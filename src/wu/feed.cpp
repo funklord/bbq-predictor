@@ -6,12 +6,43 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
+#include <QTimer>
 
 #include "wu/client.h"
 #include "wu/key_source.h"
 #include "wu/reader.h"
 
 namespace {
+
+/*
+ * How long each product stays fresh, in seconds (project.md sec 2.5).
+ *
+ * Matched to how fast the data behind it actually moves, measured in
+ * sec 2.6 rather than guessed: the station reports about every five
+ * minutes, the nowcast steps in quarter hours, and the hourly forecast
+ * is hourly. Asking faster than the source changes buys nothing and
+ * spends somebody else's quota.
+ *
+ * The observed band is deliberately slower than the station's own
+ * cadence. It lags by up to twenty-odd minutes anyway (sec 3.9.1), so
+ * a tighter interval would mostly re-download the same rows; the
+ * current band is what keeps the present sharp.
+ */
+int freshness_s(bbq_wu_product product) {
+	switch (product) {
+	case bbq_wu_product::current_station:
+	case bbq_wu_product::current_point:
+		return 5 * 60;
+	case bbq_wu_product::observed:
+		return 10 * 60;
+	case bbq_wu_product::nowcast:
+		return 15 * 60;
+	case bbq_wu_product::hourly:
+		return 60 * 60;
+	}
+
+	return 15 * 60;
+}
 
 bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
 	switch (product) {
@@ -76,6 +107,97 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		emit band_failed(name, reason);
 		finish_one();
 	});
+}
+
+void bbq_wu_feed::start_auto_refresh() {
+	if (m_timer != nullptr) {
+		return;
+	}
+
+	m_timer = new QTimer(this);
+	connect(m_timer, &QTimer::timeout, this, &bbq_wu_feed::tick);
+
+	/*
+	 * A one-minute heartbeat that decides nothing on its own -- every
+	 * band's own interval is checked against the clock, so the tick
+	 * rate only bounds how late a refresh can be, never how often one
+	 * happens.
+	 */
+	m_timer->start(60 * 1000);
+}
+
+void bbq_wu_feed::stop_auto_refresh() {
+	if (m_timer != nullptr) {
+		m_timer->stop();
+	}
+}
+
+bool bbq_wu_feed::due(bbq_wu_product product, qint64 now_utc) const {
+	const qint64 last = m_attempted.value(static_cast<int>(product), 0);
+	if (last == 0) {
+		return true;
+	}
+
+	return now_utc - last >= freshness_s(product);
+}
+
+void bbq_wu_feed::attempt(bbq_wu_product product, qint64 now_utc) {
+	m_attempted.insert(static_cast<int>(product), now_utc);
+	++m_outstanding;
+
+	switch (product) {
+	case bbq_wu_product::observed: {
+		const QString stamp = QStringLiteral("yyyyMMdd");
+		const QString today = QDate::currentDate().toString(stamp);
+		m_client->fetch_observed(m_station_id, today);
+		break;
+	}
+	case bbq_wu_product::current_station:
+		m_client->fetch_current_station(m_station_id);
+		break;
+	case bbq_wu_product::current_point:
+		m_client->fetch_current_point(m_latitude, m_longitude);
+		break;
+	case bbq_wu_product::nowcast:
+		m_client->fetch_nowcast(m_latitude, m_longitude);
+		break;
+	case bbq_wu_product::hourly:
+		m_client->fetch_hourly(m_latitude, m_longitude);
+		break;
+	}
+}
+
+void bbq_wu_feed::tick() {
+	/*
+	 * Never overlap. A slow round must not have a second one stacked on
+	 * top of it, and skipping costs at most one minute.
+	 */
+	if (m_outstanding > 0) {
+		return;
+	}
+
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	if (!m_station_id.isEmpty()) {
+		if (due(bbq_wu_product::observed, now)) {
+			attempt(bbq_wu_product::observed, now);
+		}
+		if (due(bbq_wu_product::current_station, now)) {
+			attempt(bbq_wu_product::current_station, now);
+		}
+	}
+
+	if (m_have_geocode) {
+		if (due(bbq_wu_product::nowcast, now)) {
+			attempt(bbq_wu_product::nowcast, now);
+		}
+		if (due(bbq_wu_product::hourly, now)) {
+			attempt(bbq_wu_product::hourly, now);
+		}
+		if (m_station_id.isEmpty() && due(bbq_wu_product::current_point, now)) {
+			attempt(bbq_wu_product::current_point, now);
+		}
+	}
 }
 
 void bbq_wu_feed::set_station(const QString &station_id) {

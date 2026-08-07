@@ -1,14 +1,16 @@
 #ifndef BBQ_WU_FEED_H
 #define BBQ_WU_FEED_H
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 
 #include "model/composite.h"
+#include "wu/client.h"
 
 class QNetworkAccessManager;
+class QTimer;
 class bbq_wu_key_source;
-class bbq_wu_client;
 
 /*
  * Keeps a bbq_composite fed from Weather Underground.
@@ -43,6 +45,20 @@ public:
 
 	void refresh();
 
+	/*
+	 * Re-fetch each band on its own schedule (project.md sec 2.5).
+	 *
+	 * Per band rather than one interval for everything, because the
+	 * bands do not change at the same speed: the station reports every
+	 * five minutes and the fifteen-day hourly forecast does not change
+	 * between breakfast and lunch. Refetching all of them on the
+	 * fastest of those schedules would be four times the requests for
+	 * no extra information -- against somebody else's quota, on a
+	 * scraped key, which sec 2.5 is explicit about.
+	 */
+	void start_auto_refresh();
+	void stop_auto_refresh();
+
 	const bbq_composite &composite() const { return m_composite; }
 	bool is_busy() const { return m_outstanding > 0; }
 
@@ -59,6 +75,9 @@ signals:
 private:
 	void start_forecast_bands();
 	void finish_one();
+	void tick();
+	bool due(bbq_wu_product product, qint64 now_utc) const;
+	void attempt(bbq_wu_product product, qint64 now_utc);
 
 	QNetworkAccessManager *m_net;
 	bbq_wu_key_source *m_keys;
@@ -70,6 +89,22 @@ private:
 	double m_longitude = 0.0;
 	bool m_have_geocode = false;
 	int m_outstanding = 0;
+
+	QTimer *m_timer = nullptr;
+
+	/*
+	 * When each product was last ATTEMPTED, not when it last succeeded.
+	 *
+	 * Attempts, because a band whose endpoint is failing would
+	 * otherwise be retried on every tick -- its success time never
+	 * advances, so it would look permanently due. Backing off on the
+	 * band's own interval is the polite behaviour and costs nothing
+	 * when everything is working.
+	 *
+	 * Staleness on the display still reads the SUCCESS times off the
+	 * series (sec 2.4), so a band failing quietly still shows as old.
+	 */
+	QHash<int, qint64> m_attempted;
 };
 
 #endif

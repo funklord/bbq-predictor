@@ -47,6 +47,20 @@ struct bbq_sample {
 	/* Millimetres per hour, the mean across [start_utc, end_utc). */
 	std::optional<double> precip_rate;
 
+	/*
+	 * Probability of precipitation over this span, 0 to 100.
+	 *
+	 * A third quantity rather than a flavour of the second, and the
+	 * distinction is the point: a rate says how hard it would rain and
+	 * this says whether it will. Ten percent of heavy rain and ninety
+	 * percent of drizzle are different afternoons, and neither number
+	 * can be recovered from the other.
+	 *
+	 * Absent on the measured bands, and correctly so -- an observation
+	 * has no probability, it either rained or it did not.
+	 */
+	std::optional<double> precip_chance;
+
 	qint64 end_utc() const {
 		return start_utc + duration_s;
 	}

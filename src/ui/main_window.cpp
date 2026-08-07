@@ -56,6 +56,7 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	}
 
 	m_feed->refresh();
+	m_feed->start_auto_refresh();
 }
 
 void bbq_main_window::refresh_status() {

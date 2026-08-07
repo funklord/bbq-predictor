@@ -28,6 +28,7 @@ struct bbq_graph_palette {
 	QColor axis_text;
 	QColor temperature;
 	QColor rain;
+	QColor chance;
 	QColor now_marker;
 	QColor stale_warning;
 

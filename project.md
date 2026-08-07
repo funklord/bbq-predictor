@@ -95,6 +95,37 @@ refetching, and poll no faster than the data behind the endpoint actually
 updates -- which for an hourly forecast is not every thirty seconds. This
 is self-interest as much as manners.
 
+### 2.5.1 The refresh intervals
+
+Auto-refresh is per band, not one interval for everything, because the
+bands do not change at the same speed. Refetching all of them on the
+fastest schedule would be several times the requests for no extra
+information -- against somebody else's quota, on a scraped key.
+
+| Band | Interval | Why |
+|---|---|---|
+| Current | 5 min | the station's own reporting cadence |
+| Observed | 10 min | it lags by up to twenty minutes anyway (sec 3.9.1), so a tighter interval mostly re-downloads the same rows |
+| Nowcast | 15 min | its own step |
+| Hourly | 60 min | a fifteen-day forecast does not move between breakfast and lunch |
+
+Two details make this polite rather than merely scheduled.
+
+**The clock is checked, not counted.** A one-minute heartbeat decides
+nothing on its own; each band's interval is measured against the wall
+clock, so the tick rate bounds only how *late* a refresh can be, never
+how often one happens.
+
+**Backoff is on attempts, not successes.** A band whose endpoint is
+failing never advances its success time, so it would look permanently
+due and be retried every minute. The schedule therefore records when
+each band was last *tried*. Staleness on the display still reads the
+success times (sec 2.4), so a band failing quietly still shows as old
+-- the two clocks answer different questions and are kept apart.
+
+**Rounds never overlap.** A slow round is not given a second one on top
+of it; the tick skips, which costs at most a minute.
+
 ### 2.6 The endpoints, as observed
 
 **Observed on 2026-08-07 against the live service, not read off a
@@ -759,6 +790,40 @@ program has no data for yet, the next refresh fills it as the history
 endpoint catches up, and the alternative -- stretching the observed
 band's last sample forward to meet the current reading -- is the
 inventing-data option sec 3.5 already rejected.
+
+### 3.10 Rain chance is a third quantity, in its own panel
+
+`precipChance` is not a flavour of the rain rate and is stored
+separately. **A rate says how hard it would rain; a chance says whether
+it will.** Ten percent of heavy rain and ninety percent of drizzle are
+different afternoons, and neither number can be recovered from the
+other.
+
+It is absent on the measured bands, and correctly so: an observation
+has no probability attached, it either rained or it did not. The
+independently-optional fields carry that without a special case.
+
+**Drawn in its own panel below the main plot**, sharing the x axis and
+the hour banding -- the stacked shape WU's own dashboard uses. A third
+line in the main plot would have to hang off one of the two axes there,
+which would make a scale mean two things.
+
+Two rules it does not share with the main plot:
+
+- **Fixed 0 to 100, never scaled to what is visible.** A percentage
+  means the same everywhere, and rescaling would make a dry day's five
+  percent look like a downpour.
+- **Downsampled by maximum**, like the rate and for the same reason
+  (sec 3.5). A column holding one quarter-hour at eighty percent and
+  three at ten is a column where it might well rain; meaning that down
+  to twenty-eight hides the spike somebody planning an afternoon is
+  looking for.
+
+The colour is WU's rain-family cyan, taken from the accumulation series
+on their dashboard. Said plainly rather than left as an implied
+measurement: their dashboard plots observations and so has no
+precipitation-chance panel to sample, so this is a WU colour used for a
+WU-adjacent purpose, not one measured from the thing it draws.
 
 ## 4. The tray
 

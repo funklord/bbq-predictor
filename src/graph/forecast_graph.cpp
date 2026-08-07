@@ -20,6 +20,17 @@ const int margin_left = 46;
 const int margin_right = 62;
 const int margin_top = 10;
 const int margin_bottom = 34;
+
+/*
+ * The rain-chance panel, below the main plot and sharing its x axis --
+ * the stacked-panel shape WU's own dashboard uses.
+ *
+ * Its own panel rather than a third line in the main one: a percentage
+ * has nothing to do with either axis up there, and hanging it off one
+ * of them would make a scale mean two things.
+ */
+const int chance_height = 46;
+const int chance_gap = 6;
 const int ribbon_height = 5;
 
 /*
@@ -35,6 +46,8 @@ struct column {
 	double temperature = 0.0;
 	bool has_rain = false;
 	double rain = 0.0;
+	bool has_chance = false;
+	double chance = 0.0;
 	bbq_band band = bbq_band::hourly;
 };
 
@@ -115,6 +128,21 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 				result.has_rain = true;
 			}
 		}
+
+		/*
+		 * Maximum, like the rate and for the same reason. A column
+		 * holding a quarter-hour at eighty percent and three at ten is
+		 * a column where it might well rain, and meaning that down to
+		 * twenty-eight would hide exactly the spike somebody planning
+		 * an afternoon is looking for.
+		 */
+		if (samples[i].precip_chance.has_value()) {
+			const double value = *samples[i].precip_chance;
+			if (!result.has_chance || value > result.chance) {
+				result.chance = value;
+				result.has_chance = true;
+			}
+		}
 	}
 
 	if (temperature_count > 0) {
@@ -172,6 +200,11 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 		result.has_rain = true;
 	}
 
+	if (!result.has_chance && reading.sample->precip_chance.has_value()) {
+		result.chance = *reading.sample->precip_chance;
+		result.has_chance = true;
+	}
+
 	return result;
 }
 
@@ -204,6 +237,16 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.axis_text = QColor(0x4a, 0x4a, 0x4a);
 	m_palette.temperature = QColor(0xd5, 0x20, 0x2a);
 	m_palette.rain = QColor(0x87, 0xc4, 0x03);
+
+	/*
+	 * WU's own rain-family cyan, taken from the accumulation series on
+	 * their dashboard. Their dashboard plots observations and so has no
+	 * precipitation-chance panel to measure, which is said out loud
+	 * rather than left as an implied measurement: this is a WU colour
+	 * used for a WU-adjacent purpose, not one sampled from the thing it
+	 * is drawing.
+	 */
+	m_palette.chance = QColor(0x17, 0xaa, 0xdb);
 	m_palette.now_marker = QColor(0x00, 0x53, 0xae);
 	m_palette.stale_warning = QColor(0xd5, 0x20, 0x2a);
 	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
@@ -232,9 +275,12 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.setRenderHint(QPainter::Antialiasing);
 	painter.fillRect(event->rect(), m_palette.background);
 
+	const int stack = chance_height + chance_gap;
 	const QRect plot(margin_left, margin_top,
 	                 width() - margin_left - margin_right,
-	                 height() - margin_top - margin_bottom);
+	                 height() - margin_top - margin_bottom - stack);
+	const QRect chance_plot(plot.left(), plot.bottom() + chance_gap,
+	                        plot.width(), chance_height);
 
 	if (plot.width() < 20 || plot.height() < 20) {
 		return;
@@ -330,8 +376,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		const double right = std::min(x1, static_cast<double>(plot.right()));
 
 		if (right > left) {
-			painter.fillRect(QRectF(left, plot.top(), right - left,
-			                        plot.height()),
+			const double tall = chance_plot.bottom() - plot.top();
+			painter.fillRect(QRectF(left, plot.top(), right - left, tall),
 			                 m_palette.band_shade);
 		}
 	}
@@ -352,7 +398,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
 
 		painter.setPen(m_palette.axis_text);
-		const QRectF label(x - 24, plot.bottom() + ribbon_height + 3, 48, 14);
+		const QRectF label(x - 24, chance_plot.bottom() + ribbon_height + 3,
+		                   48, 14);
 		painter.drawText(label, Qt::AlignCenter, hour_label(t));
 	}
 
@@ -418,6 +465,45 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.drawPolyline(run);
 	}
 
+	/* --- rain chance, its own panel on a fixed 0..100 scale ----------- */
+	/*
+	 * No background fill here: the hour bands are drawn tall enough to
+	 * cover both panels and filling this one would erase them, which is
+	 * what a first attempt did. Sharing the banding is what makes two
+	 * panels read as one chart rather than two.
+	 */
+	QColor chance_fill = m_palette.chance;
+	chance_fill.setAlpha(150);
+	painter.setPen(Qt::NoPen);
+	painter.setBrush(chance_fill);
+
+	for (int x = 0; x < plot.width(); ++x) {
+		const column &c = columns[x];
+		if (!c.covered || !c.has_chance) {
+			continue;
+		}
+
+		/*
+		 * Fixed 0..100 rather than scaled to what is visible. A
+		 * percentage means the same thing everywhere, and rescaling it
+		 * would make a dry day's five percent look like a downpour.
+		 */
+		const double h = chance_plot.height() * (c.chance / 100.0);
+		painter.drawRect(QRectF(chance_plot.left() + x,
+		                        chance_plot.bottom() - h, 1.0, h));
+	}
+
+	painter.setBrush(Qt::NoBrush);
+	painter.setPen(m_palette.grid);
+	painter.drawLine(chance_plot.bottomLeft(), chance_plot.bottomRight());
+
+	painter.setPen(m_palette.axis_text);
+	painter.drawText(QRectF(2, chance_plot.top() - 2, margin_left - 6, 14),
+	                 Qt::AlignRight | Qt::AlignVCenter, tr("100%"));
+	painter.drawText(QRectF(width() - margin_right + 4, chance_plot.top() - 2,
+	                        margin_right - 6, 14),
+	                 Qt::AlignLeft | Qt::AlignVCenter, tr("rain %"));
+
 	/* --- the provenance ribbon (sec 3.4) ------------------------------ */
 	for (int x = 0; x < plot.width(); ++x) {
 		if (!columns[x].covered) {
@@ -426,14 +512,15 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 		painter.setPen(band_colour(m_palette, columns[x].band));
 		const double px = plot.left() + x;
-		painter.drawLine(QPointF(px, plot.bottom() + 2),
-		                 QPointF(px, plot.bottom() + 2 + ribbon_height));
+		painter.drawLine(QPointF(px, chance_plot.bottom() + 2),
+		                 QPointF(px, chance_plot.bottom() + 2 + ribbon_height));
 	}
 
 	/* --- now ---------------------------------------------------------- */
 	const double now_x = plot.left() + (now - from) / seconds_per_pixel;
 	painter.setPen(QPen(m_palette.now_marker, 1.5));
-	painter.drawLine(QPointF(now_x, plot.top()), QPointF(now_x, plot.bottom()));
+	painter.drawLine(QPointF(now_x, plot.top()),
+	                 QPointF(now_x, chance_plot.bottom()));
 
 	/* --- axis labels --------------------------------------------------- */
 	painter.setPen(m_palette.axis_text);

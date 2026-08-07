@@ -92,6 +92,13 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 	const QJsonArray rain = root.value(spec.rain_field).toArray();
 
 	/*
+	 * Both forecast bands spell it the same way, so unlike temperature
+	 * and rain this one needs no per-band spelling in column_spec.
+	 */
+	const QString chance_key = QStringLiteral("precipChance");
+	const QJsonArray chance = root.value(chance_key).toArray();
+
+	/*
 	 * Time. The hourly band offers epoch seconds; the nowcast offers
 	 * only a local string, and its offset is what makes that usable
 	 * without the station's zone (sec 2.6.2).
@@ -139,6 +146,10 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 	}
 
 	fill_durations(samples, spec.fallback_step_s);
+
+	for (std::size_t i = 0; i < samples.size(); ++i) {
+		samples[i].precip_chance = number_at(chance, static_cast<int>(i));
+	}
 
 	/* Rain second, because converting an accumulation needs the span. */
 	for (std::size_t i = 0; i < samples.size(); ++i) {
