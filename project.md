@@ -825,6 +825,67 @@ measurement: their dashboard plots observations and so has no
 precipitation-chance panel to sample, so this is a WU colour used for a
 WU-adjacent purpose, not one measured from the thing it draws.
 
+### 3.11 Deferred: an optional interpolation mechanism
+
+Wanted later, not now, and recorded while the constraints are fresh
+rather than rediscovered when somebody builds it.
+
+**Some already exists.** The temperature line interpolates linearly
+between samples at render time (sec 3.8.1), because sec 3.1 makes
+temperature a value AT an instant and a staircase asserts something
+false. What is wanted is that generalised and made a choice -- smoother
+curves where they are honest, and off where they are not.
+
+### 3.11.1 The rule it must not break
+
+**Interpolated values live in the renderer and never in the series.**
+
+This is the whole of it. Once an interpolated point is in a
+`bbq_series`, nothing downstream can tell it from a measured one -- not
+the graph, not sec 7's scoring, not a future export. Sec 3.5 forbids
+upsampling for exactly that reason, and this feature is the shape most
+likely to violate it by accident, because "just fill in the gaps in the
+data" is the obvious implementation and the wrong one.
+
+The existing temperature interpolation obeys this: it happens inside
+one column reduction and nothing keeps it.
+
+Two more that follow from rules already settled:
+
+- **Never across a gap** (sec 3.6). A curve drawn through missing data
+  is a claim about a period nothing reported on, and a smoother curve
+  makes it more convincing rather than less.
+- **Never across a provider seam** (sec 3.7). A step where two
+  providers disagree is information; smoothing it is inventing an
+  agreement.
+
+### 3.11.2 It is per quantity, not per graph
+
+The three quantities do not want the same answer, which is why one
+global "smooth" switch would be wrong.
+
+| Quantity | Interpolation | Why |
+|---|---|---|
+| Temperature | Yes, and already does | a value at an instant, varying smoothly between them |
+| Rain rate | **Probably not** | a mean ACROSS its span, so flat IS the measurement; a curve would assert a rate profile nobody reported |
+| Rain chance | **Probably not** | a probability for a stated period, with the same objection |
+
+"Probably" is honest rather than hedging: it is the reasoning as far as
+it has been taken, and the question is worth reopening with real data
+in front of it rather than settling here.
+
+### 3.11.3 Optional, and visibly so
+
+The user's word was optional, and the reason it matters is sec 2.4's:
+if a smoothed curve is indistinguishable from a measured one, the
+setting quietly changes what the graph claims rather than how it looks.
+
+So whatever is built should be able to say which it is showing --
+whether by a marker on the real sample points, a difference in weight,
+or something else somebody tries and looks at. That is a decision for
+when it is built, and looking at the picture is what should settle it,
+as it settled the staircase.
+
 ## 4. The tray
 
 ### 4.1 Open: which desktop
@@ -938,5 +999,7 @@ Open, each needing a decision rather than a drift:
   it necessary
 - Whether a dark-desktop variant is wanted, given the measured palette
   is fixed and light (sec 3.8.3)
+- An optional interpolation mechanism, deferred with its constraints
+  written down (sec 3.11)
 - Which desktop, and therefore whether the tray needs a fallback (sec 4.1)
 - Packaging mechanism (sec 5.1)
