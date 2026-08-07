@@ -31,17 +31,24 @@ Build output goes to `build/` by default and the location is settable:
 
     make BUILD_DIR=/tmp/bbq-asan SANITIZE=1
 
-## Data source, and a warning
+## Data sources, and a warning
 
-The forecast data comes from Weather Underground, whose public API was
-discontinued at the end of 2018. This project reaches it with a key
-scraped from wunderground.com's own page bundle.
+Weather Underground comes first -- it is the reason the project exists --
+but it is the first provider rather than the only one. Anything that can
+supply data at the resolution the graphs need is a candidate: sub-hourly
+precipitation, hourly temperature out several days, and observed history.
+Resolution is the criterion, not convenience, and a three-hourly forecast
+would make the graph worse rather than better.
+
+Weather Underground's public API was discontinued at the end of 2018, and
+this project reaches it with a key scraped from wunderground.com's own
+page bundle.
 
 **That violates Weather Underground's terms of service, and it will
 break.** It was chosen deliberately over the alternatives, and the
 reasoning -- along with the requirements that follow from it -- is in
 `project.md` sec 2. If you are looking for something to depend on, this is
-not that.
+not that; the other providers, when they land, will be the clean path.
 
 ## Contributing
 

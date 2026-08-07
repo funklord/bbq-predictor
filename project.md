@@ -41,7 +41,11 @@ Makefile -- the same split beerssh uses, and for the same reason: moc,
 uic and rcc do not fit hand-written pattern rules, but everything else in
 the tree is a plain Makefile and should look like one.
 
-## 2. The data source
+## 2. The data sources
+
+Plural, deliberately. Weather Underground comes first and is the reason
+the project exists, but it is **the first provider rather than the only
+one** -- see sec 2.7.
 
 ### 2.1 The problem
 
@@ -99,15 +103,58 @@ what is wanted (sec 3); which `api.weather.com` v3 paths supply each band
 at what cadence is unverified, and **must not be written into this
 document until it has been observed rather than assumed.**
 
-### 2.7 Open: a fallback provider
+### 2.7 More than one provider, with Weather Underground first
 
-Raised and not taken. A thin seam behind the fetch layer would cost
-almost nothing now and is the difference between an afternoon and a
-rewrite when the scrape breaks; the counter-argument is that an
-abstraction built before its second implementation usually fits neither.
+**Settled: the fetch layer is multi-provider from the start.**
 
-Recorded because it will come up again the first time the scrape fails,
-and the answer should be a decision rather than a panic.
+This was previously open, and the open version framed it as a *fallback*
+-- WU-shaped code with a seam bolted on for the day the scrape breaks.
+That framing was wrong and is recorded here so it does not come back.
+What is wanted is a program that draws these graphs from whoever can
+supply them, with WU first among several rather than the one true source
+with an escape hatch.
+
+The difference is not academic. A fallback seam gets the WU response
+shape baked into everything above it, and every later provider is
+translated into WU's vocabulary whether or not that fits. Designing for
+several from the beginning means the internal time series (sec 3) is the
+project's own, and every provider -- including WU -- is a translation
+into it.
+
+**Priority is real, though, and it is not a tie.** WU comes first: it is
+what the brief asked for, it is what gets implemented first, and where
+providers disagree about what to show, WU wins until something says
+otherwise.
+
+### 2.8 What makes something a candidate provider
+
+**The graphs are the criterion.** This is not "support many weather
+APIs" -- most of them offer a three-hourly forecast that would make the
+graph worse, and adding one would be work spent making the product less
+of what it is for.
+
+A provider earns its place by supplying data at **comparable resolution
+to what sec 3 asks for**: sub-hourly precipitation, hourly temperature
+out several days, and ideally observed history. Anything that cannot
+feed a graph of this quality is not a candidate, however convenient its
+API.
+
+The following are **candidates to evaluate, not decisions**, and each
+needs its actual resolution and terms verified rather than taken from
+this list:
+
+| Provider | Why it is here | To verify |
+|---|---|---|
+| Weather Underground | The brief. First, per sec 2.7 | Endpoints (sec 2.6) |
+| MET Norway | Free, no key; nowcast is radar-based and sub-hourly, with its best coverage over the Nordics | Nowcast area and cadence; the mandatory identifying User-Agent, which they enforce |
+| Open-Meteo | Free, no key; publishes sub-hourly series for Europe and North America off high-resolution models | Which regions genuinely get sub-hourly, and the licence terms for the intended use |
+| SMHI | Sweden's own, open and key-less | Whether resolution beats what the others already give here |
+
+Two things to keep in mind while evaluating. **A provider with clean
+terms is worth more than a marginally better curve**, since WU already
+supplies the compromised path and a second one adds nothing. And a
+provider's *coverage area* is part of its resolution: a five-minute
+nowcast that stops at a border is hourly everywhere else.
 
 ## 3. The graph is the program
 
@@ -136,6 +183,21 @@ Two things follow:
 - **The forecast is a plain time series**, kept free of presentation
   concerns, so that something can later score over it (sec 7) without
   reaching into a widget.
+- **The time series is the project's own, and providers translate into
+  it** (sec 2.7). Not WU's response shape with other providers bent to
+  fit -- WU translates into it exactly as the others do, and is not
+  privileged by the data model even though it is privileged by priority.
+
+A band and a provider are **not the same axis**. Three bands and several
+providers means the bands need not all come from one place: the best
+available nowcast and the best available hourly forecast may be two
+different services, and the compositing model has to survive that rather
+than assume a single source per graph.
+
+That is a reason to design it now rather than discover it later. It is
+also a reason the joins matter more than they would otherwise: a seam
+between two bands from one provider is a resampling artefact, while a
+seam between two providers can disagree about the actual weather.
 
 ### 3.1 Rendering: a prior, not a decision
 
@@ -213,15 +275,21 @@ Settled:
 
 - Qt Widgets, Qt 6, qmake under a top-level Makefile (sec 1)
 - The key is scraped, with its consequences as requirements (sec 2)
+- Multi-provider from the start, Weather Underground first (sec 2.7)
+- Resolution is what qualifies a provider, not convenience (sec 2.8)
 - Three bands on one time axis, forecast kept presentation-free (sec 3)
+- The internal time series is ours; every provider translates into it,
+  including WU (sec 2.7, sec 3)
 - BBQ scoring deferred (sec 7)
 - No licence (sec 8)
 
 Open, each needing a decision rather than a drift:
 
 - Which WU endpoints supply which band (sec 2.6)
-- Whether a fallback provider seam goes in now (sec 2.7)
-- The compositing model itself -- the first real design work (sec 3)
+- Which providers past WU actually qualify, measured rather than
+  assumed from the candidate table (sec 2.8)
+- The compositing model itself -- the first real design work, and now
+  with bands that may come from different providers (sec 3)
 - QPainter vs QtCharts, to be confirmed by trying (sec 3.1)
 - Which desktop, and therefore whether the tray needs a fallback (sec 4.1)
 - Packaging mechanism (sec 5.1)
