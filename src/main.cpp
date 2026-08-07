@@ -96,10 +96,16 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
-	 * A tray applet must not exit when its window is closed -- closing the
-	 * window is how it gets put away, not how it is quit.
+	 * A tray applet must not exit when its window is closed -- closing
+	 * the window is how it gets put away, not how it is quit.
+	 *
+	 * That holds only where there IS a tray. Without one the window is
+	 * the entire user interface, and keeping the process alive after it
+	 * closes leaves something running with no way to see it, reach it or
+	 * quit it short of kill. So the answer follows the tray (sec 4.1),
+	 * and is decided before the window is shown.
 	 */
-	QApplication::setQuitOnLastWindowClosed(false);
+	QApplication::setQuitOnLastWindowClosed(!bbq_tray_icon::is_available());
 
 	const QString station = option_value(arguments, QStringLiteral("--station"));
 	const QString geocode = option_value(arguments, QStringLiteral("--geocode"));
