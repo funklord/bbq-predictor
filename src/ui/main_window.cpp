@@ -72,6 +72,19 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	smoothing->addItem(tr("1 h"), 60 * 60);
 	smoothing->addItem(tr("2 h"), 2 * 60 * 60);
 
+	/*
+	 * Selected from the graph rather than left on the first item.
+	 *
+	 * Both drop-downs now start from what the graph is actually doing.
+	 * The alternative had already bitten twice -- a control showing one
+	 * thing over a picture doing another -- and defaulting the graph to
+	 * anything but the first entry would have made it three.
+	 */
+	const int initial = smoothing->findData(m_graph->smoothing());
+	if (initial >= 0) {
+		smoothing->setCurrentIndex(initial);
+	}
+
 	connect(smoothing, &QComboBox::currentIndexChanged, this,
 	        [this, smoothing](int) {
 		m_graph->set_smoothing(smoothing->currentData().toInt());

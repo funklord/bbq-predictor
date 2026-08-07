@@ -972,6 +972,30 @@ Two things follow for whatever gets built:
   roughness in the curve.
 
 
+### 3.11.5 The defaults, and why they are not the safest ones
+
+**Akima, with thirty minutes of rounding.**
+
+Neither is the most conservative choice available, and that is
+deliberate. Monotone cannot overshoot and no rounding cannot mislead,
+so a timid default would have picked those -- but the graph would then
+open on a staircase of one-degree steps, which is an artefact of WU
+reporting whole degrees rather than anything the weather did. A default
+that shows the reporting instead of the weather is not the safe option,
+it is the wrong one.
+
+Akima because the shape here is plateaus beside fast drops, and it
+keeps a sharp change local instead of ringing the flat parts around it.
+Thirty minutes because that is roughly the width of a quantisation step
+at this scale, so it opens the knees without moving the line far from
+the dots.
+
+Both are visible in the controls, reversible in one click, and drawn
+over marked samples -- so what the data actually says is never hidden
+by either. That is the condition that makes a non-conservative default
+acceptable: it is a presentation the reader can see and undo, not a
+claim they cannot check.
+
 ### 3.12 The readout snaps to samples
 
 Hovering the graph shows a readout: the time, the values, and which

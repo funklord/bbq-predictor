@@ -125,13 +125,22 @@ private:
 	qint64 m_after_s = 21 * 3600;
 
 	/*
-	 * Monotone by default: smooth, and bounded by its neighbouring
-	 * samples so it cannot invent a peak no sample contains (sec
-	 * 3.11.2).
+	 * Akima and half an hour of rounding, which is what this data
+	 * actually looks best under (sec 3.11.5).
+	 *
+	 * Akima because the shape here is plateaus beside fast drops and it
+	 * keeps a sharp change local instead of ringing the flat parts.
+	 * Rounding because the source quantises to whole degrees, so
+	 * without it every step is a hard knee that is an artefact of the
+	 * reporting rather than of the weather.
+	 *
+	 * Both are departures from the safest possible defaults, and both
+	 * are visible and reversible from the controls -- with the samples
+	 * marked, so what the data actually says is never hidden by them.
 	 */
-	bbq_interpolation m_interpolation = bbq_interpolation::monotone;
+	bbq_interpolation m_interpolation = bbq_interpolation::akima;
 	bool m_show_samples = true;
-	int m_smoothing_s = 0;
+	int m_smoothing_s = 30 * 60;
 
 	/*
 	 * Where the readout is pointing, as a column index into the plot,
