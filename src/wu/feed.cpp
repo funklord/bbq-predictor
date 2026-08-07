@@ -10,6 +10,7 @@
 
 #include "wu/client.h"
 #include "wu/key_source.h"
+#include "met/nowcast.h"
 #include "wu/reader.h"
 
 namespace {
@@ -67,6 +68,42 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	m_net = new QNetworkAccessManager(this);
 	m_keys = new bbq_wu_key_source(m_net, this);
 	m_client = new bbq_wu_client(m_net, m_keys, this);
+	m_met = new bbq_met_client(m_net, this);
+
+	/*
+	 * MET Norway serves the nowcast band where it can (sec 2.9). Five
+	 * minute steps against WU's fifteen, a rate already in mm/h, no key
+	 * and no terms broken to read it -- and it replaces the one band
+	 * whose WU endpoint is exercised by none of WU's own pages, which
+	 * sec 2.6.4 flags as the least safe thing in the project.
+	 *
+	 * A failure here is not fatal and not even reported as a band
+	 * failure: the WU nowcast is requested instead, so the graph
+	 * degrades to what it drew before rather than losing the band.
+	 */
+	connect(m_met, &bbq_met_client::ready, this,
+	        [this](const QJsonDocument &document) {
+		bbq_series series = bbq_met_read_nowcast(document);
+
+		if (!series.is_empty()) {
+			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
+			m_composite.set_series(std::move(series));
+			emit updated();
+		}
+
+		finish_one();
+	});
+
+	/*
+	 * A radar failure is silent. The band is a bonus where MET reaches
+	 * and absent elsewhere, so announcing it as a failed band would put
+	 * a permanent error on the display of everybody outside its
+	 * coverage. The ordinary nowcast is fetched independently and is
+	 * unaffected.
+	 */
+	connect(m_met, &bbq_met_client::failed, this, [this](const QString &) {
+		finish_one();
+	});
 
 	connect(m_client, &bbq_wu_client::ready, this,
 	        [this](bbq_wu_product product, const QJsonDocument &document) {
@@ -219,7 +256,8 @@ void bbq_wu_feed::finish_one() {
 }
 
 void bbq_wu_feed::start_forecast_bands() {
-	m_outstanding += 2;
+	m_outstanding += 3;
+	m_met->fetch_nowcast(m_latitude, m_longitude);
 	m_client->fetch_nowcast(m_latitude, m_longitude);
 	m_client->fetch_hourly(m_latitude, m_longitude);
 }

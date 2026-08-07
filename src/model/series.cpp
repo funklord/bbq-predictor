@@ -29,6 +29,10 @@ int bbq_band_priority(bbq_band band) {
 	switch (band) {
 	case bbq_band::observed:
 		return 300;
+	/* Above the ordinary nowcast where they overlap; it is finer. */
+	case bbq_band::nowcast_fine:
+		return 250;
+
 	case bbq_band::nowcast:
 		return 200;
 
@@ -62,6 +66,8 @@ const char *bbq_band_name(bbq_band band) {
 		return "observed";
 	case bbq_band::current:
 		return "current";
+	case bbq_band::nowcast_fine:
+		return "radar";
 	case bbq_band::nowcast:
 		return "nowcast";
 	case bbq_band::hourly:

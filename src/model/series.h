@@ -20,6 +20,18 @@
 enum class bbq_band {
 	observed,
 	current,
+
+	/*
+	 * A radar nowcast: finer than the ordinary one and much shorter.
+	 *
+	 * Its own band rather than a better provider for the existing one,
+	 * because the two cover different DISTANCES into the future --
+	 * about two hours at five minutes against seven at fifteen.
+	 * Substituting one for the other traded four hours of quarter-hour
+	 * data for hourly, which is a regression dressed as an upgrade.
+	 */
+	nowcast_fine,
+
 	nowcast,
 	hourly,
 };

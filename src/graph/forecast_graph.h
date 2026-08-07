@@ -41,6 +41,7 @@ struct bbq_graph_palette {
 	/* Per band, for the provenance ribbon (sec 3.4). */
 	QColor band_observed;
 	QColor band_current;
+	QColor band_nowcast_fine;
 	QColor band_nowcast;
 	QColor band_hourly;
 };

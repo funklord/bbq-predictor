@@ -355,9 +355,9 @@ out several days, and ideally observed history. Anything that cannot
 feed a graph of this quality is not a candidate, however convenient its
 API.
 
-The following are **candidates to evaluate, not decisions**, and each
-needs its actual resolution and terms verified rather than taken from
-this list:
+**Two were measured on 2026-08-07 and one is now in use** -- see sec
+2.9. What follows was the candidate list; the measurements are below
+it.
 
 | Provider | Why it is here | To verify |
 |---|---|---|
@@ -371,6 +371,72 @@ terms is worth more than a marginally better curve**, since WU already
 supplies the compromised path and a second one adds nothing. And a
 provider's *coverage area* is part of its resolution: a five-minute
 nowcast that stops at a border is hourly everywhere else.
+
+### 2.8.1 What they actually deliver, measured
+
+| Source | Cadence | Span | Rain | Wind | Key |
+|---|---|---|---|---|---|
+| MET nowcast | **5 min** | 1.8 h | `precipitation_rate`, **mm/h** | m/s | none |
+| MET locationforecast | 60 min | 9.8 days | accumulation per hour | m/s | none |
+| Open-Meteo 15-min | 15 min | **7 days** | accumulation | -- | none |
+| Open-Meteo hourly | 60 min | 7 days | accumulation + probability | **km/h** | none |
+| WU nowcast | 15 min | 7 h | `precipRate`, mm/h | km/h | scraped |
+| WU hourly | 60 min | 15 days | `qpf` accumulation | km/h | scraped |
+
+Three findings worth having.
+
+**MET's nowcast beats WU's on resolution and loses on span** -- five
+minutes against fifteen, but under two hours against seven. That is not
+a better provider for one band, it is a different band, and sec 2.9
+treats it as one.
+
+**Open-Meteo publishes 15-minute data for seven days**, which is
+neither WU nor MET's shape and covers the gap between them. It also
+returns wind already in km/h and names the location's IANA zone in the
+response, both of which this project had to work for elsewhere.
+
+**Neither needs a key or breaks any terms.** Sec 2.2's compromise buys
+nothing that MET does not give away for the first two hours, which is
+worth knowing when the scrape eventually breaks.
+
+## 2.9 MET Norway serves the radar band
+
+**In use.** The sub-hourly band that sec 2.6.4 called the least safe
+thing in the project now has a second, cleaner source -- and it was the
+band that most needed one, since WU's fifteen-minute endpoint answers a
+scraped key while being called by none of WU's own pages.
+
+### 2.9.1 A second band, not a replacement
+
+The first attempt substituted MET for WU's nowcast, and that was a
+**regression dressed as an upgrade**: it traded four hours of
+quarter-hour data for hourly, because MET reaches under two hours where
+WU reaches seven. Caught by looking at the ribbon and seeing the fine
+band end early.
+
+So `nowcast_fine` is its own band at its own priority, above the
+ordinary nowcast where they overlap and silent where MET does not
+reach. The ribbon now runs radar, then nowcast, then hourly.
+
+### 2.9.2 It is absent, not missing
+
+The radar band is deliberately left out of sec 2.6.6's missing-band
+report, and a MET failure is not announced as a band failure either.
+
+It is a bonus where the provider reaches and simply does not exist
+elsewhere, so reporting it would put a permanent complaint on the
+display of everybody outside its coverage -- and the whole point of
+naming a missing band is that the name means something.
+
+### 2.9.3 The agent tells the truth here
+
+MET requires clients to identify themselves contactably and blocks the
+generic ones. That is a condition of a service given away free, so it
+is met honestly -- where sec 2.2's scraper wears a browser's agent
+because that whole path is already the compromised one.
+
+A provider reached legitimately gets a truthful agent. The two live a
+few files apart and the difference between them is the point.
 
 ## 3. The graph is the program
 
@@ -1244,6 +1310,8 @@ Settled:
 - Qt Widgets, Qt 6, qmake under a top-level Makefile (sec 1)
 - The key is scraped, with its consequences as requirements (sec 2)
 - Multi-provider from the start, Weather Underground first (sec 2.7)
+- MET Norway serves the radar band, as a second band rather than a
+  replacement, and silently where it does not reach (sec 2.9)
 - Resolution is what qualifies a provider, not convenience (sec 2.8)
 - Three bands on one time axis, forecast kept presentation-free (sec 3)
 - The sample is a span, not a point; canonical units C, mm/h, epoch UTC
@@ -1286,8 +1354,9 @@ Settled:
 
 Open, each needing a decision rather than a drift:
 
-- Which providers past WU actually qualify, measured rather than
-  assumed from the candidate table (sec 2.8)
+- Whether Open-Meteo should serve the gap MET does not reach: its
+  15-minute data runs seven days where MET's radar stops at two
+  (sec 2.8.1)
 - The observed band's lag against the current reading, which leaves a
   short hole in the recent past that the next refresh fills (sec 3.9.4).
   Understood and accepted rather than open, but worth revisiting if the

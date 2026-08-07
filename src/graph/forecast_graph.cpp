@@ -90,6 +90,8 @@ QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
 		return palette.band_observed;
 	case bbq_band::current:
 		return palette.band_current;
+	case bbq_band::nowcast_fine:
+		return palette.band_nowcast_fine;
 	case bbq_band::nowcast:
 		return palette.band_nowcast;
 	case bbq_band::hourly:
@@ -444,6 +446,7 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.readout_edge = QColor(0x9a, 0x9a, 0x9a);
 	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
 	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
+	m_palette.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
 	m_palette.band_nowcast = QColor(0x17, 0xaa, 0xdb);
 	m_palette.band_hourly = QColor(0x9a, 0x9a, 0x9a);
 }
