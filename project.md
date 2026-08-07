@@ -95,13 +95,90 @@ refetching, and poll no faster than the data behind the endpoint actually
 updates -- which for an hourly forecast is not every thirty seconds. This
 is self-interest as much as manners.
 
-### 2.6 Open: which endpoints, exactly
+### 2.6 The endpoints, as observed
 
-Not yet settled, and it needs a session with the real traffic in front of
-it rather than a guess written down here. What is known is the shape of
-what is wanted (sec 3); which `api.weather.com` v3 paths supply each band
-at what cadence is unverified, and **must not be written into this
-document until it has been observed rather than assumed.**
+**Observed on 2026-08-07 against the live service, not read off a
+document.** Every row below was fetched and its response inspected; the
+cadences, field names and orderings are what came back, not what an API
+reference claims. This is unofficial and undocumented, so it will drift
+-- re-observe rather than trusting this table's age.
+
+| Band | Endpoint | Cadence | Span |
+|---|---|---|---|
+| Observed, fine | `/v2/pws/history/all` | **5 min** (288 rows/day) | one day per request |
+| Observed, hourly | `/v2/pws/history/hourly` | 60 min (24 rows/day) | one day per request |
+| Observed, now | `/v2/pws/observations/current` | latest | -- |
+| Nowcast | `/v3/wx/forecast/fifteenminute` | **15 min** (28 points) | 7 hours |
+| Hourly | `/v3/wx/forecast/hourly/15day` | 60 min (360 points) | 15 days |
+| Daily | `/v3/wx/forecast/daily/{3,5,10}day` | daily | 3-10 days |
+| Historical, ICAO | `/v3/wx/conditions/historical/hourly/1day` | 60 min, **descending** | 24 hours |
+
+All take `apiKey`, plus `geocode=lat,lon` (v3 forecast), `stationId` (v2
+PWS) or `icaoCode` (v3 historical), with `units=m&language=en-US&format=json`.
+
+### 2.6.1 Extracting the key
+
+A 32-character lowercase hex string. The page carries it in two distinct
+forms, and **the difference decides whether extraction works:**
+
+- A **config blob with several named keys** -- `SUN_API_KEY`,
+  `WX_API_KEY` and others. These have *different scopes*. The weather
+  endpoints above answer to `SUN_API_KEY`; another key from the same blob
+  is a plausible-looking 32-hex string that fails on the endpoints
+  actually wanted.
+- **Fully-formed request URLs** embedded in the server-rendered payload,
+  as `https://api.weather.com/v3/...?apiKey=<32 hex>&...`.
+
+**Extract from the request URLs, not the config blob.** A key harvested
+from a URL is one the site itself just used successfully against that
+endpoint family, which is evidence; a key harvested by name from a
+config object is a guess that the name means what it looks like. Match
+`apiKey=([0-9a-f]{32})` and prefer a hit whose URL path matches the
+endpoint about to be called.
+
+### 2.6.2 The three traps
+
+Each of these was found by inspecting real responses, and each would
+produce a *plausible wrong graph* rather than an error.
+
+- **Time is not represented the same way.** `hourly` and the historical
+  endpoints carry `validTimeUtc`; **`fifteenminute` carries only
+  `validTimeLocal`**, an ISO 8601 string with an offset. The band with
+  the finest resolution is the one with no epoch field.
+- **Order is not the same.** `conditions/historical/hourly/1day` comes
+  back **newest-first**; the forecast series ascend. Plotted unreversed
+  it draws a mirror image of the last 24 hours, which looks like weather.
+- **Rain is a different quantity per band.** `fifteenminute` gives
+  `precipRate` (a rate), `hourly` gives `qpf` (accumulation over the
+  step), and `conditions/historical` gives `precip24Hour` (a running
+  24-hour total, not a per-step value at all). Drawing these on one rain
+  axis without converting is comparing three different measurements.
+
+### 2.6.3 Two response shapes, so two parsers
+
+The v3 endpoints are **column-oriented**: parallel arrays of equal
+length, one per field, indexed positionally. The v2 PWS endpoints are
+**row-oriented**: an `observations` array of objects, each nesting its
+values under a unit-system key (`metric`, `imperial`).
+
+They are not variations on a theme, and code that tries to be both is
+worse than two small readers.
+
+### 2.6.4 The nowcast is the least safe of them
+
+`/v3/wx/forecast/fifteenminute` answers with the scraped key, and it is
+the only source found so far for the sub-hourly band the brief calls for.
+
+**It was not called by either wunderground.com page observed** -- the
+forecast page or the map. That is not proof it is never used anywhere on
+the site, but it does mean the endpoint most important to this project
+is one the site does not visibly depend on. An endpoint the site does
+not exercise can be withdrawn or re-scoped without the site breaking,
+which is exactly the failure nobody would see coming.
+
+**Sec 2.7 is therefore not a hedge, it is the plan.** Another provider
+supplying sub-hourly precipitation is the insurance on the single most
+important band, and it should not wait for the day this stops answering.
 
 ### 2.7 More than one provider, with Weather Underground first
 
@@ -166,9 +243,13 @@ sources:**
 
 | Band | Cadence | Relative to now |
 |---|---|---|
-| Observed / historical | station-dependent | behind |
-| Nowcast precipitation | sub-hourly, 15 min or finer | next ~2 hours |
-| Hourly forecast | hourly | out several days |
+| Observed / historical | 5 min from a PWS (sec 2.6) | behind |
+| Nowcast precipitation | 15 min | next 7 hours |
+| Hourly forecast | hourly | out to 15 days |
+
+Those are the measured figures from sec 2.6, not aspirations. The
+observed band is the *finest* of the three at 5 minutes, which is the
+opposite of what was assumed when this section was first written.
 
 All four resolution axes were asked for explicitly, including visual
 density as a goal in its own right -- the WU chart aesthetic, not merely
@@ -180,6 +261,14 @@ Two things follow:
   bands must not read as joins, which is a resampling and alignment
   question, not a pen-width question. This is the first real design work
   and it has not been done yet.
+- **Normalising is the first thing the model does, and it is not
+  cosmetic.** Sec 2.6.2 measured what arrives: one band with no UTC
+  field, one in reverse order, and three different rain quantities --
+  a rate, a per-step accumulation, and a running 24-hour total. The
+  internal series stores one representation of time and one of rain, and
+  every reader converts into it. A band that reaches the graph still
+  carrying the provider's spelling is the bug that draws a believable
+  wrong picture.
 - **The forecast is a plain time series**, kept free of presentation
   concerns, so that something can later score over it (sec 7) without
   reaching into a widget.
@@ -283,9 +372,12 @@ Settled:
 - BBQ scoring deferred (sec 7)
 - No licence (sec 8)
 
+- The WU endpoints for all three bands, observed 2026-08-07 (sec 2.6)
+- The key comes from an embedded request URL, not the config blob
+  (sec 2.6.1)
+
 Open, each needing a decision rather than a drift:
 
-- Which WU endpoints supply which band (sec 2.6)
 - Which providers past WU actually qualify, measured rather than
   assumed from the candidate table (sec 2.8)
 - The compositing model itself -- the first real design work, and now
