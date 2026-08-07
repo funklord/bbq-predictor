@@ -367,8 +367,8 @@ Two things follow:
 
 - **The compositing model comes before any painting.** The joins between
   bands must not read as joins, which is a resampling and alignment
-  question, not a pen-width question. This is the first real design work
-  and it has not been done yet.
+  question, not a pen-width question. It is designed in sec 3.1 to 3.7
+  and not yet implemented.
 - **Normalising is the first thing the model does, and it is not
   cosmetic.** Sec 2.6.2 measured what arrives: one band with no UTC
   field, one in reverse order, and three different rain quantities --
@@ -396,14 +396,186 @@ also a reason the joins matter more than they would otherwise: a seam
 between two bands from one provider is a resampling artefact, while a
 seam between two providers can disagree about the actual weather.
 
-### 3.1 Rendering: a prior, not a decision
+### 3.1 The unit of the model is a span, not a point
+
+    start_utc     epoch seconds, UTC
+    duration_s    how long this sample covers
+    temperature   optional
+    precip_rate   optional
+    ...           each field optional independently
+
+**A sample covers an interval rather than marking an instant.** Three
+reasons, and each of them is load-bearing rather than tidy:
+
+- The bands have different step lengths (5, 15 and 60 minutes), so
+  "the next sample" is not a fixed distance away.
+- Rain is a mean over an interval, not a value at a moment (sec 3.2).
+- The end of a band's coverage has to be knowable. A band that stops
+  at +7 hours has to say so; with bare timestamps the last point is
+  indistinguishable from a gap that happens to be at the end.
+
+**The two quantities do not have the same semantics, and that is not
+papered over.** Temperature is the value *at* `start`; rain rate is the
+mean *across* `[start, start + duration)`. That asymmetry comes from the
+data rather than from the model, and hiding it would only move it
+somewhere less visible.
+
+Canonical units are Celsius, millimetres per hour, and epoch seconds
+UTC. **Every reader converts explicitly, even when `units=m` was
+requested.** A units parameter is a request, not a guarantee, and a
+silent unit error is the exact failure this project keeps naming: a
+graph that is wrong and looks fine.
+
+### 3.2 Rain is stored as a rate
+
+The decision that makes one y-axis possible, and it is not arbitrary.
+
+Sec 2.6.2 measured three different rain quantities arriving. There were
+two candidates for what to store:
+
+- **Accumulation per step** (mm) is *extensive* -- it depends on the
+  step length. The same weather gives a different number at 5 minutes
+  than at 60, so the bands cannot share an axis and every resample
+  changes the values.
+- **Rate** (mm/h) is *intensive* -- the same weather gives the same
+  number at any cadence.
+
+**So the model stores mm/h.** The conversions from what sec 2.6
+measured are then almost free:
+
+| Source | Field | Conversion |
+|---|---|---|
+| `fifteenminute` | `precipRate` | already mm/h |
+| PWS history | `precipRate` | already mm/h |
+| `hourly/15day` | `qpf` (mm per step) | `qpf / duration_hours` |
+
+Write that division out even though `duration_hours` is 1 today and the
+numbers are therefore equal. The day a provider offers a three-hourly
+`qpf`, the shortcut is a silent factor of three.
+
+**The honest caveat:** a rate meaned over 60 minutes and a rate meaned
+over 15 are the same unit and not the same measurement -- one is
+smoothed, and a downpour is flattened by it. Storing `duration_s`
+alongside is what keeps that difference visible instead of lost.
+
+**The ICAO historical path cannot supply rain at all.** Its only figure
+is `precip24Hour`, a running 24-hour total; recovering a per-step value
+means differencing successive samples, which is noisy and breaks at the
+daily reset. That path is therefore a **temperature-only fallback**, and
+the PWS band is the only real source for observed rain.
+
+### 3.3 Precedence is declared, not inferred
+
+The bands overlap. Nowcast and hourly both cover the next 7 hours, and
+observed and nowcast can both cover the last few minutes.
+
+The tempting rule is "the finest resolution wins", and it is rejected.
+It is *emergent* -- it would change meaning silently the day a provider
+adjusted its cadence, and nothing in the tree would record that the
+graph had started preferring a different source.
+
+**Each series carries an explicit priority instead**, and the order is
+declared:
+
+    observed  >  nowcast  >  hourly
+
+The first `>` is the load-bearing one. **Measured beats forecast, always
+and regardless of resolution.** An observation is what happened; no
+forecast should overwrite it because it happens to have finer steps. The
+second `>` is a genuine preference between two forecasts and is a
+configured number, not a runtime derivation.
+
+### 3.4 The composite is a view, not a merge
+
+**The bands are not flattened into one array.** The composite holds the
+series and resolves precedence when drawing.
+
+Merging would be simpler to draw and it destroys the one thing this
+project cannot lose: **provenance**. Three separate requirements need
+it, and none of them survives a flatten -- sec 2.4 shows staleness *per
+band*, sec 2.6.6 reports *which band is absent*, and sec 2.7 has bands
+that may come from *different providers*.
+
+A flattened array cannot say "the observed band is missing". It can only
+produce a gap, and a gap that means "not configured" is drawn
+identically to a gap that means "the station died" and to one that means
+"it was not raining". That is the failure this whole document keeps
+circling.
+
+The cost is nothing. The bands are 288, 28 and 360 samples.
+
+### 3.5 Never upsample, and downsample rain by maximum
+
+**Never upsample.** Inventing intermediate samples is inventing data,
+and an interpolated point is indistinguishable from a measured one once
+it is in the array.
+
+Downsample only where pixels are scarcer than samples, and **the
+aggregation depends on the quantity**:
+
+| Quantity | Aggregate | Why |
+|---|---|---|
+| Temperature | mean, or a min/max envelope | it varies smoothly |
+| Rain rate | **maximum, never mean** | see below |
+
+A five-minute downpour meaned into an hour disappears. For this program
+that is the single most important thing on the graph -- and it is
+exactly what sec 7's grilling window would ask about. **Averaging rain
+is how a graph tells you the afternoon was dry when it was not.**
+
+### 3.6 Gaps are drawn as gaps
+
+A discontinuity larger than the band's own nominal step is a gap, and it
+is **drawn as a break in the curve, never interpolated across**.
+
+Joining two points across an hour of missing data draws a line that is
+not a measurement, through a period nobody has any information about.
+It is sec 2.4 in miniature.
+
+The threshold wants trying rather than asserting; 1.5 times the nominal
+step is the starting guess, and this sentence should be replaced with
+whatever the real data makes necessary.
+
+### 3.7 What makes a join disappear
+
+Sec 3 asks that the joins not read as joins. The honest reading of that
+is **they must not read as artefacts** -- and the way to get there is
+not the obvious one.
+
+**A join disappears because normalisation is right, not because it was
+blended.** Once both sides are the same quantity, in the same units, on
+the same axis, with their interval semantics respected, a continuous
+curve is continuous because the weather is. Nothing needs smoothing.
+
+**Any step that survives correct normalisation is information, and is
+preserved.** Two providers disagreeing about the next hour is a fact
+about the forecast, and the graph's job is to show it.
+
+So there is **no crossfade, no blending, and no offset-correcting a band
+to match its neighbour at the seam.** Every one of those invents
+agreement that does not exist, which is the same sin as inventing a
+sample.
+
+This also gives a debugging rule worth having:
+
+- A seam **within one provider** that survives normalisation is a **bug
+  in the normalisation** -- most likely a unit, an interval, or the
+  reversed historical series from sec 2.6.2.
+- A seam **across providers** is **data**, and leaving it alone is
+  correct.
+
+### 3.8 Rendering: a prior, not a decision
 
 The graph is expected to be a hand-painted `QWidget` with `QPainter`
 rather than QtCharts. QtCharts is heavy, opinionated, and fights exactly
 this case -- dense custom rendering over irregular sampling.
 
-**This is a prior and not a finding.** It should be confirmed by trying
-it, and this paragraph replaced with what was actually learned.
+Sec 3.4 adds a second reason: the renderer walks several series in
+priority order and draws each at its own resolution, which is a few
+lines in `QPainter` and a fight with QtCharts's series and axis model.
+
+**This is still a prior and not a finding.** It should be confirmed by
+trying it, and this paragraph replaced with what was actually learned.
 
 ## 4. The tray
 
@@ -475,6 +647,17 @@ Settled:
 - Multi-provider from the start, Weather Underground first (sec 2.7)
 - Resolution is what qualifies a provider, not convenience (sec 2.8)
 - Three bands on one time axis, forecast kept presentation-free (sec 3)
+- The sample is a span, not a point; canonical units C, mm/h, epoch UTC
+  (sec 3.1)
+- Rain is stored as a rate, so one y-axis works; the ICAO path is a
+  temperature-only fallback (sec 3.2)
+- Precedence is declared, and measured always beats forecast (sec 3.3)
+- The composite is a view over the series, never a merge, because
+  provenance is required (sec 3.4)
+- Never upsample; downsample rain by maximum, never mean (sec 3.5)
+- Gaps are drawn as breaks, never interpolated across (sec 3.6)
+- Joins disappear through normalisation, never blending; a surviving
+  step is information (sec 3.7)
 - The internal time series is ours; every provider translates into it,
   including WU (sec 2.7, sec 3)
 - BBQ scoring deferred (sec 7)
@@ -495,8 +678,8 @@ Open, each needing a decision rather than a drift:
 
 - Which providers past WU actually qualify, measured rather than
   assumed from the candidate table (sec 2.8)
-- The compositing model itself -- the first real design work, and now
-  with bands that may come from different providers (sec 3)
-- QPainter vs QtCharts, to be confirmed by trying (sec 3.1)
+- The gap threshold in sec 3.6, which is a guess until real data makes
+  it necessary
+- QPainter vs QtCharts, to be confirmed by trying (sec 3.8)
 - Which desktop, and therefore whether the tray needs a fallback (sec 4.1)
 - Packaging mechanism (sec 5.1)
