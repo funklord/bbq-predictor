@@ -29,12 +29,15 @@ const bbq_series *bbq_composite::band(bbq_band band) const {
 
 std::vector<bbq_band> bbq_composite::missing_bands() const {
 	/*
-	 * The radar band is deliberately absent from this list.
+	 * The radar and extended bands are deliberately absent from this
+	 * list.
 	 *
 	 * It is a bonus where the provider reaches and simply does not
-	 * exist elsewhere, so reporting it missing would put a permanent
-	 * complaint on the display of everybody outside its coverage --
-	 * and sec 2.6.6's point is that "missing" should mean something.
+	 * Both are enhancements: they sharpen bands that already have a
+	 * source rather than supplying one that would otherwise be blank.
+	 * Reporting either missing would put a complaint on the display for
+	 * something nobody asked for and nothing depends on -- and sec
+	 * 2.6.6's point is that "missing" should mean something.
 	 */
 	const bbq_band every[] = {
 		bbq_band::observed,
@@ -126,6 +129,7 @@ QTimeZone bbq_composite::zone() const {
 		bbq_band::hourly,
 		bbq_band::nowcast,
 		bbq_band::nowcast_fine,
+		bbq_band::extended,
 	};
 
 	for (bbq_band band : preference) {

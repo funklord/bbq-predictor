@@ -43,6 +43,7 @@ struct bbq_graph_palette {
 	QColor band_current;
 	QColor band_nowcast_fine;
 	QColor band_nowcast;
+	QColor band_extended;
 	QColor band_hourly;
 };
 

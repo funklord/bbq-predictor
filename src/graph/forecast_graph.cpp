@@ -94,6 +94,8 @@ QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
 		return palette.band_nowcast_fine;
 	case bbq_band::nowcast:
 		return palette.band_nowcast;
+	case bbq_band::extended:
+		return palette.band_extended;
 	case bbq_band::hourly:
 		return palette.band_hourly;
 	}
@@ -448,6 +450,17 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
 	m_palette.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
 	m_palette.band_nowcast = QColor(0x17, 0xaa, 0xdb);
+	/*
+	 * Outside WU's measured set on purpose: they plot no equivalent
+	 * series, so there is nothing to copy, and every colour they DO use
+	 * is already spoken for here.
+	 *
+	 * It was #5b9f49 for one commit, which is the observed band's
+	 * colour -- two bands the same shade in the one strip whose entire
+	 * job is saying which band you are looking at. Nothing failed; the
+	 * ribbon simply stopped answering its question.
+	 */
+	m_palette.band_extended = QColor(0x8b, 0x6b, 0xb1);
 	m_palette.band_hourly = QColor(0x9a, 0x9a, 0x9a);
 }
 

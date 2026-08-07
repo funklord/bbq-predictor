@@ -7,12 +7,14 @@
 
 #include "model/composite.h"
 #include "met/nowcast.h"
+#include "openmeteo/forecast.h"
 #include "wu/client.h"
 
 class QNetworkAccessManager;
 class QTimer;
 class bbq_wu_key_source;
 class bbq_met_client;
+class bbq_openmeteo_client;
 
 /*
  * Keeps a bbq_composite fed from Weather Underground.
@@ -85,6 +87,7 @@ private:
 	bbq_wu_key_source *m_keys;
 	bbq_wu_client *m_client;
 	bbq_met_client *m_met;
+	bbq_openmeteo_client *m_open;
 
 	bbq_composite m_composite;
 	QString m_station_id;

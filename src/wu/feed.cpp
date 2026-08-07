@@ -11,6 +11,7 @@
 #include "wu/client.h"
 #include "wu/key_source.h"
 #include "met/nowcast.h"
+#include "openmeteo/forecast.h"
 #include "wu/reader.h"
 
 namespace {
@@ -69,6 +70,30 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	m_keys = new bbq_wu_key_source(m_net, this);
 	m_client = new bbq_wu_client(m_net, m_keys, this);
 	m_met = new bbq_met_client(m_net, this);
+	m_open = new bbq_openmeteo_client(m_net, this);
+
+	/*
+	 * Open-Meteo covers the ground neither other provider reaches at a
+	 * useful resolution -- quarter-hourly out to a week, where the
+	 * choice was previously hourly or nothing (sec 2.10). Silent on
+	 * failure for the same reason the radar band is: it sharpens bands
+	 * that already have a source.
+	 */
+	connect(m_open, &bbq_openmeteo_client::ready, this,
+	        [this](const QJsonDocument &document) {
+		bbq_series series = bbq_openmeteo_read(document);
+
+		if (!series.is_empty()) {
+			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
+			m_composite.set_series(std::move(series));
+			emit updated();
+		}
+
+		finish_one();
+	});
+
+	connect(m_open, &bbq_openmeteo_client::failed, this,
+	        [this](const QString &) { finish_one(); });
 
 	/*
 	 * MET Norway serves the nowcast band where it can (sec 2.9). Five
@@ -256,8 +281,9 @@ void bbq_wu_feed::finish_one() {
 }
 
 void bbq_wu_feed::start_forecast_bands() {
-	m_outstanding += 3;
+	m_outstanding += 4;
 	m_met->fetch_nowcast(m_latitude, m_longitude);
+	m_open->fetch(m_latitude, m_longitude);
 	m_client->fetch_nowcast(m_latitude, m_longitude);
 	m_client->fetch_hourly(m_latitude, m_longitude);
 }

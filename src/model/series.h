@@ -33,6 +33,17 @@ enum class bbq_band {
 	nowcast_fine,
 
 	nowcast,
+
+	/*
+	 * Quarter-hourly, but reaching a week rather than an evening.
+	 *
+	 * Below the ordinary nowcast, which shares its cadence over a
+	 * shorter range, and above hourly, which is all that covered this
+	 * ground before. Its job is the days after tomorrow, where the
+	 * choice used to be sixty-minute steps or nothing.
+	 */
+	extended,
+
 	hourly,
 };
 

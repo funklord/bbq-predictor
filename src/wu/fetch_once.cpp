@@ -343,7 +343,14 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 		loop.quit();
 	});
 
-	out << "fetch-once: fetching every band once\n";
+	/*
+	 * "the Weather Underground bands", not "every band". The radar and
+	 * extended bands come from other providers through bbq_wu_feed,
+	 * which this diagnostic predates and does not use -- so claiming
+	 * completeness here would be a check reporting something other than
+	 * what it did.
+	 */
+	out << "fetch-once: fetching the Weather Underground bands once\n";
 
 	if (!station_id.isEmpty()) {
 		outstanding += 2;

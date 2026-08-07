@@ -438,6 +438,61 @@ because that whole path is already the compromised one.
 A provider reached legitimately gets a truthful agent. The two live a
 few files apart and the difference between them is the point.
 
+## 2.10 Open-Meteo serves the extended band
+
+**Quarter-hourly out to a week.** It covers the ground neither other
+provider reaches at a useful resolution: MET's radar stops under two
+hours, WU's fifteen-minute band at seven, and after that the choice was
+sixty-minute steps or nothing.
+
+It is complete, which was checked before it was designed around. Its
+fifteen-minute series carries temperature, precipitation, wind AND
+probability -- so a band that outranks the hourly one does not quietly
+drop the fields sec 7 scores on. A band that wins by cadence and loses
+by content would have made the forecast worse while looking sharper.
+
+Priority sits under the ordinary nowcast, which shares its cadence over
+a range aimed at the near term, and over hourly, which is what it
+exists to replace.
+
+### 2.10.1 It reads the clock the hard way
+
+Open-Meteo's stamps are LOCAL and carry no offset -- `2026-08-07T00:00`
+and nothing more -- so they cannot be read without the zone the response
+names separately. An unreadable zone therefore discards the band rather
+than falling back to anything: read in the wrong zone the whole series
+shifts by hours while looking perfectly valid.
+
+They are converted through the IANA zone rather than the single
+`utc_offset_seconds` the response also offers. A fixed offset is right
+until a daylight-saving change and silently an hour out afterwards, and
+this series runs seven days -- long enough to contain one.
+
+`timezone=auto` is requested deliberately for that name. Without a
+pinned station this is the only provider here that supplies a real zone
+rather than the bare offset a WU forecast implies (sec 3.12.1).
+
+### 2.10.2 It closed a hole nobody asked it to
+
+Sec 3.9.4 left the observed band's lag uncovered -- the stretch between
+the station's last delivered row and now -- on the grounds that the
+next refresh fills it. On the day this landed that lag was **four
+hours**, and the extended band covers it.
+
+That is modelled data standing where measured data has not arrived yet,
+which is a real thing to be aware of rather than a free win. It is
+acceptable here only because the ribbon names the band: the graph says
+"extended" across that stretch, so nobody is being shown a model and
+told it is a measurement. Sec 3.3's ordering still holds where both
+exist, since observed outranks it by a wide margin.
+
+### 2.10.3 The diagnostic no longer covers everything
+
+`--fetch-once` predates the feed and drives the WU client directly, so
+it exercises neither of the other two providers. Its message says so
+rather than claiming completeness, but the divergence is real: it is a
+check that no longer inspects what the application does.
+
 ## 3. The graph is the program
 
 The single hardest thing in this project, and it is a data problem before
@@ -1312,6 +1367,8 @@ Settled:
 - Multi-provider from the start, Weather Underground first (sec 2.7)
 - MET Norway serves the radar band, as a second band rather than a
   replacement, and silently where it does not reach (sec 2.9)
+- Open-Meteo serves the extended band, quarter-hourly for a week
+  (sec 2.10)
 - Resolution is what qualifies a provider, not convenience (sec 2.8)
 - Three bands on one time axis, forecast kept presentation-free (sec 3)
 - The sample is a span, not a point; canonical units C, mm/h, epoch UTC
@@ -1354,9 +1411,9 @@ Settled:
 
 Open, each needing a decision rather than a drift:
 
-- Whether Open-Meteo should serve the gap MET does not reach: its
-  15-minute data runs seven days where MET's radar stops at two
-  (sec 2.8.1)
+- `--fetch-once` exercises only the Weather Underground bands; the
+  other two providers arrive through the feed, which that diagnostic
+  predates (sec 2.10.3)
 - The observed band's lag against the current reading, which leaves a
   short hole in the recent past that the next refresh fills (sec 3.9.4).
   Understood and accepted rather than open, but worth revisiting if the

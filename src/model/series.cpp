@@ -53,6 +53,14 @@ int bbq_band_priority(bbq_band band) {
 	case bbq_band::current:
 		return 150;
 
+	/*
+	 * Under the nowcast where they overlap, since that one is the same
+	 * cadence from a source aimed at the near term, and over hourly
+	 * everywhere else, which is the whole reason it exists.
+	 */
+	case bbq_band::extended:
+		return 180;
+
 	case bbq_band::hourly:
 		return 100;
 	}
@@ -70,6 +78,8 @@ const char *bbq_band_name(bbq_band band) {
 		return "radar";
 	case bbq_band::nowcast:
 		return "nowcast";
+	case bbq_band::extended:
+		return "extended";
 	case bbq_band::hourly:
 		return "hourly";
 	}
