@@ -859,32 +859,55 @@ Two more that follow from rules already settled:
   providers disagree is information; smoothing it is inventing an
   agreement.
 
-### 3.11.2 It is per quantity, not per graph
+### 3.11.2 A choice of methods, as a graphing tool has
 
-The three quantities do not want the same answer, which is why one
-global "smooth" switch would be wrong.
+Not one switch and not a prohibition. **Several methods, chosen by the
+user**, which is what any serious series tool offers:
 
-| Quantity | Interpolation | Why |
+| Method | Shape | Where it is right |
 |---|---|---|
-| Temperature | Yes, and already does | a value at an instant, varying smoothly between them |
-| Rain rate | **Probably not** | a mean ACROSS its span, so flat IS the measurement; a curve would assert a rate profile nobody reported |
-| Rain chance | **Probably not** | a probability for a stated period, with the same objection |
+| Step | hold each value across its span | a mean ACROSS a span -- rain rate, rain chance |
+| Linear | join consecutive samples | a value AT an instant -- temperature; what the graph does today |
+| Monotone cubic | smooth, cannot overshoot | smooth curves where overshoot would lie |
+| Natural cubic / Catmull-Rom | smoothest | dense, well-behaved data where the eye wants a curve |
 
-"Probably" is honest rather than hedging: it is the reasoning as far as
-it has been taken, and the question is worth reopening with real data
-in front of it rather than settling here.
+**Monotone cubic is the one that matters**, and the reason is not
+aesthetic. A plain cubic spline OVERSHOOTS between samples: it will
+draw rain below zero, or a temperature peak higher than any sample in
+the series. That is inventing a value nobody reported, and unlike a
+drawn line between two real points it is not recoverable from the data
+-- marking the samples does not excuse it, because the invented maximum
+sits between the marks. A monotone method (Fritsch-Carlson, or
+equivalent) is bounded by its neighbouring samples by construction,
+which is what makes smoothing honest rather than merely pretty.
 
-### 3.11.3 Optional, and visibly so
+Earlier this section said rain "probably should not" interpolate at
+all. That was too strong and is corrected: the semantics still argue
+for **step as the default** for a span-mean, but a default is not a
+ban, and the choice belongs to whoever is looking at the graph.
 
-The user's word was optional, and the reason it matters is sec 2.4's:
-if a smoothed curve is indistinguishable from a measured one, the
-setting quietly changes what the graph claims rather than how it looks.
+### 3.11.3 Marking the samples is what makes it honest
 
-So whatever is built should be able to say which it is showing --
-whether by a marker on the real sample points, a difference in weight,
-or something else somebody tries and looks at. That is a decision for
-when it is built, and looking at the picture is what should settle it,
-as it settled the staircase.
+This is the mechanism, and it resolves the tension rather than dodging
+it. **Every real sample is markable on the curve**, so a smoothed line
+never has to be trusted on its own: the marks say where the data is and
+the curve says what is drawn between.
+
+It also settles sec 3.11.1 from a second direction. Interpolated values
+have to stay in the renderer, because marking the samples requires
+knowing which points ARE samples -- and a series that has absorbed its
+interpolation can no longer tell you.
+
+Two things follow for whatever gets built:
+
+- **The method is visible, not just active.** Which interpolation is in
+  use belongs where the reader can see it, for the same reason sec 2.4
+  puts the fetch time on the display.
+- **The gap and seam rules survive every method.** No interpolation,
+  however smooth, crosses missing data (sec 3.6) or a disagreement
+  between providers (sec 3.7). Those are breaks in the data, not
+  roughness in the curve.
+
 
 ## 4. The tray
 
