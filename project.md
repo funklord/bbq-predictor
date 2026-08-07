@@ -577,6 +577,44 @@ lines in `QPainter` and a fight with QtCharts's series and axis model.
 **This is still a prior and not a finding.** It should be confirmed by
 trying it, and this paragraph replaced with what was actually learned.
 
+### 3.9 Open: the hole at now
+
+**Found by running the model against live data on 2026-08-07, not by
+reading the endpoint table.**
+
+The observed band ends when the station last reported, and the nowcast
+begins at the next quarter-hour boundary. Neither is anchored to the
+present, so between them there is an intermittent hole of up to about
+fifteen minutes -- and it sits exactly at **now**, which is the single
+most important instant on the graph.
+
+One run showed `at now: no band covers it` with observed ending 13:30Z
+and the nowcast starting 13:45Z. A run a few minutes later was covered.
+It comes and goes with the clock, which is the worst kind of defect to
+find later.
+
+The model reports it honestly rather than hiding it, and that is the
+design working: nothing interpolates across the hole and no band is
+stretched to cover it. But honest is not the same as good, and a graph
+with a recurring gap at the present moment is not what sec 0 asks for.
+
+**Not yet decided, and the options are genuinely different:**
+
+- **Use the current-conditions endpoints.** Sec 2.6 recorded
+  `/v2/pws/observations/current` and `/v3/wx/observations/current` and
+  this project uses neither. They exist precisely to answer "now", and
+  a fourth band anchored to the present is the obvious fix.
+- **Accept the hole and draw it.** Consistent with sec 3.6, costs
+  nothing, and admits that nobody actually knows the weather in a
+  fifteen-minute window nothing has reported on yet.
+- **Let the observed band's last sample run to now.** Rejected already
+  by sec 3.5 -- extending a span past its measurement is inventing
+  data, and it would be indistinguishable from a real reading.
+
+The first is probably right, which is why it is written down as a
+question rather than done in passing: it adds a band, and sec 3.3's
+priority table would need a number for it.
+
 ## 4. The tray
 
 ### 4.1 Open: which desktop
@@ -678,6 +716,9 @@ Open, each needing a decision rather than a drift:
 
 - Which providers past WU actually qualify, measured rather than
   assumed from the candidate table (sec 2.8)
+- The hole at now, found by running the model against live data
+  (sec 3.9) -- probably the current-conditions endpoints, which would
+  add a band and need a priority
 - The gap threshold in sec 3.6, which is a guess until real data makes
   it necessary
 - QPainter vs QtCharts, to be confirmed by trying (sec 3.8)

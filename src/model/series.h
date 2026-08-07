@@ -1,0 +1,123 @@
+#ifndef BBQ_SERIES_H
+#define BBQ_SERIES_H
+
+#include <QString>
+
+#include <cstddef>
+#include <vector>
+
+#include "model/sample.h"
+
+/*
+ * Which band a series carries (project.md sec 3).
+ *
+ * A band is not a provider. The same graph may take its nowcast from
+ * one service and its hourly forecast from another (sec 2.7), so the
+ * two travel separately on bbq_series below.
+ */
+enum class bbq_band {
+	observed,
+	nowcast,
+	hourly,
+};
+
+/*
+ * Declared precedence (project.md sec 3.3).
+ *
+ * A TABLE, and it must not become a computation. The tempting rule --
+ * whichever band has the finest resolution wins -- is emergent, and
+ * would change the graph's meaning silently on the day a provider
+ * adjusted its cadence, with nothing in the tree recording that a
+ * different source had started winning.
+ *
+ * observed > nowcast > hourly. The first comparison is the load-bearing
+ * one: measured beats forecast always and regardless of resolution,
+ * because an observation is what happened.
+ */
+int bbq_band_priority(bbq_band band);
+
+/* Stable lowercase identifier, for display and for settings keys. */
+const char *bbq_band_name(bbq_band band);
+
+/*
+ * One band's worth of samples from one provider.
+ *
+ * Carries its own provenance -- which band, which provider, when it was
+ * fetched -- because the composite refuses to merge these away
+ * (sec 3.4). Staleness is reported per band (sec 2.4) and an absent
+ * band is named rather than left as a hole (sec 2.6.6); neither is
+ * possible once several series have been flattened into one array.
+ */
+class bbq_series {
+public:
+	bbq_series() = default;
+	bbq_series(bbq_band band, QString provider);
+
+	bbq_band band() const { return m_band; }
+	const QString &provider() const { return m_provider; }
+	int priority() const { return bbq_band_priority(m_band); }
+
+	/*
+	 * When this band was last fetched successfully, epoch seconds UTC;
+	 * zero means never. Sec 2.4 puts this on the display, because the
+	 * scrape will break and its failure mode is a graph that keeps
+	 * drawing yesterday's curve while looking perfectly healthy.
+	 */
+	qint64 fetched_utc() const { return m_fetched_utc; }
+	void set_fetched_utc(qint64 fetched_utc);
+
+	/*
+	 * Takes the samples and puts them in ascending time order.
+	 *
+	 * The sort is not a tidy-up. One of the endpoints returns its rows
+	 * newest-first (sec 2.6.2), and plotting that unreversed draws a
+	 * mirror image of the last day which still looks like weather.
+	 * Sorting on the way in means no reader has to remember, and a
+	 * provider that changes its mind about ordering cannot break the
+	 * graph.
+	 */
+	void set_samples(std::vector<bbq_sample> samples);
+
+	const std::vector<bbq_sample> &samples() const { return m_samples; }
+	bool is_empty() const { return m_samples.empty(); }
+	std::size_t size() const { return m_samples.size(); }
+
+	/* Coverage; both zero when empty. */
+	qint64 begin_utc() const;
+	qint64 end_utc() const;
+
+	/*
+	 * The typical distance between successive samples, in seconds, or
+	 * zero when there are fewer than two.
+	 *
+	 * The median rather than the mean, so that one gap in a day of
+	 * five-minute observations cannot drag the answer upwards and hide
+	 * every other gap behind it.
+	 */
+	int nominal_step_s() const;
+
+	/*
+	 * The sample covering this instant, or nullptr where the series
+	 * does not reach or has a hole.
+	 */
+	const bbq_sample *at(qint64 when_utc) const;
+
+	/*
+	 * Whether the series is discontinuous between sample `index` and
+	 * the one after it (project.md sec 3.6). A gap is drawn as a break
+	 * and never interpolated across: joining two points across an hour
+	 * of missing data draws a line that is not a measurement, through a
+	 * period nobody has any information about.
+	 *
+	 * False for the last sample, which has no "after".
+	 */
+	bool has_gap_after(std::size_t index) const;
+
+private:
+	bbq_band m_band = bbq_band::hourly;
+	QString m_provider;
+	qint64 m_fetched_utc = 0;
+	std::vector<bbq_sample> m_samples;
+};
+
+#endif

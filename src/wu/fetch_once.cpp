@@ -1,81 +1,92 @@
 #include "wu/fetch_once.h"
 
 #include <QDate>
+#include <QDateTime>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QTextStream>
+#include <QTimeZone>
 #include <QTimer>
 
+#include "model/composite.h"
 #include "wu/client.h"
 #include "wu/key_source.h"
+#include "wu/reader.h"
 
 namespace {
 
-/*
- * Describe a response without pretending to model it.
- *
- * The two shapes are genuinely different and sec 2.6.3 says so: the v3
- * endpoints are column-oriented parallel arrays, one per field, while
- * the v2 PWS endpoints are row-oriented with their values nested under
- * a unit-system key. This prints whichever it finds rather than forcing
- * one into the other's shape -- that reconciliation is the next piece
- * of work and is not being pre-empted here.
- */
-QString describe(const QJsonDocument &document) {
-	if (!document.isObject()) {
-		return QStringLiteral("not a JSON object");
+QString stamp(qint64 when_utc) {
+	if (when_utc == 0) {
+		return QStringLiteral("--");
 	}
 
-	const QJsonObject root = document.object();
+	const QTimeZone utc(QTimeZone::UTC);
+	const QDateTime when = QDateTime::fromSecsSinceEpoch(when_utc, utc);
+	return when.toString(QStringLiteral("MM-dd HH:mm"));
+}
 
-	/* Row-oriented: the PWS shape. */
-	if (root.contains(QStringLiteral("observations"))) {
-		const QJsonArray rows = root.value(QStringLiteral("observations")).toArray();
-		if (rows.isEmpty()) {
-			return QStringLiteral("0 observation rows");
+int count_gaps(const bbq_series &series) {
+	int gaps = 0;
+
+	for (std::size_t i = 0; i < series.size(); ++i) {
+		if (series.has_gap_after(i)) {
+			++gaps;
 		}
-
-		const QJsonObject first = rows.first().toObject();
-		QStringList nested;
-		for (auto it = first.begin(); it != first.end(); ++it) {
-			if (it.value().isObject()) {
-				nested.append(it.key());
-			}
-		}
-
-		QString blocks = nested.join(QStringLiteral(", "));
-		if (blocks.isEmpty()) {
-			blocks = QStringLiteral("none");
-		}
-
-		QString summary = QString::number(rows.size());
-		summary += QStringLiteral(" rows (row-oriented), unit blocks: ");
-		summary += blocks;
-		return summary;
 	}
 
-	/* Column-oriented: the v3 shape. */
-	int longest = 0;
-	QStringList fields;
-	for (auto it = root.begin(); it != root.end(); ++it) {
-		if (it.value().isArray()) {
-			longest = qMax(longest, it.value().toArray().size());
-		}
-		fields.append(it.key());
+	return gaps;
+}
+
+QString describe_series(const bbq_series &series) {
+	if (series.is_empty()) {
+		return QStringLiteral("no samples");
 	}
 
-	if (longest == 0) {
-		return QStringLiteral("%1 fields, no arrays").arg(fields.size());
+	QString text = QString::number(series.size());
+	text += QStringLiteral(" samples, step ");
+	text += QString::number(series.nominal_step_s());
+	text += QStringLiteral("s, ");
+	text += stamp(series.begin_utc());
+	text += QStringLiteral("Z..");
+	text += stamp(series.end_utc());
+	text += QStringLiteral("Z, gaps ");
+	text += QString::number(count_gaps(series));
+	return text;
+}
+
+QString describe_reading(const bbq_composite &composite, qint64 when_utc) {
+	const bbq_reading reading = composite.at(when_utc);
+	if (!reading.is_valid()) {
+		return QStringLiteral("no band covers it");
 	}
 
-	QString summary = QString::number(longest);
-	summary += QStringLiteral(" points across ");
-	summary += QString::number(fields.size());
-	summary += QStringLiteral(" parallel arrays (column-oriented)");
-	return summary;
+	QString text;
+
+	if (reading.sample->temperature.has_value()) {
+		text += QString::number(*reading.sample->temperature, 'f', 1);
+		text += QStringLiteral(" C");
+	} else {
+		text += QStringLiteral("-- C");
+	}
+
+	text += QStringLiteral(", ");
+
+	if (reading.sample->precip_rate.has_value()) {
+		text += QString::number(*reading.sample->precip_rate, 'f', 2);
+		text += QStringLiteral(" mm/h");
+	} else {
+		text += QStringLiteral("-- mm/h");
+	}
+
+	text += QStringLiteral("   from ");
+	text += QString::fromLatin1(bbq_band_name(reading.series->band()));
+	text += QStringLiteral(" (");
+	text += reading.series->provider();
+	text += QStringLiteral(")");
+	return text;
 }
 
 /* Where the station says it is (project.md sec 2.6.7.1). */
@@ -89,8 +100,7 @@ station_point point_from_observed(const QJsonDocument &document) {
 	station_point point;
 
 	const QJsonObject root = document.object();
-	const QJsonValue rows_value = root.value(QStringLiteral("observations"));
-	const QJsonArray rows = rows_value.toArray();
+	const QJsonArray rows = root.value(QStringLiteral("observations")).toArray();
 	if (rows.isEmpty()) {
 		return point;
 	}
@@ -106,6 +116,19 @@ station_point point_from_observed(const QJsonDocument &document) {
 	point.latitude = first.value(QStringLiteral("lat")).toDouble();
 	point.longitude = first.value(QStringLiteral("lon")).toDouble();
 	return point;
+}
+
+bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
+	switch (product) {
+	case bbq_wu_product::observed:
+		return bbq_wu_read_observed(document);
+	case bbq_wu_product::nowcast:
+		return bbq_wu_read_nowcast(document);
+	case bbq_wu_product::hourly:
+		return bbq_wu_read_hourly(document);
+	}
+
+	return bbq_series();
 }
 
 } // namespace
@@ -132,8 +155,7 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 
 	if (station_id.isEmpty() && !have_geocode) {
 		error << "fetch-once: nothing configured.\n";
-		error << "fetch-once:   Give --station ID, or --geocode LAT,LON, "
-		         "or both.\n";
+		error << "fetch-once:   Give --station ID, or --geocode LAT,LON.\n";
 		return 2;
 	}
 
@@ -141,6 +163,7 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	bbq_wu_key_source keys(&net);
 	bbq_wu_client client(&net, &keys);
 
+	bbq_composite composite;
 	QEventLoop loop;
 	int outstanding = 0;
 	int failures = 0;
@@ -153,17 +176,22 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 
 	QObject::connect(&client, &bbq_wu_client::ready, &loop,
 	                 [&](bbq_wu_product product, const QJsonDocument &doc) {
-		out << QStringLiteral("  %1  ok    %2\n")
-		                .arg(QString::fromLatin1(bbq_wu_product_name(product)),
-		                     -9)
-		                .arg(describe(doc));
+		bbq_series series = read_for(product, doc);
+		series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
+
+		const QString name = QString::fromLatin1(bbq_wu_product_name(product));
+		out << QStringLiteral("  %1").arg(name, -10);
+		out << QStringLiteral(" ok    ");
+		out << describe_series(series);
+		out << "\n";
 		out.flush();
+
+		composite.set_series(std::move(series));
 
 		/*
 		 * Derive the geocode from the station and release the two
-		 * bands that were waiting on it (sec 2.6.7). The band that
-		 * needs the station supplies the coordinate the others need,
-		 * so there is no lookup endpoint and no second round trip.
+		 * bands waiting on it (sec 2.6.7). The band that needs the
+		 * station supplies the coordinate the others need.
 		 */
 		if (product == bbq_wu_product::observed && !have_geocode) {
 			const station_point point = point_from_observed(doc);
@@ -189,10 +217,11 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 
 	QObject::connect(&client, &bbq_wu_client::failed, &loop,
 	                 [&](bbq_wu_product product, const QString &reason) {
-		error << QStringLiteral("  %1  FAIL  %2\n")
-		                 .arg(QString::fromLatin1(bbq_wu_product_name(product)),
-		                      -9)
-		                 .arg(reason);
+		const QString name = QString::fromLatin1(bbq_wu_product_name(product));
+		error << QStringLiteral("  %1").arg(name, -10);
+		error << QStringLiteral(" FAIL  ");
+		error << reason;
+		error << "\n";
 		error.flush();
 		++failures;
 		settle();
@@ -208,10 +237,8 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	 * guards the way somebody did not run it.
 	 */
 	QTimer::singleShot(timeout_s * 1000, &loop, [&]() {
-		error << QStringLiteral("fetch-once: timed out after %1s with %2 "
-		                        "request(s) unanswered\n")
-		                 .arg(timeout_s)
-		                 .arg(outstanding);
+		error << QStringLiteral("fetch-once: timed out after %1s\n")
+		                 .arg(timeout_s);
 		failures += outstanding;
 		outstanding = 0;
 		loop.quit();
@@ -221,12 +248,11 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 
 	if (!station_id.isEmpty()) {
 		++outstanding;
-		client.fetch_observed(station_id,
-		                      QDate::currentDate().toString(
-		                              QStringLiteral("yyyyMMdd")));
+		const QString today =
+		        QDate::currentDate().toString(QStringLiteral("yyyyMMdd"));
+		client.fetch_observed(station_id, today);
 	} else {
-		out << "  observed   skipped -- no station pinned, which is a "
-		       "normal state\n";
+		out << "  observed   skipped -- no station pinned, a normal state\n";
 	}
 
 	if (have_geocode) {
@@ -237,6 +263,35 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 
 	out.flush();
 	loop.exec();
+
+	/*
+	 * What the composite makes of it. The three probes below are the
+	 * point: the same query at three instants should be answered by
+	 * three different bands, which is declared precedence (sec 3.3)
+	 * doing its job, and each answer says which band gave it, which is
+	 * provenance surviving resolution (sec 3.4).
+	 */
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	out << "\ncomposite:\n";
+	out << "  coverage   " << stamp(composite.begin_utc()) << "Z..";
+	out << stamp(composite.end_utc()) << "Z\n";
+
+	const std::vector<bbq_band> missing = composite.missing_bands();
+	out << "  missing    ";
+	if (missing.empty()) {
+		out << "none";
+	} else {
+		for (bbq_band band : missing) {
+			out << bbq_band_name(band) << " ";
+		}
+	}
+	out << "\n";
+
+	out << "  at now     " << describe_reading(composite, now) << "\n";
+	out << "  at +3h     " << describe_reading(composite, now + 3 * 3600) << "\n";
+	out << "  at +12h    " << describe_reading(composite, now + 12 * 3600) << "\n";
+	out << "  at -2h     " << describe_reading(composite, now - 2 * 3600) << "\n";
 
 	if (failures > 0) {
 		error << QStringLiteral("fetch-once: %1 band(s) failed\n").arg(failures);

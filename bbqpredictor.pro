@@ -43,16 +43,23 @@ INCLUDEPATH += $$PWD/src
 SOURCES += \
 	src/main.cpp \
 	src/graph/forecast_graph.cpp \
+	src/model/composite.cpp \
+	src/model/series.cpp \
 	src/ui/main_window.cpp \
 	src/ui/tray_icon.cpp \
 	src/wu/client.cpp \
 	src/wu/fetch_once.cpp \
-	src/wu/key_source.cpp
+	src/wu/key_source.cpp \
+	src/wu/reader.cpp
 
 HEADERS += \
 	src/graph/forecast_graph.h \
+	src/model/composite.h \
+	src/model/sample.h \
+	src/model/series.h \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \
 	src/wu/client.h \
 	src/wu/fetch_once.h \
-	src/wu/key_source.h
+	src/wu/key_source.h \
+	src/wu/reader.h
