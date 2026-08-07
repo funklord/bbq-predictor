@@ -61,6 +61,16 @@ struct bbq_sample {
 	 */
 	std::optional<double> precip_chance;
 
+	/*
+	 * Wind speed in kilometres per hour, which is what units=m returns
+	 * and is kept rather than converted -- one representation, and the
+	 * conversion nobody performs is the one nobody gets wrong.
+	 *
+	 * Here because sec 7 scores it: wind steals heat from a grill,
+	 * blows smoke at the cook and carries embers.
+	 */
+	std::optional<double> wind_kph;
+
 	qint64 end_utc() const {
 		return start_utc + duration_s;
 	}

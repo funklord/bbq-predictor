@@ -1091,16 +1091,76 @@ Qt's own API is called exactly as it is spelled (`setWindowTitle`,
 `paintEvent`); names this project introduces stay `snake_case` with the
 `bbq_` prefix where they reach the linker.
 
-## 7. Deferred: the BBQ prediction
+## 7. The grilling prediction
 
-Scoring the forecast for good grilling windows. **Not being built now**,
-and explicitly not designed around beyond sec 3's requirement that the
-forecast stay a plain time series.
+**Built.** The forecast is scored for grilling weather, the good
+stretches are shaded on the graph, and the best one is named in words
+above it.
 
-What makes a window good is unspecified and is the interesting part of
-the feature -- temperature, rain, wind and time of day at minimum, with
-weights nobody has stated. When it is picked up, that question is the
-work.
+### 7.1 The preferences are preferences
+
+Everything else in this document was measured against a real response.
+**None of sec 7 can be**, and the code keeps the numbers in one struct
+rather than scattered through the arithmetic so the two are hard to
+confuse. They are one cook's answers and another would set them
+differently.
+
+| Factor | Policy | Because |
+|---|---|---|
+| Temperature | zero at 5 C, full marks by 25 C, **no upper penalty** | warmer is always better; only cold counts against |
+| Rain rate | graded to zero at 2 mm/h | drizzle is survivable, a downpour is not |
+| Rain chance | tempers the score at half weight | the rate is the promise, the chance is the confidence around it |
+| Wind | fine to 15 km/h, ruinous by 45 | it steals heat, blows smoke and carries embers |
+| Hour | prime 16-21, usable 11-23, otherwise 0.15 | late afternoon into the evening is the point |
+| Length | 2 h to be offered, 3 h to be preferred | both were asked for and they are not in conflict: one is a floor, the other a ranking |
+
+### 7.2 The factors multiply
+
+Not an average, and this is the one structural decision in the scoring.
+
+**An averaging score recommends grilling in the rain because it is
+warm.** Multiplying means a window has to be decent in every respect
+rather than trading a downpour against a pleasant temperature, which is
+how anybody actually decides whether to light a fire.
+
+Three smaller consequences, each chosen rather than fallen into:
+
+- **A missing field is neutral, not pessimistic.** No temperature
+  reading is not the same as freezing, and scoring it as cold would
+  bury good windows for want of a field.
+- **The small hours score low, not zero.** Somebody grilling at two in
+  the morning has reasons of their own; a zero would hide genuinely
+  fine weather rather than merely rank it below the evening.
+- **A gap ends a window rather than failing it.** A stretch nobody has
+  a forecast for is not one to recommend, and not one to condemn
+  either -- the same reasoning as sec 3.6.
+
+### 7.3 Longer is better, but only up to a point
+
+A six-hour window is not twice the afternoon a three-hour one is; it is
+the same afternoon with more of it spare. So length raises the ranking
+up to the preferred three hours and does nothing after, which stops a
+long mediocre stretch outranking a short excellent one.
+
+### 7.4 What it needed from the rest of the project
+
+**Wind, which the model did not carry.** Added to the sample and read
+from all four bands -- and it set the same trap the temperature did:
+`windSpeed` in the forecasts and in the station's current reading,
+`windspeedAvg` in the station's history. Three spellings of one
+quantity in one API, failing the silent way, as a field that is simply
+never populated.
+
+**The location's clock**, so "evening" means evening where the fire is
+(sec 3.12.1). Scoring the hour of the day would otherwise have been
+scoring the reader's day rather than the weather's.
+
+### 7.5 Absent rather than cheerful
+
+Where nothing qualifies, the line says so. **"No grilling window in the
+next three days" is a useful answer**, and inventing a mediocre one to
+fill the space would be the same failure as a graph that draws through
+missing data.
 
 ## 8. Licence
 
@@ -1157,7 +1217,8 @@ Settled:
 - The palette, measured from WU's station dashboard (sec 3.8.2)
 - The internal time series is ours; every provider translates into it,
   including WU (sec 2.7, sec 3)
-- BBQ scoring deferred (sec 7)
+- Grilling windows scored and shaded, with the preferences gathered in
+  one place and marked as preferences (sec 7)
 - No licence (sec 8)
 - No remote; local only, and not for a harmonizing pass to close
   (sec 8.1)

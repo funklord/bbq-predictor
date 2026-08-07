@@ -99,6 +99,9 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 	const QString chance_key = QStringLiteral("precipChance");
 	const QJsonArray chance = root.value(chance_key).toArray();
 
+	const QString wind_key = QStringLiteral("windSpeed");
+	const QJsonArray wind = root.value(wind_key).toArray();
+
 	/*
 	 * Time. The hourly band offers epoch seconds; the nowcast offers
 	 * only a local string, and its offset is what makes that usable
@@ -167,6 +170,7 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 
 	for (std::size_t i = 0; i < samples.size(); ++i) {
 		samples[i].precip_chance = number_at(chance, static_cast<int>(i));
+		samples[i].wind_kph = number_at(wind, static_cast<int>(i));
 	}
 
 	/* Rain second, because converting an accumulation needs the span. */
@@ -238,6 +242,18 @@ bbq_series bbq_wu_read_observed(const QJsonDocument &response) {
 		const QJsonValue rain = metric.value(QStringLiteral("precipRate"));
 		if (rain.isDouble()) {
 			sample.precip_rate = rain.toDouble();
+		}
+
+		/*
+		 * windspeedAvg here, windSpeed in the current endpoint next
+		 * door and in the forecasts. Three spellings of one quantity
+		 * across one API, which is the same trap tempAvg/temp already
+		 * set -- and it fails the same silent way, as a field that is
+		 * simply never populated.
+		 */
+		const QJsonValue wind = metric.value(QStringLiteral("windspeedAvg"));
+		if (wind.isDouble()) {
+			sample.wind_kph = wind.toDouble();
 		}
 
 		/*
@@ -315,6 +331,11 @@ bbq_series bbq_wu_read_current_station(const QJsonDocument &response) {
 	const QJsonValue rain = metric.value(QStringLiteral("precipRate"));
 	if (rain.isDouble()) {
 		sample.precip_rate = rain.toDouble();
+	}
+
+	const QJsonValue wind = metric.value(QStringLiteral("windSpeed"));
+	if (wind.isDouble()) {
+		sample.wind_kph = wind.toDouble();
 	}
 
 	const QString zone = row.value(QStringLiteral("tz")).toString();

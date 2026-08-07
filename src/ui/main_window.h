@@ -66,6 +66,7 @@ private:
 
 	QComboBox *m_method_box;
 	QComboBox *m_smoothing_box;
+	QLabel *m_verdict;
 	QLabel *freshness_label;
 	bbq_forecast_graph *m_graph;
 	bbq_wu_feed *m_feed;

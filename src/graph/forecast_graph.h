@@ -7,6 +7,7 @@
 
 #include "graph/interpolate.h"
 #include "model/composite.h"
+#include "model/grill.h"
 
 class QMouseEvent;
 class QPaintEvent;
@@ -33,6 +34,7 @@ struct bbq_graph_palette {
 	QColor chance;
 	QColor now_marker;
 	QColor stale_warning;
+	QColor grill_window;
 	QColor readout_back;
 	QColor readout_edge;
 
@@ -102,6 +104,10 @@ public:
 	void set_smoothing(int seconds);
 	int smoothing() const { return m_smoothing_s; }
 
+	/* Shade the stretches worth lighting a fire in (sec 7). */
+	void set_show_windows(bool show);
+	bool show_windows() const { return m_show_windows; }
+
 	void set_show_samples(bool show);
 	bool show_samples() const { return m_show_samples; }
 
@@ -141,6 +147,7 @@ private:
 	bbq_interpolation m_interpolation = bbq_interpolation::akima;
 	bool m_show_samples = true;
 	int m_smoothing_s = 30 * 60;
+	bool m_show_windows = true;
 
 	/*
 	 * Where the readout is pointing, as a column index into the plot,

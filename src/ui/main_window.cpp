@@ -10,16 +10,26 @@
 
 #include "graph/forecast_graph.h"
 #include "graph/interpolate.h"
+#include "model/grill.h"
 #include "wu/feed.h"
 
 bbq_main_window::bbq_main_window(QWidget *parent)
         : QWidget(parent), m_method_box(nullptr), m_smoothing_box(nullptr),
-          freshness_label(nullptr),
+          m_verdict(nullptr), freshness_label(nullptr),
           m_graph(nullptr), m_feed(nullptr) {
 	setWindowTitle(tr("bbqpredictor"));
 
 	m_graph = new bbq_forecast_graph(this);
 	m_feed = new bbq_wu_feed(this);
+
+	/*
+	 * The answer to the question the program is named after, in words,
+	 * because a shaded band on a graph says WHEN but not HOW GOOD and
+	 * the difference between a fine evening and a merely tolerable one
+	 * is the whole point of asking.
+	 */
+	m_verdict = new QLabel(this);
+	m_verdict->setTextFormat(Qt::PlainText);
 
 	freshness_label = new QLabel(this);
 	freshness_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -90,6 +100,12 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_graph->set_smoothing(smoothing->currentData().toInt());
 	});
 
+	QCheckBox *windows = new QCheckBox(tr("Grill windows"), this);
+	windows->setChecked(m_graph->show_windows());
+	connect(windows, &QCheckBox::toggled, this, [this](bool on) {
+		m_graph->set_show_windows(on);
+	});
+
 	QCheckBox *marks = new QCheckBox(tr("Mark samples"), this);
 	marks->setChecked(m_graph->show_samples());
 	connect(marks, &QCheckBox::toggled, this, [this](bool on) {
@@ -101,11 +117,13 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	controls->addWidget(method, 0);
 	controls->addWidget(new QLabel(tr("Rounding:"), this), 0);
 	controls->addWidget(smoothing, 0);
+	controls->addWidget(windows, 0);
 	controls->addWidget(marks, 0);
 	controls->addStretch(1);
 	controls->addWidget(freshness_label, 0);
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
+	layout->addWidget(m_verdict, 0);
 	layout->addWidget(m_graph, 1);
 	layout->addLayout(controls, 0);
 
@@ -179,6 +197,48 @@ void bbq_main_window::refresh_status() {
 		const QDateTime when = QDateTime::fromSecsSinceEpoch(oldest);
 		text = tr("Oldest band fetched ");
 		text += when.toString(QStringLiteral("HH:mm:ss"));
+	}
+
+	/*
+	 * The verdict, recomputed whenever a band lands. Absent rather than
+	 * cheerful when nothing qualifies: "no good window" is a useful
+	 * answer and inventing a mediocre one to fill the line would not
+	 * be.
+	 */
+	const QTimeZone zone = composite.zone();
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	const bbq_grill_policy policy;
+	const std::vector<bbq_window> windows =
+	        bbq_grill_windows(composite, zone, now, now + 3 * 24 * 3600, policy);
+
+	if (windows.empty()) {
+		m_verdict->setText(tr("No grilling window in the next three days."));
+	} else {
+		const bbq_window &best = windows.front();
+		QDateTime start = QDateTime::fromSecsSinceEpoch(best.start_utc);
+		QDateTime end = QDateTime::fromSecsSinceEpoch(best.end_utc);
+		if (zone.isValid()) {
+			start = QDateTime::fromSecsSinceEpoch(best.start_utc, zone);
+			end = QDateTime::fromSecsSinceEpoch(best.end_utc, zone);
+		}
+
+		QString verdict = tr("Best window: ");
+		verdict += start.toString(QStringLiteral("ddd HH:mm"));
+		verdict += QStringLiteral(" to ");
+		verdict += end.toString(QStringLiteral("HH:mm"));
+		verdict += QStringLiteral("  (");
+		verdict += QString::number(best.duration_s() / 3600.0, 'f', 1);
+		verdict += tr(" h, score ");
+		verdict += QString::number(best.score, 'f', 2);
+		verdict += QStringLiteral(")");
+
+		if (windows.size() > 1) {
+			verdict += QStringLiteral("   +");
+			verdict += QString::number(windows.size() - 1);
+			verdict += tr(" more");
+		}
+
+		m_verdict->setText(verdict);
 	}
 
 	const std::vector<bbq_band> missing = composite.missing_bands();

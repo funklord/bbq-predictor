@@ -439,6 +439,7 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.chance = QColor(0x17, 0xaa, 0xdb);
 	m_palette.now_marker = QColor(0x00, 0x53, 0xae);
 	m_palette.stale_warning = QColor(0xd5, 0x20, 0x2a);
+	m_palette.grill_window = QColor(0xff, 0x8b, 0x33);
 	m_palette.readout_back = QColor(0x2b, 0x2b, 0x2b);
 	m_palette.readout_edge = QColor(0x9a, 0x9a, 0x9a);
 	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
@@ -463,6 +464,11 @@ void bbq_forecast_graph::set_interpolation(bbq_interpolation method) {
 
 void bbq_forecast_graph::set_smoothing(int seconds) {
 	m_smoothing_s = seconds;
+	update();
+}
+
+void bbq_forecast_graph::set_show_windows(bool show) {
+	m_show_windows = show;
 	update();
 }
 
@@ -616,6 +622,42 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			const double tall = chance_plot.bottom() - plot.top();
 			painter.fillRect(QRectF(left, plot.top(), right - left, tall),
 			                 m_palette.band_shade);
+		}
+	}
+
+	/*
+	 * The grilling windows (sec 7), drawn under the data rather than
+	 * over it. A recommendation should be the background a reading is
+	 * seen against, not something covering it up.
+	 */
+	if (m_show_windows) {
+		const bbq_grill_policy policy;
+		const std::vector<bbq_window> windows =
+		        bbq_grill_windows(m_composite, zone, from, to, policy);
+
+		QColor shade = m_palette.grill_window;
+
+		for (const bbq_window &window : windows) {
+			const double x0 = plot.left() + (window.start_utc - from) / seconds_per_pixel;
+			const double x1 = plot.left() + (window.end_utc - from) / seconds_per_pixel;
+			const double left = std::max(x0, static_cast<double>(plot.left()));
+			const double right = std::min(x1, static_cast<double>(plot.right()));
+
+			if (right <= left) {
+				continue;
+			}
+
+			/*
+			 * Stronger for a better window, so the ranking is visible
+			 * rather than only knowable by hovering. Bounded well below
+			 * opaque -- this is a hint under the data, not a highlight
+			 * over it.
+			 */
+			const int alpha = 26 + static_cast<int>(window.rank * 54.0);
+			shade.setAlpha(std::min(80, alpha));
+
+			const double tall = chance_plot.bottom() - plot.top();
+			painter.fillRect(QRectF(left, plot.top(), right - left, tall), shade);
 		}
 	}
 
