@@ -860,36 +860,61 @@ Two more that follow from rules already settled:
   providers disagree is information; smoothing it is inventing an
   agreement.
 
-### 3.11.2 A choice of methods, as a graphing tool has
-
-Not one switch and not a prohibition. **Several methods, chosen by the
-user**, which is what any serious series tool offers:
+### 3.11.2 The methods
 
 | Method | Shape | Where it is right |
 |---|---|---|
 | Step | hold each value across its span | a mean ACROSS a span -- rain rate, rain chance |
-| Linear | join consecutive samples | a value AT an instant -- temperature; what the graph does today |
-| Monotone cubic | smooth, cannot overshoot | smooth curves where overshoot would lie |
-| Natural cubic / Catmull-Rom | smoothest | dense, well-behaved data where the eye wants a curve |
+| Linear | join consecutive samples | a value AT an instant, and when you want no opinion at all |
+| Monotone (PCHIP) | smooth, cannot overshoot | the safe default |
+| Akima | smooth, local | plateaus beside sharp changes -- this data's actual shape |
+| Akima (modified) | as Akima, flatter on flat runs | long runs of equal samples |
+| Natural cubic | C2 continuous, smoothest | dense well-behaved data |
+| Catmull-Rom | C1 centred difference | what many tools call "spline" |
 
-**Monotone cubic is the one that matters, and it was confirmed by
-building it.** Switching the same data to natural cubic moved the
-temperature axis from 31/27 to 32/26 -- the curve drew values beyond
-every sample in the series, widening the scale to fit numbers nobody
-reported, with visible ringing between the plateaus. The reason is not
-aesthetic. A plain cubic spline OVERSHOOTS between samples: it will
-draw rain below zero, or a temperature peak higher than any sample in
-the series. That is inventing a value nobody reported, and unlike a
-drawn line between two real points it is not recoverable from the data
--- marking the samples does not excuse it, because the invented maximum
-sits between the marks. A monotone method (Fritsch-Carlson, or
-equivalent) is bounded by its neighbouring samples by construction,
-which is what makes smoothing honest rather than merely pretty.
+**Akima earns its place on this data specifically.** A cubic spline
+decides every tangent from the whole curve, so one sharp change ripples
+outward and wobbles regions that were flat. Akima decides each tangent
+from only the four nearest slopes, so a change stays local -- and this
+data is exactly plateaus beside fast drops. Rendered side by side, the
+natural cubic visibly rings through the stepped evening while Akima
+follows it and draws the morning ramp as the straight line it is.
 
-Earlier this section said rain "probably should not" interpolate at
-all. That was too strong and is corrected: the semantics still argue
-for **step as the default** for a span-mean, but a default is not a
-ban, and the choice belongs to whoever is looking at the graph.
+**Two of them can overshoot: natural cubic and Catmull-Rom.** They will
+draw a value beyond every sample -- confirmed by building it, when
+switching to Catmull-Rom moved the temperature axis from 31/27 to 32/26
+to fit numbers nobody reported. Marking the samples does not excuse
+that, because the invented extreme sits BETWEEN the marks. They are
+kept because they are legitimate choices for well-behaved data and
+because seeing what the others avoid is worth something, but neither is
+the default.
+
+### 3.11.2.1 A correction, and a warning about names
+
+**What this project called "natural cubic" was Catmull-Rom.** They are
+different curves -- Catmull-Rom is a C1 Hermite spline from centred
+differences, a natural cubic is C2 and solved from a tridiagonal
+system -- and both are now offered under their own names.
+
+The mistake is worth leaving recorded. It produced a curve that looked
+plausible under a label that was wrong, which is this document's
+recurring failure in a new place: nothing about the picture said the
+name did not fit it.
+
+### 3.11.2.2 The steps are in the data, not the curve
+
+Worth knowing before reaching for a smoother method. **Weather
+Underground reports whole degrees**, so a slow overnight fall arrives
+as a staircase of one-degree drops, and no interpolator removes it --
+every method here passes THROUGH the samples, so quantisation in equals
+quantisation out. Smoothness only changes how the corners are rounded.
+
+Removing it would need an APPROXIMATING method -- a smoothing spline or
+a filter -- which does not pass through the samples at all. That is a
+different category and a bigger claim: the curve would no longer be
+"what was reported, joined up", and the marks would visibly sit off it.
+That visible disagreement is arguably the honest way to offer it, and
+it is not built.
 
 ### 3.11.3 Marking the samples is what makes it honest
 

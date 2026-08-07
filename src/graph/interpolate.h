@@ -14,7 +14,10 @@ enum class bbq_interpolation {
 	step,
 	linear,
 	monotone,
+	akima,
+	makima,
 	natural,
+	catmull,
 };
 
 const char *bbq_interpolation_name(bbq_interpolation method);
@@ -56,9 +59,15 @@ public:
 
 private:
 	void compute_slopes();
+	void compute_natural();
 
 	std::vector<bbq_knot> m_knots;
+
+	/* Hermite tangents, for every method except step/linear/natural. */
 	std::vector<double> m_slopes;
+
+	/* Second derivatives, for the natural cubic's own evaluation. */
+	std::vector<double> m_second;
 	bbq_interpolation m_method = bbq_interpolation::linear;
 };
 

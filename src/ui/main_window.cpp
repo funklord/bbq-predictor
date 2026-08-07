@@ -39,7 +39,10 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		bbq_interpolation::step,
 		bbq_interpolation::linear,
 		bbq_interpolation::monotone,
+		bbq_interpolation::akima,
+		bbq_interpolation::makima,
 		bbq_interpolation::natural,
+		bbq_interpolation::catmull,
 	};
 
 	for (bbq_interpolation candidate : methods) {

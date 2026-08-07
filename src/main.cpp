@@ -46,7 +46,7 @@ void print_usage(QTextStream &out) {
 	out << "  --station ID   the pinned weather station, e.g. ISTOCK822\n";
 	out << "  --geocode      LAT,LON for the forecast bands; derived from\n";
 	out << "                 the station when omitted\n";
-	out << "  --interp M     step|linear|monotone|natural, for --shot\n";
+	out << "  --interp M     step|linear|monotone|akima|makima|natural|\n";
 	out << "  --cursor N     park the readout on column N, for --shot\n";
 	out << "  --shot FILE    fetch, render the window to a PNG, and exit.\n";
 	out << "                 A diagnostic: looking at the picture is how\n";
@@ -146,8 +146,14 @@ int main(int argc, char *argv[]) {
 		window.set_interpolation(bbq_interpolation::step);
 	} else if (interp == QStringLiteral("linear")) {
 		window.set_interpolation(bbq_interpolation::linear);
+	} else if (interp == QStringLiteral("akima")) {
+		window.set_interpolation(bbq_interpolation::akima);
+	} else if (interp == QStringLiteral("makima")) {
+		window.set_interpolation(bbq_interpolation::makima);
 	} else if (interp == QStringLiteral("natural")) {
 		window.set_interpolation(bbq_interpolation::natural);
+	} else if (interp == QStringLiteral("catmull")) {
+		window.set_interpolation(bbq_interpolation::catmull);
 	} else if (interp == QStringLiteral("monotone")) {
 		window.set_interpolation(bbq_interpolation::monotone);
 	}
