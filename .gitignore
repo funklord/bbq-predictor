@@ -3,6 +3,7 @@
 /build/
 /build-*/
 /bbqpredictor
+/bbqpredictor.new
 
 # qmake droppings
 .qmake.stash

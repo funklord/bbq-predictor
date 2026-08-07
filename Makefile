@@ -88,9 +88,24 @@ $(BUILD_DIR)/Makefile: bbqpredictor.pro
 # through qmake's Makefile rather than being missed. qmake's own generated
 # Makefile tracks per-object dependencies; this rule only has to notice
 # that the set changed.
+# Copied beside the target and RENAMED over it, never written through.
+#
+# Writing directly fails with ETXTBSY the moment the previous build is
+# running -- the kernel refuses to modify a file it is executing -- so
+# `make` broke for exactly as long as the app was open. That is a poor
+# trade for a GUI you are supposed to leave running while you work on it.
+#
+# rename(2) replaces the directory entry rather than the file. The
+# running process keeps its own inode and carries on undisturbed with
+# the old code, and the next launch picks up the new binary. It is also
+# atomic, so nothing ever sees a half-copied executable at this path.
+#
+# The temporary lives in the same directory on purpose: rename cannot
+# cross filesystems, and /tmp frequently is one.
 $(TARGET): $(BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
 	$(MAKE) -C $(BUILD_DIR)
-	cp $(BUILD_DIR)/$(TARGET) $(TARGET)
+	cp $(BUILD_DIR)/$(TARGET) $(TARGET).new
+	mv -f $(TARGET).new $(TARGET)
 
 run: $(TARGET)
 	./$(TARGET)
@@ -157,6 +172,7 @@ uninstall:
 # clean removes intermediates only; $(TARGET) survives, so `make install`
 # stays possible without a rebuild.
 clean:
+	rm -f $(TARGET).new
 	@if [ -f $(BUILD_DIR)/Makefile ]; then $(MAKE) -C $(BUILD_DIR) clean; fi
 
 # Removes a whole directory, having first checked it is one we could
