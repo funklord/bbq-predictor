@@ -3,6 +3,8 @@
 #include <QDateTime>
 #include <QFont>
 #include <QFontMetrics>
+#include <QEvent>
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -57,6 +59,16 @@ struct column {
 	 * (sec 3.11.1, sec 3.11.3).
 	 */
 	bool has_knot = false;
+
+	/*
+	 * The knot sample's OWN start time, not the column's.
+	 *
+	 * A column is a couple of minutes wide, so deriving the time from
+	 * its position put 05:59 in the readout for a sample that is
+	 * stamped 06:00. Small, and exactly the kind of number that looks
+	 * measured because everything around it is.
+	 */
+	qint64 knot_utc = 0;
 	bool knot_has_temperature = false;
 	double knot_temperature = 0.0;
 	bool knot_has_rain = false;
@@ -138,6 +150,9 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 		const bool starts_here = after_start && before_end;
 
 		if (starts_here) {
+			if (!result.has_knot) {
+				result.knot_utc = samples[i].start_utc;
+			}
 			result.has_knot = true;
 
 			if (samples[i].temperature.has_value()) {
@@ -361,6 +376,9 @@ QString hour_label(qint64 when_utc) {
 bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	setMinimumSize(360, 180);
 
+	/* Without this the widget hears the mouse only while a button is down. */
+	setMouseTracking(true);
+
 	/*
 	 * Weather Underground's own values, measured from their station
 	 * dashboard rather than picked (sec 3.8.2).
@@ -392,6 +410,8 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.chance = QColor(0x17, 0xaa, 0xdb);
 	m_palette.now_marker = QColor(0x00, 0x53, 0xae);
 	m_palette.stale_warning = QColor(0xd5, 0x20, 0x2a);
+	m_palette.readout_back = QColor(0x2b, 0x2b, 0x2b);
+	m_palette.readout_edge = QColor(0x9a, 0x9a, 0x9a);
 	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
 	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
 	m_palette.band_nowcast = QColor(0x17, 0xaa, 0xdb);
@@ -415,6 +435,24 @@ void bbq_forecast_graph::set_interpolation(bbq_interpolation method) {
 void bbq_forecast_graph::set_show_samples(bool show) {
 	m_show_samples = show;
 	update();
+}
+
+void bbq_forecast_graph::set_cursor_column(int column) {
+	m_cursor_column = column;
+	update();
+}
+
+void bbq_forecast_graph::mouseMoveEvent(QMouseEvent *event) {
+	const int column = static_cast<int>(event->position().x()) - margin_left;
+	m_cursor_column = column;
+	update();
+	QWidget::mouseMoveEvent(event);
+}
+
+void bbq_forecast_graph::leaveEvent(QEvent *event) {
+	m_cursor_column = -1;
+	update();
+	QWidget::leaveEvent(event);
 }
 
 void bbq_forecast_graph::set_window(qint64 before_s, qint64 after_s) {
@@ -701,6 +739,115 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.setPen(QPen(m_palette.now_marker, 1.5));
 	painter.drawLine(QPointF(now_x, plot.top()),
 	                 QPointF(now_x, chance_plot.bottom()));
+
+	/* --- the readout at the cursor ------------------------------------ */
+	/*
+	 * Snapped to the nearest real sample, never to the cursor.
+	 *
+	 * This is the whole design of the thing. The curve between samples
+	 * is drawn rather than measured (sec 3.11), so reporting the value
+	 * under the pointer would put an interpolated number in a box that
+	 * looks like a reading -- a graph that is wrong while looking fine,
+	 * which is the failure this project keeps naming. Snapping means
+	 * every number in the box is one a provider actually reported.
+	 *
+	 * It also says WHICH band and provider produced it, which is what
+	 * sec 3.4 kept the series separate for.
+	 */
+	if (m_cursor_column >= 0 && m_cursor_column < plot.width()) {
+		int found = -1;
+		for (int step = 0; step < plot.width(); ++step) {
+			const int left = m_cursor_column - step;
+			const int right = m_cursor_column + step;
+
+			if (left >= 0 && columns[left].has_knot) {
+				found = left;
+				break;
+			}
+			if (right < plot.width() && columns[right].has_knot) {
+				found = right;
+				break;
+			}
+		}
+
+		if (found >= 0) {
+			const column &c = columns[found];
+			const double px = plot.left() + found;
+
+			painter.setPen(QPen(m_palette.readout_edge, 1, Qt::DashLine));
+			painter.drawLine(QPointF(px, plot.top()),
+			                 QPointF(px, chance_plot.bottom()));
+
+			if (c.knot_has_temperature) {
+				painter.setPen(Qt::NoPen);
+				painter.setBrush(m_palette.temperature);
+				const double py = y_for_temperature(c.knot_temperature);
+				painter.drawEllipse(QPointF(px, py), 4.0, 4.0);
+				painter.setBrush(Qt::NoBrush);
+			}
+
+			QStringList lines;
+			const QDateTime when = QDateTime::fromSecsSinceEpoch(c.knot_utc);
+			lines.append(when.toString(QStringLiteral("ddd HH:mm")));
+
+			if (c.knot_has_temperature) {
+				lines.append(QString::number(c.knot_temperature, 'f', 1) +
+				             tr(" C"));
+			}
+			if (c.knot_has_rain) {
+				lines.append(QString::number(c.knot_rain, 'f', 2) +
+				             tr(" mm/h"));
+			}
+			if (c.knot_has_chance) {
+				lines.append(QString::number(c.knot_chance, 'f', 0) +
+				             tr("% rain"));
+			}
+
+			QString source = QString::fromLatin1(bbq_band_name(c.band));
+			const bbq_series *series = m_composite.band(c.band);
+			if (series != nullptr && !series->provider().isEmpty()) {
+				source += QStringLiteral(" / ") + series->provider();
+			}
+			lines.append(source);
+
+			const QFontMetrics metrics(label_font);
+			int text_width = 0;
+			for (const QString &line : lines) {
+				text_width = qMax(text_width, metrics.horizontalAdvance(line));
+			}
+
+			const int pad = 6;
+			const int box_w = text_width + pad * 2;
+			const int box_h = metrics.height() * lines.size() + pad * 2;
+
+			/*
+			 * Flipped to whichever side has room, so the box never
+			 * leaves the widget and never hides the sample it
+			 * describes.
+			 */
+			double box_x = px + 12;
+			if (box_x + box_w > plot.right()) {
+				box_x = px - 12 - box_w;
+			}
+			double box_y = plot.top() + 6;
+
+			const QRectF box(box_x, box_y, box_w, box_h);
+			painter.setPen(m_palette.readout_edge);
+			painter.setBrush(m_palette.readout_back);
+			painter.drawRoundedRect(box, 3, 3);
+
+			painter.setPen(QColor(0xf0, 0xf0, 0xf0));
+			for (int i = 0; i < lines.size(); ++i) {
+				const QRectF row(box.left() + pad,
+				                 box.top() + pad + i * metrics.height(),
+				                 text_width, metrics.height());
+				painter.drawText(row, Qt::AlignLeft | Qt::AlignVCenter,
+				                 lines.at(i));
+			}
+
+			painter.setBrush(Qt::NoBrush);
+		}
+	}
 
 	/* --- axis labels --------------------------------------------------- */
 	painter.setPen(m_palette.axis_text);

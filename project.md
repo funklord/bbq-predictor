@@ -914,6 +914,47 @@ Two things follow for whatever gets built:
   roughness in the curve.
 
 
+### 3.12 The readout snaps to samples
+
+Hovering the graph shows a readout: the time, the values, and which
+band and provider produced them.
+
+**It snaps to the nearest real sample and never reports the cursor's
+position.** That is the whole design. The curve between samples is
+drawn rather than measured (sec 3.11), so reporting the value under the
+pointer would put an interpolated number in a box that looks like a
+reading -- wrong while looking fine, which is the failure this document
+keeps naming. Snapping means every number in the box was reported by a
+provider.
+
+Naming the band and provider is what sec 3.4 kept the series separate
+for. A reading that cannot say where it came from is most of the way to
+a merged array.
+
+The time comes from the sample's own timestamp, not from the column's
+position. Deriving it from pixels put 06:00 samples in the box as
+05:59 -- small, and exactly the kind of number that looks measured
+because everything beside it is.
+
+### 3.12.1 Open: whose clock is the axis in?
+
+**The time axis and the readout use the viewer's timezone, not the
+location's.** Found while checking a readout against the raw response:
+a Taipei forecast read to somebody in Stockholm labels 04:00Z as "Sat
+06:00", which is Stockholm's morning and Taipei's midday.
+
+In the normal case this is correct and invisible, because the pinned
+station is where the user is and the two clocks agree. It is only wrong
+under the sec 2.6.7 geocode override, which exists precisely so the two
+can differ.
+
+The fix is known and already in hand: the PWS response carries the
+station's IANA zone (sec 2.6.7.1 measured `Europe/Stockholm`), noted at
+the time as a bonus rather than a requirement. This is where it earns
+its place. Not done, because which clock a weather graph should use is
+a question about the reader rather than the data -- there is a case for
+the location's, and a case for showing both.
+
 ## 4. The tray
 
 ### 4.1 Open: which desktop
@@ -1044,6 +1085,8 @@ Open, each needing a decision rather than a drift:
   short hole in the recent past that the next refresh fills (sec 3.9.4).
   Understood and accepted rather than open, but worth revisiting if the
   lag proves larger than the 4-to-22 minutes measured
+- Whose timezone the axis and readout use, which is only wrong under
+  the geocode override (sec 3.12.1)
 - The gap threshold in sec 3.6, which is a guess until real data makes
   it necessary
 - Whether a dark-desktop variant is wanted, given the measured palette

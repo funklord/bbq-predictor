@@ -8,6 +8,7 @@
 #include "graph/interpolate.h"
 #include "model/composite.h"
 
+class QMouseEvent;
 class QPaintEvent;
 
 /*
@@ -32,6 +33,8 @@ struct bbq_graph_palette {
 	QColor chance;
 	QColor now_marker;
 	QColor stale_warning;
+	QColor readout_back;
+	QColor readout_edge;
 
 	/* Per band, for the provenance ribbon (sec 3.4). */
 	QColor band_observed;
@@ -95,10 +98,18 @@ public:
 	void set_show_samples(bool show);
 	bool show_samples() const { return m_show_samples; }
 
+	/*
+	 * Park the readout on a given column without a mouse, so a
+	 * rendered shot can show it. -1 clears.
+	 */
+	void set_cursor_column(int column);
+
 	QSize sizeHint() const override;
 
 protected:
 	void paintEvent(QPaintEvent *event) override;
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void leaveEvent(QEvent *event) override;
 
 private:
 	bbq_graph_palette m_palette;
@@ -113,6 +124,12 @@ private:
 	 */
 	bbq_interpolation m_interpolation = bbq_interpolation::monotone;
 	bool m_show_samples = true;
+
+	/*
+	 * Where the readout is pointing, as a column index into the plot,
+	 * or -1 for nowhere.
+	 */
+	int m_cursor_column = -1;
 };
 
 #endif

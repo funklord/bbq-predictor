@@ -47,6 +47,7 @@ void print_usage(QTextStream &out) {
 	out << "  --geocode      LAT,LON for the forecast bands; derived from\n";
 	out << "                 the station when omitted\n";
 	out << "  --interp M     step|linear|monotone|natural, for --shot\n";
+	out << "  --cursor N     park the readout on column N, for --shot\n";
 	out << "  --shot FILE    fetch, render the window to a PNG, and exit.\n";
 	out << "                 A diagnostic: looking at the picture is how\n";
 	out << "                 layout defects actually get found.\n";
@@ -149,6 +150,11 @@ int main(int argc, char *argv[]) {
 		window.set_interpolation(bbq_interpolation::natural);
 	} else if (interp == QStringLiteral("monotone")) {
 		window.set_interpolation(bbq_interpolation::monotone);
+	}
+
+	const QString cursor = option_value(arguments, QStringLiteral("--cursor"));
+	if (!cursor.isEmpty()) {
+		window.graph()->set_cursor_column(cursor.toInt());
 	}
 
 	window.begin(station, geocode);
