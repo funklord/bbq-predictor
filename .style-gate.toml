@@ -1,0 +1,43 @@
+# Configuration for tools/style_gate.py -- see code-style.md.
+# Nothing here changes the rules; it says which files in THIS tree they
+# apply to, and how small the file list may get before a pass is a lie.
+
+# Migration only: the columns a level occupied before a tree was
+# converted. This tree was written tab-indented from its first commit, so
+# nothing here was ever converted and the value is never read. It is set
+# because the key documents that the question was considered.
+indent_width = 4
+
+# Below this the gate fails instead of passing. Deliberately under the
+# real count, which is around thirteen: this catches a file list that has
+# collapsed -- a broken include/exclude, a discovery path that matched
+# nothing -- and it does not police a number, so adding a source file
+# never requires touching it.
+#
+# The distinction matters because "found nothing" and "found nothing
+# wrong" are the same green output otherwise.
+floor = 8
+
+# `Makefile` is deliberately NOT named here, and this is a real decision
+# rather than an omission.
+#
+# Naming it would apply the tab rule to it. A recipe line must begin with
+# a literal tab, so that much is compliant by construction -- but the body
+# of an `ifdef` is indented with SPACES, because a leading tab there is
+# read as a recipe line instead. This Makefile has `ifdef DEBUG` and
+# `ifdef SANITIZE` blocks, so both spellings are correct and required in
+# the same file, and the tab rule has nothing true to say about it.
+#
+# apt-emerge names its Makefile and is right to: it has no `ifeq`, so the
+# rule costs it nothing and buys the text checks. The moment it gains one,
+# its answer changes to this one. The cost here is that the Makefile gets
+# no trailing-whitespace or final-newline check either; that is the trade,
+# and it is the right way round.
+indent_names = []
+
+# `exclude` is left at the shipped defaults -- attic, third_party, vendor,
+# build, target, dist, .pytest_cache, .claude. Restating them here would
+# only be a second copy to drift out of step with the tool.
+#
+# `build/` is where qmake's generated Makefile and the objects land, and
+# generated sources are exempt anyway.

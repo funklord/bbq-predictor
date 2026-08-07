@@ -1,0 +1,26 @@
+# Build output. BUILD_DIR is settable, so this covers the default and the
+# conventional variants rather than every path somebody might pass.
+/build/
+/build-*/
+/bbqpredictor
+
+# qmake droppings
+.qmake.stash
+Makefile.qmake
+*.o
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+
+# Editor and tooling state
+*~
+*.swp
+__pycache__/
+
+# The scraped Weather Underground key, and anything else cached at
+# runtime, must never reach a commit. It is not ours to redistribute, and
+# a key in a public history is a key that gets revoked (project.md sec 2).
+/cache/
+*.key

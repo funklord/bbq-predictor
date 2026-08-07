@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=bbqpredictor
+GenericName=Weather Applet
+Comment=High-resolution temperature and rain graphs in the tray
+Exec=bbqpredictor
+Icon=se.vibes.bbqpredictor
+Terminal=false
+Categories=Utility;
+Keywords=weather;forecast;rain;temperature;
