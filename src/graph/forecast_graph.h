@@ -5,6 +5,7 @@
 #include <QSize>
 #include <QWidget>
 
+#include "graph/interpolate.h"
 #include "model/composite.h"
 
 class QPaintEvent;
@@ -80,6 +81,20 @@ public:
 	 */
 	void set_window(qint64 before_s, qint64 after_s);
 
+	/*
+	 * How the curve is drawn between samples, and whether the samples
+	 * themselves are marked (project.md sec 3.11).
+	 *
+	 * The marks are what make a smoothed curve honest: they say where
+	 * the data is while the curve says what is drawn between. Both
+	 * repaint immediately, so the choice is answerable by looking.
+	 */
+	void set_interpolation(bbq_interpolation method);
+	bbq_interpolation interpolation() const { return m_interpolation; }
+
+	void set_show_samples(bool show);
+	bool show_samples() const { return m_show_samples; }
+
 	QSize sizeHint() const override;
 
 protected:
@@ -90,6 +105,14 @@ private:
 	bbq_composite m_composite;
 	qint64 m_before_s = 3 * 3600;
 	qint64 m_after_s = 21 * 3600;
+
+	/*
+	 * Monotone by default: smooth, and bounded by its neighbouring
+	 * samples so it cannot invent a peak no sample contains (sec
+	 * 3.11.2).
+	 */
+	bbq_interpolation m_interpolation = bbq_interpolation::monotone;
+	bool m_show_samples = true;
 };
 
 #endif

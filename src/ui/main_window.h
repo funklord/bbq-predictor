@@ -3,6 +3,9 @@
 
 #include <QWidget>
 
+#include "graph/interpolate.h"
+
+class QComboBox;
 class QLabel;
 class bbq_forecast_graph;
 class bbq_wu_feed;
@@ -27,6 +30,16 @@ public:
 	bbq_wu_feed *feed() const { return m_feed; }
 	bbq_forecast_graph *graph() const { return m_graph; }
 
+	/*
+	 * Set the curve and keep the drop-down agreeing with it.
+	 *
+	 * Exists because the two came apart: a command-line override went
+	 * straight to the graph, so every rendered comparison showed a
+	 * control naming a method the graph was not using. A widget that
+	 * misreports the state it controls is worse than no widget.
+	 */
+	void set_interpolation(bbq_interpolation method);
+
 public slots:
 	/*
 	 * Show and raise, or hide if already visible. What the tray icon calls
@@ -48,6 +61,7 @@ private:
 	 */
 	void refresh_status();
 
+	QComboBox *m_method_box;
 	QLabel *freshness_label;
 	bbq_forecast_graph *m_graph;
 	bbq_wu_feed *m_feed;

@@ -43,6 +43,7 @@ INCLUDEPATH += $$PWD/src
 SOURCES += \
 	src/main.cpp \
 	src/graph/forecast_graph.cpp \
+	src/graph/interpolate.cpp \
 	src/model/composite.cpp \
 	src/model/series.cpp \
 	src/ui/main_window.cpp \
@@ -55,6 +56,7 @@ SOURCES += \
 
 HEADERS += \
 	src/graph/forecast_graph.h \
+	src/graph/interpolate.h \
 	src/model/composite.h \
 	src/model/sample.h \
 	src/model/series.h \

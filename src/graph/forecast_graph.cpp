@@ -49,6 +49,27 @@ struct column {
 	bool has_chance = false;
 	double chance = 0.0;
 	bbq_band band = bbq_band::hourly;
+
+	/*
+	 * The real samples that START in this column, if any. These are the
+	 * knots the curve is built from, and the only points that get
+	 * marked -- everything else on screen is drawn between them
+	 * (sec 3.11.1, sec 3.11.3).
+	 */
+	bool has_knot = false;
+	bool knot_has_temperature = false;
+	double knot_temperature = 0.0;
+	bool knot_has_rain = false;
+	double knot_rain = 0.0;
+	bool knot_has_chance = false;
+	double knot_chance = 0.0;
+};
+
+/* Which quantity a curve is being built for. */
+enum class quantity {
+	temperature,
+	rain,
+	chance,
 };
 
 QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
@@ -116,9 +137,35 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 		const bool before_end = samples[i].start_utc < to;
 		const bool starts_here = after_start && before_end;
 
-		if (starts_here && samples[i].temperature.has_value()) {
-			temperature_total += *samples[i].temperature;
-			++temperature_count;
+		if (starts_here) {
+			result.has_knot = true;
+
+			if (samples[i].temperature.has_value()) {
+				temperature_total += *samples[i].temperature;
+				++temperature_count;
+			}
+
+			/*
+			 * Knots take the maximum for rain and chance, matching how
+			 * the column itself is reduced (sec 3.5) -- a curve built
+			 * from meaned peaks would smooth away the thing the maximum
+			 * was protecting.
+			 */
+			if (samples[i].precip_rate.has_value()) {
+				const double v = *samples[i].precip_rate;
+				if (!result.knot_has_rain || v > result.knot_rain) {
+					result.knot_rain = v;
+					result.knot_has_rain = true;
+				}
+			}
+
+			if (samples[i].precip_chance.has_value()) {
+				const double v = *samples[i].precip_chance;
+				if (!result.knot_has_chance || v > result.knot_chance) {
+					result.knot_chance = v;
+					result.knot_has_chance = true;
+				}
+			}
 		}
 
 		if (samples[i].precip_rate.has_value()) {
@@ -148,6 +195,8 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	if (temperature_count > 0) {
 		result.temperature = temperature_total / temperature_count;
 		result.has_temperature = true;
+		result.knot_temperature = result.temperature;
+		result.knot_has_temperature = true;
 	} else if (reading.sample->temperature.has_value()) {
 		/*
 		 * A column narrower than the band's step holds no sample start,
@@ -208,6 +257,100 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	return result;
 }
 
+/*
+ * Replace each covered column's value with one drawn from a curve
+ * through the real samples (project.md sec 3.11).
+ *
+ * Runs are bounded by coverage, so no method ever draws across a gap
+ * (sec 3.6) -- a break in the data stays a break in the curve however
+ * smooth the setting is.
+ *
+ * Columns outside the knot range within a run keep the value reduce()
+ * already gave them. Those are the leading and trailing edges where the
+ * covering sample started before the run or ends after it, and holding
+ * its measured value there is right; extrapolating a curve past its
+ * last knot would be inventing rather than interpolating.
+ */
+void apply_curve(std::vector<column> &cols, quantity which, bbq_interpolation method) {
+	std::size_t i = 0;
+
+	while (i < cols.size()) {
+		if (!cols[i].covered) {
+			++i;
+			continue;
+		}
+
+		std::size_t end = i;
+		while (end < cols.size() && cols[end].covered) {
+			++end;
+		}
+
+		std::vector<bbq_knot> knots;
+		for (std::size_t k = i; k < end; ++k) {
+			const column &c = cols[k];
+			bool present = false;
+			double value = 0.0;
+
+			switch (which) {
+			case quantity::temperature:
+				present = c.knot_has_temperature;
+				value = c.knot_temperature;
+				break;
+			case quantity::rain:
+				present = c.knot_has_rain;
+				value = c.knot_rain;
+				break;
+			case quantity::chance:
+				present = c.knot_has_chance;
+				value = c.knot_chance;
+				break;
+			}
+
+			if (present) {
+				bbq_knot knot;
+				knot.x = static_cast<double>(k);
+				knot.y = value;
+				knots.push_back(knot);
+			}
+		}
+
+		if (knots.size() >= 2) {
+			bbq_curve curve;
+			curve.set(std::move(knots), method);
+
+			for (std::size_t k = i; k < end; ++k) {
+				const double x = static_cast<double>(k);
+				if (x < curve.first_x() || x > curve.last_x()) {
+					continue;
+				}
+
+				double value = curve.at(x);
+
+				switch (which) {
+				case quantity::temperature:
+					cols[k].temperature = value;
+					cols[k].has_temperature = true;
+					break;
+				case quantity::rain:
+					/*
+					 * Clamped, because the natural cubic can overshoot
+					 * and negative rain is not a thing (sec 3.11.2).
+					 */
+					cols[k].rain = std::max(0.0, value);
+					cols[k].has_rain = true;
+					break;
+				case quantity::chance:
+					cols[k].chance = std::max(0.0, std::min(100.0, value));
+					cols[k].has_chance = true;
+					break;
+				}
+			}
+		}
+
+		i = end;
+	}
+}
+
 QString hour_label(qint64 when_utc) {
 	const QDateTime when = QDateTime::fromSecsSinceEpoch(when_utc);
 	return when.toString(QStringLiteral("HH:mm"));
@@ -264,6 +407,16 @@ void bbq_forecast_graph::set_composite(bbq_composite composite) {
 	update();
 }
 
+void bbq_forecast_graph::set_interpolation(bbq_interpolation method) {
+	m_interpolation = method;
+	update();
+}
+
+void bbq_forecast_graph::set_show_samples(bool show) {
+	m_show_samples = show;
+	update();
+}
+
 void bbq_forecast_graph::set_window(qint64 before_s, qint64 after_s) {
 	m_before_s = before_s;
 	m_after_s = after_s;
@@ -309,6 +462,10 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		const qint64 end = from + static_cast<qint64>((x + 1) * seconds_per_pixel);
 		columns.push_back(reduce(m_composite, start, end == start ? end + 1 : end));
 	}
+
+	apply_curve(columns, quantity::temperature, m_interpolation);
+	apply_curve(columns, quantity::rain, m_interpolation);
+	apply_curve(columns, quantity::chance, m_interpolation);
 
 	/* Scales, from what is actually visible rather than from the whole set. */
 	double temperature_low = 0.0;
@@ -463,6 +620,29 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 	if (run.size() > 1) {
 		painter.drawPolyline(run);
+	}
+
+	/*
+	 * The marks (sec 3.11.3). Only real samples get one, which is what
+	 * lets a smoothed curve be read honestly: the dots are the data and
+	 * the line between them is drawn.
+	 */
+	if (m_show_samples) {
+		painter.setPen(Qt::NoPen);
+		painter.setBrush(m_palette.temperature);
+
+		for (int x = 0; x < plot.width(); ++x) {
+			const column &c = columns[x];
+			if (!c.covered || !c.knot_has_temperature) {
+				continue;
+			}
+
+			const double px = plot.left() + x;
+			const double py = y_for_temperature(c.knot_temperature);
+			painter.drawEllipse(QPointF(px, py), 2.0, 2.0);
+		}
+
+		painter.setBrush(Qt::NoBrush);
 	}
 
 	/* --- rain chance, its own panel on a fixed 0..100 scale ----------- */

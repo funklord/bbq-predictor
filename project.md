@@ -825,10 +825,11 @@ measurement: their dashboard plots observations and so has no
 precipitation-chance panel to sample, so this is a WU colour used for a
 WU-adjacent purpose, not one measured from the thing it draws.
 
-### 3.11 Deferred: an optional interpolation mechanism
+### 3.11 Interpolation, as a choice of methods
 
-Wanted later, not now, and recorded while the constraints are fresh
-rather than rediscovered when somebody builds it.
+**Built.** Four methods in `src/graph/interpolate.cpp`, chosen from a
+drop-down that repaints immediately, with the real samples markable on
+the curve.
 
 **Some already exists.** The temperature line interpolates linearly
 between samples at render time (sec 3.8.1), because sec 3.1 makes
@@ -871,7 +872,11 @@ user**, which is what any serious series tool offers:
 | Monotone cubic | smooth, cannot overshoot | smooth curves where overshoot would lie |
 | Natural cubic / Catmull-Rom | smoothest | dense, well-behaved data where the eye wants a curve |
 
-**Monotone cubic is the one that matters**, and the reason is not
+**Monotone cubic is the one that matters, and it was confirmed by
+building it.** Switching the same data to natural cubic moved the
+temperature axis from 31/27 to 32/26 -- the curve drew values beyond
+every sample in the series, widening the scale to fit numbers nobody
+reported, with visible ringing between the plateaus. The reason is not
 aesthetic. A plain cubic spline OVERSHOOTS between samples: it will
 draw rain below zero, or a temperature peak higher than any sample in
 the series. That is inventing a value nobody reported, and unlike a
@@ -993,6 +998,8 @@ Settled:
 - A current band anchors the present, capped at 15 minutes and ranked
   below the forecasts so the extension can only fill a hole (sec 3.9)
 - QPainter over QtCharts, confirmed by building it (sec 3.8)
+- Four interpolation methods, chosen live, with the samples markable;
+  monotone the default because it cannot overshoot (sec 3.11)
 - The palette, measured from WU's station dashboard (sec 3.8.2)
 - The internal time series is ours; every provider translates into it,
   including WU (sec 2.7, sec 3)
@@ -1022,7 +1029,5 @@ Open, each needing a decision rather than a drift:
   it necessary
 - Whether a dark-desktop variant is wanted, given the measured palette
   is fixed and light (sec 3.8.3)
-- An optional interpolation mechanism, deferred with its constraints
-  written down (sec 3.11)
 - Which desktop, and therefore whether the tray needs a fallback (sec 4.1)
 - Packaging mechanism (sec 5.1)
