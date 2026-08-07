@@ -188,9 +188,17 @@ veryclean: clean
 	$(call bbq_remove_tree,$(BUILD_DIR))
 	rm -f $(TARGET)
 
+# `distclean` removes what the build generated and `veryclean` does not.
+# `.qmake.stash` is qmake's, is named, and is disposable by construction.
+#
+# **It no longer sweeps the tree for editor droppings.** `*~` and `*.swp` are
+# not build output: they belong to somebody's editor, and the build system
+# has no business deleting files it did not create. The sweep was also
+# unbounded -- `find .` walks `.git` too, and it was measured deleting files
+# in there. `git clean -xdn` lists that class of file and is the person's
+# call, not the build's.
 distclean: veryclean
 	rm -f .qmake.stash
-	find . -name '*~' -o -name '*.swp' | xargs -r rm -f
 
 help:
 	@sed -n '/^# TARGETS/,/^#$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
