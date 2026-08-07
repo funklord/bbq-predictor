@@ -44,9 +44,15 @@ SOURCES += \
 	src/main.cpp \
 	src/graph/forecast_graph.cpp \
 	src/ui/main_window.cpp \
-	src/ui/tray_icon.cpp
+	src/ui/tray_icon.cpp \
+	src/wu/client.cpp \
+	src/wu/fetch_once.cpp \
+	src/wu/key_source.cpp
 
 HEADERS += \
 	src/graph/forecast_graph.h \
 	src/ui/main_window.h \
-	src/ui/tray_icon.h
+	src/ui/tray_icon.h \
+	src/wu/client.h \
+	src/wu/fetch_once.h \
+	src/wu/key_source.h

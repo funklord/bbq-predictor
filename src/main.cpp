@@ -4,6 +4,7 @@
 
 #include "ui/main_window.h"
 #include "ui/tray_icon.h"
+#include "wu/fetch_once.h"
 
 /*
  * bbqpredictor -- a Qt Widgets weather applet for the tray and a window.
@@ -28,11 +29,28 @@ namespace {
 
 void print_usage(QTextStream &out) {
 	out << "usage: bbqpredictor [--version] [--help]\n";
+	out << "       bbqpredictor --fetch-once [--station ID]";
+	out << " [--geocode LAT,LON]\n";
 	out << "\n";
 	out << "A weather applet for the system tray and a window.\n";
 	out << "\n";
-	out << "  --version   print the version and exit\n";
-	out << "  --help      print this and exit\n";
+	out << "  --version      print the version and exit\n";
+	out << "  --help         print this and exit\n";
+	out << "  --fetch-once   fetch every band once, report what arrived,\n";
+	out << "                 and exit. A diagnostic, not a feature.\n";
+	out << "  --station ID   the pinned weather station, e.g. ISTOCK822\n";
+	out << "  --geocode      LAT,LON for the forecast bands; derived from\n";
+	out << "                 the station when omitted\n";
+}
+
+/* The value after `name`, or empty when absent or last. */
+QString option_value(const QStringList &arguments, const QString &name) {
+	const int index = arguments.indexOf(name);
+	if (index < 0 || index + 1 >= arguments.size()) {
+		return QString();
+	}
+
+	return arguments.at(index + 1);
 }
 
 } // namespace
@@ -58,6 +76,17 @@ int main(int argc, char *argv[]) {
 	if (arguments.contains(QStringLiteral("--help"))) {
 		print_usage(out);
 		return 0;
+	}
+
+	/*
+	 * Answered before any widget is built, so it runs headless -- in a
+	 * build chroot, over ssh, or anywhere without a display. Bounded by
+	 * its own timeout rather than by whatever invokes it.
+	 */
+	if (arguments.contains(QStringLiteral("--fetch-once"))) {
+		return bbq_wu_fetch_once(
+		        option_value(arguments, QStringLiteral("--station")),
+		        option_value(arguments, QStringLiteral("--geocode")), 30);
 	}
 
 	/*
