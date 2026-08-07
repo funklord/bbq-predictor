@@ -912,6 +912,28 @@ quantisation out. Smoothness only changes how the corners are rounded.
 Removing it needs an APPROXIMATING method, which does not pass through
 the samples at all. That is built and is sec 3.11.4.
 
+### 3.11.3 Marking the samples is what makes it honest
+
+This is the mechanism, and it resolves the tension rather than dodging
+it. **Every real sample is markable on the curve**, so a smoothed line
+never has to be trusted on its own: the marks say where the data is and
+the curve says what is drawn between.
+
+It also settles sec 3.11.1 from a second direction. Interpolated values
+have to stay in the renderer, because marking the samples requires
+knowing which points ARE samples -- and a series that has absorbed its
+interpolation can no longer tell you.
+
+Two things follow for whatever gets built:
+
+- **The method is visible, not just active.** Which interpolation is in
+  use belongs where the reader can see it, for the same reason sec 2.4
+  puts the fetch time on the display.
+- **The gap and seam rules survive every method.** No interpolation,
+  however smooth, crosses missing data (sec 3.6) or a disagreement
+  between providers (sec 3.7). Those are breaks in the data, not
+  roughness in the curve.
+
 ### 3.11.4 Rounding, which is approximation and says so
 
 **A separate control, not a seventh curve**, because it makes a larger
@@ -948,29 +970,6 @@ reports what a provider said.
 So the curve visibly departs from the dots as rounding increases, and
 that gap is the claim being made out loud. A smoothed line with no
 marks would be a graph asserting readings nobody took.
-
-### 3.11.3 Marking the samples is what makes it honest
-
-This is the mechanism, and it resolves the tension rather than dodging
-it. **Every real sample is markable on the curve**, so a smoothed line
-never has to be trusted on its own: the marks say where the data is and
-the curve says what is drawn between.
-
-It also settles sec 3.11.1 from a second direction. Interpolated values
-have to stay in the renderer, because marking the samples requires
-knowing which points ARE samples -- and a series that has absorbed its
-interpolation can no longer tell you.
-
-Two things follow for whatever gets built:
-
-- **The method is visible, not just active.** Which interpolation is in
-  use belongs where the reader can see it, for the same reason sec 2.4
-  puts the fetch time on the display.
-- **The gap and seam rules survive every method.** No interpolation,
-  however smooth, crosses missing data (sec 3.6) or a disagreement
-  between providers (sec 3.7). Those are breaks in the data, not
-  roughness in the curve.
-
 
 ### 3.11.5 The defaults, and why they are not the safest ones
 
