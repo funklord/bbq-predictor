@@ -975,6 +975,23 @@ every option open, and no licence is better than a wrong one. Recorded
 explicitly here so the absence does not read as a gap for a later pass to
 close.
 
+## 8.1 No remote, deliberately
+
+**This repository is local only, and that is a decision rather than an
+oversight.** Recorded here for the same reason the absent licence is:
+most of the sibling projects have a `github.com/funklord/<name>` remote,
+so a harmonizing pass would otherwise read the absence as drift and
+close it. `raidtray` has no remote either.
+
+The reason is specific to this project. The tree contains a working
+scraper for Weather Underground's API key and sec 2.2 records, in
+writing, that using it violates their terms of service. Keeping that on
+one machine and publishing it are different acts, and only the
+copyright holder gets to make the second one.
+
+**Adding a remote is theirs to decide, exactly as the licence is.** Do
+not add one because the siblings have one.
+
 ## 9. What has been decided, and what has not
 
 Settled:
@@ -1005,6 +1022,8 @@ Settled:
   including WU (sec 2.7, sec 3)
 - BBQ scoring deferred (sec 7)
 - No licence (sec 8)
+- No remote; local only, and not for a harmonizing pass to close
+  (sec 8.1)
 
 - The WU endpoints for all three bands, observed 2026-08-07 (sec 2.6)
 - The key comes from an embedded request URL, not the config blob
