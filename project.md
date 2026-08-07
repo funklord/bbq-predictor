@@ -222,23 +222,71 @@ the program cannot reconstruct.
   first configuration of any kind, so it sets that location for
   everything after it.
 
-### 2.6.7 Open: does the geocode follow the station?
+### 2.6.7 The geocode derives from the station, with an override
 
-Pinning a station introduces a second setting that can disagree with it.
-The observed band is keyed by `stationId`; the nowcast and hourly bands
-are keyed by `geocode`. **Nothing stops a config pinning a station in
-Stockholm and a geocode in Gothenburg, and the graph would draw two
-places on one axis without a word.**
+Pinning a station introduces a second setting that can disagree with it:
+the observed band is keyed by `stationId`, the nowcast and hourly bands
+by `geocode`. Nothing structural stops a config naming a station in
+Stockholm against a forecast point in Gothenburg, which would draw two
+places on one axis without a word.
 
-The constraint is settled even though the mechanism is not: **the two
-must never silently disagree.**
+**Settled: the geocode is derived from the pinned station's own
+coordinates. An explicit override exists, and when set it wins.**
 
-The obvious resolution -- derive the geocode from the pinned station's
-own coordinates, with an explicit override for the case where somebody
-genuinely wants a nearby station against a different forecast point --
-is **proposed and not decided**, because it changes the config schema
-and that is worth stating out loud rather than discovering in a file
-somebody has to migrate later.
+So there is one setting to make in the normal case, and the two cannot
+drift apart by accident -- only by somebody saying so.
+
+### 2.6.7.1 The derivation needs no extra request
+
+**Verified 2026-08-07 against a real response.** Every row from the PWS
+endpoints carries its own metadata alongside the observation:
+
+| Field | Example | Use |
+|---|---|---|
+| `stationID` | `ISTOCK822` | echoes the pinned station back |
+| `lat`, `lon` | `59.339`, `18.055` | the derived geocode, to 3 decimals |
+| `tz` | `Europe/Stockholm` | the station's IANA zone |
+
+The band that needs the station therefore *supplies* the coordinate the
+other bands need. No lookup endpoint, no second round trip, and no
+separate place for the answer to go stale.
+
+`tz` is a bonus worth noting rather than a requirement: sec 2.6.2's
+awkward case is `fifteenminute` arriving as local time. Its offset makes
+it parseable without help, so this is not load-bearing -- but a real
+IANA zone for the station is better than an offset for anything that has
+to name a time to the user.
+
+### 2.6.7.2 Cache the derived geocode, do not re-derive on demand
+
+Deriving from the observation response creates an ordering problem if
+taken literally: the forecast bands need a geocode, the geocode comes
+from the PWS response, so a cold start would have to fetch the observed
+band first and make the other two wait behind it.
+
+**So the derived geocode is stored in config beside the station**,
+refreshed whenever the PWS responds with a different one. It is a cache
+of a derivation, not a second source of truth, and the station remains
+the thing the user chose.
+
+This also keeps sec 2.6.6's promise honest. A station that is offline
+yields no observation and therefore no coordinate -- but the cached one
+is still there, so the nowcast and hourly bands keep working while the
+observed band is reported absent. Re-deriving on demand would have made
+a dead station take the whole graph down with it, which is precisely
+what "the observed band is optional" was supposed to prevent.
+
+### 2.6.7.3 An override must be visible
+
+The override exists for a real case: somebody wanting a nearby station's
+readings against a different forecast point, which is reasonable when
+the nearest good station is not where you are.
+
+**When it is set, the display says so.** An override that is silent
+recreates the exact failure this section removed -- two places on one
+axis with nothing to say which is which -- and the fact that a user
+opted into it does not make the graph less misleading six months later.
+Deliberate is not the same as remembered.
 
 ### 2.7 More than one provider, with Weather Underground first
 
@@ -440,12 +488,11 @@ Settled:
   substituted; the observed band is optional (sec 2.6.6)
 - Config is QSettings INI under `QStandardPaths::AppConfigLocation`
   (sec 2.6.6)
+- The geocode derives from the station and is cached beside it; an
+  explicit override wins and is shown when set (sec 2.6.7)
 
 Open, each needing a decision rather than a drift:
 
-- Whether the geocode derives from the pinned station or is set
-  independently -- the constraint that they must not silently disagree
-  is settled, the mechanism is not (sec 2.6.7)
 - Which providers past WU actually qualify, measured rather than
   assumed from the candidate table (sec 2.8)
 - The compositing model itself -- the first real design work, and now
