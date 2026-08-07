@@ -2,6 +2,7 @@
 #define BBQ_SERIES_H
 
 #include <QString>
+#include <QTimeZone>
 
 #include <cstddef>
 #include <utility>
@@ -84,6 +85,18 @@ public:
 	void set_fetched_utc(qint64 fetched_utc);
 
 	/*
+	 * The clock at the place this data describes, invalid when the
+	 * provider did not say.
+	 *
+	 * A property of the location rather than of a sample, and it lives
+	 * here because the series is what knows where it came from. Sec
+	 * 3.12.1: a forecast for somewhere else labelled in the reader's
+	 * own timezone is a graph about the wrong hours of the day.
+	 */
+	const QTimeZone &zone() const { return m_zone; }
+	void set_zone(const QTimeZone &zone);
+
+	/*
 	 * Takes the samples and puts them in ascending time order.
 	 *
 	 * The sort is not a tidy-up. One of the endpoints returns its rows
@@ -146,6 +159,7 @@ private:
 	bbq_band m_band = bbq_band::hourly;
 	QString m_provider;
 	qint64 m_fetched_utc = 0;
+	QTimeZone m_zone;
 	std::vector<bbq_sample> m_samples;
 };
 

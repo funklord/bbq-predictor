@@ -111,6 +111,24 @@ qint64 bbq_composite::end_utc() const {
 	return latest;
 }
 
+QTimeZone bbq_composite::zone() const {
+	const bbq_band preference[] = {
+		bbq_band::observed,
+		bbq_band::current,
+		bbq_band::hourly,
+		bbq_band::nowcast,
+	};
+
+	for (bbq_band band : preference) {
+		const bbq_series *series = band_series(band);
+		if (series != nullptr && series->zone().isValid()) {
+			return series->zone();
+		}
+	}
+
+	return QTimeZone();
+}
+
 qint64 bbq_composite::oldest_fetch_utc() const {
 	qint64 oldest = 0;
 

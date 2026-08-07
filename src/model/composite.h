@@ -1,6 +1,7 @@
 #ifndef BBQ_COMPOSITE_H
 #define BBQ_COMPOSITE_H
 
+#include <QTimeZone>
 #include <QtGlobal>
 
 #include <vector>
@@ -81,6 +82,19 @@ public:
 	 * the sec 2.4 failure exactly.
 	 */
 	qint64 oldest_fetch_utc() const;
+
+	/*
+	 * The clock to label this graph in (sec 3.12.1).
+	 *
+	 * Measured bands are asked first, because their zone is the
+	 * station's own IANA name and a forecast band can offer only the
+	 * UTC offset it happened to be issued with -- the same clock most
+	 * of the year, and the wrong one across a daylight-saving change.
+	 *
+	 * Invalid when nothing said, which the caller reads as "use the
+	 * viewer's" rather than as an error.
+	 */
+	QTimeZone zone() const;
 
 private:
 	const bbq_series *band_series(bbq_band band) const;

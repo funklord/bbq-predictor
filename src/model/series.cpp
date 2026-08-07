@@ -79,6 +79,10 @@ void bbq_series::set_fetched_utc(qint64 fetched_utc) {
 	m_fetched_utc = fetched_utc;
 }
 
+void bbq_series::set_zone(const QTimeZone &zone) {
+	m_zone = zone;
+}
+
 void bbq_series::set_samples(std::vector<bbq_sample> samples) {
 	m_samples = std::move(samples);
 

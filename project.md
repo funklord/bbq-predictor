@@ -936,24 +936,37 @@ position. Deriving it from pixels put 06:00 samples in the box as
 05:59 -- small, and exactly the kind of number that looks measured
 because everything beside it is.
 
-### 3.12.1 Open: whose clock is the axis in?
+### 3.12.1 The axis is in the location's clock
 
-**The time axis and the readout use the viewer's timezone, not the
-location's.** Found while checking a readout against the raw response:
-a Taipei forecast read to somebody in Stockholm labels 04:00Z as "Sat
-06:00", which is Stockholm's morning and Taipei's midday.
+**Settled: times are labelled where the weather is, not where the
+reader is.** The graph also names the clock it is using, in the corner
+by the time axis, because a fix nobody can see has not fixed the thing
+that was wrong -- which was a graph quietly showing somebody else's
+hours.
 
-In the normal case this is correct and invisible, because the pinned
-station is where the user is and the two clocks agree. It is only wrong
-under the sec 2.6.7 geocode override, which exists precisely so the two
-can differ.
+The zone is a property of the location, so it lives on the series and
+the composite picks one:
 
-The fix is known and already in hand: the PWS response carries the
-station's IANA zone (sec 2.6.7.1 measured `Europe/Stockholm`), noted at
-the time as a bonus rather than a requirement. This is where it earns
-its place. Not done, because which clock a weather graph should use is
-a question about the reader rather than the data -- there is a case for
-the location's, and a case for showing both.
+- **A pinned station gives its own IANA name.** `tz` arrives in every
+  PWS row, measured in sec 2.6.7.1 and noted then as a bonus. This is
+  where it earned its place.
+- **Without one, the forecast bands give an offset.** Every
+  `validTimeLocal` carries the location's UTC offset, which is right
+  for the moment it describes.
+
+**The named zone is preferred over the offset**, and the difference is
+not pedantry: an offset is a snapshot of a clock, correct until the
+location changes it. `Europe/Stockholm` stays right across a
+daylight-saving change; `+02:00` is wrong from that Sunday onwards, and
+wrong in a way that looks like nothing at all.
+
+Where neither says, the viewer's own clock is used and the corner says
+`local` -- an honest admission rather than a guess.
+
+The fetch time in the status line stays in the viewer's clock
+deliberately. It answers "how long ago did this machine ask", which is
+a question about the reader rather than about the weather.
+
 
 ## 4. The tray
 
@@ -1058,6 +1071,8 @@ Settled:
 - QPainter over QtCharts, confirmed by building it (sec 3.8)
 - Four interpolation methods, chosen live, with the samples markable;
   monotone the default because it cannot overshoot (sec 3.11)
+- The readout snaps to real samples; times are in the location's clock,
+  and the graph names which clock (sec 3.12)
 - The palette, measured from WU's station dashboard (sec 3.8.2)
 - The internal time series is ours; every provider translates into it,
   including WU (sec 2.7, sec 3)
@@ -1085,8 +1100,6 @@ Open, each needing a decision rather than a drift:
   short hole in the recent past that the next refresh fills (sec 3.9.4).
   Understood and accepted rather than open, but worth revisiting if the
   lag proves larger than the 4-to-22 minutes measured
-- Whose timezone the axis and readout use, which is only wrong under
-  the geocode override (sec 3.12.1)
 - The gap threshold in sec 3.6, which is a guess until real data makes
   it necessary
 - Whether a dark-desktop variant is wanted, given the measured palette

@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QTimeZone>
 
 #include <algorithm>
 #include <vector>
@@ -135,6 +136,23 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 		return series;
 	}
 
+	/*
+	 * The forecast bands do not name a zone, but every validTimeLocal
+	 * carries the location's UTC offset -- which is the right clock for
+	 * the moment it describes, and the fallback when no station is
+	 * pinned to supply a proper IANA name. bbq_composite prefers the
+	 * named one where both exist.
+	 */
+	const QString local_key = QStringLiteral("validTimeLocal");
+	const QJsonArray local_times = root.value(local_key).toArray();
+	if (!local_times.isEmpty()) {
+		const QString text = local_times.first().toString();
+		const QDateTime when = QDateTime::fromString(text, Qt::ISODate);
+		if (when.isValid() && when.timeSpec() == Qt::OffsetFromUTC) {
+			series.set_zone(QTimeZone(when.offsetFromUtc()));
+		}
+	}
+
 	std::vector<bbq_sample> samples;
 	samples.reserve(starts.size());
 
@@ -222,6 +240,20 @@ bbq_series bbq_wu_read_observed(const QJsonDocument &response) {
 			sample.precip_rate = rain.toDouble();
 		}
 
+		/*
+		 * The station's own IANA zone (sec 2.6.7.1). Named rather than
+		 * an offset, so it stays right across a daylight saving change
+		 * instead of only until the next one -- which is why sec 3.12.1
+		 * prefers it over the offset a forecast band can supply.
+		 */
+		const QString zone = row.value(QStringLiteral("tz")).toString();
+		if (!zone.isEmpty()) {
+			const QTimeZone parsed(zone.toUtf8());
+			if (parsed.isValid()) {
+				series.set_zone(parsed);
+			}
+		}
+
 		samples.push_back(sample);
 	}
 
@@ -283,6 +315,14 @@ bbq_series bbq_wu_read_current_station(const QJsonDocument &response) {
 	const QJsonValue rain = metric.value(QStringLiteral("precipRate"));
 	if (rain.isDouble()) {
 		sample.precip_rate = rain.toDouble();
+	}
+
+	const QString zone = row.value(QStringLiteral("tz")).toString();
+	if (!zone.isEmpty()) {
+		const QTimeZone parsed(zone.toUtf8());
+		if (parsed.isValid()) {
+			series.set_zone(parsed);
+		}
 	}
 
 	std::vector<bbq_sample> samples;

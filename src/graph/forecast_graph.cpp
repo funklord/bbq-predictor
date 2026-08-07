@@ -366,9 +366,21 @@ void apply_curve(std::vector<column> &cols, quantity which, bbq_interpolation me
 	}
 }
 
-QString hour_label(qint64 when_utc) {
-	const QDateTime when = QDateTime::fromSecsSinceEpoch(when_utc);
-	return when.toString(QStringLiteral("HH:mm"));
+/*
+ * Times are labelled in the LOCATION's clock, not the reader's
+ * (sec 3.12.1). An invalid zone means nothing said, and the viewer's
+ * own is the honest fallback rather than pretending to know.
+ */
+QDateTime local_time(qint64 when_utc, const QTimeZone &zone) {
+	if (zone.isValid()) {
+		return QDateTime::fromSecsSinceEpoch(when_utc, zone);
+	}
+
+	return QDateTime::fromSecsSinceEpoch(when_utc);
+}
+
+QString hour_label(qint64 when_utc, const QTimeZone &zone) {
+	return local_time(when_utc, zone).toString(QStringLiteral("HH:mm"));
 }
 
 } // namespace
@@ -477,6 +489,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		return;
 	}
 
+	const QTimeZone zone = m_composite.zone();
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
 	const qint64 from = now - m_before_s;
 	const qint64 to = now + m_after_s;
@@ -595,7 +608,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.setPen(m_palette.axis_text);
 		const QRectF label(x - 24, chance_plot.bottom() + ribbon_height + 3,
 		                   48, 14);
-		painter.drawText(label, Qt::AlignCenter, hour_label(t));
+		painter.drawText(label, Qt::AlignCenter, hour_label(t, zone));
 	}
 
 	/* --- rain, drawn first so the temperature line sits over it -------- */
@@ -787,7 +800,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			}
 
 			QStringList lines;
-			const QDateTime when = QDateTime::fromSecsSinceEpoch(c.knot_utc);
+			const QDateTime when = local_time(c.knot_utc, zone);
 			lines.append(when.toString(QStringLiteral("ddd HH:mm")));
 
 			if (c.knot_has_temperature) {
@@ -859,6 +872,33 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	const QRectF temperature_bottom(2, plot.bottom() - 12, margin_left - 6, 14);
 	painter.drawText(temperature_bottom, Qt::AlignRight | Qt::AlignVCenter,
 	                 QString::number(temperature_low, 'f', 0) + tr(" C"));
+
+	/*
+	 * Say which clock. A graph in somebody else's timezone that does
+	 * not admit it is the whole of sec 3.12.1, and the fix is not worth
+	 * much if the reader cannot tell it has been applied.
+	 */
+	QString clock = tr("local");
+	if (zone.isValid()) {
+		clock = zone.abbreviation(QDateTime::currentDateTime());
+		if (clock.isEmpty()) {
+			clock = QString::fromUtf8(zone.id());
+		}
+
+		/*
+		 * A zone with no name abbreviates to "UTC+02:00", which does
+		 * not fit and was clipped to "C+02:00" -- a label that looks
+		 * like a typo rather than a truncation. The offset alone says
+		 * the same thing in the space available.
+		 */
+		if (clock.startsWith(QStringLiteral("UTC"))) {
+			clock = clock.mid(3);
+		}
+	}
+
+	painter.drawText(QRectF(2, chance_plot.bottom() + ribbon_height + 3,
+	                        margin_left - 6, 14),
+	                 Qt::AlignRight | Qt::AlignVCenter, clock);
 
 	const QRectF rain_top(width() - margin_right + 4, plot.bottom() -
 	                              plot.height() * 0.45 - 6, margin_right - 6, 14);
