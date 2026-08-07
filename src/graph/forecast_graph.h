@@ -12,23 +12,18 @@ class QPaintEvent;
 /*
  * The colours, gathered in one place on purpose.
  *
- * project.md sec 0 asks for the Weather Underground chart aesthetic, and
- * THIS IS NOT IT -- it is a neutral stand-in derived from the widget
- * palette so the graph is legible in light and dark while the real
- * answer is unknown.
+ * MEASURED from Weather Underground's own station dashboard on
+ * 2026-08-07, not chosen (project.md sec 3.8.2). Their chart is
+ * client-rendered, so the values came out of a rendered screenshot
+ * rather than a stylesheet, sampled by counting pixels.
  *
- * It is unknown because it could not be observed. WU renders its chart
- * client-side from lazily-loaded bundles, there is no browser here to
- * look with, and Qt WebEngine on this machine has the runtime but
- * neither the Widgets library nor the headers to build one. Guessing
- * the palette from memory is precisely the move this project refuses
- * everywhere else, so it is not being made here either.
- *
- * Replace these with measured values once somebody can see the real
- * chart. Everything else in the widget is independent of them.
+ * The band shading and the red are what make the WU chart recognisable
+ * at a glance, which is what sec 0 asks for when it says the aesthetic
+ * matters as much as the sample rate.
  */
 struct bbq_graph_palette {
 	QColor background;
+	QColor band_shade;
 	QColor grid;
 	QColor axis_text;
 	QColor temperature;

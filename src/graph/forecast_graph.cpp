@@ -186,22 +186,30 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	setMinimumSize(360, 180);
 
 	/*
-	 * Derived from the widget palette so the graph follows the desktop
-	 * into dark mode instead of staying a light rectangle in it. See
-	 * the header: these are a stand-in, not the WU palette.
+	 * Weather Underground's own values, measured from their station
+	 * dashboard rather than picked (sec 3.8.2).
+	 *
+	 * The temperature red is #d5202a, which also turns up as a brand
+	 * token in their stylesheet -- two independent sightings of the
+	 * same value, which is what made it worth trusting.
+	 *
+	 * Fixed rather than taken from the widget palette, and that is a
+	 * real trade recorded in sec 3.8.3: the graph no longer follows the
+	 * desktop into dark mode, because a white plot with pale blue hour
+	 * bands IS the aesthetic sec 0 asked for.
 	 */
-	const QPalette &system = palette();
-	m_palette.background = system.color(QPalette::Base);
-	m_palette.grid = system.color(QPalette::Mid);
-	m_palette.axis_text = system.color(QPalette::WindowText);
-	m_palette.temperature = QColor(228, 122, 44);
-	m_palette.rain = QColor(64, 132, 208);
-	m_palette.now_marker = system.color(QPalette::Highlight);
-	m_palette.stale_warning = QColor(200, 64, 48);
-	m_palette.band_observed = QColor(96, 176, 112);
-	m_palette.band_current = QColor(150, 200, 130);
-	m_palette.band_nowcast = QColor(120, 160, 220);
-	m_palette.band_hourly = QColor(140, 140, 160);
+	m_palette.background = QColor(0xff, 0xff, 0xff);
+	m_palette.band_shade = QColor(0xf1, 0xf7, 0xfb);
+	m_palette.grid = QColor(0xe7, 0xe7, 0xe7);
+	m_palette.axis_text = QColor(0x4a, 0x4a, 0x4a);
+	m_palette.temperature = QColor(0xd5, 0x20, 0x2a);
+	m_palette.rain = QColor(0x87, 0xc4, 0x03);
+	m_palette.now_marker = QColor(0x00, 0x53, 0xae);
+	m_palette.stale_warning = QColor(0xd5, 0x20, 0x2a);
+	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
+	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
+	m_palette.band_nowcast = QColor(0x17, 0xaa, 0xdb);
+	m_palette.band_hourly = QColor(0x9a, 0x9a, 0x9a);
 }
 
 QSize bbq_forecast_graph::sizeHint() const {
@@ -302,6 +310,31 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		const double t = value / rain_high;
 		return plot.bottom() - t * (plot.height() * 0.45);
 	};
+
+	/*
+	 * Alternating three-hour bands, which is the most recognisable
+	 * thing about the WU chart and the cheapest density cue there is:
+	 * it gives the eye a ruler without adding a single line.
+	 */
+	const qint64 band_step = 3 * 3600;
+	const qint64 first_band = (from / band_step) * band_step;
+
+	for (qint64 t = first_band; t < to; t += band_step) {
+		if ((t / band_step) % 2 != 0) {
+			continue;
+		}
+
+		const double x0 = plot.left() + (t - from) / seconds_per_pixel;
+		const double x1 = plot.left() + (t + band_step - from) / seconds_per_pixel;
+		const double left = std::max(x0, static_cast<double>(plot.left()));
+		const double right = std::min(x1, static_cast<double>(plot.right()));
+
+		if (right > left) {
+			painter.fillRect(QRectF(left, plot.top(), right - left,
+			                        plot.height()),
+			                 m_palette.band_shade);
+		}
+	}
 
 	/* --- grid and time axis ------------------------------------------- */
 	painter.setPen(QPen(m_palette.grid, 1, Qt::DotLine));

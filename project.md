@@ -604,23 +604,63 @@ branch always found one and the interpolation never ran. One helper,
 two questions, and only one of them was being asked. Temperature now
 counts a sample only where its START lands in the column.
 
-### 3.8.2 Open: the palette is not WU's
+### 3.8.2 The palette, measured from WU's own chart
 
-Sec 0 asks for the Weather Underground chart aesthetic. **The colours
-in `src/graph/forecast_graph.h` are a neutral stand-in derived from the
-widget palette, and they are not that.**
+Sec 0 asks for the Weather Underground chart aesthetic. **It was
+measured on 2026-08-07 rather than chosen**, and the values are in
+`src/graph/forecast_graph.cpp`.
 
-They are a stand-in because the real thing could not be observed. WU
-renders its chart client-side from lazily-loaded bundles, so the
-palette is not in the page or in the stylesheet; there is no browser
-available here to look with; and Qt WebEngine on this machine has the
-runtime libraries but neither the Widgets library nor the headers
-needed to build a renderer. Guessing it from memory is the move this
-project refuses everywhere else.
+Getting them took three attempts, and the first two failed in ways
+worth recording because they say where the answer is NOT.
 
-So the colours are gathered into one struct with nothing else depending
-on them, and replacing them is a small isolated edit once somebody can
-see the real chart.
+- **Not in the page or the stylesheet.** WU renders its chart
+  client-side from lazily-loaded bundles. The stylesheet holds Angular
+  Material framework tokens and nothing about the chart.
+- **Not on the hourly forecast page.** That page is a TABLE. The graphs
+  WU is known for live on the personal weather station dashboard, which
+  is also where this project's observed band comes from -- the brief
+  and the data source point at the same page.
+
+With Qt WebEngine available, a throwaway tool rendered the dashboard
+and the values were counted out of the pixels:
+
+| Role | Value |
+|---|---|
+| Plot background | `#ffffff` |
+| Alternating three-hour bands | `#f1f7fb` |
+| Gridlines | `#e7e7e7` |
+| Temperature | `#d5202a` |
+| Dew point | `#5b9f49` |
+| Precipitation rate | `#87c403` |
+| Precipitation accumulation | `#17aadb` |
+| Wind speed | `#0053ae` |
+
+Two of them were corroborated independently, which is why the set is
+trusted rather than merely recorded. `#d5202a` appears both in the
+rendered chart and as a brand token in WU's stylesheet, arrived at by
+different routes. And a later capture came out uniformly dimmed by a
+modal overlay; inverting that dim reproduced the already-known red and
+blue to within one digit, which is what made the precipitation colours
+recovered the same way believable.
+
+The alternating bands matter as much as the colours. They are the most
+recognisable thing about the chart and the cheapest density cue there
+is -- a ruler for the eye that costs no lines.
+
+### 3.8.3 What the palette cost
+
+**The graph no longer follows the desktop into dark mode.** The colours
+were derived from `QPalette` before this and are fixed now.
+
+That is a real trade and not an oversight: a white plot with pale blue
+hour bands and a red line IS the aesthetic sec 0 asked for, and a
+version of it that inverts on a dark desktop is a different chart. Sec
+0 also settles the tie -- where a decision trades graph quality against
+anything else, the graph wins.
+
+Worth revisiting if the applet turns out to be used mostly on dark
+desktops, which is a question about how people run it rather than one
+this document can answer.
 
 ### 3.9 The hole at now, and the current band
 
@@ -804,6 +844,7 @@ Settled:
 - A current band anchors the present, capped at 15 minutes and ranked
   below the forecasts so the extension can only fill a hole (sec 3.9)
 - QPainter over QtCharts, confirmed by building it (sec 3.8)
+- The palette, measured from WU's station dashboard (sec 3.8.2)
 - The internal time series is ours; every provider translates into it,
   including WU (sec 2.7, sec 3)
 - BBQ scoring deferred (sec 7)
@@ -830,7 +871,7 @@ Open, each needing a decision rather than a drift:
   lag proves larger than the 4-to-22 minutes measured
 - The gap threshold in sec 3.6, which is a guess until real data makes
   it necessary
-- The graph's palette, which is a neutral stand-in rather than WU's
-  and could not be observed from here (sec 3.8.2)
+- Whether a dark-desktop variant is wanted, given the measured palette
+  is fixed and light (sec 3.8.3)
 - Which desktop, and therefore whether the tray needs a fallback (sec 4.1)
 - Packaging mechanism (sec 5.1)
