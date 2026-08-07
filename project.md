@@ -180,6 +180,66 @@ which is exactly the failure nobody would see coming.
 supplying sub-hourly precipitation is the insurance on the single most
 important band, and it should not wait for the day this stops answering.
 
+### 2.6.5 The station is chosen by the user and pinned
+
+The observed band (sec 2.6) is per-station: `/v2/pws/history/all` takes a
+`stationId`, of the shape `ISTOCK822` as observed on a real page.
+
+**Settled: the user picks the station, and it is pinned in config. It is
+never auto-selected and never silently changed.**
+
+The alternative -- resolve the nearest station to the current geocode on
+each refresh -- is the tempting one and it is wrong, for the same reason
+sec 2.4 exists. A nearest-station lookup means the graph's *provenance*
+moves without the display changing: today's observed curve comes from a
+garden two streets away, tomorrow's from an airfield, and both are
+labelled the same. That is not a stale reading, it is a reading of
+somewhere else, and it is even harder to notice.
+
+Pinning also matters because personal weather stations are personal. A
+station is somebody's hardware in somebody's garden; it goes offline,
+gets moved, or reads badly in ways the owner knows about and a nearest
+lookup does not. A user who has chosen theirs has chosen it for reasons
+the program cannot reconstruct.
+
+### 2.6.6 What follows from pinning
+
+- **Discovery is a separate, explicit act.** Finding candidate stations
+  is a picker the user opens, not something that runs on refresh.
+  `/v3/location/near` is for that moment and no other. A refresh path
+  that can discover a station is a refresh path that can change one.
+- **A pinned station that stops reporting is said, not replaced.**
+  Substituting a neighbour would be the sec 2.4 failure wearing a
+  helpful face. The observed band goes absent, and absent is drawn as
+  absent.
+- **The observed band is optional.** No station configured is a normal
+  state, not an error: the nowcast and hourly bands are geocode-based
+  and need no station at all. The graph works without it and says which
+  band is missing rather than showing a gap and hoping.
+- **Config lives where Qt puts it** --
+  `QStandardPaths::AppConfigLocation`, which is `~/.config/bbqpredictor/`
+  on this platform, in INI through `QSettings`. This is the project's
+  first configuration of any kind, so it sets that location for
+  everything after it.
+
+### 2.6.7 Open: does the geocode follow the station?
+
+Pinning a station introduces a second setting that can disagree with it.
+The observed band is keyed by `stationId`; the nowcast and hourly bands
+are keyed by `geocode`. **Nothing stops a config pinning a station in
+Stockholm and a geocode in Gothenburg, and the graph would draw two
+places on one axis without a word.**
+
+The constraint is settled even though the mechanism is not: **the two
+must never silently disagree.**
+
+The obvious resolution -- derive the geocode from the pinned station's
+own coordinates, with an explicit override for the case where somebody
+genuinely wants a nearby station against a different forecast point --
+is **proposed and not decided**, because it changes the config schema
+and that is worth stating out loud rather than discovering in a file
+somebody has to migrate later.
+
 ### 2.7 More than one provider, with Weather Underground first
 
 **Settled: the fetch layer is multi-provider from the start.**
@@ -375,9 +435,17 @@ Settled:
 - The WU endpoints for all three bands, observed 2026-08-07 (sec 2.6)
 - The key comes from an embedded request URL, not the config blob
   (sec 2.6.1)
+- The station is user-chosen and pinned, never auto-selected (sec 2.6.5)
+- Discovery is an explicit act; a dead station is reported, not
+  substituted; the observed band is optional (sec 2.6.6)
+- Config is QSettings INI under `QStandardPaths::AppConfigLocation`
+  (sec 2.6.6)
 
 Open, each needing a decision rather than a drift:
 
+- Whether the geocode derives from the pinned station or is set
+  independently -- the constraint that they must not silently disagree
+  is settled, the mechanism is not (sec 2.6.7)
 - Which providers past WU actually qualify, measured rather than
   assumed from the candidate table (sec 2.8)
 - The compositing model itself -- the first real design work, and now
