@@ -1064,8 +1064,9 @@ whether a fallback presentation is required.
 ## 5. Build
 
 - `make` builds the app. It does not build tests.
-- `make test` runs the suite -- **and there is no suite yet**, so it says
-  so and fails, rather than reporting a pass over nothing.
+- `make test` builds and runs the suite. It is built by that target and
+  by nothing else, so a plain build stays fast -- which is paid for by
+  never judging a test from a binary the target did not rebuild.
 - `make check` is what must pass before committing.
 - `make style` gates indentation and the document against the tree.
 - `make hooks` installs the commit-msg hook from `tools/hooks/`.
@@ -1080,6 +1081,55 @@ Not chosen. The global guidance prefers `dpkg-buildpackage` driving a
 `dh`-based `debian/rules`, and notes that the seven private projects use
 five different mechanisms between them -- so picking one here is a
 convention change to raise, not a thing to do in passing.
+
+### 5.2 The suite, and what it is for
+
+**Not coverage.** Every test asserts a claim this document makes, on
+the reasoning that a claim nothing checks is a claim that quietly stops
+being true. `make check` is style plus tests, which is what the failing
+`make test` existed to become.
+
+Three binaries rather than one, so a failure names its subject in the
+target that failed: interpolation, model, readers. None of them links
+the widgets, so the suite needs no display.
+
+The properties worth naming:
+
+- **Monotone never overshoots**, checked densely across every span
+  rather than at a few points, because an overshoot is a bulge between
+  samples and sparse sampling is how you miss one.
+- **Catmull-Rom DOES overshoot**, asserted deliberately. It is the
+  reason monotone is the default, so if a change ever made it bounded,
+  this test failing is the right way to find out.
+- **Every method passes through its knots**, which is the line between
+  interpolation and the rounding in sec 3.11.4.
+- **Local linear smoothing reproduces a straight line exactly**,
+  including at the ends -- the specific thing a weighted average gets
+  wrong.
+- **Rain outweighs warmth**, which is sec 7.2's multiply-don't-average
+  in one assertion.
+- **Rows arriving newest-first come back sorted**, which is sec 2.6.2's
+  measured trap.
+
+### 5.2.1 The suite was checked against being vacuous
+
+Two deliberate sabotages, because a green suite proves nothing until it
+has been seen to fail:
+
+- Removing the `qpf` division failed
+  `hourly_converts_accumulation_to_a_rate` and nothing else. The
+  fixture uses a TWO-hour step precisely so a reader that forgot to
+  divide cannot pass on one-hour data.
+- Setting the observed band's priority below the forecast's failed
+  `measured_beats_forecast` and nothing else. Both bands in that test
+  step identically, so resolution cannot decide it -- only the declared
+  table can.
+
+The suite also refuses to run over zero binaries, and that guard fired
+for real on its first run: the binaries built into `build-tests/`
+rather than the per-test subdirectories the glob expected, so a
+correctly-built suite matched nothing. Without the check it would have
+reported success over an empty list.
 
 ## 6. Style
 

@@ -14,9 +14,10 @@
 #                        SET, not for a value -- see BUILD FLAGS.
 #   make SANITIZE=1   -- add ASan+UBSan, independent of DEBUG
 #   make run          -- build and run it
-#   make test         -- run the test suite. There is NOT ONE YET, and this
-#                        target says so and fails rather than reporting a
-#                        pass over nothing.
+#   make test         -- build and run the suite. Built by this target and
+#                        by nothing else, so a plain build stays fast --
+#                        which is paid for by never judging a test from a
+#                        binary this target did not rebuild.
 #   make check        -- everything that must pass before a commit
 #   make style        -- indentation gate, plus project.md against the tree
 #   make hooks        -- install the commit-msg hook from tools/hooks/
@@ -110,21 +111,53 @@ $(TARGET): $(BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
 run: $(TARGET)
 	./$(TARGET)
 
-# There is no test suite yet (project.md sec 5).
+# --- the suite ---------------------------------------------------------
+TEST_BUILD_DIR ?= build-tests
+TEST_SOURCES = $(wildcard tests/*.cpp tests/*.pro tests/*.pri)
+
+$(TEST_BUILD_DIR)/Makefile: tests/tests.pro $(TEST_SOURCES)
+	mkdir -p $(TEST_BUILD_DIR)
+	cd $(TEST_BUILD_DIR) && $(QMAKE) $(CURDIR)/tests/tests.pro $(QMAKE_CONFIG) \
+	        QMAKE_CXX=$(CXX)
+
+tests-build: $(TEST_BUILD_DIR)/Makefile
+	$(MAKE) -C $(TEST_BUILD_DIR)
+
+# Runs every binary the suite built, and reports which one failed rather
+# than only that something did.
 #
-# This target exists and FAILS, rather than being absent or printing a
-# cheerful nothing. A `make test` that exits 0 over an empty suite is the
-# vacuous pass the guidelines warn about: it reads as "the tests pass" in
-# every log and every habit, and the day a real suite arrives nobody
-# notices it was never running.
-test:
-	@echo "test: there is no test suite yet." >&2
-	@echo "test:   This target fails deliberately. A green 'make test' over" >&2
-	@echo "test:   an empty suite is indistinguishable from a real pass, and" >&2
-	@echo "test:   that is the failure mode worth refusing." >&2
-	@echo "test:   Remove this message when tests/ exists, and add 'test'" >&2
-	@echo "test:   to the 'check' target below." >&2
-	@exit 1
+# QtTest forks gdb on a fatal signal and leaves it attached with the
+# binary stopped, which is how a sibling project accumulated 15 GB of
+# resident memory across one session -- a stopped process ignores
+# SIGTERM, so the obvious pkill cleans up nothing. Disabled here; ask
+# for a backtrace explicitly with BBQ_TEST_STACK_DUMP=1.
+ifdef BBQ_TEST_STACK_DUMP
+    TEST_CRASH_ENV =
+else
+    TEST_CRASH_ENV = QTEST_DISABLE_STACK_DUMP=1 QTEST_DISABLE_CORE_DUMP=1
+endif
+
+# Each binary is bounded from outside as well as being short by
+# construction: a suite that hangs must not hang the machine that ran it.
+TEST_TIMEOUT ?= 120
+
+test: tests-build
+	@failed=0; ran=0; \
+	for binary in $(TEST_BUILD_DIR)/test_*; do \
+		[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
+		ran=$$((ran + 1)); \
+		echo "--- $$binary"; \
+		$(TEST_CRASH_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
+	done; \
+	if [ "$$ran" -eq 0 ]; then \
+		echo "test: no test binaries were found in $(TEST_BUILD_DIR)." >&2; \
+		echo "test:   That is a collapsed suite, not a clean one -- a run" >&2; \
+		echo "test:   over zero binaries exits 0 and reads exactly like a" >&2; \
+		echo "test:   pass. Check that tests/tests.pro still lists them." >&2; \
+		exit 1; \
+	fi; \
+	echo "test: $$ran binary(ies), $$failed failed"; \
+	[ "$$failed" -eq 0 ]
 
 style: style-source style-docs
 
@@ -140,11 +173,9 @@ style-docs:
 # What must pass before committing. GNU's meaning of `check`, and what the
 # sibling projects already do.
 #
-# `test` is NOT in this list yet, and that is deliberate: it fails by
-# construction until a suite exists (see above), and a `check` that cannot
-# pass is a `check` nobody runs. Add it the moment tests/ is real -- that
-# is the whole point of the failing target.
-check: style
+# `test` joined this the moment tests/ became real, which was the whole
+# point of the target that failed until then.
+check: style test
 
 # The commit-msg hook lives in the tree so it is reviewable, survives a
 # clone, and can be kept in sync. .git/hooks is untracked, so a hook that
@@ -174,6 +205,7 @@ uninstall:
 clean:
 	rm -f $(TARGET).new
 	@if [ -f $(BUILD_DIR)/Makefile ]; then $(MAKE) -C $(BUILD_DIR) clean; fi
+	@if [ -f $(TEST_BUILD_DIR)/Makefile ]; then $(MAKE) -C $(TEST_BUILD_DIR) clean; fi
 
 # Removes a whole directory, having first checked it is one we could
 # plausibly have made.
@@ -201,7 +233,7 @@ define bbq_remove_tree
 endef
 
 veryclean: clean
-	$(call bbq_remove_tree,$(BUILD_DIR))
+	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR))
 	rm -f $(TARGET)
 
 # `distclean` removes what the build generated and `veryclean` does not.
@@ -219,5 +251,5 @@ distclean: veryclean
 help:
 	@sed -n '/^# TARGETS/,/^#$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
 
-.PHONY: all run test check style style-source style-docs hooks \
+.PHONY: all run test tests-build check style style-source style-docs hooks \
         install uninstall clean veryclean distclean help
