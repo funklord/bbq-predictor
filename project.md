@@ -577,43 +577,103 @@ lines in `QPainter` and a fight with QtCharts's series and axis model.
 **This is still a prior and not a finding.** It should be confirmed by
 trying it, and this paragraph replaced with what was actually learned.
 
-### 3.9 Open: the hole at now
+### 3.9 The hole at now, and the current band
 
-**Found by running the model against live data on 2026-08-07, not by
-reading the endpoint table.**
+**Found by running the model against live data on 2026-08-07**, not by
+reading the endpoint table -- and what it turned out to be was not what
+the first look suggested.
 
-The observed band ends when the station last reported, and the nowcast
-begins at the next quarter-hour boundary. Neither is anchored to the
-present, so between them there is an intermittent hole of up to about
-fifteen minutes -- and it sits exactly at **now**, which is the single
-most important instant on the graph.
+The observed band ends when the history endpoint last caught up, and
+the nowcast begins at a quarter-hour boundary. Neither is anchored to
+the present, so between them sits a hole. When the clock falls inside
+it, the graph has nothing to say about **now**, which is the single
+most important instant on it.
 
-One run showed `at now: no band covers it` with observed ending 13:30Z
-and the nowcast starting 13:45Z. A run a few minutes later was covered.
-It comes and goes with the clock, which is the worst kind of defect to
-find later.
+### 3.9.1 What the hole actually is
 
-The model reports it honestly rather than hiding it, and that is the
-design working: nothing interpolates across the hole and no band is
-stretched to cover it. But honest is not the same as good, and a graph
-with a recurring gap at the present moment is not what sec 0 asks for.
+Not a fixed gap. **The observed band's lag is variable**, measured at
+22 minutes on one fetch and 4 minutes on another a few minutes later,
+which points at caching rather than at the station. The nowcast's first
+sample is sometimes the current quarter-hour and sometimes the next.
 
-**Not yet decided, and the options are genuinely different:**
+So the hole opens and closes with the clock and with whatever the cache
+last served. That is the worst shape a defect can have: a run that
+happens to land in covered time reports success exactly as loudly as a
+run that is genuinely whole.
 
-- **Use the current-conditions endpoints.** Sec 2.6 recorded
-  `/v2/pws/observations/current` and `/v3/wx/observations/current` and
-  this project uses neither. They exist precisely to answer "now", and
-  a fourth band anchored to the present is the obvious fix.
-- **Accept the hole and draw it.** Consistent with sec 3.6, costs
-  nothing, and admits that nobody actually knows the weather in a
-  fifteen-minute window nothing has reported on yet.
-- **Let the observed band's last sample run to now.** Rejected already
-  by sec 3.5 -- extending a span past its measurement is inventing
-  data, and it would be indistinguishable from a real reading.
+**The diagnostic therefore scans rather than probes.** A single query at
+now proves nothing; walking the whole composite and reporting every
+uncovered interval produces a claim that can be checked.
 
-The first is probably right, which is why it is written down as a
-question rather than done in passing: it adds a band, and sec 3.3's
-priority table would need a number for it.
+The scan then produced a false alarm of its own, which is worth keeping
+as an example rather than quietly deleting. It stepped a fixed stride
+and judged "is now covered" from the stepped boundaries, so it reported
+a hole at now while the composite was answering now perfectly well --
+the instant had landed in the sliver between the last uncovered step
+and the real edge of coverage. The check was wrong about code that was
+right. That question is now asked of the composite directly, and only
+the hole boundaries carry the stride's error.
+
+### 3.9.2 The fix: a current band
+
+`/v2/pws/observations/current` for a pinned station, and
+`/v3/wx/observations/current` for a config with none.
+
+**They are not equivalent, measured rather than assumed.** The station
+endpoint carries `metric.precipRate`, an instantaneous rate, which is
+what the model stores. The geocode one carries no rate at all -- only
+`precip1Hour` and its longer siblings, which are trailing accumulations
+and would become a plausible wrong number if divided into a rate for
+now. So the geocode fallback yields **temperature and no rain**, which
+is exactly what independently-optional fields are for.
+
+Note also that the station's current endpoint spells temperature
+`metric.temp` where the history endpoint next door spells it
+`metric.tempAvg`. Same API, same quantity, two names.
+
+### 3.9.3 The one place a measurement is knowingly extended
+
+A current observation is an instant, and covering a hole needs a span.
+`bbq_current_validity_s` is 15 minutes: the width of the gap it exists
+to close, so nothing longer is ever needed and anything longer would
+only let a stale reading pose as a fresh one.
+
+**This is a deliberate, narrow exception to sec 3.5**, and it is
+written down rather than slipped in. Two things keep it honest:
+
+- **It is capped.** A reading older than the window stops covering
+  anything, so it can never quietly paper over an outage.
+- **It ranks below the forecast bands** -- priority 150, under the
+  nowcast's 200. This looks like a contradiction of sec 3.3's "measured
+  beats forecast" and is that rule read precisely: the rule governs an
+  instant a band *genuinely* covers, and a current observation
+  genuinely covers only the moment it was taken. A forecast made *for*
+  the following minutes beats a reading stretched *into* them.
+
+Ranking it there makes the extension provably harmless. The current
+band paints only where nothing else reaches -- the hole it was added
+for, and nothing else.
+
+### 3.9.4 What it fixes, and what it does not
+
+**Verified on live data, in the failing condition rather than beside
+it.** A run with a station pinned caught the observed band lagging 26
+minutes, leaving 13:30Z to 13:56Z uncovered by everything else -- and
+the composite answered "now" from the current band. The same happens in
+a geocode-only configuration, where the nowcast's first sample is still
+in the future and the current reading is what sits in the gap.
+
+**It anchors the present. It does not backfill the lag.** The current
+reading is a single point at roughly now, so the stretch of time
+between the observed band's last row and that reading stays uncovered
+-- a hole of up to about fifteen minutes sitting in the *recent past*
+rather than at now.
+
+That residual is left alone deliberately. It is genuinely a period this
+program has no data for yet, the next refresh fills it as the history
+endpoint catches up, and the alternative -- stretching the observed
+band's last sample forward to meet the current reading -- is the
+inventing-data option sec 3.5 already rejected.
 
 ## 4. The tray
 
@@ -696,6 +756,8 @@ Settled:
 - Gaps are drawn as breaks, never interpolated across (sec 3.6)
 - Joins disappear through normalisation, never blending; a surviving
   step is information (sec 3.7)
+- A current band anchors the present, capped at 15 minutes and ranked
+  below the forecasts so the extension can only fill a hole (sec 3.9)
 - The internal time series is ours; every provider translates into it,
   including WU (sec 2.7, sec 3)
 - BBQ scoring deferred (sec 7)
@@ -716,9 +778,10 @@ Open, each needing a decision rather than a drift:
 
 - Which providers past WU actually qualify, measured rather than
   assumed from the candidate table (sec 2.8)
-- The hole at now, found by running the model against live data
-  (sec 3.9) -- probably the current-conditions endpoints, which would
-  add a band and need a priority
+- The observed band's lag against the current reading, which leaves a
+  short hole in the recent past that the next refresh fills (sec 3.9.4).
+  Understood and accepted rather than open, but worth revisiting if the
+  lag proves larger than the 4-to-22 minutes measured
 - The gap threshold in sec 3.6, which is a guess until real data makes
   it necessary
 - QPainter vs QtCharts, to be confirmed by trying (sec 3.8)

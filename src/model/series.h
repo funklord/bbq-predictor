@@ -17,9 +17,25 @@
  */
 enum class bbq_band {
 	observed,
+	current,
 	nowcast,
 	hourly,
 };
+
+/*
+ * How long a current observation is taken to hold (project.md sec 3.9).
+ *
+ * The one place this project knowingly extends a measurement past the
+ * moment it was taken, and it is capped precisely so that it can never
+ * quietly cover an outage: a reading older than this stops covering
+ * anything, and the hole is drawn instead of papered over.
+ *
+ * Fifteen minutes because that is the width of the gap it exists to
+ * close -- the nowcast begins at the next quarter-hour boundary, so
+ * nothing longer is ever needed and anything longer would only let a
+ * stale reading masquerade as a fresh one.
+ */
+const int bbq_current_validity_s = 900;
 
 /*
  * Declared precedence (project.md sec 3.3).

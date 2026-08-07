@@ -232,6 +232,90 @@ bbq_series bbq_wu_read_observed(const QJsonDocument &response) {
 	return series;
 }
 
+bbq_series bbq_wu_read_current_station(const QJsonDocument &response) {
+	bbq_series series(bbq_band::current, QString::fromLatin1(provider_name));
+
+	if (!response.isObject()) {
+		return series;
+	}
+
+	const QJsonObject root = response.object();
+	const QJsonArray rows = root.value(QStringLiteral("observations")).toArray();
+	if (rows.isEmpty()) {
+		return series;
+	}
+
+	const QJsonObject row = rows.first().toObject();
+	const QJsonValue epoch = row.value(QStringLiteral("epoch"));
+	if (!epoch.isDouble()) {
+		return series;
+	}
+
+	bbq_sample sample;
+	sample.start_utc = static_cast<qint64>(epoch.toDouble());
+	sample.duration_s = bbq_current_validity_s;
+
+	const QJsonObject metric = row.value(QStringLiteral("metric")).toObject();
+
+	/*
+	 * `temp` here, `tempAvg` in the history endpoint. Same API, same
+	 * quantity, two spellings -- and reusing the history reader's name
+	 * would have yielded a band with no temperature and nothing to say
+	 * why.
+	 */
+	const QJsonValue temperature = metric.value(QStringLiteral("temp"));
+	if (temperature.isDouble()) {
+		sample.temperature = temperature.toDouble();
+	}
+
+	/* Already mm/h. This is why the station path beats the geocode one. */
+	const QJsonValue rain = metric.value(QStringLiteral("precipRate"));
+	if (rain.isDouble()) {
+		sample.precip_rate = rain.toDouble();
+	}
+
+	std::vector<bbq_sample> samples;
+	samples.push_back(sample);
+	series.set_samples(std::move(samples));
+	return series;
+}
+
+bbq_series bbq_wu_read_current_point(const QJsonDocument &response) {
+	bbq_series series(bbq_band::current, QString::fromLatin1(provider_name));
+
+	if (!response.isObject()) {
+		return series;
+	}
+
+	const QJsonObject root = response.object();
+	const QJsonValue when = root.value(QStringLiteral("validTimeUtc"));
+	if (!when.isDouble()) {
+		return series;
+	}
+
+	bbq_sample sample;
+	sample.start_utc = static_cast<qint64>(when.toDouble());
+	sample.duration_s = bbq_current_validity_s;
+
+	const QJsonValue temperature = root.value(QStringLiteral("temperature"));
+	if (temperature.isDouble()) {
+		sample.temperature = temperature.toDouble();
+	}
+
+	/*
+	 * Deliberately no rain. This endpoint offers precip1Hour and its
+	 * longer siblings, which are trailing accumulations -- dividing one
+	 * by its window would give the mean rate over the hour just gone
+	 * and label it as now, which is a plausible wrong number rather
+	 * than a missing one. Absent is the honest value.
+	 */
+
+	std::vector<bbq_sample> samples;
+	samples.push_back(sample);
+	series.set_samples(std::move(samples));
+	return series;
+}
+
 bbq_series bbq_wu_read_nowcast(const QJsonDocument &response) {
 	column_spec spec;
 	spec.band = bbq_band::nowcast;

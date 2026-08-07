@@ -15,6 +15,8 @@ class bbq_wu_key_source;
  */
 enum class bbq_wu_product {
 	observed,
+	current_station,
+	current_point,
 	nowcast,
 	hourly,
 };
@@ -53,6 +55,23 @@ public:
 	 * `date` is yyyyMMdd, which is the spelling the endpoint wants.
 	 */
 	void fetch_observed(const QString &station_id, const QString &date);
+
+	/*
+	 * The present moment (project.md sec 3.9). Two endpoints, and they
+	 * are not equivalent -- measured on 2026-08-07:
+	 *
+	 *   the station's own current observation carries metric.precipRate,
+	 *   an instantaneous rate, which is what the model stores;
+	 *
+	 *   the geocode one carries no rate at all, only precip1Hour and
+	 *   its longer siblings, which are trailing accumulations and
+	 *   cannot honestly become a rate for now.
+	 *
+	 * So the station path is the real one and the geocode path is a
+	 * temperature-only fallback for a config with no station pinned.
+	 */
+	void fetch_current_station(const QString &station_id);
+	void fetch_current_point(double latitude, double longitude);
 
 signals:
 	/*

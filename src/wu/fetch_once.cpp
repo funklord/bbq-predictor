@@ -118,10 +118,109 @@ station_point point_from_observed(const QJsonDocument &document) {
 	return point;
 }
 
+/*
+ * Walk the whole composite and report every instant no band covers.
+ *
+ * This exists because a single probe at "now" proves nothing: sec 3.9's
+ * hole is intermittent, so a run that happens to land inside covered
+ * time reports success exactly as loudly as a run that is genuinely
+ * whole. Scanning says where the holes ARE, which is a claim that can
+ * be checked rather than a green light that might be luck.
+ *
+ * Bounded by construction: it steps a fixed stride from the composite's
+ * first sample to its last, so the iteration count is the coverage
+ * divided by the stride and nothing about the data can extend it.
+ */
+void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_utc) {
+	const qint64 begin = composite.begin_utc();
+	const qint64 end = composite.end_utc();
+	if (begin == 0 || end <= begin) {
+		out << "  holes      nothing to scan\n";
+		return;
+	}
+
+	/*
+	 * A stride, so every boundary reported below carries up to this
+	 * much error. Fine for locating holes; useless for judging whether
+	 * one instant in particular is covered -- see now_covered.
+	 */
+	const qint64 stride = 60;
+	int holes = 0;
+	qint64 hole_start = 0;
+	qint64 worst = 0;
+
+	for (qint64 t = begin; t <= end; t += stride) {
+		const bool covered = composite.at(t).is_valid();
+
+		if (!covered && hole_start == 0) {
+			hole_start = t;
+		}
+
+		if (covered && hole_start != 0) {
+			const qint64 width = t - hole_start;
+			++holes;
+			if (width > worst) {
+				worst = width;
+			}
+			out << "  hole       " << stamp(hole_start) << "Z..";
+			out << stamp(t) << "Z  (" << (width / 60) << " min)\n";
+			hole_start = 0;
+		}
+	}
+
+	out << "  holes      " << holes;
+	if (holes > 0) {
+		out << ", worst " << (worst / 60) << " min";
+	}
+	out << "\n";
+
+	/*
+	 * Asked directly rather than read off the scan above.
+	 *
+	 * Inferring it from the stepped boundaries said IN A HOLE while the
+	 * composite was answering "now" perfectly well from the current
+	 * band: now had landed in the sub-stride sliver between the last
+	 * uncovered step and the real edge of coverage. That is a check
+	 * being wrong about code that was right, and the fix belongs in the
+	 * check.
+	 */
+	const bool now_covered = composite.at(now_utc).is_valid();
+
+	out << "  now        ";
+	if (now_covered) {
+		out << "covered\n";
+	} else {
+		out << "IN A HOLE -- sec 3.9 is not fixed\n";
+	}
+
+	/*
+	 * The claim sec 3.9's fix actually makes, checked on its own.
+	 *
+	 * "now is covered" above can be true by luck -- the nowcast may
+	 * happen to reach back over this instant on this particular run.
+	 * What the current band promises is narrower and always testable:
+	 * that IT covers now, so that when the other bands leave a hole
+	 * there, something honest is sitting in it.
+	 */
+	const bbq_series *current = composite.band(bbq_band::current);
+	out << "  current    ";
+	if (current == nullptr || current->is_empty()) {
+		out << "absent -- nothing anchors the present\n";
+	} else if (current->at(now_utc) != nullptr) {
+		out << "covers now, so the hole at now cannot reopen\n";
+	} else {
+		out << "present but does NOT cover now -- it is stale\n";
+	}
+}
+
 bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
 	switch (product) {
 	case bbq_wu_product::observed:
 		return bbq_wu_read_observed(document);
+	case bbq_wu_product::current_station:
+		return bbq_wu_read_current_station(document);
+	case bbq_wu_product::current_point:
+		return bbq_wu_read_current_point(document);
 	case bbq_wu_product::nowcast:
 		return bbq_wu_read_nowcast(document);
 	case bbq_wu_product::hourly:
@@ -247,10 +346,11 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	out << "fetch-once: fetching every band once\n";
 
 	if (!station_id.isEmpty()) {
-		++outstanding;
+		outstanding += 2;
 		const QString today =
 		        QDate::currentDate().toString(QStringLiteral("yyyyMMdd"));
 		client.fetch_observed(station_id, today);
+		client.fetch_current_station(station_id);
 	} else {
 		out << "  observed   skipped -- no station pinned, a normal state\n";
 	}
@@ -259,6 +359,16 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 		outstanding += 2;
 		client.fetch_nowcast(latitude, longitude);
 		client.fetch_hourly(latitude, longitude);
+
+		/*
+		 * The geocode fallback for the present moment, and only when
+		 * there is no station -- the station endpoint carries a real
+		 * rain rate where this one carries none (sec 3.9).
+		 */
+		if (station_id.isEmpty()) {
+			++outstanding;
+			client.fetch_current_point(latitude, longitude);
+		}
 	}
 
 	out.flush();
@@ -287,6 +397,8 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 		}
 	}
 	out << "\n";
+
+	report_holes(out, composite, now);
 
 	out << "  at now     " << describe_reading(composite, now) << "\n";
 	out << "  at +3h     " << describe_reading(composite, now + 3 * 3600) << "\n";

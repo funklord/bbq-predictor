@@ -44,6 +44,36 @@
 bbq_series bbq_wu_read_observed(const QJsonDocument &response);
 
 /*
+ * /v2/pws/observations/current -- the station's latest reading.
+ *
+ * Fills the hole at now (project.md sec 3.9). One sample, spanning
+ * bbq_current_validity_s from the moment it was taken, which is the one
+ * place this project knowingly extends a measurement -- capped so it
+ * can never quietly cover an outage, and ranked below the real bands so
+ * it paints only where nothing else reaches.
+ *
+ * Note the field name: this endpoint says metric.temp where the history
+ * endpoint next door says metric.tempAvg, for the same quantity in the
+ * same API. Assuming one spelling worked for both would have produced a
+ * band with no temperature at all and no error to explain it.
+ */
+bbq_series bbq_wu_read_current_station(const QJsonDocument &response);
+
+/*
+ * /v3/wx/observations/current -- the geocode fallback, temperature only.
+ *
+ * Carries no instantaneous rain rate, measured rather than assumed: it
+ * offers precip1Hour, precip6Hour and precip24Hour, which are trailing
+ * accumulations and say nothing honest about the rate right now. The
+ * sample therefore has a temperature and no rain, which is exactly what
+ * the independently-optional fields are for.
+ *
+ * Used only when no station is pinned. With one, the station endpoint
+ * above is strictly better.
+ */
+bbq_series bbq_wu_read_current_point(const QJsonDocument &response);
+
+/*
  * /v3/wx/forecast/fifteenminute -- column-oriented, 15 minutes, 7 hours.
  *
  * The band with the finest forecast resolution is the one with no

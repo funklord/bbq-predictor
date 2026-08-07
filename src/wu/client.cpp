@@ -28,6 +28,10 @@ const char *bbq_wu_product_name(bbq_wu_product product) {
 	switch (product) {
 	case bbq_wu_product::observed:
 		return "observed";
+	case bbq_wu_product::current_station:
+		return "current";
+	case bbq_wu_product::current_point:
+		return "current";
 	case bbq_wu_product::nowcast:
 		return "nowcast";
 	case bbq_wu_product::hourly:
@@ -62,6 +66,21 @@ void bbq_wu_client::fetch_observed(const QString &station_id,
 	 */
 	send(bbq_wu_product::observed, QStringLiteral("/v2/pws/history/all"),
 	     QStringLiteral("stationId=%1&date=%2").arg(station_id, date), true);
+}
+
+void bbq_wu_client::fetch_current_station(const QString &station_id) {
+	const QString query = QStringLiteral("stationId=%1").arg(station_id);
+	send(bbq_wu_product::current_station,
+	     QStringLiteral("/v2/pws/observations/current"), query, true);
+}
+
+void bbq_wu_client::fetch_current_point(double latitude, double longitude) {
+	QString query = QStringLiteral("geocode=");
+	query += QString::number(latitude);
+	query += QStringLiteral(",");
+	query += QString::number(longitude);
+	send(bbq_wu_product::current_point,
+	     QStringLiteral("/v3/wx/observations/current"), query, true);
 }
 
 void bbq_wu_client::send(bbq_wu_product product, const QString &path,

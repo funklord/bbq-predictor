@@ -31,6 +31,24 @@ int bbq_band_priority(bbq_band band) {
 		return 300;
 	case bbq_band::nowcast:
 		return 200;
+
+	/*
+	 * Below the nowcast, and this is not a contradiction of "measured
+	 * beats forecast" -- it is that rule read precisely.
+	 *
+	 * The rule governs an instant a band GENUINELY covers, and a
+	 * current observation genuinely covers only the moment it was
+	 * taken. The rest of its span is the declared extension in
+	 * bbq_current_validity_s, and those minutes were never measured.
+	 * A forecast made FOR them beats a reading stretched INTO them.
+	 *
+	 * Ranking it here makes the extension provably harmless: current
+	 * paints only where no other band reaches, which is exactly the
+	 * hole it was added to fill and nothing else.
+	 */
+	case bbq_band::current:
+		return 150;
+
 	case bbq_band::hourly:
 		return 100;
 	}
@@ -42,6 +60,8 @@ const char *bbq_band_name(bbq_band band) {
 	switch (band) {
 	case bbq_band::observed:
 		return "observed";
+	case bbq_band::current:
+		return "current";
 	case bbq_band::nowcast:
 		return "nowcast";
 	case bbq_band::hourly:

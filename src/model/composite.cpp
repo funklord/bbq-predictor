@@ -30,6 +30,7 @@ const bbq_series *bbq_composite::band(bbq_band band) const {
 std::vector<bbq_band> bbq_composite::missing_bands() const {
 	const bbq_band every[] = {
 		bbq_band::observed,
+		bbq_band::current,
 		bbq_band::nowcast,
 		bbq_band::hourly,
 	};
