@@ -564,18 +564,63 @@ This also gives a debugging rule worth having:
 - A seam **across providers** is **data**, and leaving it alone is
   correct.
 
-### 3.8 Rendering: a prior, not a decision
+### 3.8 Rendering: QPainter, confirmed by building it
 
-The graph is expected to be a hand-painted `QWidget` with `QPainter`
-rather than QtCharts. QtCharts is heavy, opinionated, and fights exactly
-this case -- dense custom rendering over irregular sampling.
+The prior was a hand-painted `QWidget` over QtCharts. **Built, and the
+prior held**, so this section now records what trying it taught rather
+than what was expected.
 
-Sec 3.4 adds a second reason: the renderer walks several series in
-priority order and draws each at its own resolution, which is a few
-lines in `QPainter` and a fight with QtCharts's series and axis model.
+The whole widget is one pass that reduces each pixel column to a value,
+and then three passes that walk that vector -- rain, temperature, and
+the provenance ribbon. Sec 3.5 falls straight out of the reduction: rain
+takes the maximum over the column and temperature the mean, in adjacent
+lines. There was nothing to fight.
 
-**This is still a prior and not a finding.** It should be confirmed by
-trying it, and this paragraph replaced with what was actually learned.
+What QtCharts would have fought is not the line but everything around
+it: a ribbon under the plot coloured per band, a break in the series
+wherever no band covers a column, and a per-column maximum rather than
+a point sample. Each is natural in a paint method and each is an
+argument with a series-and-axis model.
+
+### 3.8.1 Two defects, both found by looking at the picture
+
+Neither would have failed a test that checked the numbers, and that is
+the point of rendering a screen and looking at it.
+
+**The temperature came out as a staircase.** Holding a sample's value
+flat across its whole span asserts that temperature is constant for an
+hour and then jumps, which is false -- sec 3.1 makes temperature a
+value AT an instant, so consecutive points are joined. Rain is the
+opposite and stays flat, because it genuinely is a mean across its
+span. The same widget therefore draws its two quantities with different
+rules, and that is the model being read correctly rather than an
+inconsistency.
+
+**The first fix did nothing, for an instructive reason.**
+`bbq_series::range` returns samples OVERLAPPING a column, which is
+right for rain -- any span touching the column is part of its answer.
+But an hourly sample overlaps all thirty of its columns, so the mean
+branch always found one and the interpolation never ran. One helper,
+two questions, and only one of them was being asked. Temperature now
+counts a sample only where its START lands in the column.
+
+### 3.8.2 Open: the palette is not WU's
+
+Sec 0 asks for the Weather Underground chart aesthetic. **The colours
+in `src/graph/forecast_graph.h` are a neutral stand-in derived from the
+widget palette, and they are not that.**
+
+They are a stand-in because the real thing could not be observed. WU
+renders its chart client-side from lazily-loaded bundles, so the
+palette is not in the page or in the stylesheet; there is no browser
+available here to look with; and Qt WebEngine on this machine has the
+runtime libraries but neither the Widgets library nor the headers
+needed to build a renderer. Guessing it from memory is the move this
+project refuses everywhere else.
+
+So the colours are gathered into one struct with nothing else depending
+on them, and replacing them is a small isolated edit once somebody can
+see the real chart.
 
 ### 3.9 The hole at now, and the current band
 
@@ -758,6 +803,7 @@ Settled:
   step is information (sec 3.7)
 - A current band anchors the present, capped at 15 minutes and ranked
   below the forecasts so the extension can only fill a hole (sec 3.9)
+- QPainter over QtCharts, confirmed by building it (sec 3.8)
 - The internal time series is ours; every provider translates into it,
   including WU (sec 2.7, sec 3)
 - BBQ scoring deferred (sec 7)
@@ -784,6 +830,7 @@ Open, each needing a decision rather than a drift:
   lag proves larger than the 4-to-22 minutes measured
 - The gap threshold in sec 3.6, which is a guess until real data makes
   it necessary
-- QPainter vs QtCharts, to be confirmed by trying (sec 3.8)
+- The graph's palette, which is a neutral stand-in rather than WU's
+  and could not be observed from here (sec 3.8.2)
 - Which desktop, and therefore whether the tray needs a fallback (sec 4.1)
 - Packaging mechanism (sec 5.1)

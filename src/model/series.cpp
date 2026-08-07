@@ -158,6 +158,31 @@ const bbq_sample *bbq_series::at(qint64 when_utc) const {
 	return &candidate;
 }
 
+std::pair<std::size_t, std::size_t> bbq_series::range(qint64 from,
+                                                      qint64 to) const {
+	if (m_samples.empty() || to <= from) {
+		return std::make_pair(std::size_t(0), std::size_t(0));
+	}
+
+	/*
+	 * Overlap, not containment. A sixty-minute sample straddling a
+	 * two-minute column belongs to that column even though it starts
+	 * well before it, and dropping it would leave the column empty and
+	 * be drawn as a gap that is not there.
+	 */
+	std::size_t first = 0;
+	while (first < m_samples.size() && m_samples[first].end_utc() <= from) {
+		++first;
+	}
+
+	std::size_t last = first;
+	while (last < m_samples.size() && m_samples[last].start_utc < to) {
+		++last;
+	}
+
+	return std::make_pair(first, last);
+}
+
 bool bbq_series::has_gap_after(std::size_t index) const {
 	if (index + 1 >= m_samples.size()) {
 		return false;

@@ -48,6 +48,7 @@ SOURCES += \
 	src/ui/main_window.cpp \
 	src/ui/tray_icon.cpp \
 	src/wu/client.cpp \
+	src/wu/feed.cpp \
 	src/wu/fetch_once.cpp \
 	src/wu/key_source.cpp \
 	src/wu/reader.cpp
@@ -60,6 +61,7 @@ HEADERS += \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \
 	src/wu/client.h \
+	src/wu/feed.h \
 	src/wu/fetch_once.h \
 	src/wu/key_source.h \
 	src/wu/reader.h

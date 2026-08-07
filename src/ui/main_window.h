@@ -5,6 +5,7 @@
 
 class QLabel;
 class bbq_forecast_graph;
+class bbq_wu_feed;
 
 /*
  * The window half of the applet (project.md sec 0). The tray is the other
@@ -19,6 +20,12 @@ class bbq_main_window : public QWidget {
 
 public:
 	explicit bbq_main_window(QWidget *parent = nullptr);
+
+	/* Configure and start fetching. Empty station is a normal state. */
+	void begin(const QString &station_id, const QString &geocode);
+
+	bbq_wu_feed *feed() const { return m_feed; }
+	bbq_forecast_graph *graph() const { return m_graph; }
 
 public slots:
 	/*
@@ -39,8 +46,12 @@ private:
 	 * afternoon on it. So the age of the data is part of the display, and
 	 * a silent fall back to cache is a defect.
 	 */
+	void refresh_status();
+
 	QLabel *freshness_label;
-	bbq_forecast_graph *graph;
+	bbq_forecast_graph *m_graph;
+	bbq_wu_feed *m_feed;
+	QString m_last_error;
 };
 
 #endif

@@ -1,9 +1,12 @@
 #include <QApplication>
+#include <QPixmap>
+#include <QTimer>
 #include <QStringList>
 #include <QTextStream>
 
 #include "ui/main_window.h"
 #include "ui/tray_icon.h"
+#include "wu/feed.h"
 #include "wu/fetch_once.h"
 
 /*
@@ -41,6 +44,9 @@ void print_usage(QTextStream &out) {
 	out << "  --station ID   the pinned weather station, e.g. ISTOCK822\n";
 	out << "  --geocode      LAT,LON for the forecast bands; derived from\n";
 	out << "                 the station when omitted\n";
+	out << "  --shot FILE    fetch, render the window to a PNG, and exit.\n";
+	out << "                 A diagnostic: looking at the picture is how\n";
+	out << "                 layout defects actually get found.\n";
 }
 
 /* The value after `name`, or empty when absent or last. */
@@ -95,6 +101,9 @@ int main(int argc, char *argv[]) {
 	 */
 	QApplication::setQuitOnLastWindowClosed(false);
 
+	const QString station = option_value(arguments, QStringLiteral("--station"));
+	const QString geocode = option_value(arguments, QStringLiteral("--geocode"));
+
 	bbq_main_window window;
 	bbq_tray_icon tray;
 
@@ -116,6 +125,38 @@ int main(int argc, char *argv[]) {
 		error << "bbqpredictor:   On GNOME this needs a StatusNotifierItem\n";
 		error << "bbqpredictor:   shell extension. Running as a plain window.\n";
 		window.show();
+	}
+
+	window.begin(station, geocode);
+
+	/*
+	 * Render and exit. Bounded twice over: the shot is taken when the
+	 * feed settles, and a wall-clock timer takes it regardless so a
+	 * request that never answers cannot leave this running forever.
+	 */
+	const QString shot = option_value(arguments, QStringLiteral("--shot"));
+	if (!shot.isEmpty()) {
+		bool taken = false;
+
+		const auto take = [&window, shot, &taken]() {
+			if (taken) {
+				return;
+			}
+			taken = true;
+
+			const QPixmap picture = window.grab();
+			QTextStream report(stdout);
+			if (picture.save(shot)) {
+				report << "shot: wrote " << shot << "\n";
+			} else {
+				report << "shot: could not write " << shot << "\n";
+			}
+			QApplication::quit();
+		};
+
+		QObject::connect(window.feed(), &bbq_wu_feed::settled, &window,
+		                 [take]() { QTimer::singleShot(300, take); });
+		QTimer::singleShot(30000, &window, take);
 	}
 
 	return app.exec();

@@ -4,6 +4,7 @@
 #include <QString>
 
 #include <cstddef>
+#include <utility>
 #include <vector>
 
 #include "model/sample.h"
@@ -117,6 +118,18 @@ public:
 	 * does not reach or has a hole.
 	 */
 	const bbq_sample *at(qint64 when_utc) const;
+
+	/*
+	 * Indices [first, last) of every sample overlapping [from, to).
+	 * Both zero when nothing does.
+	 *
+	 * Drawing needs this and probing cannot replace it. Sec 3.5 says
+	 * rain is downsampled by MAXIMUM, and a maximum requires every
+	 * sample in the pixel column -- asking for the value at the middle
+	 * of the column would sample rather than downsample, and would drop
+	 * exactly the five-minute downpour the rule exists to keep.
+	 */
+	std::pair<std::size_t, std::size_t> range(qint64 from, qint64 to) const;
 
 	/*
 	 * Whether the series is discontinuous between sample `index` and
