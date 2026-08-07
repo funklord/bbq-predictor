@@ -40,6 +40,9 @@ public:
 	 */
 	void set_interpolation(bbq_interpolation method);
 
+	/* Same contract: sets the graph AND the control that reports it. */
+	void set_smoothing(int seconds);
+
 public slots:
 	/*
 	 * Show and raise, or hide if already visible. What the tray icon calls
@@ -62,6 +65,7 @@ private:
 	void refresh_status();
 
 	QComboBox *m_method_box;
+	QComboBox *m_smoothing_box;
 	QLabel *freshness_label;
 	bbq_forecast_graph *m_graph;
 	bbq_wu_feed *m_feed;

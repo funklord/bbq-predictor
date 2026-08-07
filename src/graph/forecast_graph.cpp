@@ -286,7 +286,15 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
  * its measured value there is right; extrapolating a curve past its
  * last knot would be inventing rather than interpolating.
  */
-void apply_curve(std::vector<column> &cols, quantity which, bbq_interpolation method) {
+struct curve_spec {
+	quantity which = quantity::temperature;
+	bbq_interpolation method = bbq_interpolation::monotone;
+	double smooth_columns = 0.0;
+};
+
+void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
+	const quantity which = spec.which;
+	const bbq_interpolation method = spec.method;
 	std::size_t i = 0;
 
 	while (i < cols.size()) {
@@ -328,6 +336,15 @@ void apply_curve(std::vector<column> &cols, quantity which, bbq_interpolation me
 				knots.push_back(knot);
 			}
 		}
+
+		/*
+		 * Smoothed BEFORE the curve is fitted, and only the copy the
+		 * curve is built from. The columns keep their knot_* values, so
+		 * the marks and the readout still report what was measured
+		 * while the line rounds through it -- which is the visible
+		 * disagreement sec 3.11.4 relies on.
+		 */
+		bbq_smooth(knots, spec.smooth_columns);
 
 		if (knots.size() >= 2) {
 			bbq_curve curve;
@@ -444,6 +461,11 @@ void bbq_forecast_graph::set_interpolation(bbq_interpolation method) {
 	update();
 }
 
+void bbq_forecast_graph::set_smoothing(int seconds) {
+	m_smoothing_s = seconds;
+	update();
+}
+
 void bbq_forecast_graph::set_show_samples(bool show) {
 	m_show_samples = show;
 	update();
@@ -514,9 +536,16 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		columns.push_back(reduce(m_composite, start, end == start ? end + 1 : end));
 	}
 
-	apply_curve(columns, quantity::temperature, m_interpolation);
-	apply_curve(columns, quantity::rain, m_interpolation);
-	apply_curve(columns, quantity::chance, m_interpolation);
+	curve_spec spec;
+	spec.method = m_interpolation;
+	spec.smooth_columns = m_smoothing_s / seconds_per_pixel;
+
+	spec.which = quantity::temperature;
+	apply_curve(columns, spec);
+	spec.which = quantity::rain;
+	apply_curve(columns, spec);
+	spec.which = quantity::chance;
+	apply_curve(columns, spec);
 
 	/* Scales, from what is actually visible rather than from the whole set. */
 	double temperature_low = 0.0;

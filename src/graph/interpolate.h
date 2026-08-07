@@ -29,6 +29,33 @@ struct bbq_knot {
 };
 
 /*
+ * Smooth a set of knots in place (project.md sec 3.11.4).
+ *
+ * This is APPROXIMATION, not interpolation, and the difference is the
+ * whole point: the returned knots no longer sit on the samples, so a
+ * curve drawn through them does not pass through the data. That is a
+ * larger claim than any method in bbq_interpolation makes, which is
+ * why it is a separate control and why the samples stay marked at
+ * their real values -- the visible gap between a mark and the curve is
+ * the claim being made honestly.
+ *
+ * Local linear regression with Gaussian weights. A plain weighted
+ * average would have been fewer lines and is worse in two specific
+ * ways: it flattens peaks, and it bends towards the interior at both
+ * ends, which would invent a turn at the edge of the window. Fitting a
+ * LINE rather than a level through each neighbourhood removes both.
+ *
+ * `bandwidth` is in the same units as knot.x and is the Gaussian's
+ * sigma. Zero or less leaves the knots untouched.
+ *
+ * Weighting by actual distance rather than by neighbour count matters
+ * here: the bands sample at roughly 5, 15 and 60 minutes, so counting
+ * neighbours would smooth an hour of the hourly band as hard as five
+ * minutes of the observed one.
+ */
+void bbq_smooth(std::vector<bbq_knot> &knots, double bandwidth);
+
+/*
  * Evaluates one of the methods over a set of knots.
  *
  * Lives here rather than in the widget because sec 3.11.1 requires

@@ -43,6 +43,68 @@ double hermite(double left, double right, double sl, double sr, double span, dou
 
 } // namespace
 
+void bbq_smooth(std::vector<bbq_knot> &knots, double bandwidth) {
+	if (bandwidth <= 0.0 || knots.size() < 3) {
+		return;
+	}
+
+	const std::size_t n = knots.size();
+	std::vector<double> smoothed(n, 0.0);
+
+	/*
+	 * Beyond three sigma a Gaussian contributes essentially nothing, so
+	 * the window is bounded rather than every knot weighing every other
+	 * one. That keeps this linear in the knot count instead of
+	 * quadratic, which matters at 288 observed samples a day.
+	 */
+	const double reach = bandwidth * 3.0;
+
+	for (std::size_t i = 0; i < n; ++i) {
+		const double centre = knots[i].x;
+
+		double sw = 0.0;
+		double swx = 0.0;
+		double swy = 0.0;
+		double swxx = 0.0;
+		double swxy = 0.0;
+
+		for (std::size_t j = 0; j < n; ++j) {
+			const double dx = knots[j].x - centre;
+			if (std::fabs(dx) > reach) {
+				continue;
+			}
+
+			const double t = dx / bandwidth;
+			const double w = std::exp(-0.5 * t * t);
+
+			sw += w;
+			swx += w * dx;
+			swy += w * knots[j].y;
+			swxx += w * dx * dx;
+			swxy += w * dx * knots[j].y;
+		}
+
+		/*
+		 * Solve the weighted least-squares line and take its value at
+		 * the centre, which is the intercept. A denominator at zero
+		 * means every weighted neighbour sits at the same x, and the
+		 * weighted mean is then the whole answer.
+		 */
+		const double denom = sw * swxx - swx * swx;
+		if (sw <= 0.0) {
+			smoothed[i] = knots[i].y;
+		} else if (std::fabs(denom) < 1e-9) {
+			smoothed[i] = swy / sw;
+		} else {
+			smoothed[i] = (swxx * swy - swx * swxy) / denom;
+		}
+	}
+
+	for (std::size_t i = 0; i < n; ++i) {
+		knots[i].y = smoothed[i];
+	}
+}
+
 void bbq_curve::set(std::vector<bbq_knot> knots, bbq_interpolation method) {
 	m_knots = std::move(knots);
 	m_method = method;

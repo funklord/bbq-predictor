@@ -13,7 +13,8 @@
 #include "wu/feed.h"
 
 bbq_main_window::bbq_main_window(QWidget *parent)
-        : QWidget(parent), m_method_box(nullptr), freshness_label(nullptr),
+        : QWidget(parent), m_method_box(nullptr), m_smoothing_box(nullptr),
+          freshness_label(nullptr),
           m_graph(nullptr), m_feed(nullptr) {
 	setWindowTitle(tr("bbqpredictor"));
 
@@ -58,6 +59,24 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_graph->set_interpolation(static_cast<bbq_interpolation>(value));
 	});
 
+	/*
+	 * Rounding, in time. Expressed as a duration because that is what
+	 * it means -- how wide a corner is allowed to be -- rather than as
+	 * an abstract strength nobody can reason about.
+	 */
+	m_smoothing_box = new QComboBox(this);
+	QComboBox *smoothing = m_smoothing_box;
+	smoothing->addItem(tr("Off"), 0);
+	smoothing->addItem(tr("15 min"), 15 * 60);
+	smoothing->addItem(tr("30 min"), 30 * 60);
+	smoothing->addItem(tr("1 h"), 60 * 60);
+	smoothing->addItem(tr("2 h"), 2 * 60 * 60);
+
+	connect(smoothing, &QComboBox::currentIndexChanged, this,
+	        [this, smoothing](int) {
+		m_graph->set_smoothing(smoothing->currentData().toInt());
+	});
+
 	QCheckBox *marks = new QCheckBox(tr("Mark samples"), this);
 	marks->setChecked(m_graph->show_samples());
 	connect(marks, &QCheckBox::toggled, this, [this](bool on) {
@@ -67,6 +86,8 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	QHBoxLayout *controls = new QHBoxLayout;
 	controls->addWidget(new QLabel(tr("Interpolation:"), this), 0);
 	controls->addWidget(method, 0);
+	controls->addWidget(new QLabel(tr("Rounding:"), this), 0);
+	controls->addWidget(smoothing, 0);
 	controls->addWidget(marks, 0);
 	controls->addStretch(1);
 	controls->addWidget(freshness_label, 0);
@@ -102,6 +123,15 @@ void bbq_main_window::set_interpolation(bbq_interpolation method) {
 	const int index = m_method_box->findData(static_cast<int>(method));
 	if (index >= 0) {
 		m_method_box->setCurrentIndex(index);
+	}
+}
+
+void bbq_main_window::set_smoothing(int seconds) {
+	m_graph->set_smoothing(seconds);
+
+	const int index = m_smoothing_box->findData(seconds);
+	if (index >= 0) {
+		m_smoothing_box->setCurrentIndex(index);
 	}
 }
 

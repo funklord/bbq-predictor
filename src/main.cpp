@@ -158,6 +158,11 @@ int main(int argc, char *argv[]) {
 		window.set_interpolation(bbq_interpolation::monotone);
 	}
 
+	const QString smooth = option_value(arguments, QStringLiteral("--smooth"));
+	if (!smooth.isEmpty()) {
+		window.set_smoothing(smooth.toInt());
+	}
+
 	const QString cursor = option_value(arguments, QStringLiteral("--cursor"));
 	if (!cursor.isEmpty()) {
 		window.graph()->set_cursor_column(cursor.toInt());

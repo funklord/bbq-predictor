@@ -95,6 +95,13 @@ public:
 	void set_interpolation(bbq_interpolation method);
 	bbq_interpolation interpolation() const { return m_interpolation; }
 
+	/*
+	 * How hard the corners are rounded, in seconds of time (sec
+	 * 3.11.4). Zero draws the knees as sharp as the data makes them.
+	 */
+	void set_smoothing(int seconds);
+	int smoothing() const { return m_smoothing_s; }
+
 	void set_show_samples(bool show);
 	bool show_samples() const { return m_show_samples; }
 
@@ -124,6 +131,7 @@ private:
 	 */
 	bbq_interpolation m_interpolation = bbq_interpolation::monotone;
 	bool m_show_samples = true;
+	int m_smoothing_s = 0;
 
 	/*
 	 * Where the readout is pointing, as a column index into the plot,

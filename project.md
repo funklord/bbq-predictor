@@ -909,12 +909,45 @@ as a staircase of one-degree drops, and no interpolator removes it --
 every method here passes THROUGH the samples, so quantisation in equals
 quantisation out. Smoothness only changes how the corners are rounded.
 
-Removing it would need an APPROXIMATING method -- a smoothing spline or
-a filter -- which does not pass through the samples at all. That is a
-different category and a bigger claim: the curve would no longer be
-"what was reported, joined up", and the marks would visibly sit off it.
-That visible disagreement is arguably the honest way to offer it, and
-it is not built.
+Removing it needs an APPROXIMATING method, which does not pass through
+the samples at all. That is built and is sec 3.11.4.
+
+### 3.11.4 Rounding, which is approximation and says so
+
+**A separate control, not a seventh curve**, because it makes a larger
+claim than any interpolation does: the line stops passing through the
+data.
+
+What it is for is the corners. Quantised whole degrees give the curve a
+hard knee at every step, and no interpolator softens one -- they all
+pass through the samples, so the knee is in the data. Rounding moves
+the knots the curve is fitted to, and the corner opens out.
+
+**Local linear regression with Gaussian weights.** A plain weighted
+average would be fewer lines and is worse in two ways that matter here:
+it flattens peaks, and it bends towards the interior at both ends,
+inventing a turn at the edge of the window. Fitting a LINE rather than
+a level through each neighbourhood removes both.
+
+Weighted by real distance rather than by neighbour count, because the
+bands sample at roughly 5, 15 and 60 minutes -- counting neighbours
+would round an hour of the hourly band as hard as five minutes of the
+observed one. The window is bounded at three sigma, which keeps it
+linear in the sample count rather than quadratic.
+
+**The setting is a duration**, because that is what it means: how wide
+a corner may be. Not an abstract strength nobody can reason about.
+
+### 3.11.4.1 What keeps it honest
+
+**The marks do not move.** Rounding is applied to a copy of the knots
+that only the curve is fitted to; the columns keep their measured
+values, so the sample dots stay where the data is and the readout still
+reports what a provider said.
+
+So the curve visibly departs from the dots as rounding increases, and
+that gap is the claim being made out loud. A smoothed line with no
+marks would be a graph asserting readings nobody took.
 
 ### 3.11.3 Marking the samples is what makes it honest
 
