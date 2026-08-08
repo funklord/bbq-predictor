@@ -76,6 +76,13 @@ signals:
 	/* Nothing further is outstanding, however it went. */
 	void settled();
 
+	/*
+	 * The station said where it is (sec 2.6.7.1), so the derivation can
+	 * be cached. Emitted rather than written here: the model does not
+	 * know where settings live and should not learn.
+	 */
+	void geocode_derived(double latitude, double longitude);
+
 private:
 	void start_forecast_bands();
 	void finish_one();

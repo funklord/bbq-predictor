@@ -251,7 +251,30 @@ the program cannot reconstruct.
   `QStandardPaths::AppConfigLocation`, which is `~/.config/bbqpredictor/`
   on this platform, in INI through `QSettings`. This is the project's
   first configuration of any kind, so it sets that location for
-  everything after it.
+  everything after it. Implemented in `src/model/settings.cpp`; see sec
+  2.6.8 for what the command line does to it.
+
+### 2.6.8 The command line overrides the run, not the configuration
+
+`--station` and `--geocode` win for the run they are given on and
+**write nothing**. Trying a different station therefore leaves the
+configured one alone, which is what an override should mean.
+
+That has one consequence worth stating, because getting it wrong was a
+real defect rather than a hypothetical. The geocode derived from a
+station (sec 2.6.7.2) is cached in config -- but only when the station
+in use is the CONFIGURED one. An override run that cached its
+derivation would file one station's coordinates against a config naming
+another, and the next argument-free run would place the forecast bands
+at a station it was not reading. Two places on one axis, arriving
+through the door sec 2.6.7 had bolted.
+
+Changing the station clears the cached coordinate for the same reason,
+rather than leaving the previous garden's location behind it.
+
+The station is editable in the window as well as in the file. A tray
+applet whose one required setting can be given only on a command line
+is one nobody can configure from the thing they are looking at.
 
 ### 2.6.7 The geocode derives from the station, with an override
 

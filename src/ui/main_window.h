@@ -7,6 +7,7 @@
 
 class QComboBox;
 class QLabel;
+class QLineEdit;
 class bbq_forecast_graph;
 class bbq_wu_feed;
 
@@ -25,6 +26,11 @@ public:
 	explicit bbq_main_window(QWidget *parent = nullptr);
 
 	/* Configure and start fetching. Empty station is a normal state. */
+	/*
+	 * Start fetching. Empty arguments mean "use what is configured",
+	 * so the applet run with no arguments at all is the normal case
+	 * rather than the broken one.
+	 */
 	void begin(const QString &station_id, const QString &geocode);
 
 	bbq_wu_feed *feed() const { return m_feed; }
@@ -66,6 +72,7 @@ private:
 
 	QComboBox *m_method_box;
 	QComboBox *m_smoothing_box;
+	QLineEdit *m_station_box;
 	QLabel *m_verdict;
 	QLabel *freshness_label;
 	bbq_forecast_graph *m_graph;

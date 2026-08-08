@@ -154,6 +154,7 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 					m_latitude = first.value(QStringLiteral("lat")).toDouble();
 					m_longitude = first.value(QStringLiteral("lon")).toDouble();
 					m_have_geocode = true;
+					emit geocode_derived(m_latitude, m_longitude);
 					start_forecast_bands();
 				}
 			}

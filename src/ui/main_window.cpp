@@ -5,21 +5,32 @@
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QStringList>
 #include <QVBoxLayout>
 
 #include "graph/forecast_graph.h"
 #include "graph/interpolate.h"
 #include "model/grill.h"
+#include "model/settings.h"
 #include "wu/feed.h"
 
 bbq_main_window::bbq_main_window(QWidget *parent)
         : QWidget(parent), m_method_box(nullptr), m_smoothing_box(nullptr),
-          m_verdict(nullptr), freshness_label(nullptr),
+          m_station_box(nullptr), m_verdict(nullptr), freshness_label(nullptr),
           m_graph(nullptr), m_feed(nullptr) {
 	setWindowTitle(tr("bbqpredictor"));
 
 	m_graph = new bbq_forecast_graph(this);
+
+	/*
+	 * Remembered presentation, applied before the controls read the
+	 * graph so both start from the same answer (sec 2.6.6).
+	 */
+	const int fallback_method = static_cast<int>(m_graph->interpolation());
+	const int stored_method = bbq_settings::interpolation(fallback_method);
+	m_graph->set_interpolation(static_cast<bbq_interpolation>(stored_method));
+	m_graph->set_smoothing(bbq_settings::smoothing(m_graph->smoothing()));
 	m_feed = new bbq_wu_feed(this);
 
 	/*
@@ -67,6 +78,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	connect(method, &QComboBox::currentIndexChanged, this, [this, method](int) {
 		const int value = method->currentData().toInt();
 		m_graph->set_interpolation(static_cast<bbq_interpolation>(value));
+		bbq_settings::set_interpolation(value);
 	});
 
 	/*
@@ -97,7 +109,31 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 
 	connect(smoothing, &QComboBox::currentIndexChanged, this,
 	        [this, smoothing](int) {
-		m_graph->set_smoothing(smoothing->currentData().toInt());
+		const int seconds = smoothing->currentData().toInt();
+		m_graph->set_smoothing(seconds);
+		bbq_settings::set_smoothing(seconds);
+	});
+
+	/*
+	 * The station, editable here rather than only in a file. A tray
+	 * applet whose one required setting can be given only on a command
+	 * line is one nobody can configure from the thing they are looking
+	 * at (sec 2.6.5).
+	 */
+	m_station_box = new QLineEdit(this);
+	m_station_box->setPlaceholderText(tr("station, e.g. ISTOCK822"));
+	m_station_box->setMaximumWidth(190);
+	m_station_box->setText(bbq_settings::station());
+
+	connect(m_station_box, &QLineEdit::editingFinished, this, [this]() {
+		const QString wanted = m_station_box->text().trimmed();
+		if (wanted == bbq_settings::station()) {
+			return;
+		}
+
+		bbq_settings::set_station(wanted);
+		m_feed->set_station(wanted);
+		m_feed->refresh();
 	});
 
 	QCheckBox *windows = new QCheckBox(tr("Grill windows"), this);
@@ -113,6 +149,8 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	});
 
 	QHBoxLayout *controls = new QHBoxLayout;
+	controls->addWidget(new QLabel(tr("Station:"), this), 0);
+	controls->addWidget(m_station_box, 0);
 	controls->addWidget(new QLabel(tr("Interpolation:"), this), 0);
 	controls->addWidget(method, 0);
 	controls->addWidget(new QLabel(tr("Rounding:"), this), 0);
@@ -167,14 +205,59 @@ void bbq_main_window::set_smoothing(int seconds) {
 }
 
 void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
-	m_feed->set_station(station_id);
+	/*
+	 * The command line overrides the file for this run and does not
+	 * write to it, so trying a different station leaves the configured
+	 * one alone -- which is what an override should mean.
+	 */
+	const QString station =
+	        station_id.isEmpty() ? bbq_settings::station() : station_id;
 
-	if (!geocode.isEmpty()) {
-		const QStringList parts = geocode.split(QLatin1Char(','));
+	m_feed->set_station(station);
+	if (m_station_box->text().trimmed().isEmpty()) {
+		m_station_box->setText(station);
+	}
+
+	/*
+	 * The forecast point, in the order sec 2.6.7 settled: an explicit
+	 * override wins, then the coordinate cached from the station, and
+	 * otherwise the station supplies one when it answers.
+	 */
+	QString point = geocode;
+	if (point.isEmpty()) {
+		point = bbq_settings::geocode_override();
+	}
+	if (point.isEmpty()) {
+		point = bbq_settings::derived_geocode();
+	}
+
+	if (!point.isEmpty()) {
+		const QStringList parts = point.split(QLatin1Char(','));
 		if (parts.size() == 2) {
 			m_feed->set_geocode(parts.at(0).toDouble(), parts.at(1).toDouble());
 		}
 	}
+
+	/*
+	 * Cached only when the station in use is the CONFIGURED one.
+	 *
+	 * A --station override that wrote here would file one station's
+	 * coordinates against a config naming another, so the next
+	 * argument-free run would place the forecast bands at a station it
+	 * is not reading -- two places on one axis, which is the whole
+	 * thing sec 2.6.7 exists to prevent. An override overrides the run,
+	 * not the configuration.
+	 */
+	const bool configured = station == bbq_settings::station();
+
+	connect(m_feed, &bbq_wu_feed::geocode_derived, this,
+	        [configured](double latitude, double longitude) {
+		if (!configured) {
+			return;
+		}
+
+		bbq_settings::set_derived_geocode(latitude, longitude);
+	});
 
 	m_feed->refresh();
 	m_feed->start_auto_refresh();

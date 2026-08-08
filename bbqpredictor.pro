@@ -49,6 +49,7 @@ SOURCES += \
 	src/openmeteo/forecast.cpp \
 	src/model/grill.cpp \
 	src/model/series.cpp \
+	src/model/settings.cpp \
 	src/ui/main_window.cpp \
 	src/ui/tray_icon.cpp \
 	src/wu/client.cpp \
@@ -66,6 +67,7 @@ HEADERS += \
 	src/model/grill.h \
 	src/model/sample.h \
 	src/model/series.h \
+	src/model/settings.h \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \
 	src/wu/client.h \
