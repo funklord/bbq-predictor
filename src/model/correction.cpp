@@ -68,7 +68,96 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 		double bias = 0.0;
 	};
 
-	std::map<int, std::vector<bias_point>> curves;
+	/*
+	 * Keyed by band AND quantity, because they are corrected
+	 * independently: a provider can be reliably warm and perfectly good
+	 * about rain, and one number covering both would describe neither.
+	 */
+	std::map<std::pair<int, QString>, std::vector<bias_point>> curves;
+
+	/*
+	 * The bias a band has been showing for a quantity at a given lead,
+	 * or nothing when there is not enough evidence to say.
+	 *
+	 * Built on first use and then reused, so the store is asked once per
+	 * band and quantity rather than once per sample -- sixteen days of
+	 * hourly data is hundreds of points and this runs on every repaint.
+	 */
+	const auto bias_for = [&](bbq_band band, const QString &quantity,
+	                          qint64 lead_s, double *out) {
+		const std::pair<int, QString> key(static_cast<int>(band), quantity);
+
+		if (curves.find(key) == curves.end()) {
+			std::vector<bias_point> points;
+
+			const bbq_lead_bucket every[] = {
+				bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
+				bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
+				bbq_lead_bucket::day, bbq_lead_bucket::two_days,
+				bbq_lead_bucket::four_days, bbq_lead_bucket::week,
+				bbq_lead_bucket::beyond};
+
+			for (bbq_lead_bucket candidate : every) {
+				const bbq_verification score =
+				        history.verification(station, band, quantity, candidate);
+
+				if (score.count >= minimum_count) {
+					bias_point point;
+					point.lead_s = bbq_lead_bucket_centre_s(candidate);
+					point.bias = score.bias;
+					points.push_back(point);
+				}
+			}
+
+			curves[key] = points;
+		}
+
+		const std::vector<bias_point> &points = curves[key];
+		if (points.empty()) {
+			return false;
+		}
+
+		/*
+		 * Held flat outside the range that has evidence, at BOTH ends.
+		 *
+		 * Clamping only the top was a real defect (sec 12.9): every lead
+		 * shorter than the first bucket's centre ran the line backwards
+		 * off the end of its data and produced a bias of the wrong sign,
+		 * making the forecast worse at the one lead where it is most
+		 * nearly right.
+		 */
+		if (lead_s <= points.front().lead_s) {
+			*out = points.front().bias;
+			return true;
+		}
+
+		if (lead_s >= points.back().lead_s) {
+			*out = points.back().bias;
+			return true;
+		}
+
+		for (std::size_t i = 1; i < points.size(); ++i) {
+			if (lead_s > points[i].lead_s) {
+				continue;
+			}
+
+			const bias_point &left = points[i - 1];
+			const bias_point &right = points[i];
+			const double span = static_cast<double>(right.lead_s - left.lead_s);
+
+			if (span <= 0.0) {
+				*out = right.bias;
+				return true;
+			}
+
+			const double t = (lead_s - left.lead_s) / span;
+			*out = left.bias + (right.bias - left.bias) * t;
+			return true;
+		}
+
+		*out = points.back().bias;
+		return true;
+	};
 
 	std::vector<bbq_sample> samples;
 
@@ -95,7 +184,15 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 
 	for (qint64 when = start; when < to_utc; when += probe_s) {
 		const bbq_reading reading = composite.at(when);
-		if (!reading.is_valid() || !reading.sample->temperature.has_value()) {
+		/*
+		 * Only that SOMETHING is covered here. Requiring a temperature
+		 * was left over from when temperature was the only quantity
+		 * corrected, and it silently dropped every sample that carried
+		 * rain without one -- so rain could never be corrected on its
+		 * own. Which quantities are present is decided below, per
+		 * quantity, where the evidence for each is also checked.
+		 */
+		if (!reading.is_valid()) {
 			continue;
 		}
 
@@ -112,38 +209,6 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 		have_last = true;
 		last_start = sample_start;
 
-		const int band_key = static_cast<int>(band);
-
-		if (curves.find(band_key) == curves.end()) {
-			std::vector<bias_point> points;
-
-			const bbq_lead_bucket every[] = {
-				bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
-				bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
-				bbq_lead_bucket::day, bbq_lead_bucket::two_days,
-				bbq_lead_bucket::four_days, bbq_lead_bucket::week,
-				bbq_lead_bucket::beyond};
-
-			for (bbq_lead_bucket candidate : every) {
-				const bbq_verification score = history.verification(
-				        station, band, QStringLiteral("temperature"), candidate);
-
-				if (score.count >= minimum_count) {
-					bias_point point;
-					point.lead_s = bbq_lead_bucket_centre_s(candidate);
-					point.bias = score.bias;
-					points.push_back(point);
-				}
-			}
-
-			curves[band_key] = points;
-		}
-
-		const std::vector<bias_point> &points = curves[band_key];
-		if (points.empty()) {
-			continue;
-		}
-
 		/*
 		 * Placed at the sample's own start, except where that is behind
 		 * the range being drawn -- a sample straddling now begins the
@@ -152,60 +217,45 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 		const qint64 place = std::max(sample_start, start);
 		const qint64 lead = place - issued_utc;
 
-		/*
-		 * Held flat outside the range that has evidence, rather than
-		 * extrapolated. Beyond the last bucket with enough comparisons
-		 * there is nothing to extrapolate FROM, and a trend continued
-		 * past its data is exactly the invention this band is drawn
-		 * separately to avoid.
-		 */
-		double bias = points.front().bias;
+		double temperature_bias = 0.0;
+		double rain_bias = 0.0;
 
-		if (lead <= points.front().lead_s) {
-			/*
-			 * Below the first bucket's centre, which the shortest leads
-			 * always are. Interpolating here ran the line BACKWARDS off
-			 * the end of the evidence and produced a bias of the wrong
-			 * sign -- a correction that made the forecast worse, at the
-			 * one lead time where it is most nearly right. Caught by the
-			 * test rather than by looking, because at these leads the
-			 * error is a fraction of a degree and the curve still looked
-			 * entirely reasonable.
-			 */
-			bias = points.front().bias;
-		} else if (lead >= points.back().lead_s) {
-			bias = points.back().bias;
-		} else {
-			for (std::size_t i = 1; i < points.size(); ++i) {
-				if (lead > points[i].lead_s) {
-					continue;
-				}
+		const bool know_temperature =
+		        reading.sample->temperature.has_value() &&
+		        bias_for(band, QStringLiteral("temperature"), lead,
+		                 &temperature_bias);
 
-				const bias_point &left = points[i - 1];
-				const bias_point &right = points[i];
-				const double span =
-				        static_cast<double>(right.lead_s - left.lead_s);
+		const bool know_rain =
+		        reading.sample->precip_rate.has_value() &&
+		        bias_for(band, QStringLiteral("precip_rate"), lead, &rain_bias);
 
-				if (span <= 0.0) {
-					bias = right.bias;
-					break;
-				}
-
-				const double t = (lead - left.lead_s) / span;
-				bias = left.bias + (right.bias - left.bias) * t;
-				break;
-			}
+		if (!know_temperature && !know_rain) {
+			continue;
 		}
+
+		bbq_sample sample;
+		sample.start_utc = place;
+		sample.duration_s = reading.sample->duration_s;
 
 		/*
 		 * Subtracted, because the bias is forecast minus observed: a
 		 * band that has been running warm gets its prediction brought
 		 * down by however much it has been running warm by.
 		 */
-		bbq_sample sample;
-		sample.start_utc = place;
-		sample.duration_s = reading.sample->duration_s;
-		sample.temperature = *reading.sample->temperature - bias;
+		if (know_temperature) {
+			sample.temperature = *reading.sample->temperature - temperature_bias;
+		}
+
+		if (know_rain) {
+			/*
+			 * Floored at zero. A band that over-forecasts rain would
+			 * otherwise be corrected into negative rainfall, which is
+			 * not a thing -- the same clamp sec 3.11.2 puts on the drawn
+			 * curve, for the same reason.
+			 */
+			const double rate = *reading.sample->precip_rate - rain_bias;
+			sample.precip_rate = std::max(0.0, rate);
+		}
 
 		samples.push_back(sample);
 	}

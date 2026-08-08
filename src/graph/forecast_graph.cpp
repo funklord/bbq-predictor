@@ -15,6 +15,7 @@
 #include <QTimeZone>
 
 #include <algorithm>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -813,6 +814,38 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		}
 	}
 
+	/*
+	 * The corrected overlay counts towards the scales, because it is
+	 * drawn on them.
+	 *
+	 * It did not, and a correction large enough to leave the axis range
+	 * ran off the top of the plot and was clipped by the widget edge --
+	 * a curve that simply stops, which reads as a rendering fault rather
+	 * than as a value out of range. Whatever is drawn has to fit; the
+	 * alternative is deciding not to draw it, and that is not a decision
+	 * a scale should make silently.
+	 */
+	for (const bbq_sample &sample : m_corrected.samples()) {
+		if (sample.start_utc < from || sample.start_utc >= to) {
+			continue;
+		}
+
+		if (sample.temperature.has_value()) {
+			if (!have_temperature) {
+				temperature_low = *sample.temperature;
+				temperature_high = *sample.temperature;
+				have_temperature = true;
+			}
+
+			temperature_low = std::min(temperature_low, *sample.temperature);
+			temperature_high = std::max(temperature_high, *sample.temperature);
+		}
+
+		if (sample.precip_rate.has_value()) {
+			rain_high = std::max(rain_high, *sample.precip_rate);
+		}
+	}
+
 	if (!have_temperature) {
 		temperature_low = 0.0;
 		temperature_high = 1.0;
@@ -1013,21 +1046,52 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * difference between what was said and what this program thinks is
 	 * visible rather than asserted.
 	 */
-	if (!m_corrected.is_empty()) {
+	for (int pass = 0; pass < 2 && !m_corrected.is_empty(); ++pass) {
+		/*
+		 * Temperature and rain are corrected independently (sec 12.5): a
+		 * provider can be reliably warm and perfectly good about rain,
+		 * so one of these may be drawn without the other.
+		 */
+		const bool doing_rain = pass == 1;
 		std::vector<bbq_knot> knots;
 
 		for (const bbq_sample &sample : m_corrected.samples()) {
 			if (sample.start_utc < from || sample.start_utc >= to) {
 				continue;
 			}
-			if (!sample.temperature.has_value()) {
+
+			const std::optional<double> &value =
+			        doing_rain ? sample.precip_rate : sample.temperature;
+
+			if (!value.has_value()) {
 				continue;
 			}
 
 			bbq_knot knot;
 			knot.x = (sample.start_utc - from) / seconds_per_pixel;
-			knot.y = *sample.temperature;
+			knot.y = *value;
 			knots.push_back(knot);
+		}
+
+		/*
+		 * A corrected rain line with no rain in it is not drawn.
+		 *
+		 * On a dry forecast the raw rate is zero, a positive bias
+		 * corrects it below zero, and the clamp puts it back at zero --
+		 * so the honest result is a dashed line lying flat along the
+		 * baseline for the width of the graph. It is not wrong; it just
+		 * says nothing, and a line that says nothing on a weather graph
+		 * still has to be read before it can be dismissed.
+		 */
+		if (doing_rain) {
+			double most = 0.0;
+			for (const bbq_knot &knot : knots) {
+				most = std::max(most, knot.y);
+			}
+
+			if (most < 0.05) {
+				continue;
+			}
 		}
 
 		/*
@@ -1054,12 +1118,26 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 					continue;
 				}
 
-				corrected_run.append(QPointF(plot.left() + x,
-				                             y_for_temperature(curve.at(at))));
+				const double value = curve.at(at);
+				const double y = doing_rain ? y_for_rain(std::max(0.0, value))
+				                            : y_for_temperature(value);
+
+				corrected_run.append(QPointF(plot.left() + x, y));
 			}
 
 			if (corrected_run.size() > 1) {
-				QPen corrected_pen(m_palette.corrected, m_metrics.line_width);
+				/*
+				 * The rain outline is drawn in the rain's own colour,
+				 * darkened, rather than in the temperature correction's.
+				 * Two dashed lines of one colour against two different
+				 * scales would say they were the same quantity.
+				 */
+				QColor ink = m_palette.corrected;
+				if (doing_rain) {
+					ink = m_palette.rain.darker(150);
+				}
+
+				QPen corrected_pen(ink, m_metrics.line_width);
 				corrected_pen.setStyle(Qt::DashLine);
 				painter.setPen(corrected_pen);
 				painter.setBrush(Qt::NoBrush);
@@ -1067,13 +1145,19 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 				/*
 				 * Labelled where it starts. An unexplained second line
-				 * on a weather graph is worse than no second line.
+				 * on a weather graph is worse than no second line. The
+				 * rain one is left unlabelled: it sits on the rain area
+				 * in the rain's colour, which says what it is, and a
+				 * second caption in the same corner would collide with
+				 * the first.
 				 */
-				painter.setPen(m_palette.corrected);
-				const QPointF head = corrected_run.first();
-				painter.drawText(QRectF(head.x() + 4, head.y() - 16, 120, 14),
-				                 Qt::AlignLeft | Qt::AlignVCenter,
-				                 tr("bias-corrected"));
+				if (!doing_rain) {
+					painter.setPen(ink);
+					const QPointF head = corrected_run.first();
+					painter.drawText(QRectF(head.x() + 4, head.y() - 16, 120, 14),
+					                 Qt::AlignLeft | Qt::AlignVCenter,
+					                 tr("bias-corrected"));
+				}
 			}
 		}
 	}

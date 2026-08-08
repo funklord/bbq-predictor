@@ -275,6 +275,19 @@ int main(int argc, char *argv[]) {
 				                           qAbs(scaled) + 0.8)) {
 					++written;
 				}
+
+				/*
+				 * Rain in mm/h, so a tenth of the temperature figure --
+				 * a band over-forecasting rain by half a degree's worth
+				 * would be a downpour.
+				 */
+				if (store.set_verification(wanted, band,
+				                           QStringLiteral("precip_rate"), bucket,
+				                           50, scaled / 10.0,
+				                           qAbs(scaled / 10.0) + 0.05,
+				                           qAbs(scaled / 10.0) + 0.08)) {
+					++written;
+				}
 			}
 		}
 
@@ -323,26 +336,34 @@ int main(int argc, char *argv[]) {
 			bbq_lead_bucket::four_days, bbq_lead_bucket::week,
 			bbq_lead_bucket::beyond};
 
-		report << "\ntemperature error, by band and lead time:\n";
+		const QString quantities[] = {QStringLiteral("temperature"),
+		                              QStringLiteral("precip_rate"),
+		                              QStringLiteral("wind_kph")};
+
 		bool any = false;
 
-		for (bbq_band band : bands) {
-			for (bbq_lead_bucket bucket : buckets) {
-				const bbq_verification score = store.verification(
-				        wanted, band, QStringLiteral("temperature"), bucket);
+		for (const QString &quantity : quantities) {
+			report << "\n" << quantity << " error, by band and lead time:\n";
 
-				if (score.count == 0) {
-					continue;
+			for (bbq_band band : bands) {
+				for (bbq_lead_bucket bucket : buckets) {
+					const bbq_verification score =
+					        store.verification(wanted, band, quantity, bucket);
+
+					if (score.count == 0) {
+						continue;
+					}
+
+					any = true;
+					report << "  " << bbq_band_name(band) << " at "
+					       << bbq_lead_bucket_name(bucket) << ": n=" << score.count
+					       << " bias=" << QString::number(score.bias, 'f', 2)
+					       << " MAE="
+					       << QString::number(score.mean_absolute_error, 'f', 2)
+					       << " RMSE="
+					       << QString::number(score.root_mean_square_error, 'f', 2)
+					       << "\n";
 				}
-
-				any = true;
-				report << "  " << bbq_band_name(band) << " at "
-				       << bbq_lead_bucket_name(bucket) << ": n=" << score.count
-				       << " bias=" << QString::number(score.bias, 'f', 2)
-				       << " MAE=" << QString::number(score.mean_absolute_error, 'f', 2)
-				       << " RMSE="
-				       << QString::number(score.root_mean_square_error, 'f', 2)
-				       << "\n";
 			}
 		}
 

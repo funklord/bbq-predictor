@@ -2439,6 +2439,43 @@ the wrong sign. **A correction that made the forecast worse, at the one
 lead time where it is most nearly right.** At those leads the error is a
 fraction of a degree and the rendered curve looked entirely reasonable.
 
+### 12.10 Rain is corrected too, and independently
+
+The first version corrected temperature alone, which was short of what
+was asked for: a deviation factor for the real values, not for one of
+them. Rain rate is corrected now as well, and **the two are independent**
+-- a provider can be reliably warm and perfectly good about rain, so one
+number covering both would describe neither. Either may be drawn without
+the other, and a quantity with no evidence behind it is absent rather
+than corrected by zero, which would draw a line claiming the raw
+forecast had been checked and found right.
+
+Wind is verified and stored but not corrected, because nothing draws
+wind. It is in the scores `--history` prints.
+
+Three things this turned up:
+
+- **A corrected rain rate is floored at zero.** A band over-forecasting
+  by more than it forecast would otherwise produce negative rainfall and
+  the graph would draw rain below its baseline. The same clamp sec
+  3.11.2 puts on the drawn curve, for the same reason.
+- **A rain overlay with no rain in it is not drawn.** On a dry forecast
+  the raw rate is zero, a positive bias corrects it below zero, and the
+  clamp puts it back at zero -- an honest dashed line lying flat along
+  the baseline for the width of the graph, saying nothing. A line that
+  says nothing still has to be read before it can be dismissed.
+- **The overlay counts towards the scales.** It did not, and a
+  correction large enough to leave the axis range ran off the top of the
+  plot and was clipped at the widget edge -- a curve that simply stops,
+  which reads as a rendering fault rather than as a value out of range.
+
+And one defect, found by the test rather than by looking: an early guard
+still required a temperature, left over from when temperature was the
+only quantity corrected. **A sample carrying rain and no temperature was
+dropped entirely**, so rain could never be corrected on its own. It was
+invisible in every rendering, because the bands that carry rain here
+carry temperature as well.
+
 ### 12.6 The give-up rule
 
 A pending forecast whose valid time has passed without an observation
