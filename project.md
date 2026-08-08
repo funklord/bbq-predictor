@@ -1679,7 +1679,8 @@ supposed to live.
 - The composite is a view over the series, never a merge, because
   provenance is required (sec 3.4)
 - Never upsample; downsample rain and chance by maximum (sec 3.5)
-- Gaps are drawn as breaks, never interpolated across (sec 3.6)
+- Gaps are drawn as breaks, never interpolated across, at a threshold
+  since checked against six bands rather than guessed (sec 3.6)
 - Joins disappear through normalisation, never blending; a surviving
   step is information (sec 3.7)
 - A current band anchors the present, capped and ranked below the
@@ -1703,6 +1704,11 @@ supposed to live.
 
 - The tray shows the temperature and reddens when stale; quit follows
   tray availability (sec 4.1, sec 4.2)
+- Desktop and mobile are two shapes rather than one that scales; the
+  device supplies the default and the configuration overrules it, and
+  the layout never resizes its own window (sec 10)
+- The Android build runs on the shared vocabulary in `tools/android.mk`,
+  spread from `~/.claude/tools/` like `style_gate.py` (sec 11)
 - Grilling windows scored and shaded, preferences gathered in one place
   and marked as preferences (sec 7)
 
@@ -1729,9 +1735,15 @@ anything.
   `dh`-based `debian/rules`, and notes the private projects use five
   mechanisms between them -- so choosing here is a convention change to
   raise, not to make in passing (sec 5.1)
-- **Whether Open-Meteo should also serve the hourly band** past the
-  seven days its quarter-hourly data reaches. WU is the only source
-  beyond that today, and it is the compromised one
+- **Finishing the Android build.** It stops at a `compileSdk 35` floor
+  set by Qt's own AndroidX dependencies against an SDK whose newest
+  platform is android-33 (sec 11.2). One `sdkmanager` line fixes it,
+  and it is a download and a licence acceptance on a shared SDK rather
+  than anything in this tree
+- **Whether the three projects that shipped for Android first adopt
+  `tools/android.mk`.** Their target names differ from the agreed ones
+  in ways somebody has to decide about rather than sweep, so it belongs
+  to a deliberate cross-project pass
 - **Whether to take Open-Meteo's quarter-hourly block where it is
   genuine.** It is real over North America and central Europe and
   interpolated elsewhere (sec 2.10.4), so using it correctly means
