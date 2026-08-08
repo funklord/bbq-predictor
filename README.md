@@ -19,6 +19,13 @@ The graphs are the point. Everything else is secondary.
 - **Curves you choose.** Seven interpolation methods, from step to
   Akima to a natural cubic, plus a rounding radius -- with the real
   samples markable, so a smoothed line never has to be taken on trust.
+- **A permanent history.** Every observation is kept for ever in a
+  SQLite archive; drag the graph sideways to scroll back through it and
+  use the wheel to zoom, from a quarter of an hour to years.
+- **Forecasts that get marked.** A forecast is held only until the
+  weather it predicted actually happens, then scored against it and
+  discarded -- leaving the bias, MAE and RMSE for each band at each lead
+  time, in the vocabulary forecast verification already uses.
 - **A tray that says something.** The icon is the current temperature
   and turns red when the data behind it is stale.
 - **Desktop and mobile shapes**, chosen by the device and overridable.
@@ -66,7 +73,10 @@ a forecast and a gap is drawn as a gap rather than interpolated across.
 
 ## Configuring it
 
-Everything lives in `~/.config/bbq-predictor/bbq-predictor.ini`. The one
+Settings live in `~/.config/bbq-predictor/bbq-predictor.ini`; the
+history is a separate SQLite file under
+`~/.local/share/bbq-predictor/`, because one is a preference you edit
+and the other is measurement. The one
 setting it cannot work without is the station:
 
     [General]
@@ -116,6 +126,8 @@ scratch work. All of them run headless.
     ./bbq-predictor --shot out.png --layout mobile
     ./bbq-predictor --tray-icon icon.png      # the tray icon, which cannot be grabbed
     ./bbq-predictor --interp akima --smooth 1800 --shot out.png
+    ./bbq-predictor --view 10800 --shot out.png   # a three-hour zoom
+    ./bbq-predictor --history                     # what the archive holds
 
 ## Contributing
 

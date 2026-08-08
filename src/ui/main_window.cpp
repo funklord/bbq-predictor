@@ -203,6 +203,21 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		refresh_status();
 	});
 
+	/*
+	 * Panning into last month is the same operation as looking at this
+	 * afternoon (project.md sec 12.8): the view says what it needs and
+	 * the feed makes sure that range is loaded from the store.
+	 *
+	 * The feed decides whether anything actually has to be read -- this
+	 * fires on every mouse move of a drag, so it must be cheap when the
+	 * answer is already in memory.
+	 */
+	connect(m_graph, &bbq_forecast_graph::view_changed, this,
+	        [this](qint64 from_utc, qint64 to_utc) {
+		m_feed->set_view_range(from_utc, to_utc);
+		m_graph->set_composite(m_feed->composite());
+	});
+
 	connect(m_feed, &bbq_wu_feed::band_failed, this,
 	        [this](const QString &band, const QString &reason) {
 		/*
@@ -350,6 +365,15 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	 */
 	const QString station =
 	        station_id.isEmpty() ? bbq_settings::station() : station_id;
+
+	/*
+	 * The store, opened before anything is fetched so the first round is
+	 * archived rather than lost. A failure is reported and not fatal:
+	 * the applet still draws, it just does not remember (sec 12).
+	 */
+	if (!m_feed->open_history()) {
+		m_last_error = tr("history: ") + m_feed->history_error();
+	}
 
 	m_feed->set_station(station);
 	if (m_station_box->text().trimmed().isEmpty()) {

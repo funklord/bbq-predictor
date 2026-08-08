@@ -155,6 +155,15 @@ public:
 
 	QSize sizeHint() const override;
 
+signals:
+	/*
+	 * The view moved. Whoever owns the data uses this to make sure the
+	 * range being looked at is actually loaded (project.md sec 12.8).
+	 */
+	void view_changed(qint64 from_utc, qint64 to_utc);
+
+public:
+
 protected:
 	void paintEvent(QPaintEvent *event) override;
 	void mouseMoveEvent(QMouseEvent *event) override;

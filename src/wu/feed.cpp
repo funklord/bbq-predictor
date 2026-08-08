@@ -124,6 +124,8 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		bbq_series series = bbq_openmeteo_read(document);
 
 		if (!series.is_empty()) {
+			m_history.record_forecast(m_station_id, series,
+			                          QDateTime::currentSecsSinceEpoch());
 			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
 			m_composite.set_series(std::move(series));
 			emit updated();
@@ -151,6 +153,8 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		bbq_series series = bbq_met_read_nowcast(document);
 
 		if (!series.is_empty()) {
+			m_history.record_forecast(m_station_id, series,
+			                          QDateTime::currentSecsSinceEpoch());
 			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
 			m_composite.set_series(std::move(series));
 			emit updated();
@@ -178,7 +182,34 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		const bool was_observed = product == bbq_wu_product::observed;
 		const bool need_geocode = !m_have_geocode;
 
+		/*
+		 * Into the store on the way past (sec 12).
+		 *
+		 * Only the observed band is archived as measurement, and the
+		 * `current` band deliberately is NOT -- which is a correctness
+		 * matter rather than an omission. A current reading carries the
+		 * declared validity of sec 3.9, and storing it with that span
+		 * would put a band of priority 300 across minutes that were
+		 * never measured, overruling the forecasts that sec 3.3 ranks
+		 * above it precisely so its extension stays harmless. Nothing
+		 * is lost: the station's own history reports the same reading
+		 * on the next observed fetch, with an honest duration.
+		 */
+		if (was_observed) {
+			m_history.record_observations(m_station_id, series);
+			m_observed_fetched_utc = QDateTime::currentSecsSinceEpoch();
+		} else if (product != bbq_wu_product::current_station &&
+		           product != bbq_wu_product::current_point) {
+			m_history.record_forecast(m_station_id, series,
+			                          QDateTime::currentSecsSinceEpoch());
+		}
+
 		m_composite.set_series(std::move(series));
+
+		if (was_observed) {
+			/* Replaces what was just set, from the store's fuller answer. */
+			load_observations();
+		}
 
 		/*
 		 * The station supplies the coordinate the forecast bands need
@@ -352,6 +383,21 @@ void bbq_wu_feed::finish_one() {
 	--m_outstanding;
 	if (m_outstanding <= 0) {
 		m_outstanding = 0;
+
+		/*
+		 * Checked when a round settles rather than on a timer of its
+		 * own: a round is exactly when new observations have arrived,
+		 * so it is the only moment anything new can be verifiable.
+		 */
+		if (m_history.is_open() && !m_station_id.isEmpty()) {
+			const int checked = m_history.verify(m_station_id);
+			m_history.expire(m_station_id, QDateTime::currentSecsSinceEpoch());
+
+			if (checked > 0) {
+				emit verified(checked);
+			}
+		}
+
 		emit settled();
 	}
 }
@@ -415,4 +461,73 @@ void bbq_wu_feed::refresh() {
 			attempt(bbq_wu_product::current_point, now);
 		}
 	}
+}
+
+bool bbq_wu_feed::open_history(const QString &path) {
+	if (!m_history.open(path)) {
+		m_history_error = m_history.last_error();
+		return false;
+	}
+
+	return true;
+}
+
+void bbq_wu_feed::set_view_range(qint64 from_utc, qint64 to_utc) {
+	m_view_from = from_utc;
+	m_view_to = to_utc;
+
+	/*
+	 * Reload only when the view has left what is in memory. This is
+	 * called on every mouse move of a drag, and a database query per
+	 * frame is exactly the kind of thing sec 13.1 is about.
+	 */
+	if (m_loaded_to > m_loaded_from && from_utc >= m_loaded_from &&
+	    to_utc <= m_loaded_to) {
+		return;
+	}
+
+	load_observations();
+}
+
+void bbq_wu_feed::load_observations() {
+	if (!m_history.is_open() || m_station_id.isEmpty()) {
+		return;
+	}
+
+	if (m_view_to <= m_view_from) {
+		/* Nothing has said what is being looked at yet. */
+		const qint64 now = QDateTime::currentSecsSinceEpoch();
+		m_view_from = now - 24 * 3600;
+		m_view_to = now + 24 * 3600;
+	}
+
+	/*
+	 * A margin either side, so a drag crosses loaded ground for a while
+	 * before it needs the database again.
+	 */
+	const qint64 span = m_view_to - m_view_from;
+	m_loaded_from = m_view_from - span;
+	m_loaded_to = m_view_to + span;
+
+	bbq_series stored =
+	        m_history.observations(m_station_id, m_loaded_from, m_loaded_to);
+
+	if (stored.is_empty()) {
+		return;
+	}
+
+	/*
+	 * Stamped with when the band was last FETCHED, not when it was read
+	 * back. Reading from disk is not freshness, and sec 2.4's staleness
+	 * check would otherwise report a stale band as new every time the
+	 * view moved.
+	 */
+	stored.set_fetched_utc(m_observed_fetched_utc);
+
+	const bbq_series *live = m_composite.band(bbq_band::observed);
+	if (live != nullptr) {
+		stored.set_zone(live->zone());
+	}
+
+	m_composite.set_series(std::move(stored));
 }

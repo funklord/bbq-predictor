@@ -6,6 +6,7 @@
 #include <QString>
 
 #include "model/composite.h"
+#include "store/history.h"
 #include "met/nowcast.h"
 #include "openmeteo/forecast.h"
 #include "wu/client.h"
@@ -72,6 +73,26 @@ public:
 	 * no extra information -- against somebody else's quota, on a
 	 * scraped key, which sec 2.5 is explicit about.
 	 */
+	/*
+	 * Open the permanent store (project.md sec 12). The path is for
+	 * tests; empty takes the real one. A feed whose store will not open
+	 * still works -- it simply forgets, and says so.
+	 */
+	bool open_history(const QString &path = QString());
+	const bbq_history &history() const { return m_history; }
+	QString history_error() const { return m_history_error; }
+
+	/*
+	 * What the graph is looking at. The observed band is served from the
+	 * store rather than from the last fetch (sec 12.8), so panning into
+	 * last month is the same operation as looking at this afternoon.
+	 *
+	 * Reloads only when the view leaves what is already in memory, and
+	 * then takes a margin either side, because this is called on every
+	 * mouse move during a drag.
+	 */
+	void set_view_range(qint64 from_utc, qint64 to_utc);
+
 	void start_auto_refresh();
 	void stop_auto_refresh();
 
@@ -87,6 +108,9 @@ signals:
 
 	/* Nothing further is outstanding, however it went. */
 	void settled();
+
+	/* How many queued forecasts were checked off in this round. */
+	void verified(int count);
 
 	/*
 	 * The station said where it is (sec 2.6.7.1), so the derivation can
@@ -123,6 +147,16 @@ private:
 	double m_longitude = 0.0;
 	bool m_have_geocode = false;
 	bool m_geocode_pinned = false;
+	void load_observations();
+
+	bbq_history m_history;
+	QString m_history_error;
+	qint64 m_observed_fetched_utc = 0;
+	qint64 m_view_from = 0;
+	qint64 m_view_to = 0;
+	qint64 m_loaded_from = 0;
+	qint64 m_loaded_to = 0;
+
 	qint64 m_radar_attempted = 0;
 	qint64 m_extended_attempted = 0;
 	int m_outstanding = 0;

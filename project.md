@@ -2433,6 +2433,48 @@ journal makes one block the other; the risk accepted in exchange is that
 a crash can lose the last transaction, which is five minutes of weather
 that gets re-fetched anyway.
 
+### 12.8 The observed band is served from the store, not from the fetch
+
+The obvious wiring keeps the fetched band in memory and reaches for the
+database only when somebody pans past it. That makes history a special
+case, and special cases are where the disagreements live -- two paths to
+the same band, and a seam at the edge of the fetched window where they
+meet.
+
+**So the fetch's only job is to keep the store current, and the composite
+always reads its observed band back out.** Panning into last March is the
+same operation as looking at this afternoon, and there is no seam because
+there is no second path.
+
+Three consequences worth stating:
+
+- **The `current` band is NOT archived**, and that is correctness rather
+  than an oversight. A current reading carries the declared validity of
+  sec 3.9, and storing it with that span would put a band of priority
+  300 across minutes nobody measured, overruling the forecasts sec 3.3
+  ranks above it exactly so its extension stays harmless. Nothing is
+  lost: the station's own history reports the same reading on the next
+  observed fetch, with an honest duration.
+- **A store read is stamped with when the band was FETCHED**, not when it
+  was read back. Reading from disk is not freshness, and a store read
+  that stamped itself as new would make sec 2.4's staleness check report
+  a dead feed as healthy every time the view moved.
+- **Reloading is skipped when the view is already inside what is
+  loaded**, and a margin of one span either side is taken when it is not.
+  The view emits on every mouse move of a drag, so this has to be cheap
+  when the answer is already in memory.
+
+Verification runs when a round settles rather than on a timer of its own:
+a round is precisely when new observations have arrived, so it is the
+only moment anything new can be checkable.
+
+`--history` reports what is actually in there -- row counts, the earliest
+observation, how many forecasts are waiting, and the error table by band
+and lead time. Measured on the first live run: two observations, because
+that is all the station published today, and 775 forecasts queued.
+**Nothing verified yet, which is right**: every queued forecast is still
+in the future.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to

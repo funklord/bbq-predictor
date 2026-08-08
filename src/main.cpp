@@ -12,6 +12,8 @@
 #include "ui/layout.h"
 #include "wu/feed.h"
 #include "wu/fetch_once.h"
+#include "model/settings.h"
+#include "store/history.h"
 
 /*
  * bbq-predictor -- a Qt Widgets weather applet for the tray and a window.
@@ -195,6 +197,80 @@ int main(int argc, char *argv[]) {
 	 * every other layout question in this project has been: by rendering
 	 * it and looking.
 	 */
+	/*
+	 * What the store actually holds (project.md sec 12). Opens, reports
+	 * and exits without fetching anything -- the same shape as the other
+	 * diagnostics, and the only way to see whether the archive is
+	 * growing without waiting a month to find out it is not.
+	 */
+	if (arguments.contains(QStringLiteral("--history"))) {
+		const QString wanted =
+		        station.isEmpty() ? bbq_settings::station() : station;
+
+		bbq_history store;
+		QTextStream report(stdout);
+
+		if (!store.open()) {
+			report << "history: cannot open: " << store.last_error() << "\n";
+			return 1;
+		}
+
+		report << "history: " << store.location() << "\n";
+		report << "station: " << wanted << "\n";
+
+		const int observations = store.observation_count(wanted);
+		report << "observations: " << observations << "\n";
+
+		if (observations > 0) {
+			const QDateTime first =
+			        QDateTime::fromSecsSinceEpoch(store.earliest_observation(wanted));
+			report << "earliest: " << first.toString(Qt::ISODate) << "\n";
+		}
+
+		report << "forecasts awaiting a check: " << store.pending_count(wanted)
+		       << "\n";
+
+		const bbq_band bands[] = {
+			bbq_band::nowcast_fine, bbq_band::nowcast,
+			bbq_band::hourly, bbq_band::extended};
+		const bbq_lead_bucket buckets[] = {
+			bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
+			bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
+			bbq_lead_bucket::day, bbq_lead_bucket::two_days,
+			bbq_lead_bucket::four_days, bbq_lead_bucket::week,
+			bbq_lead_bucket::beyond};
+
+		report << "\ntemperature error, by band and lead time:\n";
+		bool any = false;
+
+		for (bbq_band band : bands) {
+			for (bbq_lead_bucket bucket : buckets) {
+				const bbq_verification score = store.verification(
+				        wanted, band, QStringLiteral("temperature"), bucket);
+
+				if (score.count == 0) {
+					continue;
+				}
+
+				any = true;
+				report << "  " << bbq_band_name(band) << " at "
+				       << bbq_lead_bucket_name(bucket) << ": n=" << score.count
+				       << " bias=" << QString::number(score.bias, 'f', 2)
+				       << " MAE=" << QString::number(score.mean_absolute_error, 'f', 2)
+				       << " RMSE="
+				       << QString::number(score.root_mean_square_error, 'f', 2)
+				       << "\n";
+			}
+		}
+
+		if (!any) {
+			report << "  nothing verified yet -- a forecast is only checked "
+			       << "once the hour it predicted has been observed\n";
+		}
+
+		return 0;
+	}
+
 	const QString view = option_value(arguments, QStringLiteral("--view"));
 	if (!view.isEmpty()) {
 		const QStringList parts = view.split(QLatin1Char(','));

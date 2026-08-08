@@ -572,6 +572,8 @@ void bbq_forecast_graph::mouseMoveEvent(QMouseEvent *event) {
 		m_view_span_s = view_span_s();
 		m_view_from = m_drag_from - static_cast<qint64>(moved * per_pixel);
 		m_follow_now = false;
+
+		emit view_changed(view_from_utc(), view_from_utc() + view_span_s());
 	}
 
 	const int column = static_cast<int>(event->position().x()) - m_metrics.margin_left;
@@ -622,12 +624,16 @@ void bbq_forecast_graph::set_view(qint64 from_utc, qint64 span_s) {
 	m_view_span_s = std::max(shortest, std::min(longest, span_s));
 	m_view_from = from_utc;
 	m_follow_now = false;
+
+	emit view_changed(view_from_utc(), view_from_utc() + view_span_s());
 	update();
 }
 
 void bbq_forecast_graph::follow_now() {
 	m_follow_now = true;
 	m_view_span_s = 0;
+
+	emit view_changed(view_from_utc(), view_from_utc() + view_span_s());
 	update();
 }
 
@@ -689,6 +695,7 @@ void bbq_forecast_graph::wheelEvent(QWheelEvent *event) {
 	const double per_pixel = static_cast<double>(m_view_span_s) / m_plot.width();
 	m_view_from = static_cast<qint64>(anchor - offset * per_pixel);
 
+	emit view_changed(view_from_utc(), view_from_utc() + view_span_s());
 	update();
 	event->accept();
 }
