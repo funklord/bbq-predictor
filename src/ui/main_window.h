@@ -2,6 +2,7 @@
 #define BBQ_MAIN_WINDOW_H
 
 #include <QList>
+#include <QMargins>
 #include <QWidget>
 
 #include "graph/interpolate.h"
@@ -43,6 +44,11 @@ public:
 	 * wind and left the box unticked.
 	 */
 	void set_show_wind(bool show);
+
+protected:
+	void showEvent(class QShowEvent *event) override;
+
+public:
 
 	bbq_wu_feed *feed() const { return m_feed; }
 	bbq_forecast_graph *graph() const { return m_graph; }
@@ -92,6 +98,17 @@ private:
 	QComboBox *m_smoothing_box;
 	QComboBox *m_layout_box;
 	QWidget *m_controls;
+
+	/*
+	 * The root layout, kept so the safe area can be applied to it. On a
+	 * phone the system draws a status bar and a navigation bar over the
+	 * window, and a layout that ignores them puts real content
+	 * underneath both.
+	 */
+	class QVBoxLayout *m_root_layout = nullptr;
+	QMargins m_base_margins;
+
+	void apply_safe_area();
 
 	/*
 	 * The controls in order, so the shape can be rebuilt rather than

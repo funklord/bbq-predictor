@@ -2306,6 +2306,61 @@ blank, because "who signed this is unknown" must not look like a pass.
 The artifact verifies as `C=US, O=Android, CN=Android Debug`, which is
 correct for a debug build and is what the release guard would refuse.
 
+### 11.3 What the phone showed that no rendering could
+
+It installs, launches and draws: the mobile layout, the stacked
+controls, the dark theme, and an honest "no station pinned and no
+geocode set" on a device with no config yet. The station field works and
+persists -- `station=ISTOCK822` was read back out of the app's own INI --
+and SQLite works, with `history.sqlite` and its WAL files sitting beside
+it.
+
+Three things only the device could show.
+
+**It died on the first launch, after every gate had passed.** The Qt kit
+names `android-ndk-r27c`; the build used NDK 25.2, and Qt 6.10's
+libraries want `std::pmr::monotonic_buffer_resource` from a newer
+libc++:
+
+    dlopen failed: cannot locate symbol
+    "_ZTVNSt6__ndk13pmr25monotonic_buffer_resourceE"
+
+Sec 11.2 had recorded that NDK mismatch and dismissed it -- "it compiled,
+so that is a caution rather than a finding". **It compiled, linked,
+packaged, signed and installed, and then would not load.** NDK 30 runs.
+NDK r27c is the one to install, because matching what Qt was built
+against removes the guess entirely.
+
+**There is no TLS.** Every fetch fails before it starts:
+
+    current: no API key: TLS initialization failed
+
+Qt for Android does not bundle OpenSSL, and `Qt/Tools/OpenSSL` here
+holds only the source. So the applet on the phone can reach nothing at
+all, and the station field is innocent -- it saved exactly what it was
+given. This is the next piece of work and it is not small: OpenSSL has
+to be cross-compiled for the ABI and bundled through
+`ANDROID_EXTRA_LIBS`. **beerssh already has a script that builds
+precisely this** (`tools/build-deps-android.sh`, which its own header
+says has never been run), so this is a candidate for shared tooling
+rather than a second copy -- and per `harmonization.md` that is an
+observation to raise, not an extraction to make in passing.
+
+**The system bars overlap the content**, because targetSdk 36 puts the
+app edge-to-edge on Android 15 and up: the verdict line under the clock,
+the status line under the navigation buttons.
+
+The fix for the last of these is in, and its first version was wrong in
+a way worth keeping. `QWindow::safeAreaMargins()` reports
+`QMargins(0, 0, 0, 0)` on this device -- measured, not assumed -- and the
+first attempt ASSIGNED it to the layout, which wiped the ordinary
+padding and pressed everything flat against all four edges. Worse than
+the overlap it was meant to cure. **The safe area is added to the
+layout's own margins now, never substituted for them**, so an unknown
+safe area costs nothing and a real one is respected. Whether Android
+ever reports a non-zero one through Qt 6.10 is unsettled and needs a
+device to answer.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh

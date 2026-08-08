@@ -8,7 +8,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QStringList>
+#include <QShowEvent>
 #include <QVBoxLayout>
+#include <QWindow>
 
 #include "graph/forecast_graph.h"
 #include "graph/interpolate.h"
@@ -207,6 +209,10 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	                << new QLabel(tr("Layout:"), this) << m_layout_box;
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
+	m_root_layout = layout;
+
+	/* What the layout asks for before any system furniture is counted. */
+	m_base_margins = layout->contentsMargins();
 	layout->addWidget(m_verdict, 0);
 	layout->addWidget(m_graph, 1);
 	layout->addWidget(m_controls, 0);
@@ -446,6 +452,72 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 
 	m_feed->refresh();
 	m_feed->start_auto_refresh();
+}
+
+void bbq_main_window::apply_safe_area() {
+	/*
+	 * Keep the content out from under the system bars (sec 10.2).
+	 *
+	 * On the phone the verdict line was drawn under the clock and the
+	 * status line under the navigation bar -- readable only because the
+	 * text happened to be short. Qt 6.9 gained safeAreaMargins() for
+	 * exactly this; before that it had to be asked of the platform by
+	 * hand.
+	 *
+	 * On a desktop the margins are all zero, so this costs nothing and
+	 * needs no platform test: the question "how much of my window is
+	 * covered by system furniture" has an answer everywhere, and on X11
+	 * that answer is none.
+	 */
+	QWindow *handle = windowHandle();
+	if (handle == nullptr || m_root_layout == nullptr) {
+		return;
+	}
+
+	/*
+	 * Qt gained this in 6.9. The desktop build here is 6.8 and the
+	 * Android kit is 6.10, so the guard is real rather than defensive --
+	 * and it costs nothing to be on the wrong side of it, because the
+	 * platform that needs safe areas is the one with the newer Qt.
+	 */
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+	/*
+	 * ADDED to the layout's own margins, never substituted for them.
+	 *
+	 * The first attempt assigned the safe area directly, and measuring
+	 * on the phone showed it reports QMargins(0, 0, 0, 0) there -- so
+	 * assigning it wiped the ordinary padding and pushed the content
+	 * flat against every edge, which looked far worse than the overlap
+	 * it was meant to fix. Adding means an unknown safe area costs
+	 * nothing and a real one is respected.
+	 */
+	const QMargins safe = handle->safeAreaMargins();
+
+	m_root_layout->setContentsMargins(m_base_margins.left() + safe.left(),
+	                                  m_base_margins.top() + safe.top(),
+	                                  m_base_margins.right() + safe.right(),
+	                                  m_base_margins.bottom() + safe.bottom());
+#endif
+}
+
+void bbq_main_window::showEvent(QShowEvent *event) {
+	QWidget::showEvent(event);
+
+	/*
+	 * The window handle does not exist until the window is shown, and
+	 * the margins change when the device rotates or is unfolded -- this
+	 * phone is a fold, so that is a routine event rather than an edge
+	 * case.
+	 */
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+	QWindow *handle = windowHandle();
+	if (handle != nullptr) {
+		connect(handle, &QWindow::safeAreaMarginsChanged, this,
+		        &bbq_main_window::apply_safe_area, Qt::UniqueConnection);
+	}
+#endif
+
+	apply_safe_area();
 }
 
 void bbq_main_window::set_show_wind(bool show) {
