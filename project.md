@@ -89,6 +89,48 @@ triggered by the first 401. A key baked in at compile time turns the
 application into a brick on whatever Tuesday WU rotates it, and the only
 fix is a rebuild the user cannot perform.
 
+### 2.3.1 Known defect: the queued-request connections are not paired
+
+**Found by reading, not by running, and not yet fixed** -- fixing it
+needs a build and the last several sessions have been documentation
+only. Recorded precisely so it is not rediscovered from the symptom.
+
+When `bbq_wu_client::send` is called before a key exists, it makes
+*two* connections to the key source -- one to `acquired` that resends
+the request, one to `failed` that reports it -- and each lambda tears
+down only its own. So whichever fires, **the other survives**.
+
+That is not merely a leak:
+
+- **Acquisition succeeds.** The `failed` connection stays live. A later
+  failure -- after a 401 invalidates the key (sec 2.3) -- fires it and
+  emits `failed` for a product that already completed. The feed calls
+  `finish_one()` again for a request it already counted.
+- **Acquisition fails.** The `acquired` connection stays live. The next
+  successful acquisition re-fires it and re-sends a request that
+  already reported failure, producing a second answer for one request.
+
+Either way the outstanding count is decremented more often than it was
+incremented. `finish_one()` clamps at zero, so nothing goes negative --
+it emits `settled` **early**, while requests are still in flight. In
+`--fetch-once` that ends the loop before the data lands; in the applet
+it is a spurious settle.
+
+**The fan-out makes it worse.** A cold start with a station queues four
+Weather Underground requests behind one key acquisition, so there are
+four pairs, and every 401 retry cycle adds more.
+
+The fix is not a third teardown but a different shape: hold the pending
+requests in a list, connect to the key source **once** in the
+constructor, and have whichever signal arrives drain that list. The
+handle-juggling then has nothing to get wrong.
+
+Why it has not bitten in practice: every observed run acquired a key on
+the first attempt and never got a 401, which is the one path that
+leaves the stale connection reachable. **It works because the failure
+case has not happened yet**, which is exactly the kind of correctness
+this project does not want to rely on.
+
 ### 2.4 Staleness is visible, always
 
 This is the fragile joint in the whole program, and its failure mode is
@@ -1828,6 +1870,9 @@ supposed to live.
 Each of these needs a decision rather than a drift. None of them blocks
 anything.
 
+- **The unpaired connections in `send()`** (sec 2.3.1). A real defect
+  found by reading; the fix is a small restructure and needs a build to
+  verify, so it is recorded rather than shipped unverified
 - **A dark-desktop variant**, given the measured palette is fixed and
   light. A question about how the applet is actually used rather than
   one this document can answer (sec 3.8.3)
