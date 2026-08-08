@@ -1,0 +1,266 @@
+#include <QDir>
+#include <QTemporaryDir>
+#include <QTest>
+
+#include "store/history.h"
+
+/*
+ * The permanent store and the forecast queue that is not permanent
+ * (project.md sec 12).
+ *
+ * Every test opens its own database in a temporary directory, so none of
+ * them touches the real history and none of them depends on another
+ * having run first. That matters more here than elsewhere: a store is
+ * stateful by definition, and a suite that shared one would pass or fail
+ * depending on the order it happened to run in.
+ */
+class test_history : public QObject {
+	Q_OBJECT
+
+private slots:
+	void lead_times_bucket_by_their_upper_bound();
+	void observations_survive_being_stored_twice();
+	void a_forecast_is_kept_once_per_bucket_not_once_per_fetch();
+	void verifying_computes_the_standard_scores_and_empties_the_queue();
+	void bias_can_be_zero_while_the_forecast_is_useless();
+	void an_unverifiable_forecast_is_given_up_on();
+
+private:
+	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
+	                              double temperature);
+};
+
+bbq_series test_history::forecast_of(bbq_band band, qint64 start, int count,
+                                     double temperature) {
+	std::vector<bbq_sample> samples;
+
+	for (int i = 0; i < count; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = temperature;
+		samples.push_back(sample);
+	}
+
+	bbq_series series(band, QStringLiteral("test"));
+	series.set_samples(std::move(samples));
+	return series;
+}
+
+void test_history::lead_times_bucket_by_their_upper_bound() {
+	QCOMPARE(bbq_lead_bucket_for(600), bbq_lead_bucket::hour);
+	QCOMPARE(bbq_lead_bucket_for(3600), bbq_lead_bucket::hour);
+	QCOMPARE(bbq_lead_bucket_for(3601), bbq_lead_bucket::three_hours);
+	QCOMPARE(bbq_lead_bucket_for(24 * 3600), bbq_lead_bucket::day);
+	QCOMPARE(bbq_lead_bucket_for(30 * 24 * 3600), bbq_lead_bucket::beyond);
+}
+
+void test_history::observations_survive_being_stored_twice() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY2(store.open(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(store.last_error()));
+
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < 10; ++i) {
+		bbq_sample sample;
+		sample.start_utc = 1000000 + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 20.0 + i;
+		samples.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(samples);
+
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+	QCOMPARE(store.observation_count(QStringLiteral("ITEST1")), 10);
+
+	/*
+	 * The overlap case, and it is the ordinary one rather than an edge:
+	 * each refresh re-fetches the whole day, so almost every row stored
+	 * has been stored before. Ten rows, not twenty.
+	 */
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+	QCOMPARE(store.observation_count(QStringLiteral("ITEST1")), 10);
+
+	QCOMPARE(store.earliest_observation(QStringLiteral("ITEST1")),
+	         static_cast<qint64>(1000000));
+
+	const bbq_series back =
+	        store.observations(QStringLiteral("ITEST1"), 1000000, 1000000 + 1500);
+	QCOMPARE(static_cast<int>(back.samples().size()), 5);
+	QVERIFY(back.samples().front().temperature.has_value());
+	QCOMPARE(*back.samples().front().temperature, 20.0);
+}
+
+void test_history::a_forecast_is_kept_once_per_bucket_not_once_per_fetch() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	const bbq_series forecast =
+	        forecast_of(bbq_band::hourly, issued + 3600, 6, 15.0);
+
+	const int first = store.record_forecast(QStringLiteral("ITEST1"), forecast,
+	                                        issued);
+	QVERIFY(first > 0);
+
+	const int pending = store.pending_count(QStringLiteral("ITEST1"));
+
+	/*
+	 * Re-forecasting the same hours from the same moment must add
+	 * nothing. Without the bound in sec 12.6 the queue would take a
+	 * fresh copy of every valid time on every refresh, which is the
+	 * unbounded growth keeping forecasts was supposed to avoid.
+	 */
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), pending);
+
+	/*
+	 * Issued much later, the same valid times are now a SHORTER lead --
+	 * a different claim, and one the statistics must be able to tell
+	 * apart. So this does add rows.
+	 */
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued + 3 * 3600);
+	QVERIFY2(store.pending_count(QStringLiteral("ITEST1")) > pending,
+	         "a shorter-lead forecast of the same hours was discarded");
+}
+
+void test_history::verifying_computes_the_standard_scores_and_empties_the_queue() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	const qint64 valid = issued + 3600;
+
+	/* Forecast 15 C for four consecutive hours. */
+	store.record_forecast(QStringLiteral("ITEST1"),
+	                      forecast_of(bbq_band::hourly, valid, 4, 15.0), issued);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 4);
+
+	/* It was 17 C every time: the forecast ran two degrees cold. */
+	std::vector<bbq_sample> observed_samples;
+	for (int i = 0; i < 4; ++i) {
+		bbq_sample sample;
+		sample.start_utc = valid + i * 3600;
+		sample.duration_s = 300;
+		sample.temperature = 17.0;
+		observed_samples.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(observed_samples);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	const int verified = store.verify(QStringLiteral("ITEST1"));
+	QCOMPARE(verified, 4);
+
+	/* Verified forecasts are discarded, which is the whole retention rule. */
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 0);
+
+	/* The observations are untouched: they are the permanent half. */
+	QCOMPARE(store.observation_count(QStringLiteral("ITEST1")), 4);
+
+	const bbq_verification hour = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+
+	QCOMPARE(hour.count, 1);
+	QCOMPARE(hour.bias, -2.0);
+	QCOMPARE(hour.mean_absolute_error, 2.0);
+	QCOMPARE(hour.root_mean_square_error, 2.0);
+
+	/*
+	 * Stratified, not pooled. The four hours fall in different buckets,
+	 * so the one-hour bucket must not have collected all of them.
+	 */
+	const bbq_verification longer = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::three_hours);
+	QVERIFY(longer.count > 0);
+}
+
+void test_history::bias_can_be_zero_while_the_forecast_is_useless() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	const qint64 valid = issued + 1800;
+
+	/*
+	 * Sec 12.3's reason for keeping MAE and RMSE beside the bias. Two
+	 * predictions at the same lead, one ten degrees high and one ten
+	 * degrees low. Their mean error is zero -- a forecast that looks
+	 * perfect by bias alone and is worthless.
+	 */
+	bbq_sample warm;
+	warm.start_utc = valid;
+	warm.duration_s = 3600;
+	warm.temperature = 30.0;
+
+	bbq_sample cold;
+	cold.start_utc = valid + 600;
+	cold.duration_s = 3600;
+	cold.temperature = 10.0;
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples({warm, cold});
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+
+	std::vector<bbq_sample> truth;
+	for (int i = 0; i < 2; ++i) {
+		bbq_sample sample;
+		sample.start_utc = valid + i * 600;
+		sample.duration_s = 300;
+		sample.temperature = 20.0;
+		truth.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(truth);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 2);
+
+	const bbq_verification score = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+
+	QCOMPARE(score.count, 2);
+	QCOMPARE(score.bias, 0.0);
+	QCOMPARE(score.mean_absolute_error, 10.0);
+	QCOMPARE(score.root_mean_square_error, 10.0);
+}
+
+void test_history::an_unverifiable_forecast_is_given_up_on() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	store.record_forecast(QStringLiteral("ITEST1"),
+	                      forecast_of(bbq_band::hourly, issued + 3600, 4, 15.0),
+	                      issued);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 4);
+
+	/* Still recent: nothing is given up on yet. */
+	QCOMPARE(store.expire(QStringLiteral("ITEST1"), issued + 3600), 0);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 4);
+
+	/*
+	 * Long past, and no observation ever arrived -- the station was down.
+	 * Without this the queue would hold those rows for ever, and every
+	 * outage would leak a few more (sec 12.6).
+	 */
+	const int dropped =
+	        store.expire(QStringLiteral("ITEST1"), issued + 30 * 24 * 3600);
+	QCOMPARE(dropped, 4);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 0);
+}
+
+QTEST_GUILESS_MAIN(test_history)
+#include "test_history.moc"

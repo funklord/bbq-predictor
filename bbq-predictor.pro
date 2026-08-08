@@ -22,7 +22,13 @@ DEFINES += BBQ_VERSION_STRING=\\\"$$BBQ_VERSION\\\"
 
 # network is here from the start rather than added later: the whole
 # program is a client for somebody else's HTTP endpoint (project.md sec 2).
-QT += widgets network
+QT += widgets network sql
+
+# sql is for the permanent history (project.md sec 12). It brings the
+# SQLite driver plugin, which Qt builds in-tree; measured before choosing
+# the dependency -- both Qt6Sql and libqsqlite.so were already installed
+# here, so it costs a packaging dependency and one more module in the
+# Android kit rather than a new package.
 
 CONFIG += c++17
 CONFIG -= app_bundle
@@ -79,6 +85,7 @@ SOURCES += \
 	src/model/grill.cpp \
 	src/model/series.cpp \
 	src/model/settings.cpp \
+	src/store/history.cpp \
 	src/ui/layout.cpp \
 	src/ui/main_window.cpp \
 	src/ui/tray_icon.cpp \
@@ -98,6 +105,7 @@ HEADERS += \
 	src/model/sample.h \
 	src/model/series.h \
 	src/model/settings.h \
+	src/store/history.h \
 	src/ui/layout.h \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \

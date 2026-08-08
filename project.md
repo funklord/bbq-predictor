@@ -2408,6 +2408,31 @@ time, per lead-time bucket** -- the first seen in that bucket -- which is
 exactly one verification sample per bucket and turns an unbounded queue
 into a few thousand rows.
 
+### 12.7 Three numbers the implementation forced
+
+None of these was in the design and all three had to be decided to make
+it work. Recorded because each is a threshold, and a threshold nobody
+wrote down gets treated as a law later.
+
+- **The bands do not share a clock.** An hourly forecast lands on the
+  hour; the station reports whenever it feels like it. Demanding an
+  exact match between a forecast's valid time and an observation would
+  verify almost nothing, so they pair within 150 seconds -- about half
+  the station's cadence, which is the widest that cannot reach the wrong
+  sample.
+- **Rain is taken to have occurred above 0.1 mm/h.** The Brier score
+  needs a yes-or-no outcome and the world supplies a rate, so something
+  has to draw the line. This is that line and nothing else depends on it.
+- **A forecast is given up on 36 hours after its valid time.** Long
+  enough that a station down overnight still gets verified when it comes
+  back, short enough that the queue does not carry an outage for ever.
+
+The database runs in WAL mode with `synchronous = NORMAL`. Two copies of
+the applet open at once is a real case on this machine and the default
+journal makes one block the other; the risk accepted in exchange is that
+a crash can lose the last transaction, which is five minutes of weather
+that gets re-fetched anyway.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to
