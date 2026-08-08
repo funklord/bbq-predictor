@@ -1740,6 +1740,53 @@ behind a target that had been present for weeks. **A gate nobody runs is
 not a gate**, which is the same lesson as the four sessions of not
 building, arriving from the other direction.
 
+### 3.13 The graph was read end to end, and held
+
+A thousand lines, the largest surface with no automated coverage, read
+for the same faults the network paths turned out to have. **It held.**
+No live defect. Recorded because "we looked and found nothing" is a
+result, and an unwritten one gets re-looked-for.
+
+What was checked and why each is safe: every divisor is guarded before
+use -- `plot.width()` by the 20-pixel early return, `rain_high` by
+starting at 1.0 and only growing, the temperature span by the
+four-degree widening that runs before the padding. Column indices are
+bounded by `plot.width()` on both the cursor search and the three draw
+passes, and `columns` is filled with exactly that many entries. The
+rain path's subpaths each open and close on the baseline, so the
+implicit close a filled `QPainterPath` performs runs along the bottom
+rather than across the data.
+
+Three latent things, none of them reachable today, all worth knowing
+before somebody makes them reachable:
+
+- **`set_window()` has no callers.** It is superseded by `set_layout`,
+  which takes the span from the layout metrics, and it is the only
+  entry point that could set a zero span -- which would divide by zero
+  in `seconds_per_pixel`. Left alone rather than deleted: removing
+  public API is not a decision to take while reviewing something else.
+- **The knot invariant depends on arithmetic nobody stated.** A column
+  holding two sample starts would mean the readout's mean temperature
+  carried the first sample's timestamp, which breaks sec 3.11.3's
+  promise that every number in the box is one a provider reported.
+  Measured rather than assumed: columns come out at 77 s on the desktop
+  and about 130 s on mobile, against a finest band of 300 s, and the
+  window cannot be dragged narrow enough to close the gap because the
+  controls set a larger minimum than the graph does. **It is safe by a
+  factor of two, not by construction.** A finer band, or a much wider
+  span, would end that quietly.
+- **The readout box flips left when it will not fit right**, and the
+  flipped position is not clamped, so a widget narrower than the box
+  would push it off the left edge. The comment says the box "never
+  leaves the widget", which is true only because the flip is triggered
+  by being near the right edge.
+
+One thing was wrong and is fixed: the readout's text colour was written
+into the painter as a literal while the box's background and border were
+palette entries. This file's own opening note calls a constant beside
+the palette "a third opinion nobody set", and that is exactly what it
+was.
+
 ### 5.2 The suite, and what it is for
 
 **Not coverage.** Every test asserts a claim this document makes, on

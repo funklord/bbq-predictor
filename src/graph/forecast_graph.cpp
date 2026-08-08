@@ -448,6 +448,7 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.grill_window = QColor(0xff, 0x8b, 0x33);
 	m_palette.readout_back = QColor(0x2b, 0x2b, 0x2b);
 	m_palette.readout_edge = QColor(0x9a, 0x9a, 0x9a);
+	m_palette.readout_text = QColor(0xf0, 0xf0, 0xf0);
 	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
 	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
 	m_palette.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
@@ -962,7 +963,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			painter.setBrush(m_palette.readout_back);
 			painter.drawRoundedRect(box, 3, 3);
 
-			painter.setPen(QColor(0xf0, 0xf0, 0xf0));
+			painter.setPen(m_palette.readout_text);
 			for (int i = 0; i < lines.size(); ++i) {
 				const QRectF row(box.left() + pad,
 				                 box.top() + pad + i * metrics.height(),

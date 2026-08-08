@@ -39,6 +39,15 @@ struct bbq_graph_palette {
 	QColor readout_back;
 	QColor readout_edge;
 
+	/*
+	 * The readout's text. Here rather than written into the painter at
+	 * the point of use, which is where it was: this file's own opening
+	 * note says a constant beside the palette is "a third opinion nobody
+	 * set", and the box's back and edge were already palette entries
+	 * while the ink on them was not.
+	 */
+	QColor readout_text;
+
 	/* Per band, for the provenance ribbon (sec 3.4). */
 	QColor band_observed;
 	QColor band_current;
