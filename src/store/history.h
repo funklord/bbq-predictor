@@ -43,6 +43,14 @@ bbq_lead_bucket bbq_lead_bucket_for(qint64 lead_s);
 const char *bbq_lead_bucket_name(bbq_lead_bucket bucket);
 
 /*
+ * A lead time that stands for the whole bucket, used when a bias has to
+ * be a smooth function of lead rather than a step (project.md sec 12.9).
+ * The middle of the bucket's range, and an arbitrary but reasonable
+ * distance into the open-ended last one.
+ */
+qint64 bbq_lead_bucket_centre_s(bbq_lead_bucket bucket);
+
+/*
  * What the store knows about one band's error at one lead time, for one
  * quantity. Sums rather than samples, so the table is a fixed size
  * however many years pass (sec 12.1).
@@ -107,6 +115,20 @@ public:
 	 * ever (sec 12.6).
 	 */
 	int expire(const QString &station, qint64 now_utc);
+
+	/*
+	 * Write a verification row directly, replacing whatever was there.
+	 *
+	 * For seeding a scratch store so the correction can be exercised
+	 * before a month of real weather has gone by, and for any future
+	 * import. It is NOT how the applet accumulates anything -- verify()
+	 * is -- and whoever calls this is responsible for not aiming it at
+	 * the real archive.
+	 */
+	bool set_verification(const QString &station, bbq_band band,
+	                      const QString &quantity, bbq_lead_bucket bucket,
+	                      int count, double bias, double mean_absolute_error,
+	                      double root_mean_square_error);
 
 	bbq_verification verification(const QString &station, bbq_band band,
 	                              const QString &quantity,

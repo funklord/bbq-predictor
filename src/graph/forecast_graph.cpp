@@ -107,6 +107,8 @@ QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
 		return palette.band_extended;
 	case bbq_band::hourly:
 		return palette.band_hourly;
+	case bbq_band::corrected:
+		return palette.corrected;
 	}
 
 	return palette.grid;
@@ -506,6 +508,7 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.readout_back = QColor(0x2b, 0x2b, 0x2b);
 	m_palette.readout_edge = QColor(0x9a, 0x9a, 0x9a);
 	m_palette.readout_text = QColor(0xf0, 0xf0, 0xf0);
+	m_palette.corrected = QColor(0x8b, 0x6b, 0xb1);
 	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
 	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
 	m_palette.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
@@ -530,6 +533,11 @@ QSize bbq_forecast_graph::sizeHint() const {
 
 void bbq_forecast_graph::set_composite(bbq_composite composite) {
 	m_composite = std::move(composite);
+	update();
+}
+
+void bbq_forecast_graph::set_corrected(bbq_series corrected) {
+	m_corrected = std::move(corrected);
 	update();
 }
 
@@ -983,6 +991,81 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 	if (run.size() > 1) {
 		painter.drawPolyline(run);
+	}
+
+	/*
+	 * The bias-corrected overlay (sec 12.5).
+	 *
+	 * Dashed, in a colour that is not one of Weather Underground's
+	 * measured set, and never marked with sample dots -- because it has
+	 * no samples. Every point on it is arithmetic, and the whole reason
+	 * it is drawn beside the forecast instead of replacing it is so the
+	 * difference between what was said and what this program thinks is
+	 * visible rather than asserted.
+	 */
+	if (!m_corrected.is_empty()) {
+		std::vector<bbq_knot> knots;
+
+		for (const bbq_sample &sample : m_corrected.samples()) {
+			if (sample.start_utc < from || sample.start_utc >= to) {
+				continue;
+			}
+			if (!sample.temperature.has_value()) {
+				continue;
+			}
+
+			bbq_knot knot;
+			knot.x = (sample.start_utc - from) / seconds_per_pixel;
+			knot.y = *sample.temperature;
+			knots.push_back(knot);
+		}
+
+		/*
+		 * The SAME rounding as the curve it is drawn against.
+		 *
+		 * Without this the forecast was smoothed and the correction was
+		 * not, so the gap between the two lines was part bias and part
+		 * smoothing -- and the whole purpose of drawing them together is
+		 * that the gap is the correction. Any treatment applied to one
+		 * has to be applied to the other or the comparison lies.
+		 */
+		bbq_smooth(knots, spec.smooth_columns);
+
+		if (knots.size() >= 2) {
+			bbq_curve curve;
+			const double first = knots.front().x;
+			const double last = knots.back().x;
+			curve.set(std::move(knots), m_interpolation);
+
+			QPolygonF corrected_run;
+			for (int x = 0; x < plot.width(); ++x) {
+				const double at = static_cast<double>(x);
+				if (at < first || at > last) {
+					continue;
+				}
+
+				corrected_run.append(QPointF(plot.left() + x,
+				                             y_for_temperature(curve.at(at))));
+			}
+
+			if (corrected_run.size() > 1) {
+				QPen corrected_pen(m_palette.corrected, m_metrics.line_width);
+				corrected_pen.setStyle(Qt::DashLine);
+				painter.setPen(corrected_pen);
+				painter.setBrush(Qt::NoBrush);
+				painter.drawPolyline(corrected_run);
+
+				/*
+				 * Labelled where it starts. An unexplained second line
+				 * on a weather graph is worse than no second line.
+				 */
+				painter.setPen(m_palette.corrected);
+				const QPointF head = corrected_run.first();
+				painter.drawText(QRectF(head.x() + 4, head.y() - 16, 120, 14),
+				                 Qt::AlignLeft | Qt::AlignVCenter,
+				                 tr("bias-corrected"));
+			}
+		}
 	}
 
 	/*

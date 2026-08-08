@@ -13,6 +13,7 @@
 #include "met/nowcast.h"
 #include "openmeteo/forecast.h"
 #include "wu/reader.h"
+#include "model/correction.h"
 
 namespace {
 
@@ -530,4 +531,11 @@ void bbq_wu_feed::load_observations() {
 	}
 
 	m_composite.set_series(std::move(stored));
+}
+
+bbq_series bbq_wu_feed::corrected_forecast(qint64 from_utc,
+                                           qint64 to_utc) const {
+	return bbq_corrected_forecast(m_composite, m_history, m_station_id,
+	                              from_utc, to_utc,
+	                              QDateTime::currentSecsSinceEpoch());
 }

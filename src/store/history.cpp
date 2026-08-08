@@ -105,6 +105,31 @@ const char *bbq_lead_bucket_name(bbq_lead_bucket bucket) {
 	return "?";
 }
 
+qint64 bbq_lead_bucket_centre_s(bbq_lead_bucket bucket) {
+	switch (bucket) {
+	case bbq_lead_bucket::hour:
+		return 1800;
+	case bbq_lead_bucket::three_hours:
+		return 2 * 3600;
+	case bbq_lead_bucket::six_hours:
+		return 4 * 3600 + 1800;
+	case bbq_lead_bucket::twelve_hours:
+		return 9 * 3600;
+	case bbq_lead_bucket::day:
+		return 18 * 3600;
+	case bbq_lead_bucket::two_days:
+		return 36 * 3600;
+	case bbq_lead_bucket::four_days:
+		return 3 * 24 * 3600;
+	case bbq_lead_bucket::week:
+		return 5 * 24 * 3600 + 12 * 3600;
+	case bbq_lead_bucket::beyond:
+		return 11 * 24 * 3600;
+	}
+
+	return 3600;
+}
+
 bbq_history::bbq_history() {
 	/*
 	 * A connection name of our own, so two of these -- or a test and the
@@ -546,6 +571,42 @@ int bbq_history::expire(const QString &station, qint64 now_utc) {
 	}
 
 	return query.numRowsAffected();
+}
+
+bool bbq_history::set_verification(const QString &station, bbq_band band,
+                                   const QString &quantity,
+                                   bbq_lead_bucket bucket, int count,
+                                   double bias, double mean_absolute_error,
+                                   double root_mean_square_error) {
+	if (!m_open || count <= 0) {
+		return false;
+	}
+
+	/*
+	 * Stored as the sums the table actually holds, so a seeded row is
+	 * indistinguishable from an accumulated one and verify() can keep
+	 * adding to it afterwards.
+	 */
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "INSERT OR REPLACE INTO verification "
+	        "(station, band, quantity, lead_bucket, count, sum_error, "
+	        "sum_absolute_error, sum_square_error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"));
+	query.addBindValue(station);
+	query.addBindValue(static_cast<int>(band));
+	query.addBindValue(quantity);
+	query.addBindValue(static_cast<int>(bucket));
+	query.addBindValue(count);
+	query.addBindValue(bias * count);
+	query.addBindValue(mean_absolute_error * count);
+	query.addBindValue(root_mean_square_error * root_mean_square_error * count);
+
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return false;
+	}
+
+	return true;
 }
 
 bbq_verification bbq_history::verification(const QString &station,

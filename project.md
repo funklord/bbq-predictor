@@ -2394,6 +2394,51 @@ handful of comparisons is noise, not a bias -- so a minimum sample count
 gates it, and below that the band is simply absent rather than
 uncorrected-but-drawn.
 
+### 12.9 What building it changed
+
+Three things the design got wrong, all found in the first hour of the
+band existing and none of them predictable from the paper version.
+
+**The ribbon is the wrong place for it, and sec 12.5 said to put it
+there.** The ribbon answers "which band produced this stretch of the
+drawn data". A corrected curve is not produced by a band; it is this
+program's adjustment of one. Putting it there would make one strip
+answer two different questions. It is drawn as a dashed overlay in a
+colour deliberately outside Weather Underground's measured set -- it is
+not their data, and a curve wearing their palette would say it was --
+and it is labelled where it starts, because an unexplained second line
+on a weather graph is worse than no second line.
+
+**A bucketed bias drew a staircase, twice, for two different reasons.**
+The first was the bucketing itself: bias is stored per lead bucket, so
+subtracting it directly steps at every bucket edge and gives the line
+structure that came from the schema rather than from the weather. It is
+interpolated between bucket centres now, held flat beyond the buckets
+that have evidence.
+
+That fixed less than it looked like it should, because the second cause
+was different and larger: **a forecast sample holds one temperature
+across its whole span** (sec 3.1), so sampling the composite every
+quarter hour repeats an hourly value four times. The red line is smooth
+because the graph joins sample STARTS. The correction has to be built on
+the same starts or it disagrees with the curve it is drawn against, in a
+way that looks like data. One corrected point per underlying forecast
+sample.
+
+**The two lines have to get identical treatment.** The forecast is
+rounded by the smoothing setting and the overlay was not, so the gap
+between them was part bias and part smoothing -- and the entire purpose
+of drawing them together is that the gap IS the correction. Anything
+applied to one is applied to the other.
+
+A fourth was found by the test rather than by looking, which is the one
+worth keeping in mind: the interpolation clamped at its upper end and
+not its lower, so any lead shorter than the first bucket's centre ran
+the line backwards off the end of the evidence and produced a bias of
+the wrong sign. **A correction that made the forecast worse, at the one
+lead time where it is most nearly right.** At those leads the error is a
+fraction of a degree and the rendered curve looked entirely reasonable.
+
 ### 12.6 The give-up rule
 
 A pending forecast whose valid time has passed without an observation

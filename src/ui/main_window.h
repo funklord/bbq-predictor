@@ -34,6 +34,7 @@ public:
 	 * rather than the broken one.
 	 */
 	void begin(const QString &station_id, const QString &geocode);
+	void set_history_path(const QString &path) { m_history_path = path; }
 
 	bbq_wu_feed *feed() const { return m_feed; }
 	bbq_forecast_graph *graph() const { return m_graph; }
@@ -77,6 +78,7 @@ private:
 	 * a silent fall back to cache is a defect.
 	 */
 	void refresh_status();
+	void refresh_corrected();
 
 	QComboBox *m_method_box;
 	QComboBox *m_smoothing_box;
@@ -96,6 +98,7 @@ private:
 	bbq_forecast_graph *m_graph;
 	bbq_wu_feed *m_feed;
 	QString m_last_error;
+	QString m_history_path;
 };
 
 #endif

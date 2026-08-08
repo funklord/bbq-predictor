@@ -8,10 +8,12 @@ SOURCES += test_feed.cpp \
 	$$PWD/../src/wu/feed.cpp \
 	$$PWD/../src/wu/client.cpp \
 	$$PWD/../src/wu/key_source.cpp \
-	$$PWD/../src/store/history.cpp
+	$$PWD/../src/store/history.cpp \
+	$$PWD/../src/model/correction.cpp
 
 HEADERS += \
 	$$PWD/../src/wu/feed.h \
 	$$PWD/../src/wu/client.h \
 	$$PWD/../src/wu/key_source.h \
-	$$PWD/../src/store/history.h
+	$$PWD/../src/store/history.h \
+	$$PWD/../src/model/correction.h

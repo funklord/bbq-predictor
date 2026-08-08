@@ -81,6 +81,7 @@ SOURCES += \
 	src/graph/interpolate.cpp \
 	src/met/nowcast.cpp \
 	src/model/composite.cpp \
+	src/model/correction.cpp \
 	src/openmeteo/forecast.cpp \
 	src/model/grill.cpp \
 	src/model/series.cpp \
@@ -100,6 +101,7 @@ HEADERS += \
 	src/graph/interpolate.h \
 	src/met/nowcast.h \
 	src/model/composite.h \
+	src/model/correction.h \
 	src/openmeteo/forecast.h \
 	src/model/grill.h \
 	src/model/sample.h \

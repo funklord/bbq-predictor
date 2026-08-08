@@ -50,6 +50,13 @@ struct bbq_graph_palette {
 	 */
 	QColor readout_text;
 
+	/*
+	 * The bias-corrected overlay (sec 12.5). Deliberately not one of the
+	 * measured Weather Underground colours: it is not their data, and a
+	 * curve wearing their palette would say it was.
+	 */
+	QColor corrected;
+
 	/* Per band, for the provenance ribbon (sec 3.4). */
 	QColor band_observed;
 	QColor band_current;
@@ -89,6 +96,13 @@ public:
 	explicit bbq_forecast_graph(QWidget *parent = nullptr);
 
 	void set_composite(bbq_composite composite);
+
+	/*
+	 * The bias-corrected overlay (sec 12.5), drawn over the forecast it
+	 * corrects rather than replacing it. An empty series removes it,
+	 * which is the normal state until enough has been verified.
+	 */
+	void set_corrected(bbq_series corrected);
 	const bbq_composite &composite() const { return m_composite; }
 
 	/*
@@ -176,6 +190,7 @@ protected:
 private:
 	bbq_graph_palette m_palette;
 	bbq_composite m_composite;
+	bbq_series m_corrected;
 	qint64 m_before_s = 3 * 3600;
 	qint64 m_after_s = 21 * 3600;
 

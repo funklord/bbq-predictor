@@ -203,6 +203,89 @@ int main(int argc, char *argv[]) {
 	 * diagnostics, and the only way to see whether the archive is
 	 * growing without waiting a month to find out it is not.
 	 */
+	/*
+	 * A store somewhere other than the real one. For tests, for looking
+	 * at an archive without opening it in the applet, and for the
+	 * seeding below -- which must never be aimed at the real thing.
+	 */
+	const QString history_path =
+	        option_value(arguments, QStringLiteral("--history-path"));
+
+	/*
+	 * Synthetic verification statistics, so the corrected band can be
+	 * exercised before a month of real weather has gone by (sec 12.5).
+	 *
+	 * It REFUSES to write to the default store. The whole value of the
+	 * archive is that everything in it was measured, and a diagnostic
+	 * that can quietly put invented numbers there would destroy that for
+	 * the sake of a screenshot.
+	 */
+	const QString seed =
+	        option_value(arguments, QStringLiteral("--seed-verification"));
+	if (!seed.isEmpty()) {
+		QTextStream report(stdout);
+
+		if (history_path.isEmpty()) {
+			report << "seed: refusing to write invented statistics to the "
+			       << "real archive.\n";
+			report << "seed:   give --history-path with a scratch file.\n";
+			return 1;
+		}
+
+		const double bias = seed.toDouble();
+		const QString wanted =
+		        station.isEmpty() ? bbq_settings::station() : station;
+
+		bbq_history store;
+		if (!store.open(history_path)) {
+			report << "seed: cannot open: " << store.last_error() << "\n";
+			return 1;
+		}
+
+		const bbq_band bands[] = {
+			bbq_band::nowcast_fine, bbq_band::nowcast,
+			bbq_band::hourly, bbq_band::extended};
+		const bbq_lead_bucket buckets[] = {
+			bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
+			bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
+			bbq_lead_bucket::day, bbq_lead_bucket::two_days,
+			bbq_lead_bucket::four_days, bbq_lead_bucket::week,
+			bbq_lead_bucket::beyond};
+
+		int written = 0;
+		int bucket_index = 0;
+
+		for (bbq_lead_bucket bucket : buckets) {
+			++bucket_index;
+
+			for (bbq_band band : bands) {
+				/*
+				 * Growing with lead time, because that is the shape real
+				 * forecast error has: a one-hour prediction is nearly
+				 * right and a ten-day one is a guess. A flat synthetic
+				 * bias would draw a corrected curve parallel to the
+				 * forecast and would not exercise the stratification at
+				 * all.
+				 */
+				const double scaled = bias * bucket_index;
+
+				if (store.set_verification(wanted, band,
+				                           QStringLiteral("temperature"), bucket,
+				                           50, scaled, qAbs(scaled) + 0.5,
+				                           qAbs(scaled) + 0.8)) {
+					++written;
+				}
+			}
+		}
+
+		report << "seed: wrote " << written << " synthetic rows to "
+		       << history_path << "\n";
+		report << "seed:   bias " << QString::number(bias, 'f', 2)
+		       << " C per lead bucket, n=50 each\n";
+		report << "seed:   THESE ARE INVENTED. Do not read them as measurements.\n";
+		return 0;
+	}
+
 	if (arguments.contains(QStringLiteral("--history"))) {
 		const QString wanted =
 		        station.isEmpty() ? bbq_settings::station() : station;
@@ -210,7 +293,7 @@ int main(int argc, char *argv[]) {
 		bbq_history store;
 		QTextStream report(stdout);
 
-		if (!store.open()) {
+		if (!store.open(history_path)) {
 			report << "history: cannot open: " << store.last_error() << "\n";
 			return 1;
 		}
@@ -291,6 +374,7 @@ int main(int argc, char *argv[]) {
 		window.graph()->set_cursor_column(cursor.toInt());
 	}
 
+	window.set_history_path(history_path);
 	window.begin(station, geocode);
 
 	/*

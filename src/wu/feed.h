@@ -93,6 +93,12 @@ public:
 	 */
 	void set_view_range(qint64 from_utc, qint64 to_utc);
 
+	/*
+	 * The bias-corrected overlay for a range (sec 12.5). Empty until
+	 * enough forecasts have been checked to justify moving a curve.
+	 */
+	bbq_series corrected_forecast(qint64 from_utc, qint64 to_utc) const;
+
 	void start_auto_refresh();
 	void stop_auto_refresh();
 

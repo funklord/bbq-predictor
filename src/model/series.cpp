@@ -68,6 +68,14 @@ int bbq_band_priority(bbq_band band) {
 
 	case bbq_band::hourly:
 		return 100;
+
+	/*
+	 * Last, deliberately. See the note in the enum: it is an overlay,
+	 * and a priority it could ever win on would be a bug waiting for a
+	 * composite to put it in.
+	 */
+	case bbq_band::corrected:
+		return 1;
 	}
 
 	return 0;
@@ -87,6 +95,8 @@ const char *bbq_band_name(bbq_band band) {
 		return "extended";
 	case bbq_band::hourly:
 		return "hourly";
+	case bbq_band::corrected:
+		return "corrected";
 	}
 
 	return "unknown";

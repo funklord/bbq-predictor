@@ -44,6 +44,17 @@ enum class bbq_band {
 	 */
 	extended,
 
+	/*
+	 * This program's opinion about somebody else's forecast: a band
+	 * corrected by its own measured bias (project.md sec 12.5).
+	 *
+	 * Ranked below everything so it can never win a column if it is ever
+	 * put in a composite. It is drawn as an overlay rather than resolved
+	 * against the others, because a corrected number is not a number
+	 * anybody reported and must not be able to stand in for one.
+	 */
+	corrected,
+
 	hourly,
 };
 

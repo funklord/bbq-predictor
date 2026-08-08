@@ -15,6 +15,7 @@
 #include "model/grill.h"
 #include "ui/layout.h"
 #include "model/settings.h"
+#include "model/correction.h"
 #include "wu/feed.h"
 
 bbq_main_window::bbq_main_window(QWidget *parent)
@@ -200,6 +201,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 
 	connect(m_feed, &bbq_wu_feed::updated, this, [this]() {
 		m_graph->set_composite(m_feed->composite());
+		refresh_corrected();
 		refresh_status();
 	});
 
@@ -216,6 +218,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	        [this](qint64 from_utc, qint64 to_utc) {
 		m_feed->set_view_range(from_utc, to_utc);
 		m_graph->set_composite(m_feed->composite());
+		refresh_corrected();
 	});
 
 	connect(m_feed, &bbq_wu_feed::band_failed, this,
@@ -371,7 +374,7 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	 * archived rather than lost. A failure is reported and not fatal:
 	 * the applet still draws, it just does not remember (sec 12).
 	 */
-	if (!m_feed->open_history()) {
+	if (!m_feed->open_history(m_history_path)) {
 		m_last_error = tr("history: ") + m_feed->history_error();
 	}
 
@@ -431,6 +434,17 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 
 	m_feed->refresh();
 	m_feed->start_auto_refresh();
+}
+
+void bbq_main_window::refresh_corrected() {
+	/*
+	 * Recomputed for whatever the graph is looking at, because the
+	 * correction depends on lead time and lead time depends on the view.
+	 */
+	const qint64 from = m_graph->view_from_utc();
+	const qint64 to = from + m_graph->view_span_s();
+
+	m_graph->set_corrected(m_feed->corrected_forecast(from, to));
 }
 
 void bbq_main_window::refresh_status() {
