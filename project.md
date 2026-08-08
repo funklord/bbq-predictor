@@ -153,6 +153,33 @@ log. It runs `QTEST_GUILESS_MAIN` now, against a dead proxy on
 localhost and without ever spinning the event loop, so nothing leaves
 the machine and every assertion is synchronous.
 
+### 2.3.2 A stalled connection used to be fatal, permanently
+
+**No request had a deadline.** Found by reading, confirmed by measuring
+against a server that accepts connections and never answers.
+
+A reply that never finishes never calls `finish_one`, so `m_outstanding`
+never returns to zero -- and `tick()` refuses to start a round while
+anything is outstanding, deliberately, so that a slow round is never
+stacked on top of itself. Together those two correct behaviours make one
+stalled socket **permanent**: the graph freezes, auto-refresh stops for
+the life of the process, the tray goes red at two hours and stays red,
+and nothing short of a restart recovers. If the stall is the key page
+rather than a band, `m_in_flight` never clears either, so every request
+queued behind it waits for ever too.
+
+Measured both ways, forty-five seconds against the stalling server:
+before, six requests and not a single completion. After
+`setTransferTimeout(30 s)`, every request fails at the deadline,
+`m_outstanding` unwinds to zero, `settled` fires, and the next heartbeat
+retries.
+
+Thirty seconds is chosen for a slow mobile link, which sec 11 makes a
+real case rather than a hypothetical one. A timeout arrives as an
+ordinary reply error, so every band's existing failure path already
+handles it -- no new branch, which is why the change is one line on the
+manager the four providers share.
+
 ### 2.4 Staleness is visible, always
 
 This is the fragile joint in the whole program, and its failure mode is
@@ -163,6 +190,39 @@ worse than no graph, because a decision gets made on it.
 So: the last successful fetch time is part of the display, not hidden in
 a tooltip, and a failed refresh is visible in the tray icon as well as in
 the window. A silent fall back to cached data is a defect.
+
+### 2.4.1 Two bands were never refreshed at all
+
+The heartbeat only ever asked Weather Underground. The radar and
+extended bands were fetched once, in the startup burst, and never
+again -- `tick()` walks the `bbq_wu_product` values, and neither of
+those bands is one.
+
+**Sec 2.4's staleness rule then reported it correctly, and looked like a
+bug of its own.** `oldest_fetch_utc()` takes the oldest fetch across
+every band precisely so a stalled one cannot hide behind fresh ones, so
+the tray turned red exactly two hours after every launch and stayed red
+while the four WU bands refreshed perfectly. The detector was right. The
+refresh was incomplete.
+
+The same reading found a second fault in the same place: the startup
+fetches called the client directly instead of going through `attempt()`,
+so nothing recorded that the bands had been asked for. The first
+heartbeat saw a last-attempt of zero for all of them and refetched every
+band **sixty seconds after launch**, which is exactly what the freshness
+table exists to prevent, against the one provider whose quota is not
+ours to spend.
+
+Both measured, before and after, by tracing every outbound fetch across
+two heartbeats. Before: six bands at startup, then four again at +61 s,
+and radar and extended never again. After, with the two intervals
+shortened so a heartbeat had to pick them up: six at startup, then only
+radar and extended at +61 s and +121 s, and the WU bands silent until
+their own intervals came due.
+
+Every fetch goes through an attempt now, and an attempt is what records
+the time -- the two are one operation rather than two that have to be
+remembered together.
 
 ### 2.5 Be a polite client
 

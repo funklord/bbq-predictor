@@ -46,6 +46,23 @@ int freshness_s(bbq_wu_product product) {
 	return 15 * 60;
 }
 
+/*
+ * The two bands that are not Weather Underground's, and their own
+ * intervals. MET republishes its radar nowcast about every five minutes
+ * and Open-Meteo's extended band is hourly, so these match the same rule
+ * the table above follows: ask no faster than the source changes.
+ */
+const int radar_freshness_s = 10 * 60;
+const int extended_freshness_s = 60 * 60;
+
+/*
+ * Never attempted counts as overdue. Shared by every band so that the
+ * one thing they all have to agree about is written once.
+ */
+bool overdue(qint64 last_utc, int interval_s, qint64 now_utc) {
+	return last_utc == 0 || now_utc - last_utc >= interval_s;
+}
+
 bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
 	switch (product) {
 	case bbq_wu_product::observed:
@@ -67,6 +84,29 @@ bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
 
 bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	m_net = new QNetworkAccessManager(this);
+
+	/*
+	 * Every request gets a deadline, and without one there was no way
+	 * back from a stalled connection.
+	 *
+	 * A reply that never finishes never calls finish_one, so
+	 * m_outstanding never returns to zero -- and tick() refuses to start
+	 * a round while anything is outstanding, by design, so that one
+	 * stalled socket killed auto-refresh for the life of the process.
+	 * The graph froze, the tray went red at two hours and stayed red,
+	 * and nothing recovered short of a restart. Measured against a
+	 * server that accepts and never answers: forty-five seconds, six
+	 * requests, not one completion.
+	 *
+	 * Thirty seconds is long enough for a slow mobile link -- which
+	 * sec 11 makes a real case rather than a hypothetical one -- and a
+	 * timeout arrives as an ordinary reply error, so every band's
+	 * existing failure path already handles it.
+	 *
+	 * Set on the manager rather than per request: all four providers
+	 * share this one, so this is the only place it can be said once.
+	 */
+	m_net->setTransferTimeout(30 * 1000);
 	m_keys = new bbq_wu_key_source(m_net, this);
 	m_client = new bbq_wu_client(m_net, m_keys, this);
 	m_met = new bbq_met_client(m_net, this);
@@ -173,12 +213,20 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 }
 
 void bbq_wu_feed::start_auto_refresh() {
-	if (m_timer != nullptr) {
-		return;
+	if (m_timer == nullptr) {
+		m_timer = new QTimer(this);
+		connect(m_timer, &QTimer::timeout, this, &bbq_wu_feed::tick);
 	}
 
-	m_timer = new QTimer(this);
-	connect(m_timer, &QTimer::timeout, this, &bbq_wu_feed::tick);
+	/*
+	 * Restartable. The earlier shape returned early whenever the timer
+	 * existed, so a stop could never be undone -- latent rather than
+	 * live, since nothing calls stop today, but a one-way switch is not
+	 * what the pair of names promises.
+	 */
+	if (m_timer->isActive()) {
+		return;
+	}
 
 	/*
 	 * A one-minute heartbeat that decides nothing on its own -- every
@@ -197,11 +245,7 @@ void bbq_wu_feed::stop_auto_refresh() {
 
 bool bbq_wu_feed::due(bbq_wu_product product, qint64 now_utc) const {
 	const qint64 last = m_attempted.value(static_cast<int>(product), 0);
-	if (last == 0) {
-		return true;
-	}
-
-	return now_utc - last >= freshness_s(product);
+	return overdue(last, freshness_s(product), now_utc);
 }
 
 void bbq_wu_feed::attempt(bbq_wu_product product, qint64 now_utc) {
@@ -260,6 +304,12 @@ void bbq_wu_feed::tick() {
 		if (m_station_id.isEmpty() && due(bbq_wu_product::current_point, now)) {
 			attempt(bbq_wu_product::current_point, now);
 		}
+		if (overdue(m_radar_attempted, radar_freshness_s, now)) {
+			attempt_radar(now);
+		}
+		if (overdue(m_extended_attempted, extended_freshness_s, now)) {
+			attempt_extended(now);
+		}
 	}
 }
 
@@ -281,12 +331,32 @@ void bbq_wu_feed::finish_one() {
 	}
 }
 
-void bbq_wu_feed::start_forecast_bands() {
-	m_outstanding += 4;
+void bbq_wu_feed::attempt_radar(qint64 now_utc) {
+	m_radar_attempted = now_utc;
+	++m_outstanding;
 	m_met->fetch_nowcast(m_latitude, m_longitude);
+}
+
+void bbq_wu_feed::attempt_extended(qint64 now_utc) {
+	m_extended_attempted = now_utc;
+	++m_outstanding;
 	m_open->fetch(m_latitude, m_longitude);
-	m_client->fetch_nowcast(m_latitude, m_longitude);
-	m_client->fetch_hourly(m_latitude, m_longitude);
+}
+
+/*
+ * Every fetch goes through an attempt, and an attempt is what records
+ * the time. Firing a request without recording it leaves the band
+ * looking as though it had never been asked for, so the next heartbeat
+ * asks again -- which is exactly what used to happen sixty seconds
+ * after every launch.
+ */
+void bbq_wu_feed::start_forecast_bands() {
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	attempt_radar(now);
+	attempt_extended(now);
+	attempt(bbq_wu_product::nowcast, now);
+	attempt(bbq_wu_product::hourly, now);
 }
 
 void bbq_wu_feed::refresh() {
@@ -301,12 +371,11 @@ void bbq_wu_feed::refresh() {
 		return;
 	}
 
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
 	if (!m_station_id.isEmpty()) {
-		m_outstanding += 2;
-		const QString today =
-		        QDate::currentDate().toString(QStringLiteral("yyyyMMdd"));
-		m_client->fetch_observed(m_station_id, today);
-		m_client->fetch_current_station(m_station_id);
+		attempt(bbq_wu_product::observed, now);
+		attempt(bbq_wu_product::current_station, now);
 	}
 
 	if (m_have_geocode) {
@@ -318,8 +387,7 @@ void bbq_wu_feed::refresh() {
 		 * (sec 3.9.2).
 		 */
 		if (m_station_id.isEmpty()) {
-			m_outstanding += 1;
-			m_client->fetch_current_point(m_latitude, m_longitude);
+			attempt(bbq_wu_product::current_point, now);
 		}
 	}
 }

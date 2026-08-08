@@ -85,6 +85,15 @@ signals:
 
 private:
 	void start_forecast_bands();
+
+	/*
+	 * The radar and extended bands are not Weather Underground's and so
+	 * are not in bbq_wu_product, which is what the schedule is keyed by.
+	 * They carry their own last-attempted stamps rather than being
+	 * squeezed into an enum that means something else.
+	 */
+	void attempt_radar(qint64 now_utc);
+	void attempt_extended(qint64 now_utc);
 	void finish_one();
 	void tick();
 	bool due(bbq_wu_product product, qint64 now_utc) const;
@@ -101,6 +110,8 @@ private:
 	double m_latitude = 0.0;
 	double m_longitude = 0.0;
 	bool m_have_geocode = false;
+	qint64 m_radar_attempted = 0;
+	qint64 m_extended_attempted = 0;
 	int m_outstanding = 0;
 
 	QTimer *m_timer = nullptr;
