@@ -3,18 +3,12 @@
 #include <QDate>
 #include <QDateTime>
 #include <QEventLoop>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QNetworkAccessManager>
 #include <QTextStream>
 #include <QTimeZone>
 #include <QTimer>
 
 #include "model/composite.h"
-#include "wu/client.h"
-#include "wu/key_source.h"
-#include "wu/reader.h"
+#include "wu/feed.h"
 
 namespace {
 
@@ -87,35 +81,6 @@ QString describe_reading(const bbq_composite &composite, qint64 when_utc) {
 	text += reading.series->provider();
 	text += QStringLiteral(")");
 	return text;
-}
-
-/* Where the station says it is (project.md sec 2.6.7.1). */
-struct station_point {
-	bool known = false;
-	double latitude = 0.0;
-	double longitude = 0.0;
-};
-
-station_point point_from_observed(const QJsonDocument &document) {
-	station_point point;
-
-	const QJsonObject root = document.object();
-	const QJsonArray rows = root.value(QStringLiteral("observations")).toArray();
-	if (rows.isEmpty()) {
-		return point;
-	}
-
-	const QJsonObject first = rows.first().toObject();
-	const bool has_lat = first.contains(QStringLiteral("lat"));
-	const bool has_lon = first.contains(QStringLiteral("lon"));
-	if (!has_lat || !has_lon) {
-		return point;
-	}
-
-	point.known = true;
-	point.latitude = first.value(QStringLiteral("lat")).toDouble();
-	point.longitude = first.value(QStringLiteral("lon")).toDouble();
-	return point;
 }
 
 /*
@@ -213,23 +178,6 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 	}
 }
 
-bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
-	switch (product) {
-	case bbq_wu_product::observed:
-		return bbq_wu_read_observed(document);
-	case bbq_wu_product::current_station:
-		return bbq_wu_read_current_station(document);
-	case bbq_wu_product::current_point:
-		return bbq_wu_read_current_point(document);
-	case bbq_wu_product::nowcast:
-		return bbq_wu_read_nowcast(document);
-	case bbq_wu_product::hourly:
-		return bbq_wu_read_hourly(document);
-	}
-
-	return bbq_series();
-}
-
 } // namespace
 
 int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
@@ -237,9 +185,27 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	QTextStream out(stdout);
 	QTextStream error(stderr);
 
-	double latitude = 0.0;
-	double longitude = 0.0;
-	bool have_geocode = false;
+	if (station_id.isEmpty() && geocode.isEmpty()) {
+		error << "fetch-once: nothing configured.\n";
+		error << "fetch-once:   Give --station ID, or --geocode LAT,LON.\n";
+		return 2;
+	}
+
+	/*
+	 * Driven through bbq_wu_feed rather than through the WU client.
+	 *
+	 * This diagnostic predated the feed and drove that client directly,
+	 * so it exercised four Weather Underground products and neither of
+	 * the other two providers -- a check that no longer inspected what
+	 * the application does, which is the shape of vacuous pass this
+	 * project keeps refusing elsewhere.
+	 *
+	 * It also carried its own copy of the band dispatch and the geocode
+	 * derivation. Two copies of an orchestration is two things to keep
+	 * in step, and the one nobody runs is the one that drifts.
+	 */
+	bbq_wu_feed feed;
+	feed.set_station(station_id);
 
 	if (!geocode.isEmpty()) {
 		const QStringList parts = geocode.split(QLatin1Char(','));
@@ -247,139 +213,72 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 			error << "fetch-once: --geocode wants LAT,LON\n";
 			return 2;
 		}
-		latitude = parts.at(0).toDouble();
-		longitude = parts.at(1).toDouble();
-		have_geocode = true;
+		feed.set_geocode(parts.at(0).toDouble(), parts.at(1).toDouble());
 	}
 
-	if (station_id.isEmpty() && !have_geocode) {
-		error << "fetch-once: nothing configured.\n";
-		error << "fetch-once:   Give --station ID, or --geocode LAT,LON.\n";
-		return 2;
-	}
-
-	QNetworkAccessManager net;
-	bbq_wu_key_source keys(&net);
-	bbq_wu_client client(&net, &keys);
-
-	bbq_composite composite;
-	QEventLoop loop;
-	int outstanding = 0;
 	int failures = 0;
+	QEventLoop loop;
 
-	const auto settle = [&]() {
-		if (--outstanding <= 0) {
-			loop.quit();
-		}
-	};
-
-	QObject::connect(&client, &bbq_wu_client::ready, &loop,
-	                 [&](bbq_wu_product product, const QJsonDocument &doc) {
-		bbq_series series = read_for(product, doc);
-		series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
-
-		const QString name = QString::fromLatin1(bbq_wu_product_name(product));
-		out << QStringLiteral("  %1").arg(name, -10);
-		out << QStringLiteral(" ok    ");
-		out << describe_series(series);
-		out << "\n";
-		out.flush();
-
-		composite.set_series(std::move(series));
-
-		/*
-		 * Derive the geocode from the station and release the two
-		 * bands waiting on it (sec 2.6.7). The band that needs the
-		 * station supplies the coordinate the others need.
-		 */
-		if (product == bbq_wu_product::observed && !have_geocode) {
-			const station_point point = point_from_observed(doc);
-			if (point.known) {
-				have_geocode = true;
-				latitude = point.latitude;
-				longitude = point.longitude;
-				out << "  geocode derived from station: ";
-				out << latitude << "," << longitude << "\n";
-				out.flush();
-				outstanding += 2;
-				client.fetch_nowcast(latitude, longitude);
-				client.fetch_hourly(latitude, longitude);
-			} else {
-				error << "  the station reported no coordinates; the ";
-				error << "forecast bands cannot be placed\n";
-				++failures;
-			}
-		}
-
-		settle();
-	});
-
-	QObject::connect(&client, &bbq_wu_client::failed, &loop,
-	                 [&](bbq_wu_product product, const QString &reason) {
-		const QString name = QString::fromLatin1(bbq_wu_product_name(product));
-		error << QStringLiteral("  %1").arg(name, -10);
+	QObject::connect(&feed, &bbq_wu_feed::band_failed, &loop,
+	                 [&](const QString &band, const QString &reason) {
+		error << QStringLiteral("  %1").arg(band, -10);
 		error << QStringLiteral(" FAIL  ");
 		error << reason;
 		error << "\n";
 		error.flush();
 		++failures;
-		settle();
 	});
 
+	QObject::connect(&feed, &bbq_wu_feed::settled, &loop, &QEventLoop::quit);
+
 	/*
-	 * The termination condition, and it is not the requests.
-	 *
-	 * Every band settling would normally end the loop, but a connection
-	 * that never answers settles nothing. This is the bound that makes
-	 * the run finite whatever the network does, and it lives here
-	 * rather than in whatever invokes the binary -- a wrapper only
-	 * guards the way somebody did not run it.
+	 * The bound that holds whatever happens. A request that never
+	 * answers settles nothing, so the loop needs an end of its own --
+	 * and it lives here rather than in whatever invokes the binary,
+	 * because a wrapper only guards the way somebody did not run it.
 	 */
+	bool timed_out = false;
 	QTimer::singleShot(timeout_s * 1000, &loop, [&]() {
-		error << QStringLiteral("fetch-once: timed out after %1s\n")
-		                 .arg(timeout_s);
-		failures += outstanding;
-		outstanding = 0;
+		timed_out = true;
 		loop.quit();
 	});
 
-	/*
-	 * "the Weather Underground bands", not "every band". The radar and
-	 * extended bands come from other providers through bbq_wu_feed,
-	 * which this diagnostic predates and does not use -- so claiming
-	 * completeness here would be a check reporting something other than
-	 * what it did.
-	 */
-	out << "fetch-once: fetching the Weather Underground bands once\n";
+	out << "fetch-once: fetching every band once, through the feed\n";
+	out.flush();
 
-	if (!station_id.isEmpty()) {
-		outstanding += 2;
-		const QString today =
-		        QDate::currentDate().toString(QStringLiteral("yyyyMMdd"));
-		client.fetch_observed(station_id, today);
-		client.fetch_current_station(station_id);
-	} else {
-		out << "  observed   skipped -- no station pinned, a normal state\n";
+	feed.refresh();
+	loop.exec();
+
+	if (timed_out) {
+		error << QStringLiteral("fetch-once: timed out after %1s\n").arg(timeout_s);
+		++failures;
 	}
 
-	if (have_geocode) {
-		outstanding += 2;
-		client.fetch_nowcast(latitude, longitude);
-		client.fetch_hourly(latitude, longitude);
+	const bbq_composite &composite = feed.composite();
 
-		/*
-		 * The geocode fallback for the present moment, and only when
-		 * there is no station -- the station endpoint carries a real
-		 * rain rate where this one carries none (sec 3.9).
-		 */
-		if (station_id.isEmpty()) {
-			++outstanding;
-			client.fetch_current_point(latitude, longitude);
+	/*
+	 * Reported from the composite rather than as each band lands, so
+	 * every provider is described the same way whoever supplied it.
+	 */
+	const bbq_band order[] = {
+		bbq_band::observed,  bbq_band::current, bbq_band::nowcast_fine,
+		bbq_band::nowcast,   bbq_band::extended, bbq_band::hourly,
+	};
+
+	for (bbq_band band : order) {
+		const bbq_series *series = composite.band(band);
+		if (series == nullptr) {
+			continue;
 		}
+
+		out << QStringLiteral("  %1")
+		                .arg(QString::fromLatin1(bbq_band_name(band)), -10);
+		out << QStringLiteral(" %1  ").arg(series->provider(), -13);
+		out << describe_series(*series);
+		out << "\n";
 	}
 
 	out.flush();
-	loop.exec();
 
 	/*
 	 * What the composite makes of it. The three probes below are the

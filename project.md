@@ -521,12 +521,23 @@ acceptable here only because the ribbon names the band: the graph says
 told it is a measurement. Sec 3.3's ordering still holds where both
 exist, since observed outranks it by a wide margin.
 
-### 2.10.3 The diagnostic no longer covers everything
+### 2.10.3 The diagnostic runs through the feed
 
-`--fetch-once` predates the feed and drives the WU client directly, so
-it exercises neither of the other two providers. Its message says so
-rather than claiming completeness, but the divergence is real: it is a
-check that no longer inspects what the application does.
+`--fetch-once` drives `bbq_wu_feed` rather than the WU client, so it
+exercises every provider the application does and reports each band
+beside the provider that supplied it.
+
+It did not, for two commits. It predated the feed, drove the WU client
+directly, and carried its own copy of the band dispatch and the geocode
+derivation -- so it checked four Weather Underground products, neither
+of the other two providers, and a second copy of an orchestration that
+had moved on. **A check that no longer inspects what the application
+does** is the vacuous pass this project refuses everywhere else,
+arriving in the tool meant to catch it.
+
+Driving the real thing also deleted a hundred lines. Two copies of an
+orchestration are two things to keep in step, and the one nobody runs
+is the one that drifts.
 
 ## 3. The graph is the program
 
@@ -1493,9 +1504,6 @@ Settled:
 
 Open, each needing a decision rather than a drift:
 
-- `--fetch-once` exercises only the Weather Underground bands; the
-  other two providers arrive through the feed, which that diagnostic
-  predates (sec 2.10.3)
 - The observed band's lag against the current reading, which leaves a
   short hole in the recent past that the next refresh fills (sec 3.9.4).
   Understood and accepted rather than open, but worth revisiting if the
