@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+	<!--
+	  The launcher icon.
+
+	  It is the graph, because the graph is the program (project.md sec 3),
+	  and it is drawn in the palette measured from Weather Underground's own
+	  chart (sec 3.8.2) rather than in colours picked to look nice: the red
+	  is the temperature curve's, the green is the rain's, and the orange is
+	  what a grilling window is shaded with.
+
+	  Three marks, not four. The first version also carried a pale blue hour
+	  band, which is a four percent tint of white and disappeared at every
+	  icon size: a mark doing no work, taking room from the ones that do.
+	  Rendered at 16, 22, 32, 48 and 64 and looked at, which is how that was
+	  found rather than reasoned about.
+
+	  The content is inset only a little, because an icon is read at sixteen
+	  pixels more often than at sixty-four and margins are the first thing
+	  that becomes mud. There are no axes, no labels and no chance panel for
+	  the same reason.
+
+	  Note for anyone editing this file. The house style writes a double
+	  hyphen where prose would use an em dash, and XML forbids that sequence
+	  inside a comment. This one is written without any, deliberately.
+	-->
+
+	<rect x="2" y="2" width="60" height="60" rx="11" fill="#ffffff"/>
+
+	<!-- The grilling window: the one block the eye should catch first. -->
+	<rect x="26" y="7" width="17" height="50" fill="#ff8b33" opacity="0.45"/>
+
+	<!-- Rain, along the bottom as the app draws it. -->
+	<path d="M7 57 L7 44 L17 41 L26 46 L35 36 L44 40 L53 33 L57 35 L57 57 Z"
+	      fill="#87c403"/>
+
+	<!-- Temperature: one bold curve, sized to hold together at 16 px. -->
+	<path d="M7 37 C14 17 22 15 30 23 C36 29 41 18 49 14 C53 12 55 13 57 16"
+	      fill="none" stroke="#d5202a" stroke-width="7"
+	      stroke-linecap="round" stroke-linejoin="round"/>
+
+	<rect x="2" y="2" width="60" height="60" rx="11"
+	      fill="none" stroke="#d7d7d7" stroke-width="2"/>
+</svg>

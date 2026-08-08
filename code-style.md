@@ -320,6 +320,17 @@ Overriding a Qt virtual keeps Qt's name, because the signature is theirs:
 package-system spelling -- qmake wants the project file named for the
 target.
 
+### XML comments cannot carry the em dash
+
+The three rules say ASCII, and this project writes `--` where prose
+would use an em dash. **XML forbids that sequence inside a comment**, so
+`packaging/*.svg` writes those sentences without one.
+
+Found by the file refusing to parse, not by review. It is a property of
+the format rather than a decision, so it needs no exception to be
+argued -- but it is written down because the alternative is rediscovering
+it every time somebody comments an SVG.
+
 ### Formatter: not yet evaluated
 
 **No formatter runs on this tree, and none should until one has been

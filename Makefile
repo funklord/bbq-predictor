@@ -252,9 +252,16 @@ install: all
 	install -m 0644 packaging/$(APP_ID).desktop \
 	        $(DESTDIR)$(PREFIX)/share/applications/$(APP_ID).desktop
 
+	# The icon the desktop entry has been naming since the first commit.
+	# Without it the launcher shows a placeholder, which is what it did.
+	mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
+	install -m 0644 packaging/$(APP_ID).svg \
+	        $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(APP_ID).svg
+
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/$(APP_ID).desktop
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(APP_ID).svg
 
 # clean removes intermediates only; $(TARGET) survives, so `make install`
 # stays possible without a rebuild.

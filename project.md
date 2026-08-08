@@ -1451,11 +1451,11 @@ to this project:
     debian/copyright      see below -- this is the blocker
     debian/source/format  3.0 (native)
 
-Plus one thing packaging would expose rather than cause: **the desktop
-entry names `Icon=se.vibes.bbq-predictor` and no icon exists.** Nothing
-installs one and none is tracked, so the launcher entry points at
-nothing today and a package would ship that broken reference for
-lintian to find. Worth fixing whether or not packaging happens.
+Drafting this exposed one thing packaging would have shipped: the
+desktop entry had named `Icon=se.vibes.bbq-predictor` since the first
+commit and no icon existed. Fixed rather than left for the package to
+carry -- `packaging/$(APP_ID).svg`, installed to
+`share/icons/hicolor/scalable/apps` as beerssh does it.
 
 ### 5.1.4 The blocker is the licence, and it is not mine to move
 
@@ -1820,10 +1820,6 @@ anything.
   that are the holder's alone: that `debian/copyright` needs a
   `License:` field this project deliberately cannot supply, and that a
   `.deb` is a distribution artifact where the source is not
-- **The missing icon.** The desktop entry names
-  `Icon=se.vibes.bbq-predictor` and nothing in the tree provides one, so
-  the launcher entry points at nothing (sec 5.1.3). Found while drafting
-  the packaging proposal; worth fixing whether or not packaging happens
 - **Finishing the Android build.** It stops at a `compileSdk 35` floor
   set by Qt's own AndroidX dependencies against an SDK whose newest
   platform is android-33 (sec 11.2). One `sdkmanager` line fixes it,
