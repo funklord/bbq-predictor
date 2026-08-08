@@ -1398,14 +1398,94 @@ one.
 The temporary sits in the same directory deliberately, because rename
 cannot cross filesystems and `/tmp` frequently is one.
 
-### 5.1 Open: packaging
+### 5.1 Proposed: packaging
 
-Not chosen. The global guidance prefers `dpkg-buildpackage` driving a
-`dh`-based `debian/rules`, and notes that the seven private projects use
-five different mechanisms between them -- so picking one here is a
-convention change to raise, not a thing to do in passing.
+**A proposal, not a decision.** `build-and-commit.md` says choosing a
+packaging mechanism is a convention change to raise rather than make in
+passing, so this is what raising it looks like. Nothing below is built.
 
-### 5.1.1 Looking at it is the method
+### 5.1.1 The mechanism is not really in question
+
+`dpkg-buildpackage` driving a `dh`-based `debian/rules`, which is what
+the global guidance prefers and what **every sibling that packages
+already does** -- measured by reading each tree rather than taken from
+the document:
+
+| | flags | `debian/rules` |
+|---|---|---|
+| hydra, situ, netcfgd, fuzzypickles, fmake, beerssh | `-b -us -uc` | `%:` then `dh $@` |
+| apt-emerge | `--build=binary --no-sign` | same |
+| raidcfgd | checks for the tool first | same |
+
+Seven of eight spell the flags identically and the eighth asks for the
+same thing in long form. There is no live disagreement to settle here.
+
+The rules files are 4 to 12 lines of actual content, and two overrides
+recur: `dh_auto_install` calling `make install DESTDIR=...`, and
+`dh_auto_test` disabled because the suite wants a build tree the
+packaging does not keep. **This project would need both**, and its
+`install` target already honours `DESTDIR`.
+
+### 5.1.2 What is actually unsettled
+
+Three spellings differ, and all three belong to the group rather than
+to this project:
+
+- **Where artifacts land.** `$(BUILD_DIR)/deb` in hydra, situ and
+  raidcfgd; `$(BUILD_DIR)` in fmake and beerssh; `dist/` in apt-emerge.
+  `$(BUILD_DIR)/deb` reads best -- it keeps build output under one
+  variable and says what the directory holds.
+- **How they are collected** out of the parent directory
+  `dpkg-buildpackage` writes to. raidcfgd's has learned the most: it
+  moves `name_*` **and** `name-*`, having found that the first version
+  left the `-dbgsym` package behind for ever.
+- **Whether `dh` is now *the* convention** rather than what everybody
+  happens to do. That is the question `build-and-commit.md` leaves for
+  the holder, and eight trees agreeing is a good moment to answer it.
+
+### 5.1.3 What this project would need
+
+    debian/control        one binary package; dh_shlibdeps finds Qt
+    debian/rules          %: dh $@, plus the two overrides above
+    debian/changelog      gated against VERSION, as situ does
+    debian/copyright      see below -- this is the blocker
+    debian/source/format  3.0 (native)
+
+Plus one thing packaging would expose rather than cause: **the desktop
+entry names `Icon=se.vibes.bbq-predictor` and no icon exists.** Nothing
+installs one and none is tracked, so the launcher entry points at
+nothing today and a package would ship that broken reference for
+lintian to find. Worth fixing whether or not packaging happens.
+
+### 5.1.4 The blocker is the licence, and it is not mine to move
+
+`debian/copyright` carries a `License:` field. **This project has no
+licence, deliberately (sec 8).**
+
+The directive is explicit that a lint gate demanding a field is a
+finding to report and not authority to decide, and that a blank field
+must not be filled to quiet it. raidcfgd is the worked example and its
+wording is the model: a `License: none-chosen` paragraph saying all
+rights are reserved, that the absence is deliberate rather than an
+oversight, and that **until a choice is made the package is not
+distributable** -- the packaging exists so it can be built and
+installed locally.
+
+So packaging is possible now, and it produces something installable on
+this machine and nowhere else. That may be exactly what is wanted; it
+should be a decision rather than a discovery.
+
+### 5.1.5 And a second thing to decide before distributing
+
+Independent of the licence: a `.deb` is a distribution artifact, and
+sec 2.2 records that the scraper violates Weather Underground's terms.
+
+Building one locally changes nothing. Handing one to somebody else is a
+different act from publishing source that carries a warning -- a
+package installs and runs without anybody reading `project.md` sec 2
+first. Worth settling alongside the licence rather than after.
+
+### 5.1.6 Looking at it is the method
 
 **Every layout defect in this project was found by rendering a picture
 and looking at it.** Not one was found by reading the code, and none of
@@ -1732,10 +1812,18 @@ anything.
 - **A dark-desktop variant**, given the measured palette is fixed and
   light. A question about how the applet is actually used rather than
   one this document can answer (sec 3.8.3)
-- **Packaging.** The global guidance prefers `dpkg-buildpackage` with a
-  `dh`-based `debian/rules`, and notes the private projects use five
-  mechanisms between them -- so choosing here is a convention change to
-  raise, not to make in passing (sec 5.1)
+- **Packaging**, now drafted as a proposal rather than a gap (sec 5.1).
+  The mechanism is not in question -- every sibling that packages uses
+  `dpkg-buildpackage` with `dh`, seven of eight with identical flags.
+  What needs deciding is where artifacts land, whether `dh` is now *the*
+  convention rather than what everyone happens to do, and two things
+  that are the holder's alone: that `debian/copyright` needs a
+  `License:` field this project deliberately cannot supply, and that a
+  `.deb` is a distribution artifact where the source is not
+- **The missing icon.** The desktop entry names
+  `Icon=se.vibes.bbq-predictor` and nothing in the tree provides one, so
+  the launcher entry points at nothing (sec 5.1.3). Found while drafting
+  the packaging proposal; worth fixing whether or not packaging happens
 - **Finishing the Android build.** It stops at a `compileSdk 35` floor
   set by Qt's own AndroidX dependencies against an SDK whose newest
   platform is android-33 (sec 11.2). One `sdkmanager` line fixes it,
