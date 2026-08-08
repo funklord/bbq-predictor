@@ -26,7 +26,7 @@ bbq_tray_icon::bbq_tray_icon(QObject *parent)
 	 * glanced at rather than read, so it is the likelier place for a stale
 	 * reading to be believed.
 	 */
-	setToolTip(tr("bbqpredictor -- no data yet"));
+	setToolTip(tr("bbq-predictor -- no data yet"));
 
 	menu = new QMenu();
 
@@ -100,7 +100,7 @@ void bbq_tray_icon::show_state(const bbq_composite &composite,
 	 * words as well as colour, because a colour alone is a claim only
 	 * somebody who already knows the convention can read.
 	 */
-	QString tip = QStringLiteral("bbqpredictor\n");
+	QString tip = QStringLiteral("bbq-predictor\n");
 	tip += detail;
 	tip += QStringLiteral("\n");
 

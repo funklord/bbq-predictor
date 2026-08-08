@@ -1,9 +1,9 @@
 # =============================================================================
-# Top-level Makefile -- bbqpredictor
+# Top-level Makefile -- bbq-predictor
 #
 # PURPOSE
 #   The single entry point for the tree. The Qt app itself is built by
-#   qmake (bbqpredictor.pro), because moc/uic/rcc do not fit hand-written
+#   qmake (bbq-predictor.pro), because moc/uic/rcc do not fit hand-written
 #   pattern rules; everything else here is plain make. This file is the
 #   wrapper that makes the two look like one interface -- the same split
 #   beerssh uses. See project.md sec 5.
@@ -46,11 +46,11 @@
 CXX   ?= g++
 QMAKE ?= qmake6
 
-TARGET = bbqpredictor
+TARGET = bbq-predictor
 
 # Every packaging file is named after this, and a mismatch shows up as an
 # app that installs, runs, and cannot be found by a launcher.
-APP_ID = se.vibes.bbqpredictor
+APP_ID = se.vibes.bbq-predictor
 
 # The one place the version is stated (project.md sec 0). Passed into the
 # build rather than repeated in a source file, because a second copy is a
@@ -80,9 +80,9 @@ endif
 
 all: $(TARGET)
 
-$(BUILD_DIR)/Makefile: bbqpredictor.pro
+$(BUILD_DIR)/Makefile: bbq-predictor.pro
 	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/bbqpredictor.pro $(QMAKE_CONFIG) \
+	cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor.pro $(QMAKE_CONFIG) \
 	        QMAKE_CXX=$(CXX) BBQ_VERSION=$(VERSION)
 
 # The sources and headers are prerequisites so that adding a file rebuilds

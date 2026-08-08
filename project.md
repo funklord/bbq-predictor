@@ -1,4 +1,4 @@
-# bbqpredictor
+# bbq-predictor
 
 Read `~/.claude/CLAUDE.md` for prime directives.
 
@@ -17,13 +17,13 @@ secondary.** That sentence is the whole brief, and it is load-bearing:
 where a decision trades graph quality against anything else, the graph
 wins.
 
-- App id: `se.vibes.bbqpredictor`
+- App id: `se.vibes.bbq-predictor`
 - Symbol prefix: `bbq_`
 - Version: one place, the `VERSION` file
 
 ### 0.1 The name
 
-`bbqpredictor` describes an ambition, not the current scope. Scoring the
+`bbq-predictor` describes an ambition, not the current scope. Scoring the
 forecast for grilling windows is **deferred, not planned** -- see sec 7.
 It is named here so the next reader does not go looking for a feature
 that was never built, and so nobody deletes the idea as a stray.
@@ -248,7 +248,7 @@ the program cannot reconstruct.
   and need no station at all. The graph works without it and says which
   band is missing rather than showing a gap and hoping.
 - **Config lives where Qt puts it** --
-  `QStandardPaths::AppConfigLocation`, which is `~/.config/bbqpredictor/`
+  `QStandardPaths::AppConfigLocation`, which is `~/.config/bbq-predictor/`
   on this platform, in INI through `QSettings`. This is the project's
   first configuration of any kind, so it sets that location for
   everything after it. Implemented in `src/model/settings.cpp`; see sec
@@ -521,7 +521,7 @@ acceptable here only because the ribbon names the band: the graph says
 told it is a measurement. Sec 3.3's ordering still holds where both
 exist, since observed outranks it by a wide margin.
 
-### 2.10.3 The diagnostic runs through the feed
+### 2.10.3 The diagnostic runs through the feed, and reads the config
 
 `--fetch-once` drives `bbq_wu_feed` rather than the WU client, so it
 exercises every provider the application does and reports each band
@@ -538,6 +538,13 @@ arriving in the tool meant to catch it.
 Driving the real thing also deleted a hundred lines. Two copies of an
 orchestration are two things to keep in step, and the one nobody runs
 is the one that drifts.
+
+It reads the configuration too, in the same order the window uses (sec
+2.6.8). It did not at first, so it announced "nothing configured"
+against a config file with a station in it -- the same divergence
+between check and application, arriving again in the same tool one
+commit after being removed from it. Found by running it after the
+rename, with nothing but the config to go on.
 
 ## 3. The graph is the program
 
@@ -1288,7 +1295,7 @@ the applet's main surface.
 - `make hooks` installs the commit-msg hook from `tools/hooks/`.
 - `BUILD_DIR` is the build output directory, and is settable.
 - `-Os`, per the global rule. qmake's release default is `-O2` and is
-  applied by the *generated* Makefile, so `bbqpredictor.pro` is the only
+  applied by the *generated* Makefile, so `bbq-predictor.pro` is the only
   place saying otherwise takes effect.
 
 ### 5.0 The binary is replaced, never written through

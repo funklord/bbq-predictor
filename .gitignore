@@ -3,8 +3,8 @@
 /build/
 /build-*/
 /build-tests/
-/bbqpredictor
-/bbqpredictor.new
+/bbq-predictor
+/bbq-predictor.new
 
 # qmake droppings
 .qmake.stash

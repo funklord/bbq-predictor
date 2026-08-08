@@ -20,7 +20,7 @@ QSettings open() {
 	const QString directory = QStandardPaths::writableLocation(where);
 	QDir().mkpath(directory);
 
-	const QString path = directory + QStringLiteral("/bbqpredictor.ini");
+	const QString path = directory + QStringLiteral("/bbq-predictor.ini");
 	return QSettings(path, QSettings::IniFormat);
 }
 

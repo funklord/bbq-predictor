@@ -262,7 +262,7 @@ here for the detail. It does not restate the precedence rule.
 
 ## This project
 
-Everything above is the copied source. What follows is bbqpredictor's own.
+Everything above is the copied source. What follows is bbq-predictor's own.
 
 ### Exempt paths
 
@@ -292,7 +292,7 @@ Overriding a Qt virtual keeps Qt's name, because the signature is theirs:
 
 ### Filenames
 
-`main_window.cpp`, not `MainWindow.cpp`. `bbqpredictor.pro` is a
+`main_window.cpp`, not `MainWindow.cpp`. `bbq-predictor.pro` is a
 package-system spelling -- qmake wants the project file named for the
 target.
 

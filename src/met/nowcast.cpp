@@ -30,7 +30,7 @@ const char *const provider_name = "met.no";
  * comment says the same thing from the other side.
  */
 const char *const agent =
-	"bbqpredictor/0.1 (https://vibes.se; funklord@vibes.se)";
+	"bbq-predictor/0.1 (https://vibes.se; funklord@vibes.se)";
 
 const char *const nowcast_url =
 	"https://api.met.no/weatherapi/nowcast/2.0/complete";

@@ -1,5 +1,5 @@
 # =============================================================================
-# bbqpredictor.pro -- qmake project for the Qt Widgets weather applet
+# bbq-predictor.pro -- qmake project for the Qt Widgets weather applet
 #
 # Built through the top-level Makefile, not by hand. `make` wraps qmake so
 # that the Qt subtree and the plain Makefiles present one interface, which
@@ -11,7 +11,7 @@
 # =============================================================================
 
 TEMPLATE = app
-TARGET = bbqpredictor
+TARGET = bbq-predictor
 
 # Passed in by the top-level Makefile so the version lives in one place --
 # the VERSION file. The fallback exists so that opening this in Qt Creator,

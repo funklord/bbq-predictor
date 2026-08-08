@@ -12,7 +12,7 @@
 #include "wu/fetch_once.h"
 
 /*
- * bbqpredictor -- a Qt Widgets weather applet for the tray and a window.
+ * bbq-predictor -- a Qt Widgets weather applet for the tray and a window.
  *
  * The high-resolution temperature and rain graphs are the point of the
  * program; everything here is the shell around them. See project.md.
@@ -23,7 +23,7 @@
 
 #ifndef BBQ_VERSION_STRING
 /*
- * Defined by bbqpredictor.pro from the VERSION file. The fallback keeps a
+ * Defined by bbq-predictor.pro from the VERSION file. The fallback keeps a
  * bare compile working while making it obvious the build did not go
  * through `make`, rather than quietly claiming a version it does not know.
  */
@@ -33,8 +33,8 @@
 namespace {
 
 void print_usage(QTextStream &out) {
-	out << "usage: bbqpredictor [--version] [--help]\n";
-	out << "       bbqpredictor --fetch-once [--station ID]";
+	out << "usage: bbq-predictor [--version] [--help]\n";
+	out << "       bbq-predictor --fetch-once [--station ID]";
 	out << " [--geocode LAT,LON]\n";
 	out << "\n";
 	out << "A weather applet for the system tray and a window.\n";
@@ -68,7 +68,7 @@ QString option_value(const QStringList &arguments, const QString &name) {
 
 int main(int argc, char *argv[]) {
 	QApplication app(argc, argv);
-	QApplication::setApplicationName(QStringLiteral("bbqpredictor"));
+	QApplication::setApplicationName(QStringLiteral("bbq-predictor"));
 	QApplication::setApplicationVersion(QStringLiteral(BBQ_VERSION_STRING));
 
 	/*
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
 	const QStringList arguments = QApplication::arguments();
 
 	if (arguments.contains(QStringLiteral("--version"))) {
-		out << "bbqpredictor " << BBQ_VERSION_STRING << "\n";
+		out << "bbq-predictor " << BBQ_VERSION_STRING << "\n";
 		return 0;
 	}
 
@@ -145,9 +145,9 @@ int main(int argc, char *argv[]) {
 		window.show();
 	} else {
 		QTextStream error(stderr);
-		error << "bbqpredictor: no system tray on this session.\n";
-		error << "bbqpredictor:   On GNOME this needs a StatusNotifierItem\n";
-		error << "bbqpredictor:   shell extension. Running as a plain window.\n";
+		error << "bbq-predictor: no system tray on this session.\n";
+		error << "bbq-predictor:   On GNOME this needs a StatusNotifierItem\n";
+		error << "bbq-predictor:   shell extension. Running as a plain window.\n";
 		window.show();
 	}
 

@@ -19,7 +19,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
         : QWidget(parent), m_method_box(nullptr), m_smoothing_box(nullptr),
           m_station_box(nullptr), m_verdict(nullptr), freshness_label(nullptr),
           m_graph(nullptr), m_feed(nullptr) {
-	setWindowTitle(tr("bbqpredictor"));
+	setWindowTitle(tr("bbq-predictor"));
 
 	m_graph = new bbq_forecast_graph(this);
 

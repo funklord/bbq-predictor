@@ -1,4 +1,4 @@
-# bbqpredictor
+# bbq-predictor
 
 A Qt Widgets weather applet for the system tray and the desktop, built
 around high-resolution temperature and rain graphs.

@@ -8,6 +8,7 @@
 #include <QTimer>
 
 #include "model/composite.h"
+#include "model/settings.h"
 #include "wu/feed.h"
 
 namespace {
@@ -185,9 +186,35 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	QTextStream out(stdout);
 	QTextStream error(stderr);
 
-	if (station_id.isEmpty() && geocode.isEmpty()) {
+	/*
+	 * Falls back to the configuration, in the same order the window
+	 * uses (sec 2.6.8): the command line overrides the run, and what is
+	 * configured answers when it says nothing.
+	 *
+	 * Without this the diagnostic reported "nothing configured" against
+	 * a config file with a station in it -- the same divergence between
+	 * check and application that sec 2.10.3 had just removed, arriving
+	 * again in the same tool.
+	 */
+	QString station = station_id;
+	if (station.isEmpty()) {
+		station = bbq_settings::station();
+	}
+
+	QString point = geocode;
+	if (point.isEmpty()) {
+		point = bbq_settings::geocode_override();
+	}
+	if (point.isEmpty()) {
+		point = bbq_settings::derived_geocode();
+	}
+
+	if (station.isEmpty() && point.isEmpty()) {
 		error << "fetch-once: nothing configured.\n";
-		error << "fetch-once:   Give --station ID, or --geocode LAT,LON.\n";
+		error << "fetch-once:   Give --station ID or --geocode LAT,LON, or\n";
+		error << "fetch-once:   set a station in ";
+		error << bbq_settings::location();
+		error << "\n";
 		return 2;
 	}
 
@@ -205,10 +232,10 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	 * in step, and the one nobody runs is the one that drifts.
 	 */
 	bbq_wu_feed feed;
-	feed.set_station(station_id);
+	feed.set_station(station);
 
-	if (!geocode.isEmpty()) {
-		const QStringList parts = geocode.split(QLatin1Char(','));
+	if (!point.isEmpty()) {
+		const QStringList parts = point.split(QLatin1Char(','));
 		if (parts.size() != 2) {
 			error << "fetch-once: --geocode wants LAT,LON\n";
 			return 2;

@@ -16,7 +16,7 @@ namespace {
 
 const char *const provider_name = "open-meteo";
 
-const char *const agent = "bbqpredictor/0.1 (funklord@vibes.se)";
+const char *const agent = "bbq-predictor/0.1 (funklord@vibes.se)";
 
 /*
  * timezone=auto is asked for deliberately, and it costs a conversion.
