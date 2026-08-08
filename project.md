@@ -1451,6 +1451,25 @@ to this project:
     debian/copyright      see below -- this is the blocker
     debian/source/format  3.0 (native)
 
+**AppStream metainfo is on that list too, and carries the same
+blocker.** Without `packaging/$(APP_ID).metainfo.xml` the applet is
+invisible to every software centre, which beerssh supplies and this
+project does not. It cannot be written yet: AppStream requires
+`<project_license>`, so producing one means stating a licence, and that
+is the decision sec 8 says is not mine.
+
+Two smaller pieces of desktop integration, one done and one not:
+
+- **`StartupWMClass` is set**, measured with `xprop` on the running
+  window rather than guessed. Without it the running window is not
+  associated with its launcher and appears as a second, unnamed entry in
+  the dock -- beerssh carries the same line and the same warning.
+- **`QGuiApplication::setDesktopFileName()` is not called**, which is
+  the Wayland half of that same association. It is a one-line change and
+  is deliberately not made here, because it cannot be checked without
+  building and an unverified change is not the kind this project
+  commits.
+
 Drafting this exposed one thing packaging would have shipped: the
 desktop entry had named `Icon=se.vibes.bbq-predictor` since the first
 commit and no icon existed. Fixed rather than left for the package to

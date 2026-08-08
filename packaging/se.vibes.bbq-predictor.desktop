@@ -8,3 +8,15 @@ Icon=se.vibes.bbq-predictor
 Terminal=false
 Categories=Utility;
 Keywords=weather;forecast;rain;temperature;
+
+# StartupWMClass has to match what the window actually reports, or the running
+# window is not associated with its launcher and shows up as a second, unnamed
+# entry in the dock. beerssh carries the same line and the same warning.
+#
+# Measured rather than assumed: xprop on the running window reports
+# WM_CLASS = "bbq-predictor", "bbq-predictor".
+#
+# This is the X11 half. On Wayland the association comes from
+# QGuiApplication::setDesktopFileName(), which this program does not call yet
+# -- see project.md sec 5.1.3.
+StartupWMClass=bbq-predictor
