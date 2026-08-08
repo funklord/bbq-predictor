@@ -1747,3 +1747,58 @@ anything.
   the shape is not among the settled exceptions. It belongs to the
   global `code-style.md` rather than to this project, and the finding
   is recorded in this project's copy (sec 6)
+
+## 10. Desktop and mobile are two shapes
+
+**Not one layout that scales.** A phone has no pointer to hover, no
+tray to sit in, a screen that is tall rather than wide, and a finger
+instead of a cursor -- so the controls, the time window and the readout
+each want a different answer rather than a bigger one.
+
+The numbers live in one struct (`bbq_metrics`) so the two shapes can be
+compared by reading it instead of hunting through paint code. Every
+mobile value has a reason that is not "bigger":
+
+| | Desktop | Mobile | Why |
+|---|---|---|---|
+| Time window | -3 h to +21 h | -2 h to +10 h | the same span on a narrower screen is the same data drawn thinner, and resolution is this graph's whole claim |
+| Tick step | 3 h | 6 h | three-hourly labels collide at that width, and a collided label is worse than a missing one |
+| Controls | one row | two columns | ten things in a row on a phone are two millimetres wide each |
+| Control height | natural | 44 px | a finger is not a cursor |
+| Marks and line | 2.0 / 2.0 | 3.0 / 2.6 | a phone is held further from the eye than a monitor sits from it |
+
+### 10.1 The device decides, the configuration overrules
+
+The default is compiled in: a build for Android is a build for a phone.
+Asking the screen at runtime guesses wrong on exactly the machines
+people notice -- a desktop with a touchscreen, a tablet in a keyboard
+case, a phone plugged into a monitor.
+
+So the setting is `auto`, `desktop` or `mobile`, and **a preference
+somebody set is better evidence than a pixel count**.
+
+### 10.2 The layout does not resize its own window
+
+On a device the window is whatever the system gives it, so a layout
+that resized itself would be arguing with the window manager about
+something it does not own. The shape has to work at the size it is
+handed -- which is also the only way to know it works.
+
+Previewing the mobile shape on a desktop is a separate concern and
+belongs to whatever is previewing, which is why `--layout` sizes the
+window in the shot path rather than in the layout.
+
+### 10.3 Three things a look found, that reading did not
+
+- **The mobile shape was a font size.** `stack_controls` was set and
+  only the spacing changed, so the controls stayed in one row and the
+  "mobile" window came out *wider* than the desktop one. A flag that
+  nothing acts on is worse than no flag.
+- **A sentence was setting the width of a graph.** The verdict label's
+  size hint is its text on one line, which held a phone-shaped window
+  open to 1249 pixels. Wrapping was not enough; the horizontal hint had
+  to be ignored outright.
+- **The units label lost its units.** A right gutter chosen to look
+  narrow clipped "1.0 mm/h" to "1.0 mm", then to "1.0 mm/l" at the
+  second guess. It is measured from the widest string it has to hold
+  now, the same way the tray icon's digits are (sec 4.2.1).

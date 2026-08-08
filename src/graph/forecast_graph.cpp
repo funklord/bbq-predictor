@@ -18,10 +18,13 @@
 
 namespace {
 
-const int margin_left = 46;
-const int margin_right = 62;
+/*
+ * Only the top margin is fixed. Every other piece of chrome comes from
+ * the layout (sec 10), because those are the numbers the two shapes
+ * disagree about -- and a constant here would be a third opinion
+ * nobody set.
+ */
 const int margin_top = 10;
-const int margin_bottom = 34;
 
 /*
  * The rain-chance panel, below the main plot and sharing its x axis --
@@ -33,7 +36,6 @@ const int margin_bottom = 34;
  */
 const int chance_height = 46;
 const int chance_gap = 6;
-const int ribbon_height = 5;
 
 /*
  * One pixel column's worth of the composite.
@@ -499,7 +501,7 @@ void bbq_forecast_graph::set_cursor_column(int column) {
 }
 
 void bbq_forecast_graph::mouseMoveEvent(QMouseEvent *event) {
-	const int column = static_cast<int>(event->position().x()) - margin_left;
+	const int column = static_cast<int>(event->position().x()) - m_metrics.margin_left;
 	m_cursor_column = column;
 	update();
 	QWidget::mouseMoveEvent(event);
@@ -509,6 +511,13 @@ void bbq_forecast_graph::leaveEvent(QEvent *event) {
 	m_cursor_column = -1;
 	update();
 	QWidget::leaveEvent(event);
+}
+
+void bbq_forecast_graph::set_layout(bbq_layout layout) {
+	m_metrics = bbq_metrics_for(layout);
+	m_before_s = m_metrics.window_before_s;
+	m_after_s = m_metrics.window_after_s;
+	update();
 }
 
 void bbq_forecast_graph::set_window(qint64 before_s, qint64 after_s) {
@@ -522,10 +531,26 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.setRenderHint(QPainter::Antialiasing);
 	painter.fillRect(event->rect(), m_palette.background);
 
+	/*
+	 * The right gutter is measured, not chosen.
+	 *
+	 * It holds "1.0 mm/h" and "rain %", and a metric picked to look
+	 * narrow clipped the first to "1.0 mm" and then to "1.0 mm/l" --
+	 * a units label losing the units, which is the only part of it
+	 * carrying information. The layout supplies a floor; the text
+	 * decides the rest, the same way the tray icon's digits do.
+	 */
+	QFont gutter_font = font();
+	gutter_font.setPointSizeF(gutter_font.pointSizeF() * m_metrics.label_scale);
+	const QFontMetrics gutter(gutter_font);
+	const int widest = qMax(gutter.horizontalAdvance(QStringLiteral("0.0 mm/h")),
+	                        gutter.horizontalAdvance(tr("rain %")));
+	const int margin_right = qMax(m_metrics.margin_right, widest + 10);
+
 	const int stack = chance_height + chance_gap;
-	const QRect plot(margin_left, margin_top,
-	                 width() - margin_left - margin_right,
-	                 height() - margin_top - margin_bottom - stack);
+	const QRect plot(m_metrics.margin_left, margin_top,
+	                 width() - m_metrics.margin_left - margin_right,
+	                 height() - margin_top - m_metrics.margin_bottom - stack);
 	const QRect chance_plot(plot.left(), plot.bottom() + chance_gap,
 	                        plot.width(), chance_height);
 
@@ -621,7 +646,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * thing about the WU chart and the cheapest density cue there is:
 	 * it gives the eye a ruler without adding a single line.
 	 */
-	const qint64 band_step = 3 * 3600;
+	const qint64 band_step = m_metrics.tick_step_s;
 	const qint64 first_band = (from / band_step) * band_step;
 
 	for (qint64 t = first_band; t < to; t += band_step) {
@@ -681,10 +706,10 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.setPen(QPen(m_palette.grid, 1, Qt::DotLine));
 
 	QFont label_font = font();
-	label_font.setPointSizeF(label_font.pointSizeF() * 0.85);
+	label_font.setPointSizeF(label_font.pointSizeF() * m_metrics.label_scale);
 	painter.setFont(label_font);
 
-	const qint64 tick_step = 3 * 3600;
+	const qint64 tick_step = m_metrics.tick_step_s;
 	const qint64 first_tick = ((from / tick_step) + 1) * tick_step;
 
 	for (qint64 t = first_tick; t < to; t += tick_step) {
@@ -693,7 +718,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
 
 		painter.setPen(m_palette.axis_text);
-		const QRectF label(x - 24, chance_plot.bottom() + ribbon_height + 3,
+		const QRectF label(x - 24, chance_plot.bottom() + m_metrics.ribbon_height + 3,
 		                   48, 14);
 		painter.drawText(label, Qt::AlignCenter, hour_label(t, zone));
 	}
@@ -734,7 +759,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 	/* --- temperature, broken wherever no band covers a column --------- */
 	painter.setBrush(Qt::NoBrush);
-	painter.setPen(QPen(m_palette.temperature, 2.0));
+	painter.setPen(QPen(m_palette.temperature, m_metrics.line_width));
 
 	QPolygonF run;
 	for (int x = 0; x < plot.width(); ++x) {
@@ -777,7 +802,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 			const double px = plot.left() + x;
 			const double py = y_for_temperature(c.knot_temperature);
-			painter.drawEllipse(QPointF(px, py), 2.0, 2.0);
+			const double r = m_metrics.sample_radius;
+			painter.drawEllipse(QPointF(px, py), r, r);
 		}
 
 		painter.setBrush(Qt::NoBrush);
@@ -816,7 +842,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.drawLine(chance_plot.bottomLeft(), chance_plot.bottomRight());
 
 	painter.setPen(m_palette.axis_text);
-	painter.drawText(QRectF(2, chance_plot.top() - 2, margin_left - 6, 14),
+	painter.drawText(QRectF(2, chance_plot.top() - 2, m_metrics.margin_left - 6, 14),
 	                 Qt::AlignRight | Qt::AlignVCenter, tr("100%"));
 	painter.drawText(QRectF(width() - margin_right + 4, chance_plot.top() - 2,
 	                        margin_right - 6, 14),
@@ -831,7 +857,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.setPen(band_colour(m_palette, columns[x].band));
 		const double px = plot.left() + x;
 		painter.drawLine(QPointF(px, chance_plot.bottom() + 2),
-		                 QPointF(px, chance_plot.bottom() + 2 + ribbon_height));
+		                 QPointF(px, chance_plot.bottom() + 2 + m_metrics.ribbon_height));
 	}
 
 	/* --- now ---------------------------------------------------------- */
@@ -952,11 +978,11 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	/* --- axis labels --------------------------------------------------- */
 	painter.setPen(m_palette.axis_text);
 
-	const QRectF temperature_top(2, plot.top() - 2, margin_left - 6, 14);
+	const QRectF temperature_top(2, plot.top() - 2, m_metrics.margin_left - 6, 14);
 	painter.drawText(temperature_top, Qt::AlignRight | Qt::AlignVCenter,
 	                 QString::number(temperature_high, 'f', 0) + tr(" C"));
 
-	const QRectF temperature_bottom(2, plot.bottom() - 12, margin_left - 6, 14);
+	const QRectF temperature_bottom(2, plot.bottom() - 12, m_metrics.margin_left - 6, 14);
 	painter.drawText(temperature_bottom, Qt::AlignRight | Qt::AlignVCenter,
 	                 QString::number(temperature_low, 'f', 0) + tr(" C"));
 
@@ -983,8 +1009,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		}
 	}
 
-	painter.drawText(QRectF(2, chance_plot.bottom() + ribbon_height + 3,
-	                        margin_left - 6, 14),
+	painter.drawText(QRectF(2, chance_plot.bottom() + m_metrics.ribbon_height + 3,
+	                        m_metrics.margin_left - 6, 14),
 	                 Qt::AlignRight | Qt::AlignVCenter, clock);
 
 	const QRectF rain_top(width() - margin_right + 4, plot.bottom() -

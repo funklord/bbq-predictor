@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QCoreApplication>
 #include <QPixmap>
 #include <QTimer>
 #include <QStringList>
@@ -8,6 +9,7 @@
 #include "ui/tray_icon.h"
 #include "graph/forecast_graph.h"
 #include "graph/interpolate.h"
+#include "ui/layout.h"
 #include "wu/feed.h"
 #include "wu/fetch_once.h"
 
@@ -47,6 +49,7 @@ void print_usage(QTextStream &out) {
 	out << "  --geocode      LAT,LON for the forecast bands; derived from\n";
 	out << "                 the station when omitted\n";
 	out << "  --interp M     step|linear|monotone|akima|makima|natural|\n";
+	out << "  --layout L     auto|desktop|mobile, for --shot\n";
 	out << "  --cursor N     park the readout on column N, for --shot\n";
 	out << "  --tray-icon F  also save the tray icon, for --shot\n";
 	out << "  --shot FILE    fetch, render the window to a PNG, and exit.\n";
@@ -172,6 +175,11 @@ int main(int argc, char *argv[]) {
 		window.set_interpolation(bbq_interpolation::monotone);
 	}
 
+	const QString want_layout = option_value(arguments, QStringLiteral("--layout"));
+	if (!want_layout.isEmpty()) {
+		window.set_layout(bbq_layout_resolve(want_layout));
+	}
+
 	const QString smooth = option_value(arguments, QStringLiteral("--smooth"));
 	if (!smooth.isEmpty()) {
 		window.set_smoothing(smooth.toInt());
@@ -200,11 +208,32 @@ int main(int argc, char *argv[]) {
 	if (!shot.isEmpty()) {
 		bool taken = false;
 
-		const auto take = [&window, &tray, shot, tray_shot, &taken]() {
+		const auto take = [&window, &tray, shot, tray_shot, want_layout, &taken]() {
 			if (taken) {
 				return;
 			}
 			taken = true;
+
+			/*
+			 * The mobile preview is given a phone's proportions here,
+			 * at the last possible moment.
+			 *
+			 * A resize before show() does not survive, and one after it
+			 * needs an event-loop turn to reach the widget -- the
+			 * offscreen platform says as much when it warns that it
+			 * does not propagate size hints. Doing it immediately
+			 * before the grab is the only point where it is certain to
+			 * have been applied.
+			 *
+			 * It lives here rather than in the layout because a phone
+			 * does not resize its own window: the shape has to work at
+			 * whatever size it is handed, and this is only how that
+			 * gets looked at from a desktop.
+			 */
+			if (bbq_layout_resolve(want_layout) == bbq_layout::mobile) {
+				window.resize(420, 860);
+				QCoreApplication::processEvents();
+			}
 
 			if (!tray_shot.isEmpty()) {
 				const QPixmap glyph = tray.icon().pixmap(44, 44);

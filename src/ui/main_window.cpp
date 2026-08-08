@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -12,11 +13,13 @@
 #include "graph/forecast_graph.h"
 #include "graph/interpolate.h"
 #include "model/grill.h"
+#include "ui/layout.h"
 #include "model/settings.h"
 #include "wu/feed.h"
 
 bbq_main_window::bbq_main_window(QWidget *parent)
         : QWidget(parent), m_method_box(nullptr), m_smoothing_box(nullptr),
+          m_layout_box(nullptr), m_controls(nullptr),
           m_station_box(nullptr), m_verdict(nullptr), freshness_label(nullptr),
           m_graph(nullptr), m_feed(nullptr) {
 	setWindowTitle(tr("bbq-predictor"));
@@ -143,6 +146,28 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_feed->refresh();
 	});
 
+	/*
+	 * The layout, offered as a choice rather than only inferred.
+	 * "Auto" is the device's own answer (sec 10.1) and is right until
+	 * somebody disagrees with it, which is exactly the case a compiled
+	 * default cannot see.
+	 */
+	m_layout_box = new QComboBox(this);
+	m_layout_box->addItem(tr("Auto"), QStringLiteral("auto"));
+	m_layout_box->addItem(tr("Desktop"), QStringLiteral("desktop"));
+	m_layout_box->addItem(tr("Mobile"), QStringLiteral("mobile"));
+
+	const int stored_layout = m_layout_box->findData(bbq_settings::layout());
+	if (stored_layout >= 0) {
+		m_layout_box->setCurrentIndex(stored_layout);
+	}
+
+	connect(m_layout_box, &QComboBox::currentIndexChanged, this, [this](int) {
+		const QString wanted = m_layout_box->currentData().toString();
+		bbq_settings::set_layout(wanted);
+		set_layout(bbq_layout_resolve(wanted));
+	});
+
 	QCheckBox *windows = new QCheckBox(tr("Grill windows"), this);
 	windows->setChecked(m_graph->show_windows());
 	connect(windows, &QCheckBox::toggled, this, [this](bool on) {
@@ -155,22 +180,23 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_graph->set_show_samples(on);
 	});
 
-	QHBoxLayout *controls = new QHBoxLayout;
-	controls->addWidget(new QLabel(tr("Station:"), this), 0);
-	controls->addWidget(m_station_box, 0);
-	controls->addWidget(new QLabel(tr("Interpolation:"), this), 0);
-	controls->addWidget(method, 0);
-	controls->addWidget(new QLabel(tr("Rounding:"), this), 0);
-	controls->addWidget(smoothing, 0);
-	controls->addWidget(windows, 0);
-	controls->addWidget(marks, 0);
-	controls->addStretch(1);
-	controls->addWidget(freshness_label, 0);
+	m_controls = new QWidget(this);
+
+	/*
+	 * Gathered in order rather than placed, because set_layout rebuilds
+	 * the arrangement and cannot do that from widgets already owned by
+	 * a layout it is about to replace.
+	 */
+	m_control_items << new QLabel(tr("Station:"), this) << m_station_box
+	                << new QLabel(tr("Interpolation:"), this) << method
+	                << new QLabel(tr("Rounding:"), this) << smoothing
+	                << windows << marks
+	                << new QLabel(tr("Layout:"), this) << m_layout_box;
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
 	layout->addWidget(m_verdict, 0);
 	layout->addWidget(m_graph, 1);
-	layout->addLayout(controls, 0);
+	layout->addWidget(m_controls, 0);
 
 	connect(m_feed, &bbq_wu_feed::updated, this, [this]() {
 		m_graph->set_composite(m_feed->composite());
@@ -189,8 +215,109 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		refresh_status();
 	});
 
+	/*
+	 * The device decides, unless the configuration disagrees. Applied
+	 * before the first paint so nothing is drawn twice in two shapes.
+	 */
+	set_layout(bbq_layout_resolve(bbq_settings::layout()));
+
 	refresh_status();
-	resize(820, 360);
+	resize(820, 400);
+}
+
+void bbq_main_window::set_layout(bbq_layout layout) {
+	m_graph->set_layout(layout);
+
+	const bbq_metrics metrics = bbq_metrics_for(layout);
+
+	/*
+	 * The controls change SHAPE, not just size. On a phone the row
+	 * becomes six things a couple of millimetres wide, which is a row
+	 * nobody can use, so it wraps and each item gets a height a finger
+	 * can find.
+	 */
+	/*
+	 * The old arrangement goes before the new one is built. Deleting
+	 * the layout does not delete the widgets, which is the whole reason
+	 * they are held separately.
+	 */
+	delete m_controls->layout();
+
+	for (QWidget *item : m_control_items) {
+		item->setMinimumHeight(metrics.control_height);
+	}
+
+	if (metrics.stack_controls) {
+		/*
+		 * Two columns. A phone is tall and narrow, so the row that
+		 * suits a desktop becomes ten things a couple of millimetres
+		 * wide -- a row nobody can hit. Pairs read as label-then-value
+		 * down the screen instead.
+		 */
+		QGridLayout *grid = new QGridLayout(m_controls);
+		grid->setContentsMargins(0, 0, 0, 0);
+		grid->setSpacing(8);
+
+		for (int i = 0; i < m_control_items.size(); ++i) {
+			grid->addWidget(m_control_items.at(i), i / 2, i % 2);
+		}
+
+		grid->addWidget(freshness_label, m_control_items.size() / 2 + 1, 0, 1, 2);
+	} else {
+		QHBoxLayout *row = new QHBoxLayout(m_controls);
+		row->setContentsMargins(0, 0, 0, 0);
+		row->setSpacing(6);
+
+		for (QWidget *item : m_control_items) {
+			row->addWidget(item, 0);
+		}
+
+		row->addStretch(1);
+		row->addWidget(freshness_label, 0);
+	}
+
+	m_station_box->setVisible(metrics.show_station_field);
+
+	/*
+	 * The two long strings wrap on a narrow screen and do not on a wide
+	 * one.
+	 *
+	 * A QLabel's size hint is its text on one line, so the verdict --
+	 * "Best window: Fri 19:16 to 22:06 (2.8 h, score 0.90) +3 more" --
+	 * was holding a phone-shaped window open to 1249 pixels. A sentence
+	 * setting the width of a graph is a layout deciding itself from its
+	 * least important element.
+	 */
+	m_verdict->setWordWrap(metrics.stack_controls);
+	freshness_label->setWordWrap(metrics.stack_controls);
+
+	/*
+	 * Word wrap alone was not enough: a wrapped QLabel still reports a
+	 * minimum width wide enough for its longest unbreakable run, so the
+	 * verdict sentence held a phone-shaped window open to 1249 pixels.
+	 * Ignoring its horizontal hint is what actually stops a sentence
+	 * deciding the width of a graph.
+	 */
+	const QSizePolicy::Policy across =
+	        metrics.stack_controls ? QSizePolicy::Ignored : QSizePolicy::Preferred;
+	m_verdict->setSizePolicy(across, QSizePolicy::Minimum);
+	freshness_label->setSizePolicy(across, QSizePolicy::Minimum);
+	freshness_label->setAlignment(metrics.stack_controls
+	                                      ? Qt::AlignLeft | Qt::AlignVCenter
+	                                      : Qt::AlignRight | Qt::AlignVCenter);
+
+	/*
+	 * No resize here on purpose.
+	 *
+	 * On a phone the window is whatever the device gives it, so a
+	 * layout that resized its own window would be arguing with the
+	 * window manager about something it does not own. The shape has to
+	 * work at the size it is handed, which is also the only way to know
+	 * it works.
+	 *
+	 * Previewing the mobile shape on a desktop is a separate concern
+	 * and belongs to whatever is doing the previewing.
+	 */
 }
 
 QString bbq_main_window::verdict() const {

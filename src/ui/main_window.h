@@ -1,9 +1,11 @@
 #ifndef BBQ_MAIN_WINDOW_H
 #define BBQ_MAIN_WINDOW_H
 
+#include <QList>
 #include <QWidget>
 
 #include "graph/interpolate.h"
+#include "ui/layout.h"
 
 class QComboBox;
 class QLabel;
@@ -52,6 +54,9 @@ public:
 	/* Same contract: sets the graph AND the control that reports it. */
 	void set_smoothing(int seconds);
 
+	/* Re-shape for a device kind, controls and graph together (sec 10). */
+	void set_layout(bbq_layout layout);
+
 public slots:
 	/*
 	 * Show and raise, or hide if already visible. What the tray icon calls
@@ -75,6 +80,16 @@ private:
 
 	QComboBox *m_method_box;
 	QComboBox *m_smoothing_box;
+	QComboBox *m_layout_box;
+	QWidget *m_controls;
+
+	/*
+	 * The controls in order, so the shape can be rebuilt rather than
+	 * merely restyled. Re-flowing needs the widgets; keeping them here
+	 * is what lets one row become two columns without constructing
+	 * anything twice.
+	 */
+	QList<QWidget *> m_control_items;
 	QLineEdit *m_station_box;
 	QLabel *m_verdict;
 	QLabel *freshness_label;

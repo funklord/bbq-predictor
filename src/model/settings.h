@@ -51,6 +51,14 @@ public:
 	static int smoothing(int fallback);
 	static void set_smoothing(int seconds);
 
+	/*
+	 * "auto", "desktop" or "mobile" (sec 10.1). Auto means the device
+	 * decides, which is right until somebody disagrees with it -- a
+	 * tablet in a keyboard case, a phone on a monitor.
+	 */
+	static QString layout();
+	static void set_layout(const QString &preference);
+
 	/* Where the file actually is, for saying so in the interface. */
 	static QString location();
 };

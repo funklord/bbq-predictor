@@ -6,6 +6,7 @@
 #include <QWidget>
 
 #include "graph/interpolate.h"
+#include "ui/layout.h"
 #include "model/composite.h"
 #include "model/grill.h"
 
@@ -89,6 +90,12 @@ public:
 	void set_window(qint64 before_s, qint64 after_s);
 
 	/*
+	 * Adopt a layout's numbers, including its time window (sec 10).
+	 * Repaints, so switching is answerable by looking.
+	 */
+	void set_layout(bbq_layout layout);
+
+	/*
 	 * How the curve is drawn between samples, and whether the samples
 	 * themselves are marked (project.md sec 3.11).
 	 *
@@ -146,6 +153,7 @@ private:
 	 * are visible and reversible from the controls -- with the samples
 	 * marked, so what the data actually says is never hidden by them.
 	 */
+	bbq_metrics m_metrics;
 	bbq_interpolation m_interpolation = bbq_interpolation::akima;
 	bool m_show_samples = true;
 	int m_smoothing_s = 30 * 60;
