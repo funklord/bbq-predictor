@@ -448,15 +448,23 @@ tick_choice ticks_for(qint64 span_s, int wanted) {
 	}
 
 	/*
-	 * The label has to say enough to place the tick and no more. "14:00"
-	 * is perfect across an afternoon and useless across a year, where
-	 * every tick would read the same.
+	 * The label follows the STEP, not the span, and that distinction was
+	 * paid for by looking at the running window.
+	 *
+	 * Choosing it from the span put a date-only format against a
+	 * twelve-hour step at around four days, so the axis read "Tue 11,
+	 * Tue 11, Wed 12, Wed 12" -- every label printed twice, each one
+	 * naming a day but pointing at noon or midnight without saying
+	 * which. A label has to distinguish its tick from the next tick, and
+	 * only the step knows how far away that is.
 	 */
-	if (span_s <= 2 * 24 * 3600) {
+	if (chosen.step_s < 6 * 3600) {
 		chosen.format = QStringLiteral("HH:mm");
-	} else if (span_s <= 20 * 24 * 3600) {
+	} else if (chosen.step_s < 24 * 3600) {
+		chosen.format = QStringLiteral("ddd HH:mm");
+	} else if (chosen.step_s < 30 * 24 * 3600) {
 		chosen.format = QStringLiteral("ddd d");
-	} else if (span_s <= 2 * 365 * 24 * 3600) {
+	} else if (chosen.step_s < 365 * 24 * 3600) {
 		chosen.format = QStringLiteral("d MMM");
 	} else {
 		chosen.format = QStringLiteral("MMM yy");
@@ -914,13 +922,15 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
 
 		/*
-		 * A tick label that would reach into the left margin is left
-		 * out. The zone name lives there (below), and the two collided
-		 * into "CEST08:00" once the ticks could be dense enough to land
-		 * against the axis. Dropping one label costs nothing -- its
-		 * neighbour is one step away and says the same kind of thing.
+		 * A tick label that would reach past either margin is left out.
+		 *
+		 * On the left the zone name lives there and the two collided
+		 * into "CEST08:00"; on the right the gutter clipped "Wed 02:00"
+		 * to "Ned 02:00", which reads as a typo rather than as a
+		 * truncation. Dropping one label costs nothing -- its neighbour
+		 * is one step away and says the same kind of thing.
 		 */
-		if (x - 24 < plot.left()) {
+		if (x - 24 < plot.left() || x + 24 > plot.right()) {
 			continue;
 		}
 
