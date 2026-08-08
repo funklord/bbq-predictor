@@ -54,12 +54,17 @@ int bbq_band_priority(bbq_band band) {
 		return 150;
 
 	/*
-	 * Under the nowcast where they overlap, since that one is the same
-	 * cadence from a source aimed at the near term, and over hourly
-	 * everywhere else, which is the whole reason it exists.
+	 * BELOW the hourly band, not above it.
+	 *
+	 * It outranked hourly while it was believed to be quarter-hourly.
+	 * It is hourly too (sec 2.10.4), so the tie goes to WU by sec 2.7's
+	 * ordering, and this band does what its name says instead: it
+	 * covers what WU does not reach -- the observed band's lag behind
+	 * now, the sixteenth day, and the whole forecast if the scrape ever
+	 * stops answering.
 	 */
 	case bbq_band::extended:
-		return 180;
+		return 90;
 
 	case bbq_band::hourly:
 		return 100;

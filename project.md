@@ -560,42 +560,57 @@ between check and application, arriving again in the same tool one
 commit after being removed from it. Found by running it after the
 rename, with nothing but the config to go on.
 
-### 2.10.4 Open: is the quarter-hourly claim true past day two?
+### 2.10.4 The quarter-hourly claim was false here
 
-**Open-Meteo will return 15-minute data for sixteen days**, in the same
-request that carries the seven this project asks for. Adopting it was
-tempting and was not adopted, because the claim underneath could not be
-established.
+**This band was quarter-hourly for three commits and should not have
+been.** At this project's station, Open-Meteo's `minutely_15` is
+interpolated from its own hourly data.
 
-It would have mattered. The extended band outranks WU's hourly one, so
-sixteen days of it would leave the hourly band fetched every hour and
-drawn nowhere -- turning the compromised provider into a fallback,
-which is a real prize (sec 2.2).
+The provider says so, and then its API proves it. The documentation
+states that fifteen-minute data comes from HRRR over North America and
+from ICON-D2 and AROME over central Europe, and is **interpolated from
+hourly for other regions**. Asking the API for `models=icon_d2` settles
+which side of that line a location falls on:
 
-**What was measured.** For twelve of sixteen days, the 15-minute
-temperatures sit within the reporting resolution of a straight linear
-interpolation of the hourly block. Days two and three deviate by up to
-0.6 C, and the rest by no more than the 0.1 C rounding.
+| Location | ICON-D2 |
+|---|---|
+| Berlin | 192 points, all present |
+| This station, 59.34 N | HTTP 400, "No data is available for this location" |
 
-**Why that settles nothing.** The test compares two blocks of one
-response, and Open-Meteo composes each from whichever model suits it,
-so a deviation means the blocks disagree rather than that the finer one
-carries real structure -- and an agreement means they were derived from
-each other OR that the weather was genuinely smooth. It cannot separate
-upsampling from a well-behaved forecast.
+**Why it matters more here than it would elsewhere.** The graph marks
+real samples, and sec 3.11.3 makes those marks the thing that keeps a
+smoothed curve honest -- the dots are the data and the line between
+them is drawn. Quarter-hourly points that nobody modelled are not data,
+so marking them puts dots on the graph at instants no forecast ever
+described. That is the failure this project has spent its whole life
+refusing, arriving through a provider's convenience feature.
 
-Precipitation is no help either: an hourly accumulation split across
-four quarters is not the linear interpolation of consecutive hours, so
-it deviates whether or not anything was modelled.
+So the band takes the hourly block, and its priority moved below WU's
+hourly band, since two bands of one cadence are a tie and sec 2.7 gives
+those to WU.
 
-The range stays at seven days. **Extending a resolution claim that
-cannot be backed is the one thing this document consistently refuses**,
-and the honest position is that even the current seven days is
-advertised more confidently than this measurement supports.
+### 2.10.4.1 What the measurement could not do
 
-Settling it needs Open-Meteo's own account of which models supply
-`minutely_15` and how far each reaches -- documentation rather than
-another probe.
+Worth recording because the reasoning was sound and the method still
+failed.
+
+Comparing the two blocks -- does a fifteen-minute point sit on the
+straight line between its neighbouring hours? -- looked decisive and is
+not. Open-Meteo composes each block from whichever model suits it, so a
+deviation means the blocks disagree rather than that the finer one has
+structure, and an agreement means either derivation or genuinely smooth
+weather. On the day it was run, Berlin *inside* the ICON-D2 domain and
+this station *outside* it both came back at rounding level, because the
+weather was calm in both. **A controlled comparison with a real control
+still could not tell them apart.**
+
+Precipitation is worse: an hourly accumulation split four ways is not
+the linear interpolation of consecutive hours, so it deviates whether
+or not anything was modelled.
+
+What settled it was asking the provider which model covers the point --
+a question with an answer, rather than a statistic with an
+interpretation.
 
 ## 3. The graph is the program
 
@@ -1717,11 +1732,12 @@ anything.
 - **Whether Open-Meteo should also serve the hourly band** past the
   seven days its quarter-hourly data reaches. WU is the only source
   beyond that today, and it is the compromised one
-- **Whether the extended band's quarter-hourly claim holds past the
-  first day or two.** Open-Meteo will return 15-minute data for sixteen
-  days, and adopting it would have outranked WU's hourly band
-  everywhere -- but whether that data is modelled or upsampled could
-  not be established (sec 2.10.4), so the range was left at seven days
+- **Whether to take Open-Meteo's quarter-hourly block where it is
+  genuine.** It is real over North America and central Europe and
+  interpolated elsewhere (sec 2.10.4), so using it correctly means
+  probing model coverage for the configured point and choosing per
+  location. Worth it only for someone inside those domains, which this
+  station is not
 
 ### 9.3 Raised elsewhere
 

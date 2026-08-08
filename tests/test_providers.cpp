@@ -23,7 +23,7 @@ private slots:
 	void met_reads_zulu_time_as_utc();
 	void openmeteo_reads_local_time_through_the_named_zone();
 	void openmeteo_without_a_zone_is_discarded();
-	void openmeteo_converts_quarter_hour_rain_to_a_rate();
+	void openmeteo_converts_hourly_rain_to_a_rate();
 	void openmeteo_keeps_wind_that_is_already_kph();
 
 private:
@@ -50,10 +50,10 @@ QJsonDocument test_providers::met_fixture() {
 QJsonDocument test_providers::openmeteo_fixture(const char *zone) {
 	QByteArray json = R"({
 		"timezone": "ZONE",
-		"minutely_15": {
-			"time": ["2026-08-07T00:00", "2026-08-07T00:15"],
+		"hourly": {
+			"time": ["2026-08-07T00:00", "2026-08-07T01:00"],
 			"temperature_2m": [18.1, 17.9],
-			"precipitation": [0.25, 0.0],
+			"precipitation": [1.0, 0.0],
 			"wind_speed_10m": [23.4, 23.0],
 			"precipitation_probability": [7, 6]
 		}
@@ -111,6 +111,7 @@ void test_providers::openmeteo_reads_local_time_through_the_named_zone() {
 
 	const QDateTime expected(QDate(2026, 8, 6), QTime(22, 0), QTimeZone::UTC);
 	QCOMPARE(series.samples()[0].start_utc, expected.toSecsSinceEpoch());
+	QCOMPARE(series.band(), bbq_band::extended);
 
 	/* And the band carries that zone onwards, for sec 3.12.1. */
 	QVERIFY(series.zone().isValid());
@@ -127,18 +128,23 @@ void test_providers::openmeteo_without_a_zone_is_discarded() {
 	QVERIFY(bbq_openmeteo_read(openmeteo_fixture("")).is_empty());
 }
 
-void test_providers::openmeteo_converts_quarter_hour_rain_to_a_rate() {
+void test_providers::openmeteo_converts_hourly_rain_to_a_rate() {
 	/*
-	 * Millimetres per quarter hour becomes millimetres per hour, so
-	 * 0.25 over fifteen minutes is 1.0 an hour. Forgetting this reports
-	 * a cloudburst as a drizzle.
+	 * Millimetres over the hour becomes millimetres per hour, which is
+	 * a division by one and is written out anyway -- the day the block
+	 * changes cadence again, the shortcut is the bug (sec 3.2).
+	 *
+	 * The block is `hourly` rather than `minutely_15` on purpose: the
+	 * finer one is interpolated outside a few model domains, and
+	 * marking interpolated points as samples is what sec 3.11.3
+	 * forbids (sec 2.10.4).
 	 */
 	const bbq_series series = bbq_openmeteo_read(
 	        openmeteo_fixture("Europe/Stockholm"));
 
 	QVERIFY(series.samples()[0].precip_rate.has_value());
 	QVERIFY(std::fabs(*series.samples()[0].precip_rate - 1.0) < 1e-9);
-	QCOMPARE(series.samples()[0].duration_s, 900);
+	QCOMPARE(series.samples()[0].duration_s, 3600);
 }
 
 void test_providers::openmeteo_keeps_wind_that_is_already_kph() {

@@ -27,11 +27,27 @@ const char *const agent = "bbq-predictor/0.1 (funklord@vibes.se)";
  * this is the only provider here that supplies a real zone name rather
  * than the bare offset a WU forecast implies (sec 3.12.1).
  */
+/*
+ * The HOURLY block, not the fifteen-minute one, and that is a
+ * correction rather than a preference (project.md sec 2.10.4).
+ *
+ * Open-Meteo will serve `minutely_15` anywhere, but it is genuine only
+ * where a native fifteen-minute model reaches -- HRRR over North
+ * America, ICON-D2 and AROME over central Europe -- and is interpolated
+ * from hourly everywhere else. Their own API says so plainly: asking
+ * for models=icon_d2 at this project's station answers "No data is
+ * available for this location", while Berlin returns a full series.
+ *
+ * Presenting that interpolation as quarter-hourly samples would put
+ * marks on the graph at points nobody measured, which is precisely what
+ * sec 3.11.3 says the marks exist to rule out. Sixteen days of honest
+ * hourly beats seven days of hourly wearing a finer spacing.
+ */
 const char *const endpoint =
 	"https://api.open-meteo.com/v1/forecast"
-	"?minutely_15=temperature_2m,precipitation,wind_speed_10m,"
+	"?hourly=temperature_2m,precipitation,wind_speed_10m,"
 	"precipitation_probability"
-	"&timezone=auto&forecast_days=7";
+	"&timezone=auto&forecast_days=16";
 
 std::optional<double> number_at(const QJsonArray &array, int index) {
 	if (index < 0 || index >= array.size()) {
@@ -128,8 +144,7 @@ bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
 		return series;
 	}
 
-	const QJsonObject block =
-	        root.value(QStringLiteral("minutely_15")).toObject();
+	const QJsonObject block = root.value(QStringLiteral("hourly")).toObject();
 	const QJsonArray times = block.value(QStringLiteral("time")).toArray();
 	if (times.isEmpty()) {
 		return series;
@@ -165,15 +180,15 @@ bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
 
 		bbq_sample sample;
 		sample.start_utc = when.toSecsSinceEpoch();
-		sample.duration_s = 900;
+		sample.duration_s = 3600;
 		sample.temperature = number_at(temperatures, i);
 		sample.wind_kph = number_at(wind, i);
 		sample.precip_chance = number_at(chance, i);
 
-		/* Millimetres per quarter hour, which the model stores as a rate. */
+		/* Millimetres over the hour, which the model stores as a rate. */
 		const std::optional<double> fell = number_at(rain, i);
 		if (fell.has_value()) {
-			sample.precip_rate = bbq_rate_from_accumulation(*fell, 900);
+			sample.precip_rate = bbq_rate_from_accumulation(*fell, 3600);
 		}
 
 		samples.push_back(sample);

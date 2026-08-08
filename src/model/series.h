@@ -35,12 +35,12 @@ enum class bbq_band {
 	nowcast,
 
 	/*
-	 * Quarter-hourly, but reaching a week rather than an evening.
+	 * Hourly, from a provider that needs no key, reaching sixteen days.
 	 *
-	 * Below the ordinary nowcast, which shares its cadence over a
-	 * shorter range, and above hourly, which is all that covered this
-	 * ground before. Its job is the days after tomorrow, where the
-	 * choice used to be sixty-minute steps or nothing.
+	 * Ranked below the hourly band rather than above it: it is the same
+	 * cadence, so sec 2.7 gives the tie to WU. What it covers is what
+	 * WU does not -- the observed band's lag behind now, the sixteenth
+	 * day, and everything if the scrape stops answering.
 	 */
 	extended,
 
