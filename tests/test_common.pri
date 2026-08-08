@@ -13,16 +13,20 @@ QMAKE_CXXFLAGS_RELEASE -= -O2
 QMAKE_CXXFLAGS_RELEASE += -Os
 
 SOURCES += \
+	$$PWD/../src/met/nowcast.cpp \
 	$$PWD/../src/model/composite.cpp \
 	$$PWD/../src/model/grill.cpp \
 	$$PWD/../src/model/series.cpp \
 	$$PWD/../src/graph/interpolate.cpp \
+	$$PWD/../src/openmeteo/forecast.cpp \
 	$$PWD/../src/wu/reader.cpp
 
 HEADERS += \
+	$$PWD/../src/met/nowcast.h \
 	$$PWD/../src/model/composite.h \
 	$$PWD/../src/model/grill.h \
 	$$PWD/../src/model/sample.h \
 	$$PWD/../src/model/series.h \
 	$$PWD/../src/graph/interpolate.h \
+	$$PWD/../src/openmeteo/forecast.h \
 	$$PWD/../src/wu/reader.h

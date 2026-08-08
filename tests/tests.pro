@@ -11,8 +11,9 @@
 # =============================================================================
 
 TEMPLATE = subdirs
-SUBDIRS = interpolate model reader
+SUBDIRS = interpolate model reader providers
 
 interpolate.file = test_interpolate.pro
 model.file = test_model.pro
 reader.file = test_reader.pro
+providers.file = test_providers.pro

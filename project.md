@@ -495,6 +495,18 @@ this series runs seven days -- long enough to contain one.
 pinned station this is the only provider here that supplies a real zone
 rather than the bare offset a WU forecast implies (sec 3.12.1).
 
+**An empty zone name is rejected before the zone is constructed, and
+that order is the whole of it.** `QTimeZone(QByteArray(""))` does not
+produce an invalid zone -- it produces the LOCAL one and reports itself
+valid. So a response with a missing or empty `timezone` would have been
+read in the viewer's clock, silently shifting the whole series and
+putting back the exact defect sec 3.12.1 removed, in the one provider
+whose stamps carry no offset to contradict it.
+
+A wrong name is caught by `isValid`. An absent one is caught by
+nothing, which is why it is caught by hand. **Found by a test on its
+first run** (sec 5.2.2).
+
 ### 2.10.2 It closed a hole nobody asked it to
 
 Sec 3.9.4 left the observed band's lag uncovered -- the stretch between
@@ -1286,6 +1298,21 @@ The properties worth naming:
   in one assertion.
 - **Rows arriving newest-first come back sorted**, which is sec 2.6.2's
   measured trap.
+
+### 5.2.2 It found something on its first run
+
+The provider tests are weighted entirely towards conversions, because
+that is what a second provider is: the same quantities in somebody
+else's units, spelling and clock. Every such mistake fails silently --
+a wind out by 3.6, a rain rate out by 4, a series shifted by hours --
+and none of them produces an error or an obviously wrong curve.
+
+The first run failed. Open-Meteo's reader discarded a *wrong* timezone
+name and accepted an *empty* one, because Qt returns the local zone for
+an empty id and calls it valid. That is recorded in sec 2.10.1 and
+fixed; the point here is that nothing else would have caught it. The
+graph would have looked entirely normal, in the reader's own timezone,
+which is the failure this project has now removed twice.
 
 ### 5.2.1 The suite was checked against being vacuous
 

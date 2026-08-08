@@ -104,6 +104,25 @@ bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
 	 * shift the whole series by hours while looking perfectly valid.
 	 */
 	const QString zone_name = root.value(QStringLiteral("timezone")).toString();
+
+	/*
+	 * The emptiness is checked BEFORE the zone is constructed, and that
+	 * order is the whole of it.
+	 *
+	 * QTimeZone(QByteArray("")) does not produce an invalid zone. It
+	 * produces the LOCAL one, and reports itself valid -- so a response
+	 * with a missing or empty timezone would have been read in the
+	 * viewer's clock, silently shifting the entire series and putting
+	 * back the exact defect sec 3.12.1 removed. In the one provider
+	 * whose stamps carry no offset to contradict it.
+	 *
+	 * A wrong name is caught by isValid; an absent one is not caught by
+	 * anything, which is why it is caught here.
+	 */
+	if (zone_name.isEmpty()) {
+		return series;
+	}
+
 	const QTimeZone zone(zone_name.toUtf8());
 	if (!zone.isValid()) {
 		return series;
