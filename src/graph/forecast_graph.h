@@ -164,6 +164,15 @@ public:
 	void follow_now();
 	bool is_following_now() const { return m_follow_now; }
 
+	/*
+	 * The plot area as the last paint decided it, which is the geometry
+	 * every pixels-to-seconds conversion here uses. Empty before the
+	 * first paint. Exposed so the view arithmetic can be asserted
+	 * against the same rectangle the handlers use rather than against a
+	 * second guess at it.
+	 */
+	QRect plot_rect() const { return m_plot; }
+
 	qint64 view_from_utc() const;
 	qint64 view_span_s() const;
 

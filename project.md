@@ -2551,6 +2551,40 @@ three things get worse with a permanent store rather than better:
   aggregate. That is already how `reduce()` works, and the store makes it
   load-bearing rather than incidental.
 
+### 13.1.1 The gestures are asserted, not just looked at
+
+Every other visual question in this project was settled by rendering a
+picture and looking at it, and for the gestures that method is not
+enough. **A rendering shows that a view was honoured. It cannot show
+that the arithmetic behind the gesture is right**, because a graph
+zoomed about its centre and a graph zoomed about the cursor produce
+pictures that both look entirely reasonable.
+
+So `tests/test_view.cpp` asserts the two invariants that make the
+gestures feel like anything:
+
+- **Zooming holds the moment under the cursor.** Four steps in and four
+  back out, checked to within a pixel's worth of time each way.
+- **Dragging keeps the moment that was grabbed under the pointer that
+  grabbed it**, and stops when the button is released, so a later hover
+  is not a pan.
+
+Both were watched failing. Zooming about the centre instead of the
+cursor breaks the first; flipping the sign of the drag breaks the
+second. Neither break is visible in a screenshot, which is the whole
+argument for the test existing.
+
+It is the only widget test in the suite, so it is the only one that
+needs `gui` and `widgets`, and it chooses the offscreen platform in its
+own `main` rather than trusting whatever ran it. The handlers are
+protected and are reached through a subclass rather than by faking
+events through a window system that is not there -- a synthetic click
+would be testing Qt.
+
+`plot_rect()` is public for this: the assertions have to be made against
+the same rectangle the handlers use, not against a second guess at how
+the margins are computed.
+
 ### 13.2 The marks stop when they would lie
 
 Below one sample per pixel the sample marks are not drawn.

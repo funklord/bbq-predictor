@@ -11,7 +11,7 @@
 # =============================================================================
 
 TEMPLATE = subdirs
-SUBDIRS = interpolate model reader providers layout client feed history correction
+SUBDIRS = interpolate model reader providers layout client feed history correction view
 
 interpolate.file = test_interpolate.pro
 model.file = test_model.pro
@@ -22,3 +22,4 @@ client.file = test_client.pro
 feed.file = test_feed.pro
 history.file = test_history.pro
 correction.file = test_correction.pro
+view.file = test_view.pro
