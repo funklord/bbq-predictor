@@ -212,9 +212,22 @@ int main(int argc, char *argv[]) {
 	 * nothing was ever connected to quit. The README documents it as a
 	 * diagnostic in its own right, and now it is one.
 	 */
-	if (!shot.isEmpty() || !tray_shot.isEmpty()) {
-		bool taken = false;
+	/*
+	 * Declared out here, not inside the block below, and that is a
+	 * correctness matter rather than a placement preference.
+	 *
+	 * The lambdas that read it are invoked from timers during
+	 * app.exec(), which outlives any inner scope -- so a `taken` local
+	 * to the block was a dead stack slot by the time the shot fired.
+	 * AddressSanitizer calls it a stack-use-after-scope and aborts on
+	 * it; without the sanitizer the slot usually still held the right
+	 * byte, which is why every screenshot this project reasoned about
+	 * came out correct anyway. main's own frame is alive for the whole
+	 * of exec(), so here it is genuinely alive whenever a timer fires.
+	 */
+	bool taken = false;
 
+	if (!shot.isEmpty() || !tray_shot.isEmpty()) {
 		const auto take = [&window, &tray, shot, tray_shot, want_layout, &taken]() {
 			if (taken) {
 				return;

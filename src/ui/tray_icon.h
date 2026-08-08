@@ -28,6 +28,7 @@ class bbq_tray_icon : public QSystemTrayIcon {
 
 public:
 	explicit bbq_tray_icon(QObject *parent = nullptr);
+	~bbq_tray_icon() override;
 
 	/*
 	 * Whether this session actually has a tray to sit in. Static because
@@ -70,7 +71,14 @@ private:
 	 */
 	static QIcon reading_icon(const QString &text, const QColor &ink);
 
-	QMenu *menu;
+	/*
+	 * Owned here, and deliberately parentless: QMenu is a QWidget and
+	 * QSystemTrayIcon is not, so there is no parent to give it, and
+	 * setContextMenu does not take ownership. Without the destructor
+	 * below it simply leaked, which is what the sanitizer build said the
+	 * first time anybody ran it.
+	 */
+	QMenu *m_menu;
 };
 
 #endif

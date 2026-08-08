@@ -1701,6 +1701,45 @@ the build rather than scratch work:
 All of them answer before any widget is built or run under the
 offscreen platform, so none needs a display.
 
+### 5.1.7 The sanitizer build existed and had never been run
+
+`make SANITIZE=1` was wired up early and nothing had ever executed what
+it produced. The first run found two faults and a third on the way in,
+which is a poor argument for building a gate and a good one for running
+it.
+
+**A live stack-use-after-scope, in the screenshot path.** The `--shot`
+machinery kept a `bool taken` so the picture is grabbed once whether the
+feed settles or the wall-clock timer fires first, and that bool was
+declared inside the block that set the timers up. The lambdas reading it
+run from timers during `app.exec()`, long after the block ended, so
+every shot was deciding whether it had already been taken by reading a
+dead stack slot. Undefined behaviour that worked: the slot generally
+still held the right byte, which is why every picture this project
+reasoned about came out correct. `main`'s own frame is alive for the
+whole of `exec()`, so the fix is to declare it there.
+
+**A leaked `QMenu`.** The tray's context menu is necessarily parentless
+-- `QMenu` is a `QWidget` and `QSystemTrayIcon` is not, so there is no
+parent to give it -- and `setContextMenu` does not take ownership. It
+was never deleted. Nine and a half kilobytes across seventy-two
+allocations, the menu and everything Qt hangs off one. A destructor owns
+it now, and the sanitized build reports nothing at all.
+
+**And `BUILD_DIR` did not isolate.** Found by being bitten rather than
+by reading: `make BUILD_DIR=/tmp/bbq-asan SANITIZE=1` -- the README's own
+example -- copied the sanitized binary over `./bbq-predictor`, where it
+is slower, behaves differently, and looks identical. The whole reason
+`build-and-commit.md` requires a settable build directory is so that an
+isolated build cannot clobber a plain one, so the guarantee was exactly
+backwards. The copy into the tree now happens only for the default
+directory; anything else stays where it was built.
+
+None of the three was reachable by reading alone, and all three sat
+behind a target that had been present for weeks. **A gate nobody runs is
+not a gate**, which is the same lesson as the four sessions of not
+building, arriving from the other direction.
+
 ### 5.2 The suite, and what it is for
 
 **Not coverage.** Every test asserts a claim this document makes, on

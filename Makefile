@@ -113,7 +113,25 @@ include tools/android.mk
 ANDROID_BUILD_DIR ?= build-android
 ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/$(TARGET)-$(VERSION)-$(ANDROID_ABI).apk
 
-all: $(TARGET)
+# Where a build lands, and why a custom BUILD_DIR must not land here.
+#
+# A non-default BUILD_DIR means an ISOLATED build -- sanitized, cross, a
+# second ABI -- and isolating it is pointless if the result then replaces
+# the plain binary in the tree. It did: the recipe below copied to
+# ./$(TARGET) unconditionally, so the README's own example,
+#
+#     make BUILD_DIR=/tmp/bbq-asan SANITIZE=1
+#
+# left a sanitized binary sitting at ./$(TARGET), where it is slower,
+# behaves differently, and looks exactly like the ordinary one. Found by
+# running it. build-and-commit.md asks for the opposite in as many words.
+ifeq ($(BUILD_DIR),build)
+ARTIFACT = $(TARGET)
+else
+ARTIFACT = $(BUILD_DIR)/$(TARGET)
+endif
+
+all: $(ARTIFACT)
 
 $(BUILD_DIR)/Makefile: bbq-predictor.pro
 	mkdir -p $(BUILD_DIR)
@@ -138,13 +156,16 @@ $(BUILD_DIR)/Makefile: bbq-predictor.pro
 #
 # The temporary lives in the same directory on purpose: rename cannot
 # cross filesystems, and /tmp frequently is one.
-$(TARGET): $(BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
+$(BUILD_DIR)/$(TARGET): $(BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
 	$(MAKE) -C $(BUILD_DIR)
+
+# Only for the default build directory, per the note above.
+$(TARGET): $(BUILD_DIR)/$(TARGET)
 	cp $(BUILD_DIR)/$(TARGET) $(TARGET).new
 	mv -f $(TARGET).new $(TARGET)
 
-run: $(TARGET)
-	./$(TARGET)
+run: $(ARTIFACT)
+	./$(ARTIFACT)
 
 # --- Android ---------------------------------------------------------------
 # The build rule is this project's; everything around it is tools/android.mk.
@@ -255,7 +276,7 @@ hooks:
 # expect to autostart is most of how it gets run.
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	install -m 0755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
+	install -m 0755 $(ARTIFACT) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	mkdir -p $(DESTDIR)$(PREFIX)/share/applications
 	install -m 0644 packaging/$(APP_ID).desktop \
 	        $(DESTDIR)$(PREFIX)/share/applications/$(APP_ID).desktop

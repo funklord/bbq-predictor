@@ -96,6 +96,10 @@ Build output goes to `build/` and the location is settable:
 
     make BUILD_DIR=/tmp/bbq-asan SANITIZE=1
 
+An isolated build stays in its own directory: only the default `build/`
+is copied to `./bbq-predictor`, so a sanitized or cross build cannot
+quietly replace the ordinary binary.
+
 For Android, point the build at a Qt kit and an NDK:
 
     make android QT_ANDROID_ROOT=$HOME/Qt/6.10.0/android_arm64_v8a \

@@ -17,7 +17,7 @@
 #include "model/grill.h"
 
 bbq_tray_icon::bbq_tray_icon(QObject *parent)
-        : QSystemTrayIcon(parent), menu(nullptr) {
+        : QSystemTrayIcon(parent), m_menu(nullptr) {
 	setIcon(placeholder_icon());
 
 	/*
@@ -28,18 +28,18 @@ bbq_tray_icon::bbq_tray_icon(QObject *parent)
 	 */
 	setToolTip(tr("bbq-predictor -- no data yet"));
 
-	menu = new QMenu();
+	m_menu = new QMenu();
 
-	QAction *show_action = menu->addAction(tr("Show / hide"));
+	QAction *show_action = m_menu->addAction(tr("Show / hide"));
 	connect(show_action, &QAction::triggered,
 	        this, &bbq_tray_icon::toggle_requested);
 
-	menu->addSeparator();
+	m_menu->addSeparator();
 
-	QAction *quit_action = menu->addAction(tr("Quit"));
+	QAction *quit_action = m_menu->addAction(tr("Quit"));
 	connect(quit_action, &QAction::triggered, qApp, &QApplication::quit);
 
-	setContextMenu(menu);
+	setContextMenu(m_menu);
 
 	/*
 	 * Only a plain click toggles. A context-menu request must not, or the
@@ -52,6 +52,10 @@ bbq_tray_icon::bbq_tray_icon(QObject *parent)
 			emit toggle_requested();
 		}
 	});
+}
+
+bbq_tray_icon::~bbq_tray_icon() {
+	delete m_menu;
 }
 
 namespace {
