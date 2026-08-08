@@ -45,7 +45,19 @@ public:
 	 * and no override is set (sec 2.6.7), so calling this is the
 	 * override rather than the normal path.
 	 */
-	void set_geocode(double latitude, double longitude);
+	/*
+	 * The forecast point. `pinned` says where it came from, and the
+	 * distinction is load-bearing rather than informational: a pinned
+	 * coordinate was chosen by configuration (an override, or --geocode)
+	 * and belongs to no station, while an unpinned one is the cache
+	 * derived from whichever station was being read at the time.
+	 *
+	 * Changing the station therefore discards an unpinned coordinate and
+	 * keeps a pinned one. Sec 2.6.7.3.
+	 */
+	void set_geocode(double latitude, double longitude, bool pinned = true);
+
+	bool has_geocode() const { return m_have_geocode; }
 
 	void refresh();
 
@@ -110,6 +122,7 @@ private:
 	double m_latitude = 0.0;
 	double m_longitude = 0.0;
 	bool m_have_geocode = false;
+	bool m_geocode_pinned = false;
 	qint64 m_radar_attempted = 0;
 	qint64 m_extended_attempted = 0;
 	int m_outstanding = 0;

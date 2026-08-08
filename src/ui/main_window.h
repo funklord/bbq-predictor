@@ -18,7 +18,7 @@ class bbq_wu_feed;
  * half and is bbq_tray_icon.
  *
  * Deliberately thin: the graph is the content, and everything around it
- * exists to say how old that content is. See freshness_label below -- sec
+ * exists to say how old that content is. See m_freshness_label below -- sec
  * 2.4 makes that a requirement rather than a decoration.
  */
 class bbq_main_window : public QWidget {
@@ -92,7 +92,7 @@ private:
 	QList<QWidget *> m_control_items;
 	QLineEdit *m_station_box;
 	QLabel *m_verdict;
-	QLabel *freshness_label;
+	QLabel *m_freshness_label;
 	bbq_forecast_graph *m_graph;
 	bbq_wu_feed *m_feed;
 	QString m_last_error;

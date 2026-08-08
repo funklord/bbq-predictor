@@ -458,6 +458,43 @@ axis with nothing to say which is which -- and the fact that a user
 opted into it does not make the graph less misleading six months later.
 Deliberate is not the same as remembered.
 
+### 2.6.7.4 The cache has an in-memory half, and it was not being dropped
+
+Sec 2.6.7.2 caches the derived coordinate in the config file, and
+`bbq_settings::set_station` removes that cache the moment the station
+changes -- for the reason 2.6.7 gives, that a coordinate belonging to
+one station must never be used with another.
+
+**The running feed kept its own copy, and nothing dropped that one.**
+Changing the station in the window wrote the new id, cleared the cache
+on disk, and left `m_latitude`, `m_longitude` and `m_have_geocode`
+holding the previous station's garden. The refresh that followed
+immediately aimed the radar, nowcast, extended and hourly bands there
+while the observed band read the new station: two places on one axis,
+which is precisely the failure this whole section exists to prevent, and
+it survived because only half the state was being invalidated.
+
+It compounded. The observed handler derives a coordinate only when it
+does not already have one, so with the stale one still held the new
+station's coordinate was **never learned** -- not for the rest of the
+session, and never written back to the cache either. A restart was the
+only thing that fixed it, and a restart made it look like it had never
+happened.
+
+The fix is to say where a coordinate came from. One chosen by
+configuration -- `geocode_override`, or `--geocode` -- is **pinned**: it
+belongs to no station and no station change may discard it. One derived
+from a station, including the config cache that was derived from one
+earlier, is not, and goes when the station goes.
+
+`has_geocode()` is public so the distinction is assertable from a test
+rather than only reasonable in the source, and `tests/test_feed.cpp`
+asserts all three cases: derived does not survive, pinned does, and
+re-setting the same id changes nothing. That last one matters because
+the field writes on `editingFinished`, which fires when the box merely
+loses focus -- treating that as a change would throw away a good
+coordinate every time somebody clicked past it.
+
 ### 2.6.8 The command line overrides the run, not the configuration
 
 `--station` and `--geocode` win for the run they are given on and

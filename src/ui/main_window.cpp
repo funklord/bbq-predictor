@@ -20,7 +20,7 @@
 bbq_main_window::bbq_main_window(QWidget *parent)
         : QWidget(parent), m_method_box(nullptr), m_smoothing_box(nullptr),
           m_layout_box(nullptr), m_controls(nullptr),
-          m_station_box(nullptr), m_verdict(nullptr), freshness_label(nullptr),
+          m_station_box(nullptr), m_verdict(nullptr), m_freshness_label(nullptr),
           m_graph(nullptr), m_feed(nullptr) {
 	setWindowTitle(tr("bbq-predictor"));
 
@@ -45,9 +45,9 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	m_verdict = new QLabel(this);
 	m_verdict->setTextFormat(Qt::PlainText);
 
-	freshness_label = new QLabel(this);
-	freshness_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-	freshness_label->setTextFormat(Qt::PlainText);
+	m_freshness_label = new QLabel(this);
+	m_freshness_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+	m_freshness_label->setTextFormat(Qt::PlainText);
 
 	/*
 	 * The interpolation controls (project.md sec 3.11).
@@ -262,7 +262,7 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 			grid->addWidget(m_control_items.at(i), i / 2, i % 2);
 		}
 
-		grid->addWidget(freshness_label, m_control_items.size() / 2 + 1, 0, 1, 2);
+		grid->addWidget(m_freshness_label, m_control_items.size() / 2 + 1, 0, 1, 2);
 	} else {
 		QHBoxLayout *row = new QHBoxLayout(m_controls);
 		row->setContentsMargins(0, 0, 0, 0);
@@ -273,7 +273,7 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 		}
 
 		row->addStretch(1);
-		row->addWidget(freshness_label, 0);
+		row->addWidget(m_freshness_label, 0);
 	}
 
 	m_station_box->setVisible(metrics.show_station_field);
@@ -289,7 +289,7 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 	 * least important element.
 	 */
 	m_verdict->setWordWrap(metrics.stack_controls);
-	freshness_label->setWordWrap(metrics.stack_controls);
+	m_freshness_label->setWordWrap(metrics.stack_controls);
 
 	/*
 	 * Word wrap alone was not enough: a wrapped QLabel still reports a
@@ -301,8 +301,8 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 	const QSizePolicy::Policy across =
 	        metrics.stack_controls ? QSizePolicy::Ignored : QSizePolicy::Preferred;
 	m_verdict->setSizePolicy(across, QSizePolicy::Minimum);
-	freshness_label->setSizePolicy(across, QSizePolicy::Minimum);
-	freshness_label->setAlignment(metrics.stack_controls
+	m_freshness_label->setSizePolicy(across, QSizePolicy::Minimum);
+	m_freshness_label->setAlignment(metrics.stack_controls
 	                                      ? Qt::AlignLeft | Qt::AlignVCenter
 	                                      : Qt::AlignRight | Qt::AlignVCenter);
 
@@ -362,17 +362,25 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	 * otherwise the station supplies one when it answers.
 	 */
 	QString point = geocode;
+	bool pinned = true;
 	if (point.isEmpty()) {
 		point = bbq_settings::geocode_override();
 	}
 	if (point.isEmpty()) {
+		/*
+		 * The cache, and the only one of the three that belongs to a
+		 * station rather than to the configuration -- so it is the only
+		 * one that must not survive the station changing.
+		 */
 		point = bbq_settings::derived_geocode();
+		pinned = false;
 	}
 
 	if (!point.isEmpty()) {
 		const QStringList parts = point.split(QLatin1Char(','));
 		if (parts.size() == 2) {
-			m_feed->set_geocode(parts.at(0).toDouble(), parts.at(1).toDouble());
+			m_feed->set_geocode(parts.at(0).toDouble(), parts.at(1).toDouble(),
+			                    pinned);
 		}
 	}
 
@@ -476,7 +484,7 @@ void bbq_main_window::refresh_status() {
 		text += m_last_error;
 	}
 
-	freshness_label->setText(text);
+	m_freshness_label->setText(text);
 }
 
 void bbq_main_window::toggle_visibility() {

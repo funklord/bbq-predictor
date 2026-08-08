@@ -314,13 +314,38 @@ void bbq_wu_feed::tick() {
 }
 
 void bbq_wu_feed::set_station(const QString &station_id) {
+	if (station_id == m_station_id) {
+		return;
+	}
+
 	m_station_id = station_id;
+
+	/*
+	 * A coordinate derived from the OLD station does not describe this
+	 * one, so it goes (sec 2.6.7.4).
+	 *
+	 * Keeping it was worse than stale. refresh() would fire the forecast
+	 * bands at the previous station's garden while the observed band
+	 * read the new one -- the two-places-on-one-axis failure sec 2.6.7
+	 * exists to prevent -- and because a geocode was still held, the
+	 * observed handler's "derive one" branch never ran, so the new
+	 * station's coordinate was never learned and never re-cached. The
+	 * settings layer already dropped its copy on the same edit; this is
+	 * the in-memory half of that.
+	 *
+	 * A pinned coordinate survives, because it was never the station's
+	 * to begin with.
+	 */
+	if (!m_geocode_pinned) {
+		m_have_geocode = false;
+	}
 }
 
-void bbq_wu_feed::set_geocode(double latitude, double longitude) {
+void bbq_wu_feed::set_geocode(double latitude, double longitude, bool pinned) {
 	m_latitude = latitude;
 	m_longitude = longitude;
 	m_have_geocode = true;
+	m_geocode_pinned = pinned;
 }
 
 void bbq_wu_feed::finish_one() {
