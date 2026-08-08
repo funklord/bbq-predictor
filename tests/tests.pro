@@ -11,10 +11,11 @@
 # =============================================================================
 
 TEMPLATE = subdirs
-SUBDIRS = interpolate model reader providers layout
+SUBDIRS = interpolate model reader providers layout client
 
 interpolate.file = test_interpolate.pro
 model.file = test_model.pro
 reader.file = test_reader.pro
 providers.file = test_providers.pro
 layout.file = test_layout.pro
+client.file = test_client.pro

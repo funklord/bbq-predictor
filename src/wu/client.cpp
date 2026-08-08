@@ -44,6 +44,40 @@ const char *bbq_wu_product_name(bbq_wu_product product) {
 bbq_wu_client::bbq_wu_client(QNetworkAccessManager *net,
                              bbq_wu_key_source *keys, QObject *parent)
         : QObject(parent), m_net(net), m_keys(keys) {
+	/*
+	 * Connected ONCE, here, and each handler drains the whole queue.
+	 *
+	 * The previous shape made a pair of connections per queued request
+	 * and let each lambda tear down only its own, so whichever fired
+	 * left the other alive -- and the survivor either re-sent a request
+	 * that had already failed or failed one that had already succeeded.
+	 * Sec 2.3.1 has the full account; the point of this shape is that
+	 * there is no per-request bookkeeping left to get wrong.
+	 */
+	connect(m_keys, &bbq_wu_key_source::acquired, this, [this]() {
+		/*
+		 * Taken before the loop, so a resend that somehow queued again
+		 * would wait for the next signal instead of being drained by
+		 * the iteration that queued it.
+		 */
+		const QList<pending> ready_to_go = m_waiting;
+		m_waiting.clear();
+
+		for (const pending &request : ready_to_go) {
+			send(request.product, request.path, request.query,
+			     request.may_retry);
+		}
+	});
+
+	connect(m_keys, &bbq_wu_key_source::failed, this,
+	        [this](const QString &reason) {
+		const QList<pending> abandoned = m_waiting;
+		m_waiting.clear();
+
+		for (const pending &request : abandoned) {
+			emit failed(request.product, tr("no API key: %1").arg(reason));
+		}
+	});
 }
 
 void bbq_wu_client::fetch_hourly(double latitude, double longitude) {
@@ -87,25 +121,16 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
                          const QString &query, bool may_retry) {
 	if (!m_keys->has_key()) {
 		/*
-		 * Acquire, then come back here. The connection is
-		 * single-shot so a queued request does not fire again on
-		 * every later acquisition.
+		 * Queued, not connected. The handlers in the constructor drain
+		 * this list, so a request waits exactly once however many other
+		 * requests are waiting beside it.
 		 */
-		QMetaObject::Connection *handle = new QMetaObject::Connection;
-		*handle = connect(m_keys, &bbq_wu_key_source::acquired, this,
-		                  [this, product, path, query, may_retry, handle]() {
-			disconnect(*handle);
-			delete handle;
-			send(product, path, query, may_retry);
-		});
-
-		QMetaObject::Connection *fail = new QMetaObject::Connection;
-		*fail = connect(m_keys, &bbq_wu_key_source::failed, this,
-		                [this, product, fail](const QString &reason) {
-			disconnect(*fail);
-			delete fail;
-			emit failed(product, tr("no API key: %1").arg(reason));
-		});
+		pending request;
+		request.product = product;
+		request.path = path;
+		request.query = query;
+		request.may_retry = may_retry;
+		m_waiting.append(request);
 
 		m_keys->acquire();
 		return;

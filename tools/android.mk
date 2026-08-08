@@ -22,6 +22,20 @@
 # packaging command, and one word meaning two things across sibling trees is
 # how somebody eventually runs the wrong one.
 #
+#
+# INCLUDE THIS AFTER YOUR DEFAULT GOAL, OR SET ONE.
+#
+# `include` is where make first sees a target, so pulling this fragment in
+# ahead of a project's `all` makes android-check the default goal: a plain
+# `make` then runs the preflight, fails for want of QT_ANDROID_ROOT, and
+# builds nothing. bbq-predictor did this and did not notice for four
+# sessions. Either include it below `all`, or say so explicitly:
+#
+#   .DEFAULT_GOAL := all
+#
+# The fragment cannot fix this for you -- it has no way to know what your
+# default goal is meant to be.
+#
 # WHAT THE PROJECT SUPPLIES
 #   APP_ID              reverse-DNS id; the package and the launcher use it
 #   VERSION             the one place a version is stated

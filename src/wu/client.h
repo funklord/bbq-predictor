@@ -2,6 +2,7 @@
 #define BBQ_WU_CLIENT_H
 
 #include <QJsonDocument>
+#include <QList>
 #include <QObject>
 #include <QString>
 
@@ -73,6 +74,15 @@ public:
 	void fetch_current_station(const QString &station_id);
 	void fetch_current_point(double latitude, double longitude);
 
+	/*
+	 * How many requests are waiting for a key. Zero at rest.
+	 *
+	 * Exposed because it is the only externally visible consequence of
+	 * the queue being drained correctly, and sec 2.3.1's defect was
+	 * precisely a queue that refilled itself behind everybody's back.
+	 */
+	int waiting() const { return static_cast<int>(m_waiting.size()); }
+
 signals:
 	/*
 	 * Raw response for a product. Undigested by design -- see above.
@@ -88,11 +98,28 @@ signals:
 	void failed(bbq_wu_product product, const QString &reason);
 
 private:
+	/*
+	 * A request that arrived before there was a key to send it with.
+	 *
+	 * Held in a list drained by whichever key-source signal arrives,
+	 * rather than by a pair of per-request connections. Sec 2.3.1: the
+	 * pair could only tear down the half that fired, so the other half
+	 * survived and later re-sent a request that had already failed, or
+	 * failed one that had already succeeded.
+	 */
+	struct pending {
+		bbq_wu_product product = bbq_wu_product::hourly;
+		QString path;
+		QString query;
+		bool may_retry = true;
+	};
+
 	void send(bbq_wu_product product, const QString &path,
 	          const QString &query, bool may_retry);
 
 	QNetworkAccessManager *m_net;
 	bbq_wu_key_source *m_keys;
+	QList<pending> m_waiting;
 };
 
 #endif

@@ -98,6 +98,14 @@ ifdef SANITIZE
                     QMAKE_LFLAGS+=-fsanitize=address,undefined
 endif
 
+# Stated before the include, and load-bearing.
+#
+# `include` is where make FIRST sees a target, so a fragment pulled in ahead
+# of `all` silently becomes the default goal -- and a plain `make` then runs
+# android-check and fails, having built nothing. That is exactly what
+# happened here, and it survived four sessions because none of them built.
+.DEFAULT_GOAL := all
+
 # The shared vocabulary. Included before the rules below so a project rule
 # can use ANDROID_ABI and friends without redefining any of them.
 include tools/android.mk

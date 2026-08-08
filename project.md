@@ -89,11 +89,12 @@ triggered by the first 401. A key baked in at compile time turns the
 application into a brick on whatever Tuesday WU rotates it, and the only
 fix is a rebuild the user cannot perform.
 
-### 2.3.1 Known defect: the queued-request connections are not paired
+### 2.3.1 The queued-request connections were not paired
 
-**Found by reading, not by running, and not yet fixed** -- fixing it
-needs a build and the last several sessions have been documentation
-only. Recorded precisely so it is not rediscovered from the symptom.
+**Found by reading, not by running. Fixed, and the fix is tested.**
+Kept here in full because the reasoning is the useful part: this is the
+only defect in the project that no amount of running would have
+surfaced.
 
 When `bbq_wu_client::send` is called before a key exists, it makes
 *two* connections to the key source -- one to `acquired` that resends
@@ -120,16 +121,37 @@ it is a spurious settle.
 Weather Underground requests behind one key acquisition, so there are
 four pairs, and every 401 retry cycle adds more.
 
-The fix is not a third teardown but a different shape: hold the pending
-requests in a list, connect to the key source **once** in the
-constructor, and have whichever signal arrives drain that list. The
-handle-juggling then has nothing to get wrong.
+The fix is not a third teardown but a different shape: the pending
+requests are held in a list, the key source is connected **once** in the
+constructor, and whichever signal arrives drains that list. There is no
+per-request bookkeeping left to get wrong.
 
-Why it has not bitten in practice: every observed run acquired a key on
-the first attempt and never got a 401, which is the one path that
-leaves the stale connection reachable. **It works because the failure
-case has not happened yet**, which is exactly the kind of correctness
-this project does not want to rely on.
+`waiting()` exists so the queue's emptiness is assertable from outside,
+which is what makes the test below possible at all.
+
+Why it never bit in practice: every observed run acquired a key on the
+first attempt and never got a 401, which is the one path that leaves
+the stale connection reachable. **It worked because the failure case
+had not happened yet**, which is exactly the kind of correctness this
+project does not want to rely on.
+
+**How the fix is known to work.** `tests/test_client.cpp` drives the key
+source's outcomes by hand -- queue two requests, report a failure,
+then report an acquisition -- and asserts the queue stays empty. The
+old mechanism was reinstated deliberately and the test fails against
+it, at the assertion after the acquisition, with one request re-queued
+that had already been answered. It passes against the fix. A test that
+was not watched failing is not yet evidence of anything.
+
+The test found something on the way, which is recorded because it is a
+better example than the defect it was written for. Its first version
+used `QTEST_APPLESS_MAIN`, and **without a `QCoreApplication`,
+`QNetworkAccessManager` returns null replies** -- so the code under test
+was connecting to `nullptr` and every assertion held for reasons
+unrelated to the queue. It passed. The only sign was a warning in the
+log. It runs `QTEST_GUILESS_MAIN` now, against a dead proxy on
+localhost and without ever spinning the event loop, so nothing leaves
+the machine and every assertion is synchronous.
 
 ### 2.4 Staleness is visible, always
 
@@ -1870,9 +1892,6 @@ supposed to live.
 Each of these needs a decision rather than a drift. None of them blocks
 anything.
 
-- **The unpaired connections in `send()`** (sec 2.3.1). A real defect
-  found by reading; the fix is a small restructure and needs a build to
-  verify, so it is recorded rather than shipped unverified
 - **A dark-desktop variant**, given the measured palette is fixed and
   light. A question about how the applet is actually used rather than
   one this document can answer (sec 3.8.3)
@@ -2023,6 +2042,32 @@ question rather than a line.
 
 All seven are listed now, with a note that `make install` is the
 desktop one.
+
+### 11.1.2 The include stole the default goal
+
+**For four sessions, a plain `make` built nothing.** It ran
+`android-check`, failed for want of `QT_ANDROID_ROOT`, and stopped.
+
+`include` is where make first sees a target, and `tools/android.mk` was
+pulled in above `all` so that a project rule could use `ANDROID_ABI`
+without redefining it. That placement is right; the consequence is that
+the fragment's first target became the default goal. Nothing warned,
+because nothing was wrong -- make did exactly what it is specified to
+do.
+
+What let it survive is the interesting half. It was introduced during
+the Android work and the four sessions after it were documentation,
+packaging and review, all under a standing instruction not to build. The
+regression was not subtle or rare; it was simply never executed. **A
+build that nobody runs is a build whose state is unknown**, and the
+gap between "the tests pass" and "the tests were run" is exactly the
+distance this project keeps insisting on elsewhere.
+
+`.DEFAULT_GOAL := all` is stated above the include now, with the reason
+attached. The shared fragment carries the warning too, at the top where
+somebody copying it into a fifth project will read it -- it cannot fix
+this for them, having no way to know what their default goal should be,
+so saying so is the most it can do.
 
 ### 11.2 What stops it here
 
