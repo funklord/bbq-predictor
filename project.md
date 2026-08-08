@@ -23,10 +23,23 @@ wins.
 
 ### 0.1 The name
 
-`bbq-predictor` describes an ambition, not the current scope. Scoring the
-forecast for grilling windows is **deferred, not planned** -- see sec 7.
-It is named here so the next reader does not go looking for a feature
-that was never built, and so nobody deletes the idea as a stray.
+**The name describes the program now**, which it did not for most of
+this project's life. It was `bbqpredictor` and the grilling prediction
+was deferred; the prediction is sec 7 and the spelling is kebab-case,
+which `code-style.md` already allows as the package-system spelling and
+which a Debian package would have to use anyway.
+
+The rename is worth one note beyond the spelling, because it cost
+something not obvious. **`QStandardPaths::AppConfigLocation` is derived
+from the application name**, so renaming the program moved the
+configuration out from under it -- and the file it left behind was the
+one holding the pinned station, which is the single setting the applet
+cannot work without. Copied across by hand rather than lost. Anything
+that renames this program again has to move that file with it.
+
+The symbol prefix stayed `bbq_` throughout, and the include guards
+`BBQ_`. Both were already short enough not to carry the project's full
+name, which is why neither had to move.
 
 ## 1. Toolkit
 
@@ -252,7 +265,8 @@ the program cannot reconstruct.
   on this platform, in INI through `QSettings`. This is the project's
   first configuration of any kind, so it sets that location for
   everything after it. Implemented in `src/model/settings.cpp`; see sec
-  2.6.8 for what the command line does to it.
+  2.6.8 for what the command line does to it, and sec 0.1 for what a
+  rename does to it.
 
 ### 2.6.7 The geocode derives from the station, with an override
 
@@ -1546,6 +1560,23 @@ repository meets that paragraph before they meet the code.
 and it is set on the hosting side rather than anywhere in this tree.
 Nothing here depends on the answer; sec 2.2 is the same warning either
 way.
+
+### 8.1.1 No key has ever been in a commit
+
+**Checked across the whole history before publishing, not just across
+the working tree**: no 32-character hex string appears in any commit
+this repository contains.
+
+That is a property to keep rather than a fact to have established once.
+A scraped key is somebody else's credential, git history is the one
+place a mistake cannot be quietly deleted, and this repository now has
+a remote -- so an accidental paste is published the moment it is
+pushed.
+
+The extraction pattern is documented in sec 2.6.1 and the key itself
+is runtime state that is never written down (sec 2.3), which is what
+makes the property easy to hold: there is nowhere in the tree a key is
+supposed to live.
 
 ## 9. What has been decided, and what has not
 
