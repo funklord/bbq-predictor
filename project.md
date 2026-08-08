@@ -2276,3 +2276,180 @@ belongs to whichever AndroidX versions a given Qt release happens to
 pull, which is not something a Makefile can know without asking Gradle.
 Guessing it would be a check that goes stale silently, which is worse
 than the honest Gradle error.
+
+## 12. The history is permanent, the forecasts are not
+
+Everything before this section was an applet with no memory. Each refresh
+replaced the bands in place, closing the window discarded them, and the
+graph could only ever show the window the layout gave it.
+
+**Observations are now kept forever. Forecasts are kept only long enough
+to be checked against them, and are then thrown away.** That is the whole
+rule, and it is what keeps a permanent store bounded: the only thing that
+grows without limit is the record of what actually happened, which is
+also the only part that cannot be re-fetched.
+
+### 12.1 What is kept, what is discarded
+
+**Kept forever**: every measurement. The `observed` band's station rows
+and the `current` band's instantaneous readings are both measurements of
+the real world, so both are archived. A station reporting every five
+minutes produces about 105,000 rows a year, which is a few megabytes --
+a decade fits in a file nobody will notice.
+
+**Kept until checked**: forecast samples, in a pending queue. A forecast
+sample is held until the observation for the time it predicted arrives,
+at which point it contributes one error to the statistics and the row is
+deleted.
+
+**Kept forever, but tiny**: the accumulated statistics. Sums and counts
+rather than the samples they came from, so the table has a fixed size
+however many years pass.
+
+**Never stored**: the raw provider responses. They are a fetch away and
+they are somebody else's format.
+
+### 12.2 Why not a standard interchange format
+
+Asked directly, and worth recording because the answer is not "there
+isn't one" -- there are several, and none of them wants to be appended
+to every five minutes.
+
+- **CF-conventions NetCDF**, `featureType = timeSeries`, is the genuine
+  meteorological standard for station series and is read by xarray, R
+  and Panoply. It is built for write-once archives, has no Qt binding,
+  and this machine carries only the runtime library with no headers.
+- **WMO BUFR** is the observation *exchange* format: table-driven,
+  designed for transmission between weather services, and nobody keeps a
+  personal archive in it.
+- **GRIB** is gridded model output. A point time series is the wrong
+  shape for it entirely.
+- **Parquet** is the modern analytics standard and compresses beautifully,
+  but appending one row at a time is precisely what columnar storage is
+  bad at, and it is not installed here.
+
+**SQLite is a container rather than a rival to any of those.** It gives
+indexed range queries -- the thing that makes scrolling back through a
+year cheap -- crash safety, and correct behaviour when two copies of the
+applet are open, which happens on this machine. Measured before
+choosing: `Qt6Sql` and the `libqsqlite.so` driver are both already
+installed, so it costs a line in the `.pro`, a packaging dependency and
+one more module in the Android kit, and no new package here.
+
+Exporting to CF-NetCDF or to CSV stays possible and is where
+interoperability actually matters. **Being handed a standard file is
+worth a great deal; being unable to append a row cheaply is worth
+nothing.**
+
+Settings stay in the INI file. The store is for measurements, not
+preferences, and sec 2.6.6's reasoning about a config file being
+something a person can open is unchanged.
+
+### 12.3 Verification uses the field's own vocabulary
+
+The request was for a "forecast deviation factor". That quantity already
+has a name, and several relatives worth having beside it:
+
+- **ME, the mean error, or bias** -- the signed mean of forecast minus
+  observed. This is the deviation factor, and correcting a forecast with
+  it is long-established practice under the name **MOS**.
+- **MAE** and **RMSE** -- the unsigned magnitude of the error. These are
+  not decoration. **Bias can sit at zero while a forecast is wildly wrong
+  in both directions**, so a store that recorded only bias would report a
+  useless forecast as a perfect one.
+- **Lead time** stratifies all of them. A one-hour prediction and a
+  ten-day prediction are not the same claim, and averaging them together
+  produces a number that describes neither.
+
+Adopting the standard names costs nothing and makes the output mean
+something to anybody who knows the field.
+
+### 12.4 Rain chance needs a different instrument
+
+**A forecast of "40% chance" is not wrong when it stays dry**, so mean
+error cannot score it. The standard tool is the **Brier score** with a
+reliability curve: of all the occasions the forecast said 40%, did it
+rain on roughly 40% of them?
+
+That is a different accumulation -- probability bins against observed
+occurrence, not a running sum of differences -- so it is a second table
+rather than another column in the first. Rain is taken to have occurred
+when the observed rate exceeds 0.1 mm/h, which is a threshold and is
+labelled as one.
+
+### 12.5 The correction is a band, not an edit
+
+Once a bias is known the forecast could simply be adjusted, and it is
+not. **The corrected curve is drawn as its own band**, in its own
+colour, with its own entry in the provenance ribbon.
+
+The reason is sec 3.4 and sec 3.11.3, which this project has held to
+everywhere else: the graph shows what a provider reported, and a number
+nobody reported does not get to look like one that was. A correction is
+this program's opinion about somebody else's forecast. It can be drawn,
+and it must say that is what it is.
+
+It applies only where there is enough evidence to justify it -- a
+handful of comparisons is noise, not a bias -- so a minimum sample count
+gates it, and below that the band is simply absent rather than
+uncorrected-but-drawn.
+
+### 12.6 The give-up rule
+
+A pending forecast whose valid time has passed without an observation
+ever arriving must expire, or every outage leaks rows for ever. It is
+deleted once its valid time is far enough in the past that no
+observation is coming.
+
+The queue is bounded a second way, deliberately. The same valid time is
+re-forecast on every refresh, and keeping all of them would store the
+same hour hundreds of times. **One forecast is kept per band, per valid
+time, per lead-time bucket** -- the first seen in that bucket -- which is
+exactly one verification sample per bucket and turns an unbounded queue
+into a few thousand rows.
+
+## 13. Navigating the graph
+
+**Drag to pan, wheel to zoom about the cursor, double-click to return to
+now.** The map and charting convention, chosen because it is the one
+most people already have in their hands.
+
+The window stops being a layout constant and becomes graph state. The
+layout still supplies the *initial* span (sec 10), which is what a fresh
+window should open at; after that the view is the user's.
+
+Panning away from now stops the view following the clock. A graph that
+kept scrolling itself while being read would fight the reader, and
+double-click is the way back rather than a mode nobody can find.
+
+### 13.1 What "snappy" costs
+
+Sixty frames a second is sixteen milliseconds, and a full paint measured
+7.6 ms with a single day of data. That is headroom, but not much, and
+three things get worse with a permanent store rather than better:
+
+- **`bbq_series::range()` scans linearly from index 0.** With a year in
+  memory that is about 10^8 operations per repaint and panning would
+  crawl. It becomes a binary search, which `at()` already uses on the
+  same sorted vector.
+- **Only the visible window is loaded.** The store is queried by time
+  range against an index; the whole history is never in memory at once,
+  however much of it accumulates.
+- **Zoomed out, there are more samples than pixels**, so columns
+  aggregate. That is already how `reduce()` works, and the store makes it
+  load-bearing rather than incidental.
+
+### 13.2 The marks stop when they would lie
+
+Below one sample per pixel the sample marks are not drawn.
+
+Sec 3.11.3 makes the dots mean "a real sample, here". Drawn at a zoom
+where twenty samples share a pixel they would merge into a band of ink
+that implies a density of measurement nobody made, which is the
+graph-that-is-wrong-while-looking-fine this project keeps refusing.
+Absent dots say "zoomed out"; smeared dots say something false.
+
+**This is a judgement made without being asked, and it is reversible.**
+The alternative worth considering is a min/max envelope per column, which
+is honest in a different way -- it shows the spread the mean hides -- and
+is more work than the first version of this needs.

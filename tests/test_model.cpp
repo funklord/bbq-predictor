@@ -24,6 +24,7 @@ private slots:
 	void a_band_never_fetched_poisons_the_freshness();
 	void rain_outweighs_warmth();
 	void a_short_window_is_not_offered();
+	void range_agrees_with_the_scan_it_replaced();
 
 private:
 	static bbq_series band_of(bbq_band band, qint64 start, int step_s,
@@ -240,6 +241,65 @@ void test_model::a_short_window_is_not_offered() {
 
 	QVERIFY2(windows.empty(),
 	         "a one-hour stretch was offered as a grilling window");
+}
+
+void test_model::range_agrees_with_the_scan_it_replaced() {
+	/*
+	 * The proof for a mechanical change (project.md sec 13.1).
+	 *
+	 * range() used to scan from index zero and now seeks with a binary
+	 * search. The claim is that it returns exactly what the scan
+	 * returned, so the check is not a handful of chosen cases but the
+	 * old implementation, run beside the new one over every window in a
+	 * sweep.
+	 *
+	 * The fixture deliberately mixes durations. The seek is only exact
+	 * because it starts a full m_max_duration_s early, so a series whose
+	 * spans are all the same length would not exercise the reason the
+	 * subtraction is there.
+	 */
+	std::vector<bbq_sample> samples;
+	const qint64 base = 1000000;
+
+	for (int i = 0; i < 40; ++i) {
+		bbq_sample sample;
+		sample.start_utc = base + i * 300;
+
+		/* Mostly five minutes, occasionally a two-hour straddler. */
+		sample.duration_s = (i % 7 == 3) ? 7200 : 300;
+		sample.temperature = 10.0 + i;
+		samples.push_back(sample);
+	}
+
+	bbq_series series(bbq_band::observed, QStringLiteral("test"));
+	series.set_samples(samples);
+
+	const std::vector<bbq_sample> &sorted = series.samples();
+
+	for (qint64 from = base - 9000; from < base + 15000; from += 137) {
+		for (qint64 width : {1, 60, 300, 3600, 20000}) {
+			const qint64 to = from + width;
+
+			/* The implementation that was replaced, verbatim. */
+			std::size_t want_first = 0;
+			while (want_first < sorted.size() &&
+			       sorted[want_first].end_utc() <= from) {
+				++want_first;
+			}
+
+			std::size_t want_last = want_first;
+			while (want_last < sorted.size() &&
+			       sorted[want_last].start_utc < to) {
+				++want_last;
+			}
+
+			const std::pair<std::size_t, std::size_t> got =
+			        series.range(from, to);
+
+			QCOMPARE(got.first, want_first);
+			QCOMPARE(got.second, want_last);
+		}
+	}
 }
 
 QTEST_APPLESS_MAIN(test_model)

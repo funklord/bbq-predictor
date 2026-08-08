@@ -191,6 +191,7 @@ private:
 	QString m_provider;
 	qint64 m_fetched_utc = 0;
 	int m_nominal_step_s = 0;
+	qint64 m_max_duration_s = 0;
 	QTimeZone m_zone;
 	std::vector<bbq_sample> m_samples;
 };

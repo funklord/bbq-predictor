@@ -113,6 +113,15 @@ void bbq_series::set_samples(std::vector<bbq_sample> samples) {
 
 	std::sort(m_samples.begin(), m_samples.end(), by_start);
 	m_nominal_step_s = compute_nominal_step_s();
+
+	/*
+	 * The longest span in the series, which is what makes the binary
+	 * search in range() exact rather than approximate. See there.
+	 */
+	m_max_duration_s = 0;
+	for (const bbq_sample &sample : m_samples) {
+		m_max_duration_s = std::max<qint64>(m_max_duration_s, sample.duration_s);
+	}
 }
 
 qint64 bbq_series::begin_utc() const {
@@ -195,15 +204,40 @@ std::pair<std::size_t, std::size_t> bbq_series::range(qint64 from,
 	 * two-minute column belongs to that column even though it starts
 	 * well before it, and dropping it would leave the column empty and
 	 * be drawn as a gap that is not there.
+	 *
+	 * Found by binary search, and the walk that remains is bounded by
+	 * construction rather than by hope.
+	 *
+	 * This scanned from index 0 until sec 13.1. That is fine at a day of
+	 * data and quadratic against a permanent store: the graph asks this
+	 * once per pixel column, so a year in memory made it about 10^8
+	 * operations per repaint and panning would have crawled.
+	 *
+	 * The seek is exact, not a heuristic. A sample starting before
+	 * `from - m_max_duration_s` cannot reach `from`, because its end is
+	 * at most its start plus the longest span in the series -- so
+	 * beginning the overlap scan there returns precisely what starting
+	 * at zero returned, and the scan covers only the few samples that
+	 * can actually straddle the edge.
 	 */
-	std::size_t first = 0;
+	const auto by_start = [](const bbq_sample &sample, qint64 value) {
+		return sample.start_utc < value;
+	};
+
+	const auto reachable = std::lower_bound(m_samples.begin(), m_samples.end(),
+	                                        from - m_max_duration_s, by_start);
+
+	std::size_t first = static_cast<std::size_t>(reachable - m_samples.begin());
 	while (first < m_samples.size() && m_samples[first].end_utc() <= from) {
 		++first;
 	}
 
-	std::size_t last = first;
-	while (last < m_samples.size() && m_samples[last].start_utc < to) {
-		++last;
+	const auto past = std::lower_bound(m_samples.begin(), m_samples.end(), to,
+	                                   by_start);
+
+	std::size_t last = static_cast<std::size_t>(past - m_samples.begin());
+	if (last < first) {
+		last = first;
 	}
 
 	return std::make_pair(first, last);
