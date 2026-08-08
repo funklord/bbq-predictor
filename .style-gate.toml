@@ -9,14 +9,19 @@
 indent_width = 4
 
 # Below this the gate fails instead of passing. Deliberately under the
-# real count, which is around thirteen: this catches a file list that has
-# collapsed -- a broken include/exclude, a discovery path that matched
-# nothing -- and it does not police a number, so adding a source file
-# never requires touching it.
+# real count, which is around forty-five: this catches a file list that
+# has collapsed -- a broken include/exclude, a discovery path that
+# matched nothing -- and it does not police a number, so adding a source
+# file never requires touching it.
 #
 # The distinction matters because "found nothing" and "found nothing
 # wrong" are the same green output otherwise.
-floor = 8
+#
+# It was 8 while the tree had thirteen files and stayed there while the
+# tree grew to forty-five, which is how a floor stops being one: a
+# collapse to a quarter of the tree would have passed. Raised, and worth
+# raising again the next time this number is a small fraction of `list`.
+floor = 30
 
 # `Makefile` is deliberately NOT named here, and this is a real decision
 # rather than an omission.
@@ -35,9 +40,17 @@ floor = 8
 # and it is the right way round.
 indent_names = []
 
-# `exclude` is left at the shipped defaults -- attic, third_party, vendor,
-# build, target, dist, .pytest_cache, .claude. Restating them here would
-# only be a second copy to drift out of step with the tool.
+# `exclude` REPLACES the shipped defaults rather than extending them --
+# `cfg.update(loaded)`, so naming one directory here would drop the other
+# eight. That is why the whole list is restated, against this file's own
+# earlier advice not to: the advice assumed adding nothing.
 #
-# `build/` is where qmake's generated Makefile and the objects land, and
-# generated sources are exempt anyway.
+# What needed adding is `build-android` and `build-tests`. Both hold
+# generated sources, both are covered by `.gitignore`, and neither is in
+# the shipped defaults -- so the git discovery path skipped them while a
+# plain walk would not, which is precisely the disagreement between the
+# two paths that the tool's own comment warns about. A CI checkout
+# without `.git` that had been built would have gated moc output.
+exclude = ["attic", "third_party", "vendor", "build", "target",
+           "dist", ".pytest_cache", ".claude",
+           "build-android", "build-tests"]
