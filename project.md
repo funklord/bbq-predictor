@@ -1802,3 +1802,66 @@ window in the shot path rather than in the layout.
   narrow clipped "1.0 mm/h" to "1.0 mm", then to "1.0 mm/l" at the
   second guess. It is measured from the widest string it has to hold
   now, the same way the tray icon's digits are (sec 4.2.1).
+
+## 11. Android
+
+The build is wired and harmonized. **It does not complete on this
+machine**, for a reason that is a missing SDK package rather than
+anything in the tree -- see sec 11.2.
+
+### 11.1 The vocabulary is shared, the build rule is not
+
+`tools/android.mk` carries the target names, the preflight, the
+versionCode, the adb plumbing and the signature check. It is spread
+verbatim from `~/.claude/tools/android.mk`, the same model as
+`style_gate.py` and for the same reason: a copy in the repository is
+reachable by CI, and a file under `~/.claude` is not.
+
+    make android            debug build, installable on any device
+    make android-aab        the Play bundle; needs a keystore
+    make android-install    install on the attached device
+    make android-run        install and launch
+    make android-log        this app's log, and only this app's
+    make android-uninstall  remove it
+    make android-check      everything the build needs, checked by name
+
+`harmonization.md` settled those names and this is the first project to
+carry them. **`apk` is deliberately not among them**: netcfgd's `apk`
+is Alpine's packaging command, and one word meaning two things across
+sibling trees is how somebody eventually runs the wrong one.
+
+Only the build rule lives in this project's Makefile, because qmake and
+CMake differ and that difference is the project's own.
+
+Three things came from other projects' scars rather than from thinking:
+the ABI is read from the Qt kit rather than chosen twice; the
+versionCode is derived from `VERSION`, because a hardcoded one allows
+exactly one upload; and the artifact's signature is **read back from
+the file**, because flags handed to Qt's generated Makefile are dropped
+silently and beerssh shipped a "release build" carrying the Android
+debug key.
+
+### 11.2 What stops it here
+
+The C++ compiles for arm64 against NDK 25.2. Gradle then refuses:
+
+    Dependency 'androidx.core:core:1.16.0' requires ... a newer compileSdk
+
+Qt 6.10's Android support pulls AndroidX libraries that require
+**compileSdk 35**, and this SDK has platforms up to android-33. No
+setting in this tree changes that -- the platform has to be installed:
+
+    sdkmanager "platforms;android-35"
+
+That is a download, a licence acceptance and a change to a shared SDK
+outside this repository, so it is recorded rather than done. The Qt kit
+also names `android-ndk-r27c` as the NDK it was built against, and 25.2
+is the newest here; it compiled, so that is a caution rather than a
+finding.
+
+**The preflight deliberately does not check for this.** It checks what
+it can name -- kit, ABI, NDK, SDK, JDK -- and a compileSdk requirement
+belongs to whichever AndroidX versions a given Qt release happens to
+pull, which is not something a Makefile can know without asking Gradle.
+Guessing it would be a check that goes stale silently, which is worse
+than the honest Gradle error.

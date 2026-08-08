@@ -38,6 +38,35 @@ QMAKE_CXXFLAGS_RELEASE += -Os
 QMAKE_CFLAGS_RELEASE   -= -O2
 QMAKE_CFLAGS_RELEASE   += -Os
 
+# --- Android ---------------------------------------------------------------
+# The only platform conditional in this file. Everything above is shared by
+# construction, which is the point: the mobile difference is a LAYOUT
+# (project.md sec 10), not a second program.
+android {
+	# Play rejects any upload whose versionCode does not exceed the last it
+	# accepted, so a hardcoded number allows one upload and blocks every
+	# update after it. The Makefile computes it from VERSION and passes it
+	# in; qmake has no arithmetic to do it here.
+	#
+	# The fallback matters: opening this in Qt Creator, or any bare qmake
+	# run, must still produce something installable.
+	isEmpty(BBQ_VERSION_CODE): BBQ_VERSION_CODE = 1
+	ANDROID_VERSION_CODE = $$BBQ_VERSION_CODE
+	ANDROID_VERSION_NAME = $$BBQ_VERSION
+
+	# Set here rather than as <uses-sdk> in a manifest: the Gradle plugin
+	# takes these from the build file and warns about, or overrides, a
+	# manifest that also declares them.
+	# Passed in rather than fixed here, because the target API a build can
+	# use is bounded by the platforms actually installed -- and the number
+	# Play requires for an upload moves independently of them. A build that
+	# hardcodes it fails on a machine whose SDK is one release behind, and
+	# fails talking about Gradle rather than about the SDK.
+	isEmpty(BBQ_TARGET_API): BBQ_TARGET_API = 33
+	ANDROID_MIN_SDK_VERSION = 26
+	ANDROID_TARGET_SDK_VERSION = $$BBQ_TARGET_API
+}
+
 INCLUDEPATH += $$PWD/src
 
 SOURCES += \

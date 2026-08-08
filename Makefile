@@ -28,7 +28,20 @@
 #                        possible without a rebuild
 #   make veryclean    -- clean, plus the binary and the build directories
 #   make distclean    -- veryclean, plus stray editor files
+#   make android      -- the Android APK (needs a Qt kit, NDK, SDK, JDK)
+#   make android-aab  -- the Play bundle instead; needs a keystore
+#   make android-run  -- install and launch on the attached device
+#   make android-log  -- follow this app's log and nothing else
 #   make help         -- this list
+#
+# ANDROID
+#   The target names and the adb plumbing come from tools/android.mk, which
+#   is spread verbatim from ~/.claude/tools/android.mk so a habit learned in
+#   one project is correct in the next. This file supplies only the build
+#   rule, because qmake and CMake differ and that difference is the project's.
+#
+#     make android QT_ANDROID_ROOT=$HOME/Qt/6.10.0/android_arm64_v8a \
+#                  ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/25.2.9519653
 #
 # BUILD FLAGS
 #   DEBUG and SANITIZE are never given a `?=` default: every check is
@@ -78,6 +91,13 @@ ifdef SANITIZE
                     QMAKE_LFLAGS+=-fsanitize=address,undefined
 endif
 
+# The shared vocabulary. Included before the rules below so a project rule
+# can use ANDROID_ABI and friends without redefining any of them.
+include tools/android.mk
+
+ANDROID_BUILD_DIR ?= build-android
+ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/$(TARGET)-$(VERSION)-$(ANDROID_ABI).apk
+
 all: $(TARGET)
 
 $(BUILD_DIR)/Makefile: bbq-predictor.pro
@@ -110,6 +130,35 @@ $(TARGET): $(BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
 
 run: $(TARGET)
 	./$(TARGET)
+
+# --- Android ---------------------------------------------------------------
+# The build rule is this project's; everything around it is tools/android.mk.
+$(ANDROID_BUILD_DIR)/Makefile: android-check bbq-predictor.pro
+	mkdir -p $(ANDROID_BUILD_DIR)
+	cd $(ANDROID_BUILD_DIR) && $(QT_ANDROID_ROOT)/bin/qmake \
+	        $(CURDIR)/bbq-predictor.pro $(QMAKE_CONFIG) \
+	        BBQ_VERSION=$(VERSION) BBQ_VERSION_CODE=$(ANDROID_VERSION_CODE) \
+	        BBQ_TARGET_API=$(ANDROID_TARGET_API)
+
+# Named for what it holds, because Gradle's own name for it says nothing
+# about which app, which version or which ABI you are looking at.
+android: $(ANDROID_BUILD_DIR)/Makefile
+	$(MAKE) -C $(ANDROID_BUILD_DIR) apk
+	@src=$$(find $(ANDROID_BUILD_DIR)/android-build/build/outputs/apk \
+	        -name '*.apk' -print -quit); \
+	if [ -z "$$src" ]; then echo "android: no .apk was produced" >&2; exit 1; fi; \
+	cp "$$src" $(ANDROID_ARTIFACT); \
+	echo "android: $(ANDROID_ARTIFACT)"
+	$(call android_verify_signature,$(ANDROID_ARTIFACT))
+
+android-aab: $(ANDROID_BUILD_DIR)/Makefile
+	@if [ -z "$(ANDROID_KEYSTORE)" ]; then \
+		echo "android-aab: ANDROID_KEYSTORE is not set." >&2; \
+		echo "android-aab:   Play will not take a debug-signed bundle, and a" >&2; \
+		echo "android-aab:   versionCode it HAS taken cannot be reused." >&2; \
+		exit 1; \
+	fi
+	$(MAKE) -C $(ANDROID_BUILD_DIR) aab
 
 # --- the suite ---------------------------------------------------------
 TEST_BUILD_DIR ?= build-tests
@@ -233,7 +282,7 @@ define bbq_remove_tree
 endef
 
 veryclean: clean
-	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR))
+	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) $(ANDROID_BUILD_DIR))
 	rm -f $(TARGET)
 
 # `distclean` removes what the build generated and `veryclean` does not.
@@ -252,4 +301,5 @@ help:
 	@sed -n '/^# TARGETS/,/^#$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
+        android android-aab \
         install uninstall clean veryclean distclean help
