@@ -48,6 +48,7 @@ void print_usage(QTextStream &out) {
 	out << "                 the station when omitted\n";
 	out << "  --interp M     step|linear|monotone|akima|makima|natural|\n";
 	out << "  --cursor N     park the readout on column N, for --shot\n";
+	out << "  --tray-icon F  also save the tray icon, for --shot\n";
 	out << "  --shot FILE    fetch, render the window to a PNG, and exit.\n";
 	out << "                 A diagnostic: looking at the picture is how\n";
 	out << "                 layout defects actually get found.\n";
@@ -121,6 +122,19 @@ int main(int argc, char *argv[]) {
 	                 &window, &bbq_main_window::toggle_visibility);
 
 	/*
+	 * The tray follows the data. Updated on a failure as well as a
+	 * success, because sec 2.4's point is that a refresh which stopped
+	 * working must show somewhere, and the tray is where a glance
+	 * lands.
+	 */
+	const auto refresh_tray = [&tray, &window]() {
+		tray.show_state(window.feed()->composite(), window.verdict());
+	};
+
+	QObject::connect(window.feed(), &bbq_wu_feed::updated, &window, refresh_tray);
+	QObject::connect(window.feed(), &bbq_wu_feed::settled, &window, refresh_tray);
+
+	/*
 	 * Said out loud on the session that cannot show a tray, rather than
 	 * discovered as an icon that never appears (project.md sec 4.1). With
 	 * no tray and no window there would be no way back to the program at
@@ -175,15 +189,28 @@ int main(int argc, char *argv[]) {
 	 * feed settles, and a wall-clock timer takes it regardless so a
 	 * request that never answers cannot leave this running forever.
 	 */
+	/*
+	 * The tray icon, rendered to a file. A tray cannot be screenshotted
+	 * from here and the icon is now the applet's main surface, so this
+	 * is the only way to look at what it says before shipping it.
+	 */
+	const QString tray_shot = option_value(arguments, QStringLiteral("--tray-icon"));
+
 	const QString shot = option_value(arguments, QStringLiteral("--shot"));
 	if (!shot.isEmpty()) {
 		bool taken = false;
 
-		const auto take = [&window, shot, &taken]() {
+		const auto take = [&window, &tray, shot, tray_shot, &taken]() {
 			if (taken) {
 				return;
 			}
 			taken = true;
+
+			if (!tray_shot.isEmpty()) {
+				const QPixmap glyph = tray.icon().pixmap(44, 44);
+				glyph.save(tray_shot);
+				QTextStream(stdout) << "shot: wrote " << tray_shot << "\n";
+			}
 
 			const QPixmap picture = window.grab();
 			QTextStream report(stdout);

@@ -1205,6 +1205,38 @@ half of the brief is simply absent on that desktop.
 "applet for systray" is half the stated product and the answer decides
 whether a fallback presentation is required.
 
+### 4.2 The tray shows the weather
+
+**The icon is the current temperature**, and it turns red when the data
+behind it has gone stale.
+
+That is sec 2.4's other half finally being done rather than asked for.
+The document has said since the first commit that a failed refresh must
+be visible *in the tray icon as well as in the window*, and the icon
+was a placeholder dot for thirty commits -- which made the systray half
+of sec 0's brief a coloured circle.
+
+**Stale is two hours**, which is two missed hourly refreshes. The
+slowest band legitimately reaches an hour old between fetches (sec
+2.5.1), so anything tighter would cry stale on a working applet.
+
+The tooltip carries what a number cannot: which band the reading came
+from, how old the oldest band is, and the grilling verdict. **Stale is
+said in words there as well as in colour**, because a colour alone is a
+claim only somebody who already knows the convention can read.
+
+### 4.2.1 The icon is measured, not guessed
+
+The digits are sized by measuring the text and shrinking until it fits,
+rather than by a fraction of the icon height.
+
+The first version set the pixel size to the icon's height, which is the
+height of the em box and not of the digits, so "20" rendered a size too
+large and lost its top and bottom to the edges. Found by rendering the
+icon to a file and looking at it -- `--tray-icon` exists for that,
+because a tray cannot be screenshotted from here and the icon is now
+the applet's main surface.
+
 ## 5. Build
 
 - `make` builds the app. It does not build tests.

@@ -193,6 +193,10 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	resize(820, 360);
 }
 
+QString bbq_main_window::verdict() const {
+	return m_verdict->text();
+}
+
 void bbq_main_window::set_interpolation(bbq_interpolation method) {
 	m_graph->set_interpolation(method);
 

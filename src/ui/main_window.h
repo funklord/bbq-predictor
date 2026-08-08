@@ -36,6 +36,9 @@ public:
 	bbq_wu_feed *feed() const { return m_feed; }
 	bbq_forecast_graph *graph() const { return m_graph; }
 
+	/* What the window says above the graph, for the tray to echo. */
+	QString verdict() const;
+
 	/*
 	 * Set the curve and keep the drop-down agreeing with it.
 	 *
