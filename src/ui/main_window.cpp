@@ -122,6 +122,13 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 */
 	m_station_box = new QLineEdit(this);
 	m_station_box->setPlaceholderText(tr("station, e.g. ISTOCK822"));
+	/*
+	 * A minimum as well as a maximum. Without the floor the controls
+	 * row squeezed it to about forty pixels showing "stati...", which
+	 * is the one field the applet cannot work without and the one the
+	 * empty state tells you to fill.
+	 */
+	m_station_box->setMinimumWidth(150);
 	m_station_box->setMaximumWidth(190);
 	m_station_box->setText(bbq_settings::station());
 
