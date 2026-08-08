@@ -52,6 +52,55 @@ ANDROID_SDK_ROOT ?= $(HOME)/Android/Sdk
 ANDROID_API      ?= 26
 ANDROID_TARGET_API ?= 33
 
+# EXPORTED, not merely set, and this is load-bearing.
+#
+# androiddeployqt reads the SDK location out of the deployment-settings JSON,
+# which qmake writes from the ENVIRONMENT rather than from any make variable.
+# Leave these unexported and qmake falls back to whatever path was baked into
+# the Qt installation -- /opt/android/sdk on the machine this was found on --
+# so the build compiles every source, links the shared object, and only then
+# fails at packaging with "Directory /opt/android/sdk/platforms does not
+# exist": a path nobody configured, named by nothing the project can see.
+export ANDROID_SDK_ROOT
+export ANDROID_NDK_ROOT
+
+# Which platform Gradle compiles against, named rather than guessed.
+#
+# androiddeployqt's default is "the highest available", and its idea of
+# highest is wrong when the SDK holds an extension platform: with android-36
+# installed beside android-33-ext5 it chose the latter, and Gradle then
+# refused the build because Qt's own AndroidX dependencies require at least
+# 34. The failure names neither the platform it picked nor where it picked it
+# from, so naming it here removes a heuristic that is demonstrably wrong on a
+# perfectly ordinary SDK.
+ANDROID_PLATFORM ?= android-$(ANDROID_TARGET_API)
+
+# The host-side deploy tool, asked for rather than assumed. Qt puts it with
+# the HOST tools, not in the Android kit, and the directory is named
+# differently per platform -- qmake knows where it is.
+ifdef QT_ANDROID_ROOT
+ANDROID_HOST_BINS := $(shell $(QT_ANDROID_ROOT)/bin/qmake -query QT_HOST_BINS 2>/dev/null)
+endif
+
+ANDROID_DEPLOY_QT ?= $(ANDROID_HOST_BINS)/androiddeployqt
+
+# The JDK, resolved and EXPORTED rather than left to Gradle to find.
+#
+# Gradle picks its own toolchain and will happily choose a JRE: on the
+# machine this was written for it took java-21-openjdk, which ships no
+# compiler, and failed with "does not provide the required capabilities:
+# [JAVA_COMPILER]" while a perfectly good JDK 17 sat on PATH. The preflight
+# had passed, honestly and uselessly -- it checked one JVM and the build used
+# another, which is a check verifying something other than what it protects.
+#
+# Resolving JAVA_HOME from javac and exporting it makes the two the same JVM,
+# so the preflight now guarantees the compiler Gradle actually runs.
+ifeq ($(origin JAVA_HOME), undefined)
+JAVA_HOME := $(patsubst %/bin/javac,%,$(realpath $(shell command -v javac 2>/dev/null)))
+endif
+
+export JAVA_HOME
+
 ANDROID_ADB       = $(ANDROID_SDK_ROOT)/platform-tools/adb
 
 # The ABI is the Qt KIT's, read from it rather than chosen a second time.
@@ -122,16 +171,32 @@ android-check:
 		echo "android:   platform-tools, a platform and build-tools." >&2; \
 		exit 1; \
 	fi
-	@if ! command -v javac >/dev/null 2>&1 && [ -z "$(JAVA_HOME)" ]; then \
+	@if [ -z "$(JAVA_HOME)" ] && ! command -v javac >/dev/null 2>&1; then \
 		echo "android: no javac on PATH and JAVA_HOME is unset." >&2; \
 		echo "android:   Gradle needs a JDK; a JRE alone will not do, and it" >&2; \
 		echo "android:   says so only as a toolchain capability error." >&2; \
 		exit 1; \
 	fi
+	@if [ ! -x "$(JAVA_HOME)/bin/javac" ]; then \
+		echo "android: JAVA_HOME=$(JAVA_HOME) has no bin/javac." >&2; \
+		echo "android:   That is a JRE. Gradle reports it as a toolchain" >&2; \
+		echo "android:   lacking JAVA_COMPILER, naming the JVM but not the" >&2; \
+		echo "android:   reason." >&2; \
+		exit 1; \
+	fi
+	@echo "android:   jdk $(JAVA_HOME)"
 	@echo "android: kit $(QT_ANDROID_ROOT)"
 	@echo "android:   abi $(ANDROID_ABI), versionCode $(ANDROID_VERSION_CODE)"
 
 # Whoever signed it, read from the artifact rather than announced.
+#
+# The pattern has to cope with more than one apksigner output format. It read
+# only "Signer #1 certificate DN:", and build-tools 37 prints "V2 Signer:
+# certificate DN:" instead -- so the check matched nothing, announced "signed
+# by " with an empty name, and the debug-key guard below could never fire. The
+# check written to stop a debug-signed release had been quietly disabled by a
+# tool update, which is the same failure one layer up. An unreadable signature
+# is now an error rather than a blank.
 #
 # beerssh shipped a "release build" signed with the Android debug key, and
 # the only reason anybody noticed is that somebody ran apksigner by hand:
@@ -142,15 +207,24 @@ android-check:
 define android_verify_signature
 	@signer=$$(ls $(ANDROID_SDK_ROOT)/build-tools/*/apksigner 2>/dev/null | tail -1); \
 	if [ -z "$$signer" ]; then \
-		echo "android: no apksigner in the SDK; cannot say who signed this"; \
-	else \
-		dn=$$($$signer verify --print-certs "$(1)" 2>/dev/null \
-		      | sed -n 's/^Signer #1 certificate DN: //p'); \
-		echo "android: signed by $$dn"; \
-		if [ -n "$(ANDROID_KEYSTORE)" ] && echo "$$dn" | grep -q "Android Debug"; then \
-			echo "android: a keystore was given but the artifact is DEBUG-signed" >&2; \
-			exit 1; \
-		fi; \
+		echo "android: NO apksigner in the SDK -- who signed this is unchecked" >&2; \
+		exit 0; \
+	fi; \
+	dn=$$($$signer verify --print-certs "$(1)" 2>/dev/null \
+	      | sed -n -e 's/^Signer #1 certificate DN: //p' \
+	               -e 's/^V[0-9]* Signer: certificate DN: //p' \
+	      | head -1); \
+	if [ -z "$$dn" ]; then \
+		echo "android: cannot read the signature of $(1)." >&2; \
+		echo "android:   apksigner ran and printed nothing this recognises," >&2; \
+		echo "android:   so the signer is UNKNOWN. That must not read as a" >&2; \
+		echo "android:   pass: it is how a debug-signed release ships." >&2; \
+		exit 1; \
+	fi; \
+	echo "android: signed by $$dn"; \
+	if [ -n "$(ANDROID_KEYSTORE)" ] && echo "$$dn" | grep -q "Android Debug"; then \
+		echo "android: a keystore was given but the artifact is DEBUG-signed" >&2; \
+		exit 1; \
 	fi
 endef
 

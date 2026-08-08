@@ -2252,30 +2252,59 @@ somebody copying it into a fifth project will read it -- it cannot fix
 this for them, having no way to know what their default goal should be,
 so saying so is the most it can do.
 
-### 11.2 What stops it here
+### 11.2 It builds, and what it took
 
-The C++ compiles for arm64 against NDK 25.2. Gradle then refuses:
+**`make android` produces an installable arm64 APK.** 52 MB, debug-signed,
+against NDK 25.2 and the Qt 6.10 kit. Four things were in the way and
+none of them was the thing recorded here before.
 
-    Dependency 'androidx.core:core:1.16.0' requires ... a newer compileSdk
+**The platform floor was real and is gone.** Qt 6.10 pulls AndroidX
+libraries needing a `compileSdk` of at least 34, and this SDK reached
+android-33. android-36 is installed now, which clears it.
 
-Qt 6.10's Android support pulls AndroidX libraries that require
-**compileSdk 35**, and this SDK has platforms up to android-33. No
-setting in this tree changes that -- the platform has to be installed:
+**`ANDROID_SDK_ROOT` was set and never exported.** androiddeployqt reads
+the SDK location out of the deployment-settings JSON, and qmake writes
+that from the ENVIRONMENT rather than from any make variable, so it fell
+back to a path baked into the Qt installation: `/opt/android/sdk`. Every
+source compiled and the shared object linked before it failed on a
+directory nobody in this project had ever named.
 
-    sdkmanager "platforms;android-35"
+**androiddeployqt picked the wrong platform.** Its default is "the
+highest available" and it chose `android-33-ext5` over `android-36`, so
+Gradle refused the build for the same compileSdk reason as before -- with
+the platform now installed. `--android-platform` is named explicitly, and
+the generated `apk` rule hardcodes that flag away, so the target reuses
+Qt's own `apk_install_target` and replaces only the deploy step.
 
-That is a download, a licence acceptance and a change to a shared SDK
-outside this repository, so it is recorded rather than done. The Qt kit
-also names `android-ndk-r27c` as the NDK it was built against, and 25.2
-is the newest here; it compiled, so that is a caution rather than a
-finding.
+**Gradle chose a JRE for its toolchain.** It took java-21-openjdk, which
+ships no compiler, and reported "does not provide the required
+capabilities: [JAVA_COMPILER]" while a perfectly good JDK 17 sat on PATH.
+**The preflight had passed, honestly and uselessly**: it checked that
+javac existed and Gradle then used a different JVM entirely -- a check
+verifying something other than the thing it protects. `JAVA_HOME` is
+resolved from javac and exported now, so the JVM the preflight approves
+is the JVM Gradle runs.
 
-**The preflight deliberately does not check for this.** It checks what
-it can name -- kit, ABI, NDK, SDK, JDK -- and a compileSdk requirement
-belongs to whichever AndroidX versions a given Qt release happens to
-pull, which is not something a Makefile can know without asking Gradle.
-Guessing it would be a check that goes stale silently, which is worse
-than the honest Gradle error.
+### 11.2.1 The signature check had been switched off by a tool update
+
+The APK built, and the fragment announced `signed by ` with nothing
+after it.
+
+`apksigner` prints `V2 Signer: certificate DN:` in build-tools 37; the
+check read only `Signer #1 certificate DN:`. So it matched nothing,
+printed an empty name, and -- this is the part that matters -- **the
+guard that fails a release built with the debug key could never fire**,
+because it tests a string that was always empty.
+
+That guard exists because beerssh shipped a debug-signed release under a
+success message. A tool's output format changed and quietly disabled it,
+which is the same failure one layer up: **a check that cannot report a
+fault reads exactly like one finding nothing wrong.** Both formats are
+accepted now, and an unreadable signature is an error rather than a
+blank, because "who signed this is unknown" must not look like a pass.
+
+The artifact verifies as `C=US, O=Android, CN=Android Debug`, which is
+correct for a debug build and is what the release guard would refuse.
 
 ## 12. The history is permanent, the forecasts are not
 

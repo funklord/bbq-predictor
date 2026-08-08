@@ -178,8 +178,18 @@ $(ANDROID_BUILD_DIR)/Makefile: android-check bbq-predictor.pro
 
 # Named for what it holds, because Gradle's own name for it says nothing
 # about which app, which version or which ABI you are looking at.
+# Qt's generated `apk` target is two steps: build-and-install, then
+# androiddeployqt. Only the second is replaced here, and only to pass
+# --android-platform, which the generated rule hardcodes away. The first is
+# reused rather than reimplemented, because an orchestration copied is an
+# orchestration to keep in step.
 android: $(ANDROID_BUILD_DIR)/Makefile
-	$(MAKE) -C $(ANDROID_BUILD_DIR) apk
+	$(MAKE) -C $(ANDROID_BUILD_DIR) apk_install_target
+	$(ANDROID_DEPLOY_QT) \
+	        --input $(ANDROID_BUILD_DIR)/android-$(TARGET)-deployment-settings.json \
+	        --output $(ANDROID_BUILD_DIR)/android-build \
+	        --android-platform $(ANDROID_PLATFORM) \
+	        --apk $(ANDROID_BUILD_DIR)/android-build/$(TARGET).apk
 	@src=$$(find $(ANDROID_BUILD_DIR)/android-build/build/outputs/apk \
 	        -name '*.apk' -print -quit); \
 	if [ -z "$$src" ]; then echo "android: no .apk was produced" >&2; exit 1; fi; \
