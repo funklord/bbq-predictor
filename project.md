@@ -1522,22 +1522,30 @@ every option open, and no licence is better than a wrong one. Recorded
 explicitly here so the absence does not read as a gap for a later pass to
 close.
 
-### 8.1 No remote, deliberately
+### 8.1 Published, by the holder's decision
 
-**This repository is local only, and that is a decision rather than an
-oversight.** Recorded here for the same reason the absent licence is:
-most of the sibling projects have a `github.com/funklord/<name>` remote,
-so a harmonizing pass would otherwise read the absence as drift and
-close it. `raidtray` has no remote either.
+This repository was local-only for most of its life, and that was a
+decision rather than an oversight -- recorded here so a harmonizing
+pass would not read the absence as drift and close it, since most of
+the sibling projects carry a `github.com/funklord` remote.
 
-The reason is specific to this project. The tree contains a working
-scraper for Weather Underground's API key and sec 2.2 records, in
-writing, that using it violates their terms of service. Keeping that on
-one machine and publishing it are different acts, and only the
-copyright holder gets to make the second one.
+**The copyright holder has since decided to publish it**, and that is
+the one thing that moves it. The reasoning that kept it local is not
+withdrawn so much as overruled by the person entitled to overrule it.
 
-**Adding a remote is theirs to decide, exactly as the licence is.** Do
-not add one because the siblings have one.
+What that reasoning was, and why it still matters to know:
+
+The tree contains a working scraper for Weather Underground's API key,
+and sec 2.2 states in writing that using it violates their terms of
+service. Keeping that on one machine and publishing it are different
+acts. Publishing does not make sec 2.2 less true, and it is the reason
+sec 2.2 is written as plainly as it is -- anybody arriving at this
+repository meets that paragraph before they meet the code.
+
+**Whether the repository is public or private is the holder's to set**,
+and it is set on the hosting side rather than anywhere in this tree.
+Nothing here depends on the answer; sec 2.2 is the same warning either
+way.
 
 ## 9. What has been decided, and what has not
 
@@ -1607,8 +1615,9 @@ not add one because the siblings have one.
   style plus tests (sec 5.2)
 - Looking at a rendered picture is the method, and the diagnostics
   exist to make it cheap (sec 5.1.1)
-- No licence (sec 8) and no remote (sec 8.1), both deliberate and
-  neither a gap for a harmonizing pass to close
+- No licence, deliberately and still (sec 8)
+- Published by the holder's decision, having been deliberately local
+  before it (sec 8.1)
 
 ### 9.2 Open
 
