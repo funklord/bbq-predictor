@@ -3,6 +3,7 @@
 
 #include <QColor>
 #include <QSize>
+#include <QRect>
 #include <QWidget>
 
 #include "graph/interpolate.h"
@@ -11,6 +12,7 @@
 #include "model/grill.h"
 
 class QMouseEvent;
+class QWheelEvent;
 class QPaintEvent;
 
 /*
@@ -135,11 +137,31 @@ public:
 	 */
 	void set_cursor_column(int column);
 
+	/*
+	 * The view, which is the user's rather than the layout's once they
+	 * have touched it (project.md sec 13).
+	 *
+	 * The layout still supplies the span a fresh window opens at. After
+	 * a drag or a wheel the view is explicit, and follow_now goes false
+	 * so the clock stops dragging the graph out from under whoever is
+	 * reading it. Double-click puts it back.
+	 */
+	void set_view(qint64 from_utc, qint64 span_s);
+	void follow_now();
+	bool is_following_now() const { return m_follow_now; }
+
+	qint64 view_from_utc() const;
+	qint64 view_span_s() const;
+
 	QSize sizeHint() const override;
 
 protected:
 	void paintEvent(QPaintEvent *event) override;
 	void mouseMoveEvent(QMouseEvent *event) override;
+	void mousePressEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void mouseDoubleClickEvent(QMouseEvent *event) override;
+	void wheelEvent(QWheelEvent *event) override;
 	void leaveEvent(QEvent *event) override;
 
 private:
@@ -173,6 +195,29 @@ private:
 	 * or -1 for nowhere.
 	 */
 	int m_cursor_column = -1;
+
+	/*
+	 * The view. Zero span means "not set yet", so the layout's window is
+	 * used until something moves it.
+	 */
+	bool m_follow_now = true;
+	qint64 m_view_from = 0;
+	qint64 m_view_span_s = 0;
+
+	/*
+	 * The plot rectangle from the last paint.
+	 *
+	 * A drag has to convert pixels to seconds, and the geometry that
+	 * conversion needs is decided in paintEvent -- the right margin is
+	 * MEASURED from the gutter text rather than fixed, so it cannot
+	 * simply be recomputed here without saying the same thing twice.
+	 * Empty until the first paint, and every handler checks.
+	 */
+	QRect m_plot;
+
+	bool m_dragging = false;
+	double m_drag_x = 0.0;
+	qint64 m_drag_from = 0;
 };
 
 #endif

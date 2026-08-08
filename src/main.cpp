@@ -185,6 +185,31 @@ int main(int argc, char *argv[]) {
 		window.set_smoothing(smooth.toInt());
 	}
 
+	/*
+	 * The view, for looking at a zoom or a pan without a mouse
+	 * (project.md sec 13). "span" alone, or "span,from" to place the
+	 * left edge at an absolute moment.
+	 *
+	 * Interaction is the one thing a screenshot cannot exercise by
+	 * itself, so this is how a zoomed graph gets checked the same way
+	 * every other layout question in this project has been: by rendering
+	 * it and looking.
+	 */
+	const QString view = option_value(arguments, QStringLiteral("--view"));
+	if (!view.isEmpty()) {
+		const QStringList parts = view.split(QLatin1Char(','));
+		const qint64 span = parts.at(0).toLongLong();
+
+		if (span > 0) {
+			qint64 edge = QDateTime::currentSecsSinceEpoch() - span / 4;
+			if (parts.size() == 2) {
+				edge = parts.at(1).toLongLong();
+			}
+
+			window.graph()->set_view(edge, span);
+		}
+	}
+
 	const QString cursor = option_value(arguments, QStringLiteral("--cursor"));
 	if (!cursor.isEmpty()) {
 		window.graph()->set_cursor_column(cursor.toInt());

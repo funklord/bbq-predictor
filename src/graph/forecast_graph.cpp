@@ -5,6 +5,7 @@
 #include <QFontMetrics>
 #include <QEvent>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -61,6 +62,12 @@ struct column {
 	 * (sec 3.11.1, sec 3.11.3).
 	 */
 	bool has_knot = false;
+
+	/*
+	 * How many samples started here, which is what decides whether the
+	 * marks can honestly be drawn at this zoom (sec 13.2).
+	 */
+	int knot_count = 0;
 
 	/*
 	 * The knot sample's OWN start time, not the column's.
@@ -160,6 +167,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 				result.knot_utc = samples[i].start_utc;
 			}
 			result.has_knot = true;
+			++result.knot_count;
 
 			if (samples[i].temperature.has_value()) {
 				temperature_total += *samples[i].temperature;
@@ -402,8 +410,57 @@ QDateTime local_time(qint64 when_utc, const QTimeZone &zone) {
 	return QDateTime::fromSecsSinceEpoch(when_utc);
 }
 
-QString hour_label(qint64 when_utc, const QTimeZone &zone) {
-	return local_time(when_utc, zone).toString(QStringLiteral("HH:mm"));
+/*
+ * How far apart the ticks go, and what they say (project.md sec 13).
+ *
+ * The layout's tick_step_s was right while the window was a constant and
+ * is wrong the moment it can be zoomed: at a three-hour view a
+ * three-hour step draws one label, and at a ten-year view it would draw
+ * thirty thousand. So the step is chosen from the span.
+ *
+ * A ladder of round intervals rather than span/8, because a tick every
+ * 47 minutes is arithmetically even and unreadable. These are the
+ * divisions a clock and a calendar actually have.
+ */
+struct tick_choice {
+	qint64 step_s = 3600;
+	QString format = QStringLiteral("HH:mm");
+};
+
+tick_choice ticks_for(qint64 span_s, int wanted) {
+	const qint64 ladder[] = {
+		60, 5 * 60, 15 * 60, 30 * 60,
+		3600, 3 * 3600, 6 * 3600, 12 * 3600,
+		24 * 3600, 2 * 24 * 3600, 7 * 24 * 3600, 14 * 24 * 3600,
+		30 * 24 * 3600, 91 * 24 * 3600, 365 * 24 * 3600,
+	};
+
+	tick_choice chosen;
+	chosen.step_s = ladder[sizeof(ladder) / sizeof(ladder[0]) - 1];
+
+	for (qint64 candidate : ladder) {
+		if (span_s / candidate <= wanted) {
+			chosen.step_s = candidate;
+			break;
+		}
+	}
+
+	/*
+	 * The label has to say enough to place the tick and no more. "14:00"
+	 * is perfect across an afternoon and useless across a year, where
+	 * every tick would read the same.
+	 */
+	if (span_s <= 2 * 24 * 3600) {
+		chosen.format = QStringLiteral("HH:mm");
+	} else if (span_s <= 20 * 24 * 3600) {
+		chosen.format = QStringLiteral("ddd d");
+	} else if (span_s <= 2 * 365 * 24 * 3600) {
+		chosen.format = QStringLiteral("d MMM");
+	} else {
+		chosen.format = QStringLiteral("MMM yy");
+	}
+
+	return chosen;
 }
 
 } // namespace
@@ -502,6 +559,21 @@ void bbq_forecast_graph::set_cursor_column(int column) {
 }
 
 void bbq_forecast_graph::mouseMoveEvent(QMouseEvent *event) {
+	if (m_dragging && m_plot.width() > 0) {
+		/*
+		 * Throw the plot sideways. The seconds under the grab point stay
+		 * under it, so the graph tracks the hand rather than scrolling
+		 * at some rate of its own.
+		 */
+		const double per_pixel =
+		        static_cast<double>(view_span_s()) / m_plot.width();
+		const double moved = event->position().x() - m_drag_x;
+
+		m_view_span_s = view_span_s();
+		m_view_from = m_drag_from - static_cast<qint64>(moved * per_pixel);
+		m_follow_now = false;
+	}
+
 	const int column = static_cast<int>(event->position().x()) - m_metrics.margin_left;
 	m_cursor_column = column;
 	update();
@@ -519,6 +591,106 @@ void bbq_forecast_graph::set_layout(bbq_layout layout) {
 	m_before_s = m_metrics.window_before_s;
 	m_after_s = m_metrics.window_after_s;
 	update();
+}
+
+qint64 bbq_forecast_graph::view_span_s() const {
+	if (!m_follow_now && m_view_span_s > 0) {
+		return m_view_span_s;
+	}
+
+	return m_before_s + m_after_s;
+}
+
+qint64 bbq_forecast_graph::view_from_utc() const {
+	if (!m_follow_now && m_view_span_s > 0) {
+		return m_view_from;
+	}
+
+	return QDateTime::currentSecsSinceEpoch() - m_before_s;
+}
+
+void bbq_forecast_graph::set_view(qint64 from_utc, qint64 span_s) {
+	/*
+	 * Bounded at both ends. Fifteen minutes is about a pixel per second
+	 * at this width and there is nothing finer to look at; ten years is
+	 * further back than any station here has data for, and an unbounded
+	 * zoom-out turns the whole history into one column of ink.
+	 */
+	const qint64 shortest = 15 * 60;
+	const qint64 longest = 10LL * 365 * 24 * 3600;
+
+	m_view_span_s = std::max(shortest, std::min(longest, span_s));
+	m_view_from = from_utc;
+	m_follow_now = false;
+	update();
+}
+
+void bbq_forecast_graph::follow_now() {
+	m_follow_now = true;
+	m_view_span_s = 0;
+	update();
+}
+
+void bbq_forecast_graph::mousePressEvent(QMouseEvent *event) {
+	if (event->button() == Qt::LeftButton && m_plot.width() > 0) {
+		m_dragging = true;
+		m_drag_x = event->position().x();
+		m_drag_from = view_from_utc();
+		setCursor(Qt::ClosedHandCursor);
+	}
+
+	QWidget::mousePressEvent(event);
+}
+
+void bbq_forecast_graph::mouseReleaseEvent(QMouseEvent *event) {
+	if (event->button() == Qt::LeftButton && m_dragging) {
+		m_dragging = false;
+		unsetCursor();
+	}
+
+	QWidget::mouseReleaseEvent(event);
+}
+
+void bbq_forecast_graph::mouseDoubleClickEvent(QMouseEvent *event) {
+	/*
+	 * The way back. A view that has been panned into last March needs
+	 * one gesture to return, and a mode nobody can find is not one.
+	 */
+	follow_now();
+	QWidget::mouseDoubleClickEvent(event);
+}
+
+void bbq_forecast_graph::wheelEvent(QWheelEvent *event) {
+	if (m_plot.width() <= 0) {
+		QWidget::wheelEvent(event);
+		return;
+	}
+
+	/*
+	 * Zoom about the cursor: whatever moment is under the pointer stays
+	 * under it. Zooming about the centre instead means the thing being
+	 * looked at slides away exactly when it is being examined.
+	 */
+	const double offset = std::max(0.0, std::min(
+	        static_cast<double>(m_plot.width()),
+	        event->position().x() - m_plot.left()));
+
+	const qint64 span = view_span_s();
+	const qint64 from = view_from_utc();
+	const double anchor = from + offset * (static_cast<double>(span) / m_plot.width());
+
+	const double steps = event->angleDelta().y() / 120.0;
+	const double scale = std::pow(1.0 / 1.25, steps);
+	const qint64 wanted = static_cast<qint64>(span * scale);
+
+	set_view(0, wanted);
+
+	/* set_view has clamped the span; the anchor is held against it. */
+	const double per_pixel = static_cast<double>(m_view_span_s) / m_plot.width();
+	m_view_from = static_cast<qint64>(anchor - offset * per_pixel);
+
+	update();
+	event->accept();
 }
 
 void bbq_forecast_graph::set_window(qint64 before_s, qint64 after_s) {
@@ -559,10 +731,12 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		return;
 	}
 
+	m_plot = plot;
+
 	const QTimeZone zone = m_composite.zone();
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
-	const qint64 from = now - m_before_s;
-	const qint64 to = now + m_after_s;
+	const qint64 from = view_from_utc();
+	const qint64 to = from + view_span_s();
 
 	if (m_composite.is_empty()) {
 		painter.setPen(m_palette.axis_text);
@@ -647,7 +821,13 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * thing about the WU chart and the cheapest density cue there is:
 	 * it gives the eye a ruler without adding a single line.
 	 */
-	const qint64 band_step = m_metrics.tick_step_s;
+	/*
+	 * Both the shading and the ticks follow the same chosen step, so the
+	 * bands stay one tick wide at every zoom rather than becoming
+	 * enormous blocks when the view narrows.
+	 */
+	const tick_choice ticks = ticks_for(to - from, plot.width() / 90);
+	const qint64 band_step = ticks.step_s;
 	const qint64 first_band = (from / band_step) * band_step;
 
 	for (qint64 t = first_band; t < to; t += band_step) {
@@ -710,7 +890,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	label_font.setPointSizeF(label_font.pointSizeF() * m_metrics.label_scale);
 	painter.setFont(label_font);
 
-	const qint64 tick_step = m_metrics.tick_step_s;
+	const qint64 tick_step = ticks.step_s;
 	const qint64 first_tick = ((from / tick_step) + 1) * tick_step;
 
 	for (qint64 t = first_tick; t < to; t += tick_step) {
@@ -718,10 +898,22 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.setPen(QPen(m_palette.grid, 1, Qt::DotLine));
 		painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
 
+		/*
+		 * A tick label that would reach into the left margin is left
+		 * out. The zone name lives there (below), and the two collided
+		 * into "CEST08:00" once the ticks could be dense enough to land
+		 * against the axis. Dropping one label costs nothing -- its
+		 * neighbour is one step away and says the same kind of thing.
+		 */
+		if (x - 24 < plot.left()) {
+			continue;
+		}
+
 		painter.setPen(m_palette.axis_text);
 		const QRectF label(x - 24, chance_plot.bottom() + m_metrics.ribbon_height + 3,
 		                   48, 14);
-		painter.drawText(label, Qt::AlignCenter, hour_label(t, zone));
+		const QString stamp = local_time(t, zone).toString(ticks.format);
+		painter.drawText(label, Qt::AlignCenter, stamp);
 	}
 
 	/* --- rain, drawn first so the temperature line sits over it -------- */
@@ -791,7 +983,24 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * lets a smoothed curve be read honestly: the dots are the data and
 	 * the line between them is drawn.
 	 */
-	if (m_show_samples) {
+	/*
+	 * Below one sample per pixel the marks are not drawn at all
+	 * (sec 13.2).
+	 *
+	 * Sec 3.11.3 makes a dot mean "a real sample, here". At a zoom where
+	 * twenty of them share a pixel they merge into a band of ink that
+	 * claims a density of measurement nobody made -- the graph that is
+	 * wrong while looking fine. Absent dots say "zoomed out"; smeared
+	 * dots say something false.
+	 */
+	int knot_total = 0;
+	for (const column &c : columns) {
+		knot_total += c.knot_count;
+	}
+
+	const bool marks_would_crowd = knot_total > plot.width();
+
+	if (m_show_samples && !marks_would_crowd) {
 		painter.setPen(Qt::NoPen);
 		painter.setBrush(m_palette.temperature);
 
