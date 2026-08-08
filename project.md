@@ -560,6 +560,43 @@ between check and application, arriving again in the same tool one
 commit after being removed from it. Found by running it after the
 rename, with nothing but the config to go on.
 
+### 2.10.4 Open: is the quarter-hourly claim true past day two?
+
+**Open-Meteo will return 15-minute data for sixteen days**, in the same
+request that carries the seven this project asks for. Adopting it was
+tempting and was not adopted, because the claim underneath could not be
+established.
+
+It would have mattered. The extended band outranks WU's hourly one, so
+sixteen days of it would leave the hourly band fetched every hour and
+drawn nowhere -- turning the compromised provider into a fallback,
+which is a real prize (sec 2.2).
+
+**What was measured.** For twelve of sixteen days, the 15-minute
+temperatures sit within the reporting resolution of a straight linear
+interpolation of the hourly block. Days two and three deviate by up to
+0.6 C, and the rest by no more than the 0.1 C rounding.
+
+**Why that settles nothing.** The test compares two blocks of one
+response, and Open-Meteo composes each from whichever model suits it,
+so a deviation means the blocks disagree rather than that the finer one
+carries real structure -- and an agreement means they were derived from
+each other OR that the weather was genuinely smooth. It cannot separate
+upsampling from a well-behaved forecast.
+
+Precipitation is no help either: an hourly accumulation split across
+four quarters is not the linear interpolation of consecutive hours, so
+it deviates whether or not anything was modelled.
+
+The range stays at seven days. **Extending a resolution claim that
+cannot be backed is the one thing this document consistently refuses**,
+and the honest position is that even the current seven days is
+advertised more confidently than this measurement supports.
+
+Settling it needs Open-Meteo's own account of which models supply
+`minutely_15` and how far each reaches -- documentation rather than
+another probe.
+
 ## 3. The graph is the program
 
 The single hardest thing in this project, and it is a data problem before
@@ -751,9 +788,24 @@ Joining two points across an hour of missing data draws a line that is
 not a measurement, through a period nobody has any information about.
 It is sec 2.4 in miniature.
 
-The threshold wants trying rather than asserting; 1.5 times the nominal
-step is the starting guess, and this sentence should be replaced with
-whatever the real data makes necessary.
+**1.5 times the nominal step, and it has now been checked rather than
+guessed.** Across all six bands from three providers -- 5, 15 and 60
+minute cadences, 1086 samples in one run -- the rule reports no gaps
+anywhere, which is the correct answer, since none of those responses
+had one.
+
+The tightest real case is the observed band, which arrives at 288 and
+306 second strides against a 300 second median: a ratio of 1.06 against
+a threshold of 1.5, so there is comfortable room before ordinary
+jitter would be drawn as a break.
+
+The rule was also suspected of a specific false positive that turned
+out not to exist. MET's radar band was believed to coarsen after the
+first hour, which would have put a 2x stride inside a band and been
+flagged as a gap that is not there -- but measured across a full
+nowcast every stride is exactly five minutes, and the belief was an
+unchecked claim in a code comment rather than something the provider
+does.
 
 ### 3.7 What makes a join disappear
 
@@ -1665,9 +1717,11 @@ anything.
 - **Whether Open-Meteo should also serve the hourly band** past the
   seven days its quarter-hourly data reaches. WU is the only source
   beyond that today, and it is the compromised one
-- **The gap threshold**, still the 1.5x guess it was labelled as, now
-  that six bands of real spacing exist to calibrate it against
-  (sec 3.6)
+- **Whether the extended band's quarter-hourly claim holds past the
+  first day or two.** Open-Meteo will return 15-minute data for sixteen
+  days, and adopting it would have outranked WU's hourly band
+  everywhere -- but whether that data is modelled or upsampled could
+  not be established (sec 2.10.4), so the range was left at seven days
 
 ### 9.3 Raised elsewhere
 

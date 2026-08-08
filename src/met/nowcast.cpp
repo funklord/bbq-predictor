@@ -149,9 +149,15 @@ bbq_series bbq_met_read_nowcast(const QJsonDocument &response) {
 	}
 
 	/*
-	 * Durations from the real spacing, as everywhere else. MET steps at
-	 * five minutes for the first hour and then coarsens, so a fixed
-	 * step would be wrong for the tail of the very band being read.
+	 * Durations from the real spacing, as everywhere else.
+	 *
+	 * This comment used to say MET coarsens after the first hour, which
+	 * was asserted rather than observed and is not what the responses
+	 * do: measured across a full nowcast, every stride is exactly five
+	 * minutes. Taking durations from the data costs nothing and is
+	 * right either way, which is the reason to keep doing it -- but the
+	 * claim about the provider was not checked and should not have been
+	 * written as though it had been.
 	 */
 	for (std::size_t i = 0; i + 1 < samples.size(); ++i) {
 		const qint64 stride = samples[i + 1].start_utc - samples[i].start_utc;
