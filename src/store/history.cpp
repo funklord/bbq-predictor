@@ -609,6 +609,111 @@ bool bbq_history::set_verification(const QString &station, bbq_band band,
 	return true;
 }
 
+bool bbq_history::set_reliability(const QString &station, bbq_band band,
+                                  bbq_lead_bucket bucket, int probability_bin,
+                                  int count, int rain_count,
+                                  double sum_square_error) {
+	if (!m_open || count <= 0) {
+		return false;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "INSERT OR REPLACE INTO reliability "
+	        "(station, band, lead_bucket, probability_bin, count, rain_count, "
+	        "sum_square_error) VALUES (?, ?, ?, ?, ?, ?, ?)"));
+	query.addBindValue(station);
+	query.addBindValue(static_cast<int>(band));
+	query.addBindValue(static_cast<int>(bucket));
+	query.addBindValue(probability_bin);
+	query.addBindValue(count);
+	query.addBindValue(rain_count);
+	query.addBindValue(sum_square_error);
+
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return false;
+	}
+
+	return true;
+}
+
+bbq_brier bbq_history::brier(const QString &station, bbq_band band,
+                             bbq_lead_bucket bucket) const {
+	bbq_brier result;
+
+	if (!m_open) {
+		return result;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "SELECT SUM(count), SUM(rain_count), SUM(sum_square_error) "
+	        "FROM reliability WHERE station = ? AND band = ? AND lead_bucket = ?"));
+	query.addBindValue(station);
+	query.addBindValue(static_cast<int>(band));
+	query.addBindValue(static_cast<int>(bucket));
+
+	if (!query.exec() || !query.next() || query.value(0).isNull()) {
+		return result;
+	}
+
+	result.count = query.value(0).toInt();
+	if (result.count <= 0) {
+		result.count = 0;
+		return result;
+	}
+
+	const double n = result.count;
+	const double rained = query.value(1).toDouble();
+
+	result.score = query.value(2).toDouble() / n;
+	result.base_rate = rained / n;
+
+	/*
+	 * The score of ignoring the weather entirely and always predicting
+	 * the observed base rate. It is what "good" has to be measured
+	 * against: a Brier of 0.1 is excellent in a dry climate and poor in
+	 * a changeable one, and only the comparison says which this is.
+	 */
+	result.baseline = result.base_rate * (1.0 - result.base_rate);
+
+	return result;
+}
+
+std::vector<bbq_reliability_bin> bbq_history::reliability(
+        const QString &station, bbq_band band, bbq_lead_bucket bucket) const {
+	std::vector<bbq_reliability_bin> bins;
+
+	if (!m_open) {
+		return bins;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "SELECT probability_bin, count, rain_count FROM reliability "
+	        "WHERE station = ? AND band = ? AND lead_bucket = ? "
+	        "ORDER BY probability_bin"));
+	query.addBindValue(station);
+	query.addBindValue(static_cast<int>(band));
+	query.addBindValue(static_cast<int>(bucket));
+
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return bins;
+	}
+
+	while (query.next()) {
+		bbq_reliability_bin bin;
+		bin.probability_bin = query.value(0).toInt();
+		bin.count = query.value(1).toInt();
+		bin.rain_count = query.value(2).toInt();
+		bins.push_back(bin);
+	}
+
+	return bins;
+}
+
 bbq_verification bbq_history::verification(const QString &station,
                                            bbq_band band,
                                            const QString &quantity,

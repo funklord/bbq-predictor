@@ -24,6 +24,8 @@ private slots:
 	void verifying_computes_the_standard_scores_and_empties_the_queue();
 	void bias_can_be_zero_while_the_forecast_is_useless();
 	void an_unverifiable_forecast_is_given_up_on();
+	void a_chance_forecast_is_scored_by_occurrence_not_by_error();
+	void a_brier_score_is_read_against_its_baseline();
 
 private:
 	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
@@ -260,6 +262,98 @@ void test_history::an_unverifiable_forecast_is_given_up_on() {
 	        store.expire(QStringLiteral("ITEST1"), issued + 30 * 24 * 3600);
 	QCOMPARE(dropped, 4);
 	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 0);
+}
+
+void test_history::a_chance_forecast_is_scored_by_occurrence_not_by_error() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	const qint64 valid = issued + 1800;
+
+	/* "70% chance", and it rained. */
+	bbq_sample forecast_sample;
+	forecast_sample.start_utc = valid;
+	forecast_sample.duration_s = 3600;
+	forecast_sample.precip_chance = 70.0;
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples({forecast_sample});
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+
+	bbq_sample observed_sample;
+	observed_sample.start_utc = valid;
+	observed_sample.duration_s = 300;
+	observed_sample.precip_rate = 2.5;
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples({observed_sample});
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 1);
+
+	/*
+	 * A percentage is not scored by subtracting it from what happened.
+	 * "70%" is not 70 units wrong when it rains, so nothing should have
+	 * landed in the mean-error table for it.
+	 */
+	const bbq_verification wrong_table = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("precip_chance"), bbq_lead_bucket::hour);
+	QCOMPARE(wrong_table.count, 0);
+
+	const bbq_brier score = store.brier(QStringLiteral("ITEST1"),
+	                                    bbq_band::hourly, bbq_lead_bucket::hour);
+	QCOMPARE(score.count, 1);
+
+	/* It rained, so the outcome is 1 and the error is 0.3. */
+	QVERIFY(qAbs(score.score - 0.09) < 0.0001);
+	QCOMPARE(score.base_rate, 1.0);
+
+	const std::vector<bbq_reliability_bin> bins = store.reliability(
+	        QStringLiteral("ITEST1"), bbq_band::hourly, bbq_lead_bucket::hour);
+	QCOMPARE(static_cast<int>(bins.size()), 1);
+	QCOMPARE(bins.front().probability_bin, 7);
+	QCOMPARE(bins.front().rain_count, 1);
+}
+
+void test_history::a_brier_score_is_read_against_its_baseline() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	/*
+	 * A forecaster who always says 50% in a climate that rains half the
+	 * time. The Brier score is 0.25, which sounds poor and is exactly
+	 * what knowing nothing earns -- so the skill against the baseline is
+	 * zero, and that is the number worth printing. A raw score means
+	 * nothing without it: 0.1 is excellent in a dry climate and poor in
+	 * a changeable one.
+	 */
+	store.set_reliability(QStringLiteral("ITEST1"), bbq_band::hourly,
+	                      bbq_lead_bucket::day, 5, 100, 50, 25.0);
+
+	const bbq_brier score = store.brier(QStringLiteral("ITEST1"),
+	                                    bbq_band::hourly, bbq_lead_bucket::day);
+
+	QCOMPARE(score.count, 100);
+	QVERIFY(qAbs(score.score - 0.25) < 0.0001);
+	QVERIFY(qAbs(score.base_rate - 0.5) < 0.0001);
+	QVERIFY(qAbs(score.baseline - 0.25) < 0.0001);
+	QVERIFY2(qAbs(score.skill()) < 0.0001,
+	         "always saying 50% in a coin-flip climate scored as skill");
+
+	/* And a forecaster who is actually right earns skill. */
+	store.set_reliability(QStringLiteral("ITEST2"), bbq_band::hourly,
+	                      bbq_lead_bucket::day, 0, 50, 0, 0.0);
+	store.set_reliability(QStringLiteral("ITEST2"), bbq_band::hourly,
+	                      bbq_lead_bucket::day, 10, 50, 50, 0.0);
+
+	const bbq_brier perfect = store.brier(
+	        QStringLiteral("ITEST2"), bbq_band::hourly, bbq_lead_bucket::day);
+	QVERIFY(qAbs(perfect.score) < 0.0001);
+	QVERIFY(qAbs(perfect.skill() - 1.0) < 0.0001);
 }
 
 QTEST_GUILESS_MAIN(test_history)

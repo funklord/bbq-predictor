@@ -2568,6 +2568,34 @@ that is all the station published today, and 775 forecasts queued.
 **Nothing verified yet, which is right**: every queued forecast is still
 in the future.
 
+### 12.11 Reading the chance score, and archiving the diagnostic
+
+**The reliability table was write-only.** It accumulated on every check
+and nothing ever read it, which is a store growing a column nobody can
+see -- and the argument for keeping it was that a percentage forecast
+needs a different instrument. An instrument nobody reads is not one.
+
+`--history` reports it now, and reports it against its reference. **A
+raw Brier score means nothing on its own**: 0.1 is excellent in a dry
+climate and poor in a changeable one. So the baseline printed beside it
+is the score a forecaster earns by ignoring the weather entirely and
+always predicting the observed base rate, and the skill is how much
+better than that this band managed -- zero being no better than knowing
+nothing. Always saying fifty percent where it rains half the time scores
+0.25 and a skill of exactly zero, which is the case the test pins.
+
+Under each score is the reliability curve, which asks the only question
+a percentage can be held to: **of all the times this band said forty
+percent, how often did it rain?** A calibrated forecaster's bins sit on
+the diagonal.
+
+**`--fetch-once` archives what it fetches.** It reaches the real
+providers through the real feed and produces genuine observations, and
+discarding them because the caller happened to be a diagnostic would put
+a hole in a record whose entire value is that it has none. It honours
+`--history-path` like everything else, so a check that should not touch
+the archive still need not.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to

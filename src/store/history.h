@@ -74,6 +74,47 @@ struct bbq_verification {
 	double root_mean_square_error = 0.0;
 };
 
+/*
+ * One probability bin of a reliability curve (project.md sec 12.4).
+ *
+ * The question it answers is the one a percentage forecast can actually
+ * be held to: of all the times this band said forty percent, how often
+ * did it rain? A well-calibrated forecaster's bins land on the diagonal.
+ */
+struct bbq_reliability_bin {
+	int probability_bin = 0;
+	int count = 0;
+	int rain_count = 0;
+
+	/* The bin's nominal probability, 0..1, and what actually happened. */
+	double forecast() const { return probability_bin / 10.0; }
+	double observed() const {
+		return count > 0 ? static_cast<double>(rain_count) / count : 0.0;
+	}
+};
+
+/*
+ * The Brier score for a band at a lead time, with the reference it has
+ * to be read against.
+ *
+ * A raw Brier score means nothing on its own: 0.1 is excellent in a dry
+ * climate and poor in a changeable one. The baseline is the score a
+ * forecaster gets by ignoring the weather and always predicting the
+ * observed base rate, and the skill is how much better than that this
+ * band did -- zero being no better than knowing nothing, and one being
+ * perfect.
+ */
+struct bbq_brier {
+	int count = 0;
+	double score = 0.0;
+	double baseline = 0.0;
+	double base_rate = 0.0;
+
+	double skill() const {
+		return baseline > 0.0 ? 1.0 - (score / baseline) : 0.0;
+	}
+};
+
 class bbq_history {
 public:
 	bbq_history();
@@ -129,6 +170,18 @@ public:
 	                      const QString &quantity, bbq_lead_bucket bucket,
 	                      int count, double bias, double mean_absolute_error,
 	                      double root_mean_square_error);
+
+	/* Diagnostic and import, as set_verification above. */
+	bool set_reliability(const QString &station, bbq_band band,
+	                     bbq_lead_bucket bucket, int probability_bin, int count,
+	                     int rain_count, double sum_square_error);
+
+	bbq_brier brier(const QString &station, bbq_band band,
+	                bbq_lead_bucket bucket) const;
+
+	std::vector<bbq_reliability_bin> reliability(const QString &station,
+	                                             bbq_band band,
+	                                             bbq_lead_bucket bucket) const;
 
 	bbq_verification verification(const QString &station, bbq_band band,
 	                              const QString &quantity,

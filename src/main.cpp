@@ -102,7 +102,8 @@ int main(int argc, char *argv[]) {
 	if (arguments.contains(QStringLiteral("--fetch-once"))) {
 		return bbq_wu_fetch_once(
 		        option_value(arguments, QStringLiteral("--station")),
-		        option_value(arguments, QStringLiteral("--geocode")), 30);
+		        option_value(arguments, QStringLiteral("--geocode")), 30,
+		        option_value(arguments, QStringLiteral("--history-path")));
 	}
 
 	/*
@@ -296,6 +297,31 @@ int main(int argc, char *argv[]) {
 				                           qAbs(scaled * 2.0) + 1.5)) {
 					++written;
 				}
+
+				/*
+				 * A reliability curve that drifts off the diagonal with
+				 * lead time: the band over-predicts rain, and does so
+				 * more the further ahead it looks. A curve sitting
+				 * exactly on the diagonal would exercise the arithmetic
+				 * without showing whether it can report a fault.
+				 */
+				for (int bin = 0; bin <= 10; ++bin) {
+					const double said = bin / 10.0;
+					const double drift = 0.04 * bucket_index;
+					const double happened =
+					        qBound(0.0, said - drift, 1.0);
+
+					const int trials = 20;
+					const int rained =
+					        static_cast<int>(happened * trials + 0.5);
+					const double error =
+					        (said - happened) * (said - happened) * trials;
+
+					if (store.set_reliability(wanted, band, bucket, bin, trials,
+					                          rained, error)) {
+						++written;
+					}
+				}
 			}
 		}
 
@@ -372,6 +398,49 @@ int main(int argc, char *argv[]) {
 					       << " RMSE="
 					       << QString::number(score.root_mean_square_error, 'f', 2)
 					       << "\n";
+				}
+			}
+		}
+
+		/*
+		 * Rain chance is scored differently and so is reported
+		 * differently (sec 12.4). A percentage forecast is not wrong
+		 * when it stays dry, so what is shown is the Brier score against
+		 * the baseline it has to be read against, and the reliability
+		 * curve underneath it: of all the times this band said forty
+		 * percent, how often did it rain?
+		 */
+		report << "\nrain chance (Brier, lower is better):\n";
+
+		for (bbq_band band : bands) {
+			for (bbq_lead_bucket bucket : buckets) {
+				const bbq_brier score = store.brier(wanted, band, bucket);
+				if (score.count == 0) {
+					continue;
+				}
+
+				any = true;
+				report << "  " << bbq_band_name(band) << " at "
+				       << bbq_lead_bucket_name(bucket) << ": n=" << score.count
+				       << " Brier=" << QString::number(score.score, 'f', 3)
+				       << " baseline=" << QString::number(score.baseline, 'f', 3)
+				       << " skill=" << QString::number(score.skill(), 'f', 2)
+				       << " (rained " << QString::number(score.base_rate * 100.0, 'f', 0)
+				       << "% of the time)\n";
+
+				const std::vector<bbq_reliability_bin> bins =
+				        store.reliability(wanted, band, bucket);
+
+				for (const bbq_reliability_bin &bin : bins) {
+					if (bin.count == 0) {
+						continue;
+					}
+
+					report << "      said "
+					       << QString::number(bin.forecast() * 100.0, 'f', 0)
+					       << "%, rained "
+					       << QString::number(bin.observed() * 100.0, 'f', 0)
+					       << "%  (n=" << bin.count << ")\n";
 				}
 			}
 		}

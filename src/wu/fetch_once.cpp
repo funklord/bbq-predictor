@@ -182,7 +182,7 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 } // namespace
 
 int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
-                      int timeout_s) {
+                      int timeout_s, const QString &history_path) {
 	QTextStream out(stdout);
 	QTextStream error(stderr);
 
@@ -232,6 +232,21 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	 * in step, and the one nobody runs is the one that drifts.
 	 */
 	bbq_wu_feed feed;
+
+	/*
+	 * Archived, like a run of the applet is (sec 12.11).
+	 *
+	 * This fetches the same real observations through the same feed, and
+	 * discarding them because the caller happened to be a diagnostic
+	 * would put a hole in a record whose entire value is that it has no
+	 * holes. A store that will not open is reported and not fatal: the
+	 * check is still a check.
+	 */
+	if (!feed.open_history(history_path)) {
+		error << "fetch-once: history unavailable: " << feed.history_error()
+		      << "\n";
+	}
+
 	feed.set_station(station);
 
 	if (!point.isEmpty()) {

@@ -20,7 +20,13 @@
  * rather than an error (sec 2.6.6). Passing a station with no geocode
  * derives one from the station's own coordinates (sec 2.6.7).
  */
+/*
+ * `history_path` is the store to archive into. Empty takes the real one,
+ * which is deliberate: this fetches genuine measurements, and throwing
+ * away real observations because they arrived through a diagnostic
+ * would be the wrong way round (project.md sec 12.11).
+ */
 int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
-                      int timeout_s);
+                      int timeout_s, const QString &history_path = QString());
 
 #endif
