@@ -147,7 +147,13 @@ public:
 	 * five-minute observations cannot drag the answer upwards and hide
 	 * every other gap behind it.
 	 */
-	int nominal_step_s() const;
+	/*
+	 * The median stride between samples. Computed once when the samples
+	 * are set rather than on each call: has_gap_after needs it, and the
+	 * graph asks that question once per pixel column, so recomputing it
+	 * meant an allocation and a median per column per repaint.
+	 */
+	int nominal_step_s() const { return m_nominal_step_s; }
 
 	/*
 	 * The sample covering this instant, or nullptr where the series
@@ -179,9 +185,12 @@ public:
 	bool has_gap_after(std::size_t index) const;
 
 private:
+	int compute_nominal_step_s() const;
+
 	bbq_band m_band = bbq_band::hourly;
 	QString m_provider;
 	qint64 m_fetched_utc = 0;
+	int m_nominal_step_s = 0;
 	QTimeZone m_zone;
 	std::vector<bbq_sample> m_samples;
 };

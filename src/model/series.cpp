@@ -112,6 +112,7 @@ void bbq_series::set_samples(std::vector<bbq_sample> samples) {
 	};
 
 	std::sort(m_samples.begin(), m_samples.end(), by_start);
+	m_nominal_step_s = compute_nominal_step_s();
 }
 
 qint64 bbq_series::begin_utc() const {
@@ -130,7 +131,7 @@ qint64 bbq_series::end_utc() const {
 	return m_samples.back().end_utc();
 }
 
-int bbq_series::nominal_step_s() const {
+int bbq_series::compute_nominal_step_s() const {
 	if (m_samples.size() < 2) {
 		return 0;
 	}

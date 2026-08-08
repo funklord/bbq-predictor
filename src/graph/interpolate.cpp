@@ -53,9 +53,17 @@ void bbq_smooth(std::vector<bbq_knot> &knots, double bandwidth) {
 
 	/*
 	 * Beyond three sigma a Gaussian contributes essentially nothing, so
-	 * the window is bounded rather than every knot weighing every other
-	 * one. That keeps this linear in the knot count instead of
-	 * quadratic, which matters at 288 observed samples a day.
+	 * a knot outside that reach is skipped rather than weighed.
+	 *
+	 * That bounds the WORK per centre, not the iteration count: the
+	 * inner loop still visits every knot and drops most of them at the
+	 * distance test. An earlier comment here claimed the pass was
+	 * therefore linear, which it is not -- it is quadratic in visits and
+	 * linear in arithmetic. At the few hundred knots a column set
+	 * produces the difference is not measurable, and making it truly
+	 * linear means requiring the knots to be sorted by x, which is a
+	 * contract this function does not currently impose on its callers.
+	 * Left as it is, deliberately, rather than left described wrongly.
 	 */
 	const double reach = bandwidth * 3.0;
 

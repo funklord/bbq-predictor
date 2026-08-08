@@ -32,12 +32,14 @@ std::vector<bbq_band> bbq_composite::missing_bands() const {
 	 * The radar and extended bands are deliberately absent from this
 	 * list.
 	 *
-	 * It is a bonus where the provider reaches and simply does not
 	 * Both are enhancements: they sharpen bands that already have a
 	 * source rather than supplying one that would otherwise be blank.
-	 * Reporting either missing would put a complaint on the display for
-	 * something nobody asked for and nothing depends on -- and sec
-	 * 2.6.6's point is that "missing" should mean something.
+	 * The radar band is a bonus where MET Norway reaches and simply
+	 * absent elsewhere, and the extended band fills in past the edge of
+	 * what Weather Underground answers for. Reporting either missing
+	 * would put a complaint on the display for something nobody asked
+	 * for and nothing depends on -- and sec 2.6.6's point is that
+	 * "missing" should mean something.
 	 */
 	const bbq_band every[] = {
 		bbq_band::observed,

@@ -193,11 +193,6 @@ int main(int argc, char *argv[]) {
 	window.begin(station, geocode);
 
 	/*
-	 * Render and exit. Bounded twice over: the shot is taken when the
-	 * feed settles, and a wall-clock timer takes it regardless so a
-	 * request that never answers cannot leave this running forever.
-	 */
-	/*
 	 * The tray icon, rendered to a file. A tray cannot be screenshotted
 	 * from here and the icon is now the applet's main surface, so this
 	 * is the only way to look at what it says before shipping it.
@@ -205,7 +200,19 @@ int main(int argc, char *argv[]) {
 	const QString tray_shot = option_value(arguments, QStringLiteral("--tray-icon"));
 
 	const QString shot = option_value(arguments, QStringLiteral("--shot"));
-	if (!shot.isEmpty()) {
+
+	/*
+	 * Render and exit. Bounded twice over: the shot is taken when the
+	 * feed settles, and a wall-clock timer takes it regardless so a
+	 * request that never answers cannot leave this running forever.
+	 *
+	 * EITHER option arms this, and that is a fix rather than a tidy-up.
+	 * The condition used to be --shot alone, so --tray-icon on its own
+	 * did exactly nothing: it wrote no file and never exited, because
+	 * nothing was ever connected to quit. The README documents it as a
+	 * diagnostic in its own right, and now it is one.
+	 */
+	if (!shot.isEmpty() || !tray_shot.isEmpty()) {
 		bool taken = false;
 
 		const auto take = [&window, &tray, shot, tray_shot, want_layout, &taken]() {
@@ -241,13 +248,16 @@ int main(int argc, char *argv[]) {
 				QTextStream(stdout) << "shot: wrote " << tray_shot << "\n";
 			}
 
-			const QPixmap picture = window.grab();
-			QTextStream report(stdout);
-			if (picture.save(shot)) {
-				report << "shot: wrote " << shot << "\n";
-			} else {
-				report << "shot: could not write " << shot << "\n";
+			if (!shot.isEmpty()) {
+				const QPixmap picture = window.grab();
+				QTextStream report(stdout);
+				if (picture.save(shot)) {
+					report << "shot: wrote " << shot << "\n";
+				} else {
+					report << "shot: could not write " << shot << "\n";
+				}
 			}
+
 			QApplication::quit();
 		};
 
