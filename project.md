@@ -1853,6 +1853,28 @@ the file**, because flags handed to Qt's generated Makefile are dropped
 silently and beerssh shipped a "release build" carrying the Android
 debug key.
 
+### 11.1.1 A target nobody can find does not exist
+
+`make android-install` puts the APK on the attached phone and has since
+the fragment landed. It was asked for anyway, as `make adb`, because
+**`make help` listed `android`, `android-aab`, `android-run` and
+`android-log` and not it.**
+
+The adjacency made it worse: `make install` sits a few lines above and
+means the *desktop* one, so somebody scanning for "install" finds a
+target that installs on this machine and reasonably concludes there is
+no phone equivalent.
+
+The names are not the problem and were not changed -- `harmonization.md`
+settled them so a habit learned in one project is correct in the next,
+and a synonym added here would start the divergence the fragment exists
+to end. What was wrong is that the help advertised four of seven
+targets, so the answer to "how do I flash this to a phone" was a
+question rather than a line.
+
+All seven are listed now, with a note that `make install` is the
+desktop one.
+
 ### 11.2 What stops it here
 
 The C++ compiles for arm64 against NDK 25.2. Gradle then refuses:

@@ -29,9 +29,16 @@
 #   make veryclean    -- clean, plus the binary and the build directories
 #   make distclean    -- veryclean, plus stray editor files
 #   make android      -- the Android APK (needs a Qt kit, NDK, SDK, JDK)
-#   make android-aab  -- the Play bundle instead; needs a keystore
-#   make android-run  -- install and launch on the attached device
-#   make android-log  -- follow this app's log and nothing else
+#   make android-check     -- everything that build needs, checked by name
+#   make android-install   -- put that APK on the attached phone (adb)
+#   make android-run       -- install it and launch it
+#   make android-log       -- follow this app's log, and only this app's
+#   make android-uninstall -- remove it from the phone
+#   make android-aab       -- the Play bundle instead; needs a keystore
+#
+#   The android-* targets from `install` down need a device on adb.
+#   Note `make install` is the DESKTOP one -- it installs the binary and
+#   its desktop entry on this machine, not on a phone.
 #   make help         -- this list
 #
 # ANDROID
