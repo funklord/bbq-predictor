@@ -314,6 +314,41 @@ single file is the exact failure the source warns about -- a silent
 conversion of files that were already correct, discovered later as a
 reverted commit.
 
+### Unsettled: statement continuations without an open bracket
+
+**Raised rather than decided, having been worked around six times.**
+
+The gate wants an extra indent level on a line that continues a
+statement when no bracket is open at that point:
+
+    out << "one"
+    	<< "two";                  // wants a tab more than the statement
+
+    void thing(int a,
+    		int b) {           // inside an anonymous namespace
+
+    return QString::number(x)
+    	.arg(y);
+
+**The gate is not wrong about the documented rule**, which was checked
+rather than assumed: `code-style.md`'s own worked example -- a
+signature wrapped under its own open paren at module level, and a call
+whose continuation aligns under an open paren -- passes the gate
+verbatim. Those cases are alignment inside brackets and are settled.
+The shapes above are not in the settled list at all.
+
+Each occurrence was restructured to something unambiguous instead:
+separate statements, an intermediate variable, a small struct in place
+of a long parameter list. **The code came out better every time**,
+which is a real argument for leaving the rule alone -- a five-parameter
+signature that had to be wrapped became a `column_spec` struct, and a
+`<<` chain became lines that each say one thing.
+
+But six workarounds is a convention operating without having been
+agreed. The rule is `~/.claude/guidelines/code-style.md`'s to settle,
+not this project's, so it is written down here and raised rather than
+answered locally.
+
 ### Tooling
 
     make style          both gates below

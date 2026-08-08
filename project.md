@@ -254,28 +254,6 @@ the program cannot reconstruct.
   everything after it. Implemented in `src/model/settings.cpp`; see sec
   2.6.8 for what the command line does to it.
 
-### 2.6.8 The command line overrides the run, not the configuration
-
-`--station` and `--geocode` win for the run they are given on and
-**write nothing**. Trying a different station therefore leaves the
-configured one alone, which is what an override should mean.
-
-That has one consequence worth stating, because getting it wrong was a
-real defect rather than a hypothetical. The geocode derived from a
-station (sec 2.6.7.2) is cached in config -- but only when the station
-in use is the CONFIGURED one. An override run that cached its
-derivation would file one station's coordinates against a config naming
-another, and the next argument-free run would place the forecast bands
-at a station it was not reading. Two places on one axis, arriving
-through the door sec 2.6.7 had bolted.
-
-Changing the station clears the cached coordinate for the same reason,
-rather than leaving the previous garden's location behind it.
-
-The station is editable in the window as well as in the file. A tray
-applet whose one required setting can be given only on a command line
-is one nobody can configure from the thing they are looking at.
-
 ### 2.6.7 The geocode derives from the station, with an override
 
 Pinning a station introduces a second setting that can disagree with it:
@@ -341,6 +319,28 @@ recreates the exact failure this section removed -- two places on one
 axis with nothing to say which is which -- and the fact that a user
 opted into it does not make the graph less misleading six months later.
 Deliberate is not the same as remembered.
+
+### 2.6.8 The command line overrides the run, not the configuration
+
+`--station` and `--geocode` win for the run they are given on and
+**write nothing**. Trying a different station therefore leaves the
+configured one alone, which is what an override should mean.
+
+That has one consequence worth stating, because getting it wrong was a
+real defect rather than a hypothetical. The geocode derived from a
+station (sec 2.6.7.2) is cached in config -- but only when the station
+in use is the CONFIGURED one. An override run that cached its
+derivation would file one station's coordinates against a config naming
+another, and the next argument-free run would place the forecast bands
+at a station it was not reading. Two places on one axis, arriving
+through the door sec 2.6.7 had bolted.
+
+Changing the station clears the cached coordinate for the same reason,
+rather than leaving the previous garden's location behind it.
+
+The station is editable in the window as well as in the file. A tray
+applet whose one required setting can be given only on a command line
+is one nobody can configure from the thing they are looking at.
 
 ### 2.7 More than one provider, with Weather Underground first
 
@@ -422,7 +422,7 @@ response, both of which this project had to work for elsewhere.
 nothing that MET does not give away for the first two hours, which is
 worth knowing when the scrape eventually breaks.
 
-## 2.9 MET Norway serves the radar band
+### 2.9 MET Norway serves the radar band
 
 **In use.** The sub-hourly band that sec 2.6.4 called the least safe
 thing in the project now has a second, cleaner source -- and it was the
@@ -461,7 +461,7 @@ because that whole path is already the compromised one.
 A provider reached legitimately gets a truthful agent. The two live a
 few files apart and the difference between them is the point.
 
-## 2.10 Open-Meteo serves the extended band
+### 2.10 Open-Meteo serves the extended band
 
 **Quarter-hourly out to a week.** It covers the ground neither other
 provider reaches at a useful resolution: MET's radar stops under two
@@ -1218,15 +1218,32 @@ a question about the reader rather than about the weather.
 
 ## 4. The tray
 
-### 4.1 Open: which desktop
+### 4.1 Which desktop, answered by running it
 
-`QSystemTrayIcon` on Linux now means StatusNotifierItem. KDE Plasma
-serves it natively; GNOME needs a shell extension, without which the tray
-half of the brief is simply absent on that desktop.
+`QSystemTrayIcon` on Linux means StatusNotifierItem. KDE Plasma serves
+it natively; a bare GNOME session does not, and there the tray half of
+sec 0's brief is simply absent.
 
-**Unresolved, and it needs an answer before the tray work starts**, because
-"applet for systray" is half the stated product and the answer decides
-whether a fallback presentation is required.
+**This was open until the applet was run on the real display, where the
+tray is available.** It stayed open through the whole tray design, and
+being unable to answer it turned out not to block anything -- because
+the honest response to "there might be no tray" is a fallback, and the
+fallback is worth having whatever the answer is.
+
+Two things came out of it that a decision on paper would not have
+produced:
+
+- **Quit follows the tray.** A tray applet should not exit when its
+  window closes, but that holds only where there IS a tray; without
+  one the window is the entire interface, and keeping the process alive
+  after it closes leaves something running with no way to see, reach or
+  quit it short of `kill`. The setting is decided from
+  `is_available()` before the window is shown, so the two halves cannot
+  disagree.
+- **The fallback is exercised constantly.** The offscreen platform
+  reports no tray, so every rendered shot in this project takes the
+  no-tray path. It is the most-tested branch in the program rather than
+  a courtesy nobody runs.
 
 ### 4.2 The tray shows the weather
 
@@ -1274,12 +1291,66 @@ the applet's main surface.
   applied by the *generated* Makefile, so `bbqpredictor.pro` is the only
   place saying otherwise takes effect.
 
+### 5.0 The binary is replaced, never written through
+
+`make` copies beside the target and renames over it.
+
+Writing directly fails with `ETXTBSY` the moment the previous build is
+running -- the kernel refuses to modify a file it is executing -- so
+`make` broke for exactly as long as the applet was open, which is a
+poor trade for a GUI meant to be left running while it is worked on.
+
+`rename(2)` replaces the directory entry rather than the file, so the
+running process keeps its inode and carries on with the old code while
+the next launch picks up the new binary. It is also atomic: the
+previous recipe could leave a *truncated* executable at that path if
+the copy were interrupted, replacing a working program with a broken
+one.
+
+The temporary sits in the same directory deliberately, because rename
+cannot cross filesystems and `/tmp` frequently is one.
+
 ### 5.1 Open: packaging
 
 Not chosen. The global guidance prefers `dpkg-buildpackage` driving a
 `dh`-based `debian/rules`, and notes that the seven private projects use
 five different mechanisms between them -- so picking one here is a
 convention change to raise, not a thing to do in passing.
+
+### 5.1.1 Looking at it is the method
+
+**Every layout defect in this project was found by rendering a picture
+and looking at it.** Not one was found by reading the code, and none of
+them would have failed a test that checked numbers:
+
+- the temperature drawn as a staircase, which asserts that temperature
+  is constant for an hour and then jumps (sec 3.8.1);
+- the first fix for it doing nothing, because `range()` returns
+  overlaps (sec 3.8.1);
+- the radar band ending early when it replaced a longer one, seen in
+  the provenance ribbon (sec 2.9.1);
+- two bands sharing a colour in the strip whose only job is telling
+  them apart (sec 2.10);
+- the tray icon's digits clipped, because a font's pixel size is the em
+  box and not the glyph (sec 4.2.1);
+- the station field squeezed to `stati...` -- the one field the applet
+  cannot work without (sec 2.6.6);
+- a control reading "Off" over a visibly rounded curve, twice.
+
+So the diagnostics exist to make looking cheap, and they are part of
+the build rather than scratch work:
+
+| Flag | What it renders |
+|---|---|
+| `--fetch-once` | every band through the feed, with holes and probes |
+| `--shot FILE` | the window, headless |
+| `--tray-icon FILE` | the tray icon, which cannot be screenshotted |
+| `--cursor N` | parks the readout so a shot shows it |
+| `--interp M` | a curve method, for comparing them side by side |
+| `--smooth SECS` | a rounding radius, likewise |
+
+All of them answer before any widget is built or run under the
+offscreen platform, so none needs a display.
 
 ### 5.2 The suite, and what it is for
 
@@ -1310,21 +1381,6 @@ The properties worth naming:
 - **Rows arriving newest-first come back sorted**, which is sec 2.6.2's
   measured trap.
 
-### 5.2.2 It found something on its first run
-
-The provider tests are weighted entirely towards conversions, because
-that is what a second provider is: the same quantities in somebody
-else's units, spelling and clock. Every such mistake fails silently --
-a wind out by 3.6, a rain rate out by 4, a series shifted by hours --
-and none of them produces an error or an obviously wrong curve.
-
-The first run failed. Open-Meteo's reader discarded a *wrong* timezone
-name and accepted an *empty* one, because Qt returns the local zone for
-an empty id and calls it valid. That is recorded in sec 2.10.1 and
-fixed; the point here is that nothing else would have caught it. The
-graph would have looked entirely normal, in the reader's own timezone,
-which is the failure this project has now removed twice.
-
 ### 5.2.1 The suite was checked against being vacuous
 
 Two deliberate sabotages, because a green suite proves nothing until it
@@ -1345,6 +1401,21 @@ rather than the per-test subdirectories the glob expected, so a
 correctly-built suite matched nothing. Without the check it would have
 reported success over an empty list.
 
+### 5.2.2 It found something on its first run
+
+The provider tests are weighted entirely towards conversions, because
+that is what a second provider is: the same quantities in somebody
+else's units, spelling and clock. Every such mistake fails silently --
+a wind out by 3.6, a rain rate out by 4, a series shifted by hours --
+and none of them produces an error or an obviously wrong curve.
+
+The first run failed. Open-Meteo's reader discarded a *wrong* timezone
+name and accepted an *empty* one, because Qt returns the local zone for
+an empty id and calls it valid. That is recorded in sec 2.10.1 and
+fixed; the point here is that nothing else would have caught it. The
+graph would have looked entirely normal, in the reader's own timezone,
+which is the failure this project has now removed twice.
+
 ## 6. Style
 
 Three rules -- `snake_case`, tabs to indent and spaces to align,
@@ -1354,6 +1425,16 @@ root.
 Qt's own API is called exactly as it is spelled (`setWindowTitle`,
 `paintEvent`); names this project introduces stay `snake_case` with the
 `bbq_` prefix where they reach the linker.
+
+**One shape came up repeatedly and is not settled**: a statement
+continued across lines without an open bracket -- an operator-led
+`<<` chain, a wrapped signature inside an anonymous namespace, a
+`.arg()` chain. The gate wants an extra indent level there, and
+`code-style.md`'s worked example passes it verbatim, so the gate is not
+disagreeing with the documented rule; the shape is simply not among the
+settled exceptions. It has been restructured around six times rather
+than settled once. The finding, and what was checked, is in this
+project's `code-style.md`.
 
 ## 7. The grilling prediction
 
@@ -1434,7 +1515,7 @@ every option open, and no licence is better than a wrong one. Recorded
 explicitly here so the absence does not read as a gap for a later pass to
 close.
 
-## 8.1 No remote, deliberately
+### 8.1 No remote, deliberately
 
 **This repository is local only, and that is a decision rather than an
 oversight.** Recorded here for the same reason the absent licence is:
@@ -1453,64 +1534,99 @@ not add one because the siblings have one.
 
 ## 9. What has been decided, and what has not
 
-Settled:
+### 9.1 Settled
 
-- Qt Widgets, Qt 6, qmake under a top-level Makefile (sec 1)
+**The data.**
+
 - The key is scraped, with its consequences as requirements (sec 2)
-- Multi-provider from the start, Weather Underground first (sec 2.7)
-- MET Norway serves the radar band, as a second band rather than a
-  replacement, and silently where it does not reach (sec 2.9)
-- Open-Meteo serves the extended band, quarter-hourly for a week
-  (sec 2.10)
+- Multi-provider from the start, WU first; the internal series is ours
+  and every provider translates into it, including WU (sec 2.7)
 - Resolution is what qualifies a provider, not convenience (sec 2.8)
-- Three bands on one time axis, forecast kept presentation-free (sec 3)
-- The sample is a span, not a point; canonical units C, mm/h, epoch UTC
-  (sec 3.1)
-- Rain is stored as a rate, so one y-axis works; the ICAO path is a
-  temperature-only fallback (sec 3.2)
-- Precedence is declared, and measured always beats forecast (sec 3.3)
+- The WU endpoints for every band, observed rather than documented
+  (sec 2.6), and the key taken from an embedded request URL rather than
+  the config blob (sec 2.6.1)
+- MET Norway serves the radar band and Open-Meteo the extended one,
+  each as a band of its own rather than a replacement, and each silent
+  where it does not reach (sec 2.9, sec 2.10)
+- The station is user-chosen and pinned; the geocode derives from it
+  and is cached; an override wins and is shown (sec 2.6.5 to 2.6.7)
+- Config is QSettings INI under `AppConfigLocation`, and the command
+  line overrides the run rather than the configuration (sec 2.6.6,
+  sec 2.6.8)
+- Refresh is per band, on the clock, backing off on attempts rather
+  than successes (sec 2.5.1)
+
+**The model.**
+
+- A sample is a span, not a point; canonical units C, mm/h, km/h,
+  epoch UTC (sec 3.1)
+- Rain is stored as a rate, so one axis works; rain chance is a third
+  quantity and not a flavour of it (sec 3.2, sec 3.10)
+- Precedence is declared, and measured beats forecast (sec 3.3)
 - The composite is a view over the series, never a merge, because
   provenance is required (sec 3.4)
-- Never upsample; downsample rain by maximum, never mean (sec 3.5)
+- Never upsample; downsample rain and chance by maximum (sec 3.5)
 - Gaps are drawn as breaks, never interpolated across (sec 3.6)
 - Joins disappear through normalisation, never blending; a surviving
   step is information (sec 3.7)
-- A current band anchors the present, capped at 15 minutes and ranked
-  below the forecasts so the extension can only fill a hole (sec 3.9)
+- A current band anchors the present, capped and ranked below the
+  forecasts so the extension can only fill a hole (sec 3.9)
+
+**The graph.**
+
 - QPainter over QtCharts, confirmed by building it (sec 3.8)
-- Four interpolation methods, chosen live, with the samples markable;
-  monotone the default because it cannot overshoot (sec 3.11)
-- The readout snaps to real samples; times are in the location's clock,
+- The palette measured from WU's own dashboard, at the cost of
+  following the desktop into dark mode (sec 3.8.2, sec 3.8.3)
+- Seven interpolation methods chosen live, with the samples markable
+  and monotone the default because it cannot overshoot (sec 3.11)
+- Rounding is approximation and says so: the marks stay on the data
+  while the curve leaves it (sec 3.11.4)
+- Akima and thirty minutes as defaults, which are not the most
+  conservative choices and are visible and reversible (sec 3.11.5)
+- The readout snaps to real samples; times are in the location's clock
   and the graph names which clock (sec 3.12)
-- The palette, measured from WU's station dashboard (sec 3.8.2)
-- The internal time series is ours; every provider translates into it,
-  including WU (sec 2.7, sec 3)
-- Grilling windows scored and shaded, with the preferences gathered in
-  one place and marked as preferences (sec 7)
-- No licence (sec 8)
-- No remote; local only, and not for a harmonizing pass to close
-  (sec 8.1)
 
-- The WU endpoints for all three bands, observed 2026-08-07 (sec 2.6)
-- The key comes from an embedded request URL, not the config blob
-  (sec 2.6.1)
-- The station is user-chosen and pinned, never auto-selected (sec 2.6.5)
-- Discovery is an explicit act; a dead station is reported, not
-  substituted; the observed band is optional (sec 2.6.6)
-- Config is QSettings INI under `QStandardPaths::AppConfigLocation`
-  (sec 2.6.6)
-- The geocode derives from the station and is cached beside it; an
-  explicit override wins and is shown when set (sec 2.6.7)
+**The applet.**
 
-Open, each needing a decision rather than a drift:
+- The tray shows the temperature and reddens when stale; quit follows
+  tray availability (sec 4.1, sec 4.2)
+- Grilling windows scored and shaded, preferences gathered in one place
+  and marked as preferences (sec 7)
 
-- The observed band's lag against the current reading, which leaves a
-  short hole in the recent past that the next refresh fills (sec 3.9.4).
-  Understood and accepted rather than open, but worth revisiting if the
-  lag proves larger than the 4-to-22 minutes measured
-- The gap threshold in sec 3.6, which is a guess until real data makes
-  it necessary
-- Whether a dark-desktop variant is wanted, given the measured palette
-  is fixed and light (sec 3.8.3)
-- Which desktop, and therefore whether the tray needs a fallback (sec 4.1)
-- Packaging mechanism (sec 5.1)
+**The build.**
+
+- The binary is replaced by rename, never written through (sec 5.0)
+- Tests are built by `make test` and by nothing else; `make check` is
+  style plus tests (sec 5.2)
+- Looking at a rendered picture is the method, and the diagnostics
+  exist to make it cheap (sec 5.1.1)
+- No licence (sec 8) and no remote (sec 8.1), both deliberate and
+  neither a gap for a harmonizing pass to close
+
+### 9.2 Open
+
+Each of these needs a decision rather than a drift. None of them blocks
+anything.
+
+- **A dark-desktop variant**, given the measured palette is fixed and
+  light. A question about how the applet is actually used rather than
+  one this document can answer (sec 3.8.3)
+- **Packaging.** The global guidance prefers `dpkg-buildpackage` with a
+  `dh`-based `debian/rules`, and notes the private projects use five
+  mechanisms between them -- so choosing here is a convention change to
+  raise, not to make in passing (sec 5.1)
+- **Whether Open-Meteo should also serve the hourly band** past the
+  seven days its quarter-hourly data reaches. WU is the only source
+  beyond that today, and it is the compromised one
+- **The gap threshold**, still the 1.5x guess it was labelled as, now
+  that six bands of real spacing exist to calibrate it against
+  (sec 3.6)
+
+### 9.3 Raised elsewhere
+
+- **Statement continuations without an open bracket** have been
+  restructured around six times rather than settled once. The gate is
+  not disagreeing with the documented rule -- that was checked -- but
+  the shape is not among the settled exceptions. It belongs to the
+  global `code-style.md` rather than to this project, and the finding
+  is recorded in this project's copy (sec 6)
