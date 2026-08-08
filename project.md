@@ -1436,6 +1436,7 @@ the build rather than scratch work:
 | `--cursor N` | parks the readout so a shot shows it |
 | `--interp M` | a curve method, for comparing them side by side |
 | `--smooth SECS` | a rounding radius, likewise |
+| `--layout L` | the desktop or mobile shape, at a phone's proportions |
 
 All of them answer before any widget is built or run under the
 offscreen platform, so none needs a display.

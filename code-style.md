@@ -266,13 +266,37 @@ Everything above is the copied source. What follows is bbq-predictor's own.
 
 ### Exempt paths
 
-Nothing is vendored or generated in this tree yet, so the exempt list is
-empty beyond the gate's shipped defaults (`build`, `attic`, `third_party`,
-`vendor` and the rest). Add a path here when one appears, and say why.
+Nothing is vendored here, and everything exempt is generated: three
+build trees, named in `.style-gate.toml`.
 
-`build/` is where qmake's generated Makefile and every object file land.
-That Makefile is generated, so it is exempt by the header's rule and by
-the gate's default exclude both.
+- `build/` -- qmake's generated Makefile and the desktop objects.
+- `build-tests/` -- the same for the suite.
+- `build-android/` -- the Qt Android build tree and everything
+  `androiddeployqt` puts under it.
+
+All three are generated, so they are exempt by the header's rule as well
+as by the gate's configuration.
+
+**That list and `.gitignore` are two descriptions of one thing and have
+to agree.** They did not: the last two were in `.gitignore` and in
+neither the gate's shipped defaults nor its config, so the git discovery
+path skipped them and a plain walk would have gated moc output --
+the disagreement between discovery paths that the tool's own comments
+warn about, surfacing only in a checkout without `.git`.
+
+Note that `exclude` in `.style-gate.toml` **replaces** the shipped
+defaults rather than extending them, so that file restates all of them.
+Adding one path there means adding it to a list, not to a default.
+
+**The two lists agree on names but not in kind, and that gap is
+permanent.** `.gitignore` carries `/build-*/`, a glob that covers every
+build tree anybody invents; the gate takes literal directory names and
+cannot glob. So `make BUILD_DIR=build-asan` is ignored by git and
+walked by the gate, and a new build tree has to be added here by hand.
+
+Building outside the tree avoids it entirely -- `make
+BUILD_DIR=/tmp/bbq-asan` is neither ignored nor walked, because it is
+not in the repository at all.
 
 ### Qt, and the naming rule
 
