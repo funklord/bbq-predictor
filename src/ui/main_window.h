@@ -7,6 +7,7 @@
 #include "graph/interpolate.h"
 #include "ui/layout.h"
 
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -35,6 +36,13 @@ public:
 	 */
 	void begin(const QString &station_id, const QString &geocode);
 	void set_history_path(const QString &path) { m_history_path = path; }
+
+	/*
+	 * Goes through the checkbox rather than straight to the graph, so
+	 * the control cannot disagree with the picture. It did: --wind drew
+	 * wind and left the box unticked.
+	 */
+	void set_show_wind(bool show);
 
 	bbq_wu_feed *feed() const { return m_feed; }
 	bbq_forecast_graph *graph() const { return m_graph; }
@@ -99,6 +107,7 @@ private:
 	bbq_wu_feed *m_feed;
 	QString m_last_error;
 	QString m_history_path;
+	QCheckBox *m_wind_box = nullptr;
 };
 
 #endif

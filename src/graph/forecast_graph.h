@@ -57,6 +57,14 @@ struct bbq_graph_palette {
 	 */
 	QColor corrected;
 
+	/*
+	 * Wind. Muted on purpose: it is a supporting quantity here -- it
+	 * matters to the grilling score (sec 7) rather than being something
+	 * the graph is read for -- and a fourth confident line would compete
+	 * with the three that are.
+	 */
+	QColor wind;
+
 	/* Per band, for the provenance ribbon (sec 3.4). */
 	QColor band_observed;
 	QColor band_current;
@@ -142,6 +150,14 @@ public:
 	void set_show_windows(bool show);
 	bool show_windows() const { return m_show_windows; }
 
+	/*
+	 * Wind, off by default. It earns its place through the grilling
+	 * score rather than through the graph, so it is offered rather than
+	 * imposed on a plot that already carries three quantities.
+	 */
+	void set_show_wind(bool show);
+	bool show_wind() const { return m_show_wind; }
+
 	void set_show_samples(bool show);
 	bool show_samples() const { return m_show_samples; }
 
@@ -220,6 +236,7 @@ private:
 	bbq_metrics m_metrics;
 	bbq_interpolation m_interpolation = bbq_interpolation::akima;
 	bool m_show_samples = true;
+	bool m_show_wind = false;
 	int m_smoothing_s = 30 * 60;
 	bool m_show_windows = true;
 

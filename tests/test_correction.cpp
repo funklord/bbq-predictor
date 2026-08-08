@@ -22,6 +22,7 @@ private slots:
 	void measurements_are_never_corrected();
 	void rain_is_corrected_and_never_goes_negative();
 	void one_quantity_can_be_known_while_another_is_not();
+	void wind_is_corrected_and_never_goes_negative();
 
 private:
 	static bbq_composite forecast_at(qint64 start, int hours, double temperature);
@@ -327,6 +328,69 @@ void test_correction::one_quantity_can_be_known_while_another_is_not() {
 		QVERIFY2(!sample.precip_rate.has_value(),
 		         "rain was corrected with no evidence behind it");
 	}
+}
+
+void test_correction::wind_is_corrected_and_never_goes_negative() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const bbq_lead_bucket every[] = {
+		bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
+		bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours};
+
+	/* The band over-forecasts wind by 6 km/h at every lead. */
+	for (bbq_lead_bucket bucket : every) {
+		store.set_verification(QStringLiteral("ITEST1"), bbq_band::hourly,
+		                       QStringLiteral("wind_kph"), bucket, 50, 6.0, 6.0,
+		                       6.0);
+	}
+
+	const qint64 now = 1000000;
+
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < 6; ++i) {
+		bbq_sample sample;
+		sample.start_utc = now + i * 3600;
+		sample.duration_s = 3600;
+		sample.wind_kph = (i % 2 == 0) ? 20.0 : 2.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series series(bbq_band::hourly, QStringLiteral("wunderground"));
+	series.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(series));
+
+	const bbq_series corrected = bbq_corrected_forecast(
+	        composite, store, QStringLiteral("ITEST1"), now, now + 6 * 3600, now);
+
+	/*
+	 * Wind alone, with no temperature anywhere in the series. This is
+	 * the case that was silently dropped by a guard left over from when
+	 * temperature was the only corrected quantity (sec 12.10).
+	 */
+	QVERIFY2(!corrected.is_empty(), "a wind-only forecast was discarded");
+
+	bool saw_reduced = false;
+	bool saw_floor = false;
+
+	for (const bbq_sample &sample : corrected.samples()) {
+		QVERIFY(sample.wind_kph.has_value());
+		QVERIFY2(*sample.wind_kph >= 0.0, "the correction invented a "
+		                                  "negative wind speed");
+
+		if (qAbs(*sample.wind_kph - 14.0) < 0.001) {
+			saw_reduced = true;
+		}
+		if (*sample.wind_kph == 0.0) {
+			saw_floor = true;
+		}
+	}
+
+	QVERIFY2(saw_reduced, "20 km/h with a 6 km/h bias did not become 14");
+	QVERIFY2(saw_floor, "2 km/h with a 6 km/h bias did not stop at zero");
 }
 
 QTEST_GUILESS_MAIN(test_correction)

@@ -181,6 +181,18 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_graph->set_show_samples(on);
 	});
 
+	/*
+	 * Wind, offered rather than imposed. It matters to the grilling
+	 * score (sec 7) more than to the graph, and the plot already carries
+	 * temperature, rain and chance -- a fourth line by default would
+	 * cost every reader something to gain what only some of them want.
+	 */
+	m_wind_box = new QCheckBox(tr("Wind"), this);
+	m_wind_box->setChecked(m_graph->show_wind());
+	connect(m_wind_box, &QCheckBox::toggled, this, [this](bool on) {
+		m_graph->set_show_wind(on);
+	});
+
 	m_controls = new QWidget(this);
 
 	/*
@@ -191,7 +203,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	m_control_items << new QLabel(tr("Station:"), this) << m_station_box
 	                << new QLabel(tr("Interpolation:"), this) << method
 	                << new QLabel(tr("Rounding:"), this) << smoothing
-	                << windows << marks
+	                << windows << marks << m_wind_box
 	                << new QLabel(tr("Layout:"), this) << m_layout_box;
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
@@ -434,6 +446,14 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 
 	m_feed->refresh();
 	m_feed->start_auto_refresh();
+}
+
+void bbq_main_window::set_show_wind(bool show) {
+	if (m_wind_box != nullptr) {
+		m_wind_box->setChecked(show);
+	}
+
+	m_graph->set_show_wind(show);
 }
 
 void bbq_main_window::refresh_corrected() {

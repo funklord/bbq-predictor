@@ -288,6 +288,14 @@ int main(int argc, char *argv[]) {
 				                           qAbs(scaled / 10.0) + 0.08)) {
 					++written;
 				}
+
+				/* Wind in km/h, so a few times the temperature figure. */
+				if (store.set_verification(wanted, band,
+				                           QStringLiteral("wind_kph"), bucket, 50,
+				                           scaled * 2.0, qAbs(scaled * 2.0) + 1.0,
+				                           qAbs(scaled * 2.0) + 1.5)) {
+					++written;
+				}
 			}
 		}
 
@@ -336,9 +344,10 @@ int main(int argc, char *argv[]) {
 			bbq_lead_bucket::four_days, bbq_lead_bucket::week,
 			bbq_lead_bucket::beyond};
 
-		const QString quantities[] = {QStringLiteral("temperature"),
-		                              QStringLiteral("precip_rate"),
-		                              QStringLiteral("wind_kph")};
+		const QString quantities[] = {
+			QStringLiteral("temperature"),
+			QStringLiteral("precip_rate"),
+			QStringLiteral("wind_kph")};
 
 		bool any = false;
 
@@ -388,6 +397,11 @@ int main(int argc, char *argv[]) {
 
 			window.graph()->set_view(edge, span);
 		}
+	}
+
+	/* Wind is off by default; a shot may want it on. */
+	if (arguments.contains(QStringLiteral("--wind"))) {
+		window.set_show_wind(true);
 	}
 
 	const QString cursor = option_value(arguments, QStringLiteral("--cursor"));

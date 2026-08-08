@@ -219,6 +219,7 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 
 		double temperature_bias = 0.0;
 		double rain_bias = 0.0;
+		double wind_bias = 0.0;
 
 		const bool know_temperature =
 		        reading.sample->temperature.has_value() &&
@@ -229,7 +230,11 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 		        reading.sample->precip_rate.has_value() &&
 		        bias_for(band, QStringLiteral("precip_rate"), lead, &rain_bias);
 
-		if (!know_temperature && !know_rain) {
+		const bool know_wind =
+		        reading.sample->wind_kph.has_value() &&
+		        bias_for(band, QStringLiteral("wind_kph"), lead, &wind_bias);
+
+		if (!know_temperature && !know_rain && !know_wind) {
 			continue;
 		}
 
@@ -255,6 +260,12 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 			 */
 			const double rate = *reading.sample->precip_rate - rain_bias;
 			sample.precip_rate = std::max(0.0, rate);
+		}
+
+		if (know_wind) {
+			/* Floored for the same reason rain is: there is no negative wind. */
+			const double speed = *reading.sample->wind_kph - wind_bias;
+			sample.wind_kph = std::max(0.0, speed);
 		}
 
 		samples.push_back(sample);

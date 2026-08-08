@@ -54,6 +54,8 @@ struct column {
 	double rain = 0.0;
 	bool has_chance = false;
 	double chance = 0.0;
+	bool has_wind = false;
+	double wind = 0.0;
 	bbq_band band = bbq_band::hourly;
 
 	/*
@@ -85,6 +87,8 @@ struct column {
 	double knot_rain = 0.0;
 	bool knot_has_chance = false;
 	double knot_chance = 0.0;
+	bool knot_has_wind = false;
+	double knot_wind = 0.0;
 };
 
 /* Which quantity a curve is being built for. */
@@ -92,6 +96,7 @@ enum class quantity {
 	temperature,
 	rain,
 	chance,
+	wind,
 };
 
 QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
@@ -145,6 +150,8 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 
 	double temperature_total = 0.0;
 	int temperature_count = 0;
+	double wind_total = 0.0;
+	int wind_count = 0;
 
 	for (std::size_t i = span.first; i < span.second; ++i) {
 		/*
@@ -175,6 +182,18 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 			if (samples[i].temperature.has_value()) {
 				temperature_total += *samples[i].temperature;
 				++temperature_count;
+			}
+
+			/*
+			 * Wind is meaned like temperature rather than maxed like
+			 * rain: it is a speed AT the sample's instant (sec 3.1), and
+			 * a gust is not what these bands report.
+			 */
+			if (samples[i].wind_kph.has_value()) {
+				wind_total += *samples[i].wind_kph;
+				++wind_count;
+				result.knot_wind = *samples[i].wind_kph;
+				result.knot_has_wind = true;
 			}
 
 			/*
@@ -276,6 +295,14 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 		}
 	}
 
+	if (wind_count > 0) {
+		result.wind = wind_total / wind_count;
+		result.has_wind = true;
+	} else if (reading.sample->wind_kph.has_value()) {
+		result.wind = *reading.sample->wind_kph;
+		result.has_wind = true;
+	}
+
 	if (!result.has_rain && reading.sample->precip_rate.has_value()) {
 		result.rain = *reading.sample->precip_rate;
 		result.has_rain = true;
@@ -344,6 +371,10 @@ void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
 				present = c.knot_has_chance;
 				value = c.knot_chance;
 				break;
+			case quantity::wind:
+				present = c.knot_has_wind;
+				value = c.knot_wind;
+				break;
 			}
 
 			if (present) {
@@ -391,6 +422,11 @@ void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
 				case quantity::chance:
 					cols[k].chance = std::max(0.0, std::min(100.0, value));
 					cols[k].has_chance = true;
+					break;
+				case quantity::wind:
+					/* No negative wind, for the same reason as rain. */
+					cols[k].wind = std::max(0.0, value);
+					cols[k].has_wind = true;
 					break;
 				}
 			}
@@ -518,6 +554,7 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	m_palette.readout_edge = QColor(0x9a, 0x9a, 0x9a);
 	m_palette.readout_text = QColor(0xf0, 0xf0, 0xf0);
 	m_palette.corrected = QColor(0x8b, 0x6b, 0xb1);
+	m_palette.wind = QColor(0x6b, 0x8b, 0x9a);
 	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
 	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
 	m_palette.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
@@ -562,6 +599,11 @@ void bbq_forecast_graph::set_smoothing(int seconds) {
 
 void bbq_forecast_graph::set_show_windows(bool show) {
 	m_show_windows = show;
+	update();
+}
+
+void bbq_forecast_graph::set_show_wind(bool show) {
+	m_show_wind = show;
 	update();
 }
 
@@ -792,14 +834,21 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	apply_curve(columns, spec);
 	spec.which = quantity::chance;
 	apply_curve(columns, spec);
+	spec.which = quantity::wind;
+	apply_curve(columns, spec);
 
 	/* Scales, from what is actually visible rather than from the whole set. */
 	double temperature_low = 0.0;
 	double temperature_high = 0.0;
 	bool have_temperature = false;
 	double rain_high = 1.0;
+	double wind_high = 1.0;
 
 	for (const column &c : columns) {
+		if (c.has_wind) {
+			wind_high = std::max(wind_high, c.wind);
+		}
+
 		if (c.has_temperature) {
 			if (!have_temperature) {
 				temperature_low = c.temperature;
@@ -844,6 +893,10 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		if (sample.precip_rate.has_value()) {
 			rain_high = std::max(rain_high, *sample.precip_rate);
 		}
+
+		if (sample.wind_kph.has_value()) {
+			wind_high = std::max(wind_high, *sample.wind_kph);
+		}
 	}
 
 	if (!have_temperature) {
@@ -864,6 +917,18 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	const auto y_for_temperature = [&](double value) {
 		const double span = temperature_high - temperature_low;
 		const double t = (value - temperature_low) / span;
+		return plot.bottom() - t * plot.height();
+	};
+
+	/*
+	 * Wind gets its own axis rather than being hung off one of the
+	 * others, which is the objection sec 3 records against putting a
+	 * percentage on the temperature scale: a scale that means two things
+	 * means neither. Its maximum is labelled in the right gutter beside
+	 * the rain's.
+	 */
+	const auto y_for_wind = [&](double value) {
+		const double t = value / wind_high;
 		return plot.bottom() - t * plot.height();
 	};
 
@@ -1034,6 +1099,34 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 	if (run.size() > 1) {
 		painter.drawPolyline(run);
+	}
+
+	/*
+	 * Wind, under everything else and thinner than everything else. It
+	 * is context for the grilling score rather than a headline.
+	 */
+	if (m_show_wind) {
+		QPolygonF wind_run;
+
+		for (int x = 0; x < plot.width(); ++x) {
+			const column &c = columns[x];
+			if (!c.covered || !c.has_wind) {
+				if (wind_run.size() > 1) {
+					painter.setPen(QPen(m_palette.wind, 1.0, Qt::DotLine));
+					painter.drawPolyline(wind_run);
+				}
+				wind_run.clear();
+				continue;
+			}
+
+			wind_run.append(QPointF(plot.left() + x, y_for_wind(c.wind)));
+		}
+
+		if (wind_run.size() > 1) {
+			painter.setPen(QPen(m_palette.wind, 1.0, Qt::DotLine));
+			painter.setBrush(Qt::NoBrush);
+			painter.drawPolyline(wind_run);
+		}
 	}
 
 	/*
@@ -1322,6 +1415,10 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 				lines.append(QString::number(c.knot_chance, 'f', 0) +
 				             tr("% rain"));
 			}
+			if (c.knot_has_wind) {
+				lines.append(QString::number(c.knot_wind, 'f', 0) +
+				             tr(" km/h"));
+			}
 
 			QString source = QString::fromLatin1(bbq_band_name(c.band));
 			const bbq_series *series = m_composite.band(c.band);
@@ -1411,4 +1508,12 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	                              plot.height() * 0.45 - 6, margin_right - 6, 14);
 	painter.drawText(rain_top, Qt::AlignLeft | Qt::AlignVCenter,
 	                 QString::number(rain_high, 'f', 1) + tr(" mm/h"));
+
+	if (m_show_wind) {
+		painter.setPen(m_palette.wind);
+		const QRectF wind_top(width() - margin_right + 4, plot.top() - 2,
+		                      margin_right - 6, 14);
+		painter.drawText(wind_top, Qt::AlignLeft | Qt::AlignVCenter,
+		                 QString::number(wind_high, 'f', 0) + tr(" km/h"));
+	}
 }

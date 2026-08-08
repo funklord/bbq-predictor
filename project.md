@@ -2450,8 +2450,19 @@ the other, and a quantity with no evidence behind it is absent rather
 than corrected by zero, which would draw a line claiming the raw
 forecast had been checked and found right.
 
-Wind is verified and stored but not corrected, because nothing draws
-wind. It is in the scores `--history` prints.
+**Wind is corrected too, and drawn, because a correction nothing draws
+is a correction nobody can check.** It matters here through the grilling
+score (sec 7) rather than through the graph, so it is offered rather
+than imposed: a checkbox, off by default, because the plot already
+carries three quantities and a fourth line by default would cost every
+reader something to gain what only some of them want.
+
+It gets **its own axis**, labelled in the right gutter, rather than
+being hung off the temperature or rain scale. That is the same objection
+sec 3 records against putting a percentage on an existing axis: a scale
+meaning two things means neither. It is drawn thin and dotted and in a
+muted colour, under everything else, because it is context rather than a
+headline. Corrected wind is floored at zero for the reason rain is.
 
 Three things this turned up:
 
