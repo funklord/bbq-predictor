@@ -113,7 +113,7 @@ quietly replace the ordinary binary.
 For Android, point the build at a Qt kit and an NDK:
 
     make android QT_ANDROID_ROOT=$HOME/Qt/6.10.0/android_arm64_v8a \
-                 ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/25.2.9519653
+                 ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/27.2.12479018
 
 ## Looking at it
 

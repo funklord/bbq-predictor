@@ -2255,8 +2255,13 @@ so saying so is the most it can do.
 ### 11.2 It builds, and what it took
 
 **`make android` produces an installable arm64 APK.** 52 MB, debug-signed,
-against NDK 25.2 and the Qt 6.10 kit. Four things were in the way and
-none of them was the thing recorded here before.
+against the Qt 6.10 kit. Four things were in the way and none of them
+was the thing recorded here before.
+
+**Build it with NDK r27c** -- `ndk;27.2.12479018` -- which is the NDK the
+kit names and the one sec 11.3 explains the cost of not using. Measured
+since: it builds, packages and signs, and the applet loads on the
+device.
 
 **The platform floor was real and is gone.** Qt 6.10 pulls AndroidX
 libraries needing a `compileSdk` of at least 34, and this SDK reached
@@ -2327,9 +2332,9 @@ libc++:
 
 Sec 11.2 had recorded that NDK mismatch and dismissed it -- "it compiled,
 so that is a caution rather than a finding". **It compiled, linked,
-packaged, signed and installed, and then would not load.** NDK 30 runs.
-NDK r27c is the one to install, because matching what Qt was built
-against removes the guess entirely.
+packaged, signed and installed, and then would not load.** NDK 30 runs
+too, but r27c is what the kit names, and matching it removes the guess
+rather than surviving it. r27c is what the build uses now.
 
 **There is no TLS.** Every fetch fails before it starts:
 
