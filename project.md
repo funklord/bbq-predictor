@@ -2366,6 +2366,33 @@ safe area costs nothing and a real one is respected. Whether Android
 ever reports a non-zero one through Qt 6.10 is unsettled and needs a
 device to answer.
 
+### 11.4 The kit moved, and the preflight now checks the thing that bit
+
+Qt on this machine went from 6.10.0 to 6.12.0 between one session and the
+next, and every Android instruction here named 6.10.0 -- including the
+one the shared fragment prints when it cannot find a kit, which was
+therefore advice pointing at a directory that no longer existed.
+
+Measured rather than assumed: **6.12.0 builds, packages and signs with
+the same r27c**, which its own `qdevice.pri` names exactly as 6.10.0 did.
+The examples name 6.12.0 now, and the fragment's error message names no
+version at all -- an example carrying a version number goes stale every
+release, and a stale example is worse than a placeholder because it
+looks checked.
+
+**The preflight compares the NDK in use against the one the kit names.**
+It reads `DEFAULT_ANDROID_NDK_ROOT` from the kit's `qdevice.pri` and
+`Pkg.Revision` from the NDK's `source.properties`, and refuses a major
+version mismatch.
+
+This is not the compileSdk case sec 11.2 declines to guess at. The kit
+states its NDK outright, so the check reads a fact rather than
+predicting one -- and it is the fault that cost the most here, because it
+is invisible until the device refuses to load the app. Watched failing
+against a fabricated NDK 25 against the 6.12 kit, and `make android-check
+ANDROID_NDK_MISMATCH_OK=1` still gets through for anyone who has a
+reason.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh

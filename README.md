@@ -112,8 +112,13 @@ quietly replace the ordinary binary.
 
 For Android, point the build at a Qt kit and an NDK:
 
-    make android QT_ANDROID_ROOT=$HOME/Qt/6.10.0/android_arm64_v8a \
+    make android QT_ANDROID_ROOT=$HOME/Qt/6.12.0/android_arm64_v8a \
                  ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/27.2.12479018
+
+The Qt version is whichever is installed; the NDK is not a free choice.
+It must match the one the kit names in its own `mkspecs/qdevice.pri`, and
+`make android-check` compares them -- a mismatch builds and installs
+perfectly and then fails to load on the device.
 
 ## Looking at it
 

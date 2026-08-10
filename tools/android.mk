@@ -143,7 +143,7 @@ android-check:
 	@if [ -z "$(QT_ANDROID_ROOT)" ]; then \
 		echo "android: QT_ANDROID_ROOT is not set." >&2; \
 		echo "android:   point it at a Qt-for-Android kit, e.g." >&2; \
-		echo "android:   make android QT_ANDROID_ROOT=\$$HOME/Qt/6.10.0/android_arm64_v8a" >&2; \
+		echo "android:   make android QT_ANDROID_ROOT=\$$HOME/Qt/<version>/android_arm64_v8a" >&2; \
 		exit 1; \
 	fi
 	@if [ -z "$(ANDROID_ABI)" ]; then \
@@ -183,6 +183,19 @@ android-check:
 		echo "android:   lacking JAVA_COMPILER, naming the JVM but not the" >&2; \
 		echo "android:   reason." >&2; \
 		exit 1; \
+	fi
+	@kit_ndk=$$(sed -n 's/.*android-ndk-r\([0-9]*\).*/\1/p' \
+	                 "$(QT_ANDROID_ROOT)/mkspecs/qdevice.pri" 2>/dev/null | head -1); \
+	used_ndk=$$(sed -n 's/^Pkg.Revision *= *\([0-9]*\).*/\1/p' \
+	                 "$(ANDROID_NDK_ROOT)/source.properties" 2>/dev/null | head -1); \
+	if [ -n "$$kit_ndk" ] && [ -n "$$used_ndk" ] && [ "$$kit_ndk" != "$$used_ndk" ]; then \
+		echo "android: NDK $$used_ndk, but this Qt kit was built against r$$kit_ndk." >&2; \
+		echo "android:   That mismatch is not a build error. It compiles, links," >&2; \
+		echo "android:   packages, signs and installs, and then dlopen refuses the" >&2; \
+		echo "android:   Qt libraries on the device for a missing libc++ symbol." >&2; \
+		echo "android:   Install the matching NDK, or set ANDROID_NDK_MISMATCH_OK=1" >&2; \
+		echo "android:   if you have a reason." >&2; \
+		[ -n "$(ANDROID_NDK_MISMATCH_OK)" ] || exit 1; \
 	fi
 	@echo "android:   jdk $(JAVA_HOME)"
 	@echo "android: kit $(QT_ANDROID_ROOT)"
