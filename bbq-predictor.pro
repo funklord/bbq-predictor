@@ -71,6 +71,27 @@ android {
 	isEmpty(BBQ_TARGET_API): BBQ_TARGET_API = 33
 	ANDROID_MIN_SDK_VERSION = 26
 	ANDROID_TARGET_SDK_VERSION = $$BBQ_TARGET_API
+
+	# OpenSSL, without which there is no TLS and therefore no data at all
+	# (project.md sec 11.5). Qt for Android does not ship it, and every
+	# provider this program reads is HTTPS -- so its absence is not a
+	# degraded build, it is a build that can fetch nothing.
+	#
+	# Built by tools/build-openssl-android.sh from the distribution's own
+	# source. Conditional, because a tree that has not run that script
+	# should still produce an installable package rather than refusing to
+	# configure -- it simply cannot fetch, and says so on screen.
+	BBQ_SSL_LIB = $$PWD/deps/android/$$ANDROID_TARGET_ARCH/lib
+	BBQ_SSL_CRYPTO = $$BBQ_SSL_LIB/libcrypto.so
+	BBQ_SSL_SSL = $$BBQ_SSL_LIB/libssl.so
+
+	exists($$BBQ_SSL_SSL) {
+		ANDROID_EXTRA_LIBS += $$BBQ_SSL_CRYPTO $$BBQ_SSL_SSL
+		message("openssl: bundling $$BBQ_SSL_LIB")
+	} else {
+		warning("openssl: $$BBQ_SSL_SSL is missing -- the package will " \
+		        "have no TLS. Run tools/build-openssl-android.sh.")
+	}
 }
 
 INCLUDEPATH += $$PWD/src

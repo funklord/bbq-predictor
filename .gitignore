@@ -26,3 +26,6 @@ __pycache__/
 # a key in a public history is a key that gets revoked (project.md sec 2).
 /cache/
 *.key
+
+# Cross-compiled Android dependencies (tools/build-openssl-android.sh).
+deps/

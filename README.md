@@ -110,7 +110,16 @@ An isolated build stays in its own directory: only the default `build/`
 is copied to `./bbq-predictor`, so a sanitized or cross build cannot
 quietly replace the ordinary binary.
 
-For Android, point the build at a Qt kit and an NDK:
+Android needs OpenSSL built for the device first -- Qt ships none, and
+without it the applet can fetch nothing at all:
+
+    ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/27.2.12479018 \
+        tools/build-openssl-android.sh arm64-v8a
+
+The source comes from `apt-get source openssl`, so it is the version the
+distribution pinned and patched rather than one this repository chose.
+
+Then point the build at a Qt kit and an NDK:
 
     make android QT_ANDROID_ROOT=$HOME/Qt/6.12.0/android_arm64_v8a \
                  ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/27.2.12479018

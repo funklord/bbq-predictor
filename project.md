@@ -2393,6 +2393,80 @@ against a fabricated NDK 25 against the 6.12 kit, and `make android-check
 ANDROID_NDK_MISMATCH_OK=1` still gets through for anyone who has a
 reason.
 
+### 11.5 TLS, and where the source comes from
+
+Qt for Android ships no OpenSSL, so `QSslSocket` cannot start and every
+provider here is HTTPS. That is not a degraded build; it is one that can
+fetch nothing, and Qt says so plainly once you look:
+
+    W qt.tlsbackend.ossl: Failed to load libssl/libcrypto.
+
+`tools/build-openssl-android.sh` cross-compiles it, and the interesting
+decisions are about the source rather than the compiler.
+
+**The system's OpenSSL cannot be used, and not for one reason but two.**
+It is x86-64 where the phone is aarch64, and it is linked against glibc
+where Android has bionic -- so even a Debian arm64 build would not load.
+Only source is portable across that gap.
+
+**The source comes from apt.** `apt-get source openssl` gives a version
+the distribution pinned, with a signature and a checksum apt verifies
+before we see it, and it arrives with the distribution's security patches
+already applied -- the fetch for 3.5.6 applied fixes for CVE-2026-42766
+and a use-after-free in `PKCS7_verify` on the way past. A tarball
+fetched by a line in a shell script would move that trust decision into
+this repository, where nobody reviews it.
+
+**The old Qt's copy was refused.** `Qt-old/Tools/OpenSSL/src` was still
+on the machine and would have saved the download: it is 1.1.1q, dated
+July 2022, end-of-life since September 2023. Convenient is not the same
+as safe, and this is the one place in the project where the difference
+is measured in somebody's security rather than in a wrong graph. The
+script refuses anything that is not 3.x, by version rather than by
+policy note.
+
+### 11.5.1 Two mistakes, both from believing a requirement that was not there
+
+**The version check failed open.** It read `OPENSSL_VERSION_TEXT` out of
+`opensslv.h`, which OpenSSL 3 does not ship -- it GENERATES that header
+during configure, from `VERSION.dat`. So against a 3.5.6 tree the check
+found nothing and refused to proceed, which was the right outcome by
+luck; had the case been ordered differently it would have sailed past.
+**A security check that cannot read a version must fail closed**, and it
+reads both layouts now.
+
+**The libraries were renamed, and that broke them.** Believing
+androiddeployqt required `lib<name>_<abi>.so`, the build renamed them and
+used `patchelf` to fix the SONAME. The device refused the result:
+
+    dlopen failed: cannot find "9_REQ_fp" from verneed[0]
+    in DT_NEEDED list for libcrypto_arm64-v8a.so
+
+which is not a missing symbol. Rewriting `.dynstr` shifted the offsets
+the version-needs section points into, so it named a string that was
+never a filename. **androiddeployqt has no such requirement** -- it
+copies extra libraries verbatim -- and Qt's TLS backend finds them by
+pattern, `libcrypto.*` and `libssl.*`, not by exact name. OpenSSL's
+Android targets already emit unversioned libraries, because Android will
+not follow a `.so.3` and an APK may only carry files named `lib*.so`.
+There was nothing to correct. **The libraries ship exactly as linked.**
+
+The script checks the thing that would otherwise fail only on the
+device: that every library `libssl` needs is either in the package or
+part of Android.
+
+### 11.5.2 What is proven and what is not
+
+Proven: the libraries build, they are aarch64, they are in the APK
+beside Qt's own OpenSSL backend plugin, the app installs and runs, and
+**`Failed to load libssl/libcrypto` no longer appears at all**.
+
+Not yet proven: that a fetch completes. The phone was locked for the
+run, so Android had the activity stopped and Qt never got past creating
+its window -- no config was written and no store was created, which is
+correct behaviour for an app that has not been resumed. It needs one
+unlocked run to confirm.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
