@@ -12,6 +12,11 @@
 #include "ui/layout.h"
 #include "wu/feed.h"
 #include "wu/fetch_once.h"
+#include <QFile>
+#include <QStandardPaths>
+
+#include "net/probe.h"
+#include "net/tls_backend.h"
 #include "model/settings.h"
 #include "store/history.h"
 
@@ -74,6 +79,13 @@ QString option_value(const QStringList &arguments, const QString &name) {
 int main(int argc, char *argv[]) {
 	QApplication app(argc, argv);
 	QApplication::setApplicationName(QStringLiteral("bbq-predictor"));
+
+	/*
+	 * Before anything reaches the network, including the diagnostics
+	 * below -- on Android the TLS backend does not load itself, and
+	 * every provider here is HTTPS (sec 11.6).
+	 */
+	bbq_ensure_tls_backend();
 	QApplication::setApplicationVersion(QStringLiteral(BBQ_VERSION_STRING));
 
 	/*
@@ -99,6 +111,37 @@ int main(int argc, char *argv[]) {
 	 * build chroot, over ssh, or anywhere without a display. Bounded by
 	 * its own timeout rather than by whatever invokes it.
 	 */
+	/*
+	 * What can this machine actually reach, and what did its TLS resolve
+	 * to (sec 11.6). Answered before any widget exists, so it runs
+	 * anywhere -- including on a phone, where it is the only way to get
+	 * the answer off the device.
+	 */
+	/*
+	 * A marker file asks for the same thing, because on Android there is
+	 * no command line to ask on.
+	 *
+	 * Qt's launcher does take arguments, but only ones baked into the
+	 * manifest at build time; an intent extra does not reach argv. So a
+	 * device diagnostic would otherwise need its own build, which is
+	 * exactly the loop this probe exists to break. Dropping a file into
+	 * the data directory needs no rebuild and works over adb:
+	 *
+	 *   adb shell run-as <package> touch files/run-probe
+	 *
+	 * Removed as it is read, so a diagnostic cannot become a permanent
+	 * mode nobody remembers turning on.
+	 */
+	const QString marker =
+	        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+	        QStringLiteral("/run-probe");
+
+	if (arguments.contains(QStringLiteral("--probe")) ||
+	    QFile::exists(marker)) {
+		QFile::remove(marker);
+		return bbq_net_probe(15);
+	}
+
 	if (arguments.contains(QStringLiteral("--fetch-once"))) {
 		return bbq_wu_fetch_once(
 		        option_value(arguments, QStringLiteral("--station")),

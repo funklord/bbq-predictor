@@ -183,6 +183,24 @@ $(ANDROID_BUILD_DIR)/Makefile: android-check bbq-predictor.pro
 # --android-platform, which the generated rule hardcodes away. The first is
 # reused rather than reimplemented, because an orchestration copied is an
 # orchestration to keep in step.
+#
+# Gradle then runs a SECOND time, for one property, and that is the whole
+# reason TLS works on the device.
+#
+# Qt's TLS backend finds OpenSSL by SCANNING a directory for files matching
+# libcrypto.* and libssl.*. With the modern default the libraries are never
+# unpacked -- they sit inside the APK, where a directory scan cannot see
+# them -- so everything looks right and TLS still fails: the libraries are
+# in the package, the app runs, and Qt reports "Failed to load
+# libssl/libcrypto". legacyPackaging=true sets extractNativeLibs, and
+# Android then writes them to lib/<abi>/ where Qt is looking.
+#
+# androiddeployqt has no flag for it and writes gradle.properties itself, so
+# the property goes on Gradle's command line where nothing overwrites it.
+# The obvious shortcut -- androiddeployqt --no-build, then Gradle -- does
+# not work: from a clean tree that leaves no Gradle project at all. It
+# appeared to work only because a previous build had left one behind, which
+# is the same stale-state trap this project keeps finding.
 android: $(ANDROID_BUILD_DIR)/Makefile
 	$(MAKE) -C $(ANDROID_BUILD_DIR) apk_install_target
 	$(ANDROID_DEPLOY_QT) \
@@ -190,6 +208,8 @@ android: $(ANDROID_BUILD_DIR)/Makefile
 	        --output $(ANDROID_BUILD_DIR)/android-build \
 	        --android-platform $(ANDROID_PLATFORM) \
 	        --apk $(ANDROID_BUILD_DIR)/android-build/$(TARGET).apk
+	cd $(ANDROID_BUILD_DIR)/android-build && ./gradlew \
+	        -PlegacyPackaging=true assembleDebug
 	@src=$$(find $(ANDROID_BUILD_DIR)/android-build/build/outputs/apk \
 	        -name '*.apk' -print -quit); \
 	if [ -z "$$src" ]; then echo "android: no .apk was produced" >&2; exit 1; fi; \

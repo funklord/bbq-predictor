@@ -2467,6 +2467,76 @@ its window -- no config was written and no store was created, which is
 correct behaviour for an app that has not been resumed. It needs one
 unlocked run to confirm.
 
+### 11.6 TLS on Android: what it was, after four wrong answers
+
+The applet on the phone could fetch nothing. Qt reported
+`qt.tlsbackend.ossl: Failed to load libssl/libcrypto` and every band
+failed with "TLS initialization failed".
+
+**It was not the libraries.** Qt's automatic plugin discovery never
+loads the OpenSSL TLS backend on Android. The plugin sits in the same
+directory as the cert-only backend that DOES load, loads perfectly when
+asked directly, and Qt emits no diagnostic about skipping it -- not even
+with `qt.tlsbackend.ossl.debug` turned on. `bbq_ensure_tls_backend()`
+asks: it is a no-op wherever TLS already works, so it needs no platform
+test at the call site.
+
+Four things were blamed first, and each cost a build-install-test cycle:
+the library names, the NDK, whether the libraries were extracted from
+the APK, and the packaging. Two of those turned out to be real problems
+worth fixing anyway -- the NDK mismatch (sec 11.3) and extraction (sec
+11.6.2) -- but neither was this.
+
+### 11.6.1 The probe, and why it should have been first
+
+`--probe` fetches a list of URLs and reports what TLS resolved to. Each
+target separates a specific pair of explanations rather than being
+thorough: plain HTTP tells "no network" from "no TLS", a boring HTTPS
+host tells "TLS broken" from "that provider broken", and
+`supportsSsl()` with the two library version strings answers directly
+what four rounds of inference could not.
+
+On the device it said, in one run:
+
+    supportsSsl        NO
+    available backends cert-only
+    lib/arm64          libcrypto.so libssl.so
+    OK   http, FAIL every https
+
+Libraries present, network fine, backend absent. That is the whole
+diagnosis, and it took one run where inference had taken four.
+
+**The lesson is the order of operations.** Four inferences were drawn
+from a one-line warning and two of them were wrong; the probe produced
+more fact in a single run than the entire sequence before it. When a
+remote failure reports one line, the next step is an instrument, not a
+theory.
+
+It writes a file as well as logging, because on Android the early part
+of startup happens before Qt installs its logcat handler -- so the first
+version of the probe reported nothing at all, on the one platform it was
+written for.
+
+### 11.6.2 Five false readings, all from measurement rather than code
+
+Worth listing, because each looked exactly like a real failure:
+
+- **`strings` does not find `QStringLiteral` text.** It is UTF-16, so a
+  check for freshly added code in a built library reported it missing.
+- **`run-as ... sh -c "rm -f ..."` quoting failed silently**, so a stale
+  report was read as a fresh one.
+- **The APK path hash revealed a stale install**: the report being read
+  came from a previous package.
+- **`androiddeployqt --no-build` succeeded against leftover state** and
+  appeared to generate a Gradle project it had not.
+- **`adb exec-out screencap` piped through a shell mangled the PNG**,
+  producing a blank white image of a screen that was drawing correctly.
+  Capturing to a file on the device and pulling it works.
+
+The libraries themselves needed one real fix: `legacyPackaging=true`, so
+Android extracts them to `lib/<abi>/` where Qt's directory scan can see
+them. Inside the APK they are invisible to it.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh

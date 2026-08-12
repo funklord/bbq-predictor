@@ -87,6 +87,16 @@ android {
 
 	exists($$BBQ_SSL_SSL) {
 		ANDROID_EXTRA_LIBS += $$BBQ_SSL_CRYPTO $$BBQ_SSL_SSL
+
+		# Both namings, deliberately, as an experiment rather than a
+		# belief: Qt's Android documentation and its own OpenSSL builds
+		# use libcrypto_3.so and libssl_3.so, while the plugin's search
+		# pattern is libcrypto.* -- which the plain names also match.
+		# Shipping both settles which one it actually opens, and costs
+		# only duplicated files in a debug package.
+		BBQ_SSL_CRYPTO3 = $$BBQ_SSL_LIB/libcrypto_3.so
+		BBQ_SSL_SSL3 = $$BBQ_SSL_LIB/libssl_3.so
+		exists($$BBQ_SSL_SSL3): ANDROID_EXTRA_LIBS += $$BBQ_SSL_CRYPTO3 $$BBQ_SSL_SSL3
 		message("openssl: bundling $$BBQ_SSL_LIB")
 	} else {
 		warning("openssl: $$BBQ_SSL_SSL is missing -- the package will " \
@@ -101,6 +111,8 @@ SOURCES += \
 	src/graph/forecast_graph.cpp \
 	src/graph/interpolate.cpp \
 	src/met/nowcast.cpp \
+	src/net/probe.cpp \
+	src/net/tls_backend.cpp \
 	src/model/composite.cpp \
 	src/model/correction.cpp \
 	src/openmeteo/forecast.cpp \
@@ -121,6 +133,8 @@ HEADERS += \
 	src/graph/forecast_graph.h \
 	src/graph/interpolate.h \
 	src/met/nowcast.h \
+	src/net/probe.h \
+	src/net/tls_backend.h \
 	src/model/composite.h \
 	src/model/correction.h \
 	src/openmeteo/forecast.h \
