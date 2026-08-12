@@ -8,6 +8,7 @@
 
 #include "graph/interpolate.h"
 #include "ui/layout.h"
+#include "ui/theme.h"
 #include "model/composite.h"
 #include "model/grill.h"
 
@@ -155,6 +156,13 @@ public:
 	 * score rather than through the graph, so it is offered rather than
 	 * imposed on a plot that already carries three quantities.
 	 */
+	/*
+	 * Light, dark, or the device's answer (sec 10.3). Repaints, so the
+	 * choice is answerable by looking.
+	 */
+	void set_theme(bbq_theme theme);
+	bbq_theme theme() const { return m_theme; }
+
 	void set_show_wind(bool show);
 	bool show_wind() const { return m_show_wind; }
 
@@ -210,6 +218,7 @@ protected:
 	void mouseReleaseEvent(QMouseEvent *event) override;
 	void mouseDoubleClickEvent(QMouseEvent *event) override;
 	void wheelEvent(QWheelEvent *event) override;
+	bool event(QEvent *event) override;
 	void leaveEvent(QEvent *event) override;
 
 private:
@@ -237,6 +246,7 @@ private:
 	bbq_interpolation m_interpolation = bbq_interpolation::akima;
 	bool m_show_samples = true;
 	bool m_show_wind = false;
+	bbq_theme m_theme = bbq_theme::automatic;
 	int m_smoothing_s = 30 * 60;
 	bool m_show_windows = true;
 

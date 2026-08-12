@@ -56,6 +56,9 @@ public:
 	 * decides, which is right until somebody disagrees with it -- a
 	 * tablet in a keyboard case, a phone on a monitor.
 	 */
+	static QString theme();
+	static void set_theme(const QString &preference);
+
 	static QString layout();
 	static void set_layout(const QString &preference);
 

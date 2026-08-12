@@ -1,9 +1,12 @@
 #include "graph/forecast_graph.h"
 
+#include "ui/theme.h"
+
 #include <QDateTime>
 #include <QFont>
 #include <QFontMetrics>
 #include <QEvent>
+#include <QGestureEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QPaintEvent>
@@ -510,6 +513,91 @@ tick_choice ticks_for(qint64 span_s, int wanted) {
 	return chosen;
 }
 
+
+/*
+ * The palette, per colour scheme (project.md sec 10.3).
+ *
+ * The DATA colours are identical in both. They are measurements of
+ * Weather Underground's own chart (sec 3.8.2), and a measurement does
+ * not change because the room got darker -- the temperature red stays
+ * WU's red. What changes is the ground it is drawn on and the furniture
+ * around it: background, grid, band shading, axis text.
+ */
+bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
+	bbq_graph_palette chosen;
+	chosen.background = QColor(0xff, 0xff, 0xff);
+	chosen.band_shade = QColor(0xf1, 0xf7, 0xfb);
+	chosen.grid = QColor(0xe7, 0xe7, 0xe7);
+	chosen.axis_text = QColor(0x4a, 0x4a, 0x4a);
+	chosen.temperature = QColor(0xd5, 0x20, 0x2a);
+	chosen.rain = QColor(0x87, 0xc4, 0x03);
+
+	/*
+	 * WU's own rain-family cyan, taken from the accumulation series on
+	 * their dashboard. Their dashboard plots observations and so has no
+	 * precipitation-chance panel to measure, which is said out loud
+	 * rather than left as an implied measurement: this is a WU colour
+	 * used for a WU-adjacent purpose, not one sampled from the thing it
+	 * is drawing.
+	 */
+	chosen.chance = QColor(0x17, 0xaa, 0xdb);
+	chosen.now_marker = QColor(0x00, 0x53, 0xae);
+	chosen.stale_warning = QColor(0xd5, 0x20, 0x2a);
+	chosen.grill_window = QColor(0xff, 0x8b, 0x33);
+	chosen.readout_back = QColor(0x2b, 0x2b, 0x2b);
+	chosen.readout_edge = QColor(0x9a, 0x9a, 0x9a);
+	chosen.readout_text = QColor(0xf0, 0xf0, 0xf0);
+	chosen.corrected = QColor(0x8b, 0x6b, 0xb1);
+	chosen.wind = QColor(0x6b, 0x8b, 0x9a);
+	chosen.band_observed = QColor(0x5b, 0x9f, 0x49);
+	chosen.band_current = QColor(0x87, 0xc4, 0x03);
+	chosen.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
+	chosen.band_nowcast = QColor(0x17, 0xaa, 0xdb);
+	/*
+	 * Outside WU's measured set on purpose: they plot no equivalent
+	 * series, so there is nothing to copy, and every colour they DO use
+	 * is already spoken for here.
+	 *
+	 * It was #5b9f49 for one commit, which is the observed band's
+	 * colour -- two bands the same shade in the one strip whose entire
+	 * job is saying which band you are looking at. Nothing failed; the
+	 * ribbon simply stopped answering its question.
+	 */
+	chosen.band_extended = QColor(0x8b, 0x6b, 0xb1);
+	chosen.band_hourly = QColor(0x9a, 0x9a, 0x9a);
+
+	if (scheme != Qt::ColorScheme::Dark) {
+		return chosen;
+	}
+
+	/*
+	 * Dark. Not an inversion: inverting would take WU's measured red to
+	 * a cyan that is nobody's temperature colour. Only the surfaces
+	 * move, and they move to a near-black rather than a pure one so the
+	 * plot still reads as a panel rather than as a hole in the screen.
+	 */
+	chosen.background = QColor(0x16, 0x18, 0x1a);
+	chosen.band_shade = QColor(0x1e, 0x24, 0x2b);
+	chosen.grid = QColor(0x33, 0x37, 0x3b);
+	chosen.axis_text = QColor(0xc2, 0xc6, 0xca);
+
+	/*
+	 * The two that would otherwise disappear. WU's greens and blues are
+	 * chosen against white; on a dark ground the darker end of that set
+	 * goes muddy, so those specific entries are lifted rather than the
+	 * whole palette being reworked.
+	 */
+	chosen.band_observed = QColor(0x7a, 0xc8, 0x64);
+	chosen.now_marker = QColor(0x5a, 0x9d, 0xe8);
+
+	/* The readout was already a dark box; on a dark ground it needs an
+	 * edge to stay a box rather than a smudge. */
+	chosen.readout_back = QColor(0x2b, 0x2f, 0x33);
+	chosen.readout_edge = QColor(0x70, 0x76, 0x7c);
+
+	return chosen;
+}
+
 } // namespace
 
 bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
@@ -517,6 +605,16 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 
 	/* Without this the widget hears the mouse only while a button is down. */
 	setMouseTracking(true);
+
+	/*
+	 * Pinch, which is what zooming IS on the device this now runs on.
+	 *
+	 * A wheel is a desktop instrument; a phone has two fingers and no
+	 * wheel at all, so without this the zoom built in sec 13 simply does
+	 * not exist there. Qt delivers it as a gesture rather than as raw
+	 * touch, so the pinch centre and scale arrive already computed.
+	 */
+	grabGesture(Qt::PinchGesture);
 
 	/*
 	 * Weather Underground's own values, measured from their station
@@ -531,46 +629,7 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	 * desktop into dark mode, because a white plot with pale blue hour
 	 * bands IS the aesthetic sec 0 asked for.
 	 */
-	m_palette.background = QColor(0xff, 0xff, 0xff);
-	m_palette.band_shade = QColor(0xf1, 0xf7, 0xfb);
-	m_palette.grid = QColor(0xe7, 0xe7, 0xe7);
-	m_palette.axis_text = QColor(0x4a, 0x4a, 0x4a);
-	m_palette.temperature = QColor(0xd5, 0x20, 0x2a);
-	m_palette.rain = QColor(0x87, 0xc4, 0x03);
-
-	/*
-	 * WU's own rain-family cyan, taken from the accumulation series on
-	 * their dashboard. Their dashboard plots observations and so has no
-	 * precipitation-chance panel to measure, which is said out loud
-	 * rather than left as an implied measurement: this is a WU colour
-	 * used for a WU-adjacent purpose, not one sampled from the thing it
-	 * is drawing.
-	 */
-	m_palette.chance = QColor(0x17, 0xaa, 0xdb);
-	m_palette.now_marker = QColor(0x00, 0x53, 0xae);
-	m_palette.stale_warning = QColor(0xd5, 0x20, 0x2a);
-	m_palette.grill_window = QColor(0xff, 0x8b, 0x33);
-	m_palette.readout_back = QColor(0x2b, 0x2b, 0x2b);
-	m_palette.readout_edge = QColor(0x9a, 0x9a, 0x9a);
-	m_palette.readout_text = QColor(0xf0, 0xf0, 0xf0);
-	m_palette.corrected = QColor(0x8b, 0x6b, 0xb1);
-	m_palette.wind = QColor(0x6b, 0x8b, 0x9a);
-	m_palette.band_observed = QColor(0x5b, 0x9f, 0x49);
-	m_palette.band_current = QColor(0x87, 0xc4, 0x03);
-	m_palette.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
-	m_palette.band_nowcast = QColor(0x17, 0xaa, 0xdb);
-	/*
-	 * Outside WU's measured set on purpose: they plot no equivalent
-	 * series, so there is nothing to copy, and every colour they DO use
-	 * is already spoken for here.
-	 *
-	 * It was #5b9f49 for one commit, which is the observed band's
-	 * colour -- two bands the same shade in the one strip whose entire
-	 * job is saying which band you are looking at. Nothing failed; the
-	 * ribbon simply stopped answering its question.
-	 */
-	m_palette.band_extended = QColor(0x8b, 0x6b, 0xb1);
-	m_palette.band_hourly = QColor(0x9a, 0x9a, 0x9a);
+	set_theme(bbq_theme::automatic);
 }
 
 QSize bbq_forecast_graph::sizeHint() const {
@@ -599,6 +658,12 @@ void bbq_forecast_graph::set_smoothing(int seconds) {
 
 void bbq_forecast_graph::set_show_windows(bool show) {
 	m_show_windows = show;
+	update();
+}
+
+void bbq_forecast_graph::set_theme(bbq_theme theme) {
+	m_theme = theme;
+	m_palette = palette_for(bbq_theme_scheme(theme));
 	update();
 }
 
@@ -725,6 +790,55 @@ void bbq_forecast_graph::mouseDoubleClickEvent(QMouseEvent *event) {
 	QWidget::mouseDoubleClickEvent(event);
 }
 
+bool bbq_forecast_graph::event(QEvent *event) {
+	if (event->type() != QEvent::Gesture) {
+		return QWidget::event(event);
+	}
+
+	QGestureEvent *gestures = static_cast<QGestureEvent *>(event);
+	QGesture *found = gestures->gesture(Qt::PinchGesture);
+	if (found == nullptr || m_plot.width() <= 0) {
+		return QWidget::event(event);
+	}
+
+	QPinchGesture *pinch = static_cast<QPinchGesture *>(found);
+
+	/*
+	 * The same invariant the wheel holds (sec 13.1.1): the moment under
+	 * the fingers stays under them. The centre point is where the pinch
+	 * is happening, so it is the anchor -- zooming about the middle of
+	 * the widget instead would slide the thing being pinched away from
+	 * the fingers doing it, which feels broken in a way a screenshot
+	 * cannot show.
+	 */
+	const double where = pinch->centerPoint().x() - m_plot.left();
+	const double offset = std::max(0.0, std::min(
+	        static_cast<double>(m_plot.width()), where));
+
+	const qint64 span = view_span_s();
+	const qint64 from = view_from_utc();
+	const double anchor = from + offset * (static_cast<double>(span) / m_plot.width());
+
+	const double scale = pinch->scaleFactor();
+	if (scale > 0.0) {
+		/*
+		 * Fingers apart means see MORE detail, so the span shrinks --
+		 * the reciprocal, not the factor itself.
+		 */
+		set_view(0, static_cast<qint64>(span / scale));
+
+		const double per_pixel =
+		        static_cast<double>(m_view_span_s) / m_plot.width();
+		m_view_from = static_cast<qint64>(anchor - offset * per_pixel);
+
+		emit view_changed(view_from_utc(), view_from_utc() + view_span_s());
+		update();
+	}
+
+	gestures->accept(Qt::PinchGesture);
+	return true;
+}
+
 void bbq_forecast_graph::wheelEvent(QWheelEvent *event) {
 	if (m_plot.width() <= 0) {
 		QWidget::wheelEvent(event);
@@ -784,11 +898,26 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	const QFontMetrics gutter(gutter_font);
 	const int widest = qMax(gutter.horizontalAdvance(QStringLiteral("0.0 mm/h")),
 	                        gutter.horizontalAdvance(tr("rain %")));
-	const int margin_right = qMax(m_metrics.margin_right, widest + 10);
+	/*
+	 * On mobile the plot takes the whole width and the axis numbers are
+	 * drawn ON TOP of it (project.md sec 10.4).
+	 *
+	 * A gutter is a frame by another name. On a phone the left margin
+	 * and the measured right one together take a tenth of the screen to
+	 * hold four short labels, and that tenth is plot -- the difference
+	 * between reading an evening and squinting at it. The labels do not
+	 * need their own room; they need to be legible, which is a question
+	 * about contrast rather than about space.
+	 */
+	const bool overlay_labels = m_metrics.stack_controls;
+
+	const int margin_right =
+	        overlay_labels ? 0 : qMax(m_metrics.margin_right, widest + 10);
+	const int margin_left = overlay_labels ? 0 : m_metrics.margin_left;
 
 	const int stack = chance_height + chance_gap;
-	const QRect plot(m_metrics.margin_left, margin_top,
-	                 width() - m_metrics.margin_left - margin_right,
+	const QRect plot(margin_left, margin_top,
+	                 width() - margin_left - margin_right,
 	                 height() - margin_top - m_metrics.margin_bottom - stack);
 	const QRect chance_plot(plot.left(), plot.bottom() + chance_gap,
 	                        plot.width(), chance_height);
@@ -1010,6 +1139,60 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	QFont label_font = font();
 	label_font.setPointSizeF(label_font.pointSizeF() * m_metrics.label_scale);
 	painter.setFont(label_font);
+
+	/*
+	 * One way of drawing an edge label, so the two shapes cannot drift.
+	 *
+	 * Overlaid text needs a ground of its own or it competes with
+	 * whatever the curve is doing behind it -- a translucent plate in
+	 * the plot's own background colour keeps the label readable without
+	 * hiding the data, and costs nothing where there is a gutter to
+	 * draw in instead.
+	 */
+	const auto edge_label = [&](double x, double y, double wide,
+	                            Qt::Alignment align, const QString &text) {
+		const QRectF box(x, y, wide, 14);
+
+		if (overlay_labels) {
+			const QFontMetrics measured(label_font);
+			const int text_wide = measured.horizontalAdvance(text);
+
+			double left = box.left();
+			if (align.testFlag(Qt::AlignRight)) {
+				left = box.right() - text_wide;
+			}
+
+			QColor plate = m_palette.background;
+			plate.setAlpha(200);
+
+			painter.setPen(Qt::NoPen);
+			painter.setBrush(plate);
+			painter.drawRect(QRectF(left - 3, box.top(), text_wide + 6,
+			                        box.height()));
+			painter.setBrush(Qt::NoBrush);
+			painter.setPen(m_palette.axis_text);
+		}
+
+		painter.drawText(box, align | Qt::AlignVCenter, text);
+	};
+
+	/*
+	 * Where an edge label sits: inside the plot when there is no gutter,
+	 * in the gutter when there is one.
+	 */
+	const double left_label_x = overlay_labels ? plot.left() + 4 : 2;
+	const double left_label_wide =
+	        overlay_labels ? 80 : m_metrics.margin_left - 6;
+	const Qt::Alignment left_align =
+	        overlay_labels ? Qt::AlignLeft : Qt::AlignRight;
+
+	const double right_label_wide = overlay_labels ? 90 : margin_right - 6;
+	const double right_label_x = overlay_labels
+	                                     ? plot.right() - right_label_wide - 4
+	                                     : width() - margin_right + 4;
+	const Qt::Alignment right_align =
+	        overlay_labels ? Qt::AlignRight : Qt::AlignLeft;
+
 
 	const qint64 tick_step = ticks.step_s;
 	const qint64 first_tick = ((from / tick_step) + 1) * tick_step;
@@ -1329,11 +1512,10 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.drawLine(chance_plot.bottomLeft(), chance_plot.bottomRight());
 
 	painter.setPen(m_palette.axis_text);
-	painter.drawText(QRectF(2, chance_plot.top() - 2, m_metrics.margin_left - 6, 14),
-	                 Qt::AlignRight | Qt::AlignVCenter, tr("100%"));
-	painter.drawText(QRectF(width() - margin_right + 4, chance_plot.top() - 2,
-	                        margin_right - 6, 14),
-	                 Qt::AlignLeft | Qt::AlignVCenter, tr("rain %"));
+	edge_label(left_label_x, chance_plot.top() - 2, left_label_wide, left_align,
+	           tr("100%"));
+	edge_label(right_label_x, chance_plot.top() - 2, right_label_wide,
+	           right_align, tr("rain %"));
 
 	/* --- the provenance ribbon (sec 3.4) ------------------------------ */
 	for (int x = 0; x < plot.width(); ++x) {
@@ -1469,13 +1651,13 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	/* --- axis labels --------------------------------------------------- */
 	painter.setPen(m_palette.axis_text);
 
-	const QRectF temperature_top(2, plot.top() - 2, m_metrics.margin_left - 6, 14);
-	painter.drawText(temperature_top, Qt::AlignRight | Qt::AlignVCenter,
-	                 QString::number(temperature_high, 'f', 0) + tr(" C"));
+	const QString high_text = QString::number(temperature_high, 'f', 0) + tr(" C");
+	const QString low_text = QString::number(temperature_low, 'f', 0) + tr(" C");
 
-	const QRectF temperature_bottom(2, plot.bottom() - 12, m_metrics.margin_left - 6, 14);
-	painter.drawText(temperature_bottom, Qt::AlignRight | Qt::AlignVCenter,
-	                 QString::number(temperature_low, 'f', 0) + tr(" C"));
+	edge_label(left_label_x, plot.top() - 2, left_label_wide, left_align,
+	           high_text);
+	edge_label(left_label_x, plot.bottom() - 12, left_label_wide, left_align,
+	           low_text);
 
 	/*
 	 * Say which clock. A graph in somebody else's timezone that does
@@ -1500,20 +1682,20 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		}
 	}
 
-	painter.drawText(QRectF(2, chance_plot.bottom() + m_metrics.ribbon_height + 3,
-	                        m_metrics.margin_left - 6, 14),
-	                 Qt::AlignRight | Qt::AlignVCenter, clock);
+	edge_label(left_label_x, chance_plot.bottom() + m_metrics.ribbon_height + 3,
+	           left_label_wide, left_align, clock);
 
-	const QRectF rain_top(width() - margin_right + 4, plot.bottom() -
-	                              plot.height() * 0.45 - 6, margin_right - 6, 14);
-	painter.drawText(rain_top, Qt::AlignLeft | Qt::AlignVCenter,
-	                 QString::number(rain_high, 'f', 1) + tr(" mm/h"));
+	const QString rain_text = QString::number(rain_high, 'f', 1) + tr(" mm/h");
+
+	edge_label(right_label_x, plot.bottom() - plot.height() * 0.45 - 6,
+	           right_label_wide, right_align, rain_text);
 
 	if (m_show_wind) {
+		const QString wind_text = QString::number(wind_high, 'f', 0) + tr(" km/h");
+
 		painter.setPen(m_palette.wind);
-		const QRectF wind_top(width() - margin_right + 4, plot.top() - 2,
-		                      margin_right - 6, 14);
-		painter.drawText(wind_top, Qt::AlignLeft | Qt::AlignVCenter,
-		                 QString::number(wind_high, 'f', 0) + tr(" km/h"));
+		edge_label(right_label_x, plot.top() - 2, right_label_wide, right_align,
+		           wind_text);
+		painter.setPen(m_palette.axis_text);
 	}
 }

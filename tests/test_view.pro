@@ -7,7 +7,9 @@ TARGET = test_view
 QT += gui widgets
 
 SOURCES += test_view.cpp \
-	$$PWD/../src/graph/forecast_graph.cpp
+	$$PWD/../src/graph/forecast_graph.cpp \
+	$$PWD/../src/ui/theme.cpp
 
 HEADERS += \
-	$$PWD/../src/graph/forecast_graph.h
+	$$PWD/../src/graph/forecast_graph.h \
+	$$PWD/../src/ui/theme.h

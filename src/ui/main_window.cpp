@@ -18,6 +18,7 @@
 #include "ui/layout.h"
 #include "model/settings.h"
 #include "model/correction.h"
+#include "ui/theme.h"
 #include "wu/feed.h"
 
 bbq_main_window::bbq_main_window(QWidget *parent)
@@ -195,6 +196,27 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_graph->set_show_wind(on);
 	});
 
+	/*
+	 * The theme. Beside the layout box because they are the same kind of
+	 * choice: a compiled-in default, overridable, with "auto" meaning
+	 * the device's own answer (sec 10.3).
+	 */
+	m_theme_box = new QComboBox(this);
+	m_theme_box->addItem(tr("Auto"), QStringLiteral("auto"));
+	m_theme_box->addItem(tr("Light"), QStringLiteral("light"));
+	m_theme_box->addItem(tr("Dark"), QStringLiteral("dark"));
+
+	const int stored_theme = m_theme_box->findData(bbq_settings::theme());
+	if (stored_theme >= 0) {
+		m_theme_box->setCurrentIndex(stored_theme);
+	}
+
+	connect(m_theme_box, &QComboBox::currentIndexChanged, this, [this](int index) {
+		const QString wanted = m_theme_box->itemData(index).toString();
+		bbq_settings::set_theme(wanted);
+		apply_theme(bbq_theme_resolve(wanted));
+	});
+
 	m_controls = new QWidget(this);
 
 	/*
@@ -206,7 +228,8 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	                << new QLabel(tr("Interpolation:"), this) << method
 	                << new QLabel(tr("Rounding:"), this) << smoothing
 	                << windows << marks << m_wind_box
-	                << new QLabel(tr("Layout:"), this) << m_layout_box;
+	                << new QLabel(tr("Layout:"), this) << m_layout_box
+	                << new QLabel(tr("Theme:"), this) << m_theme_box;
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
 	m_root_layout = layout;
@@ -216,6 +239,9 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	layout->addWidget(m_verdict, 0);
 	layout->addWidget(m_graph, 1);
 	layout->addWidget(m_controls, 0);
+
+	/* The saved choice, applied before anything is shown. */
+	apply_theme(bbq_theme_resolve(bbq_settings::theme()));
 
 	connect(m_feed, &bbq_wu_feed::updated, this, [this]() {
 		m_graph->set_composite(m_feed->composite());
@@ -265,6 +291,15 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 	m_graph->set_layout(layout);
 
 	const bbq_metrics metrics = bbq_metrics_for(layout);
+
+	/*
+	 * Kept, because the safe-area code needs to know which shape it is
+	 * padding: the mobile one gives its horizontal margins to the plot
+	 * (sec 10.4), and that decision is made where the margins are set
+	 * rather than duplicated here.
+	 */
+	m_metrics = metrics;
+	apply_safe_area();
 
 	/*
 	 * The controls change SHAPE, not just size. On a phone the row
@@ -454,50 +489,67 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	m_feed->start_auto_refresh();
 }
 
-void bbq_main_window::apply_safe_area() {
+void bbq_main_window::apply_theme(bbq_theme theme) {
 	/*
-	 * Keep the content out from under the system bars (sec 10.2).
-	 *
-	 * On the phone the verdict line was drawn under the clock and the
-	 * status line under the navigation bar -- readable only because the
-	 * text happened to be short. Qt 6.9 gained safeAreaMargins() for
-	 * exactly this; before that it had to be asked of the platform by
-	 * hand.
-	 *
-	 * On a desktop the margins are all zero, so this costs nothing and
-	 * needs no platform test: the question "how much of my window is
-	 * covered by system furniture" has an answer everywhere, and on X11
-	 * that answer is none.
+	 * The whole application, not only the graph. A dark plot inside a
+	 * light window is worse than either, and the controls are what the
+	 * eye lands on first on a phone.
 	 */
-	QWindow *handle = windowHandle();
-	if (handle == nullptr || m_root_layout == nullptr) {
+	bbq_theme_apply(theme);
+	m_graph->set_theme(theme);
+
+	if (m_theme_box != nullptr) {
+		const int index = m_theme_box->findData(
+		        QString::fromLatin1(bbq_theme_name(theme)));
+		if (index >= 0 && index != m_theme_box->currentIndex()) {
+			m_theme_box->setCurrentIndex(index);
+		}
+	}
+}
+
+void bbq_main_window::apply_safe_area() {
+	if (m_root_layout == nullptr) {
 		return;
 	}
 
 	/*
-	 * Qt gained this in 6.9. The desktop build here is 6.8 and the
-	 * Android kit is 6.10, so the guard is real rather than defensive --
-	 * and it costs nothing to be on the wrong side of it, because the
-	 * platform that needs safe areas is the one with the newer Qt.
+	 * On mobile the graph runs to the screen edges (sec 10.4).
+	 *
+	 * A phone screen is narrow enough that a margin either side is not
+	 * breathing room, it is lost plot: those pixels are the difference
+	 * between reading an evening and squinting at it. The vertical
+	 * margins stay, because the verdict above and the controls below
+	 * need separating from the plot.
+	 *
+	 * This is deliberately OUTSIDE the version guard below. It was
+	 * inside it once, which meant the shape depended on the Qt version
+	 * rather than on the layout: the desktop build is 6.8, the guard
+	 * compiled the whole block away, and the mobile shape silently kept
+	 * its margins on the one platform where they could be looked at.
+	 */
+	const bool edge_to_edge = m_metrics.stack_controls;
+	const int base_left = edge_to_edge ? 0 : m_base_margins.left();
+	const int base_right = edge_to_edge ? 0 : m_base_margins.right();
+
+	QMargins safe;
+
+	/*
+	 * Qt gained safe areas in 6.9. Where it has them they are ADDED to
+	 * the margins above, never substituted for them -- assigning them
+	 * wiped the ordinary padding on a device that reports zeroes, and
+	 * pressed every widget flat against all four edges.
 	 */
 #if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
-	/*
-	 * ADDED to the layout's own margins, never substituted for them.
-	 *
-	 * The first attempt assigned the safe area directly, and measuring
-	 * on the phone showed it reports QMargins(0, 0, 0, 0) there -- so
-	 * assigning it wiped the ordinary padding and pushed the content
-	 * flat against every edge, which looked far worse than the overlap
-	 * it was meant to fix. Adding means an unknown safe area costs
-	 * nothing and a real one is respected.
-	 */
-	const QMargins safe = handle->safeAreaMargins();
-
-	m_root_layout->setContentsMargins(m_base_margins.left() + safe.left(),
-	                                  m_base_margins.top() + safe.top(),
-	                                  m_base_margins.right() + safe.right(),
-	                                  m_base_margins.bottom() + safe.bottom());
+	const QWindow *handle = windowHandle();
+	if (handle != nullptr) {
+		safe = handle->safeAreaMargins();
+	}
 #endif
+
+	m_root_layout->setContentsMargins(base_left + safe.left(),
+	                                  m_base_margins.top() + safe.top(),
+	                                  base_right + safe.right(),
+	                                  m_base_margins.bottom() + safe.bottom());
 }
 
 void bbq_main_window::showEvent(QShowEvent *event) {

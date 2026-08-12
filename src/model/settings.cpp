@@ -30,6 +30,7 @@ const char *const key_override = "geocode_override";
 const char *const key_interpolation = "graph/interpolation";
 const char *const key_smoothing = "graph/rounding_seconds";
 const char *const key_layout = "layout";
+const char *const key_theme = "theme";
 
 } // namespace
 
@@ -89,6 +90,15 @@ int bbq_settings::smoothing(int fallback) {
 
 void bbq_settings::set_smoothing(int seconds) {
 	open().setValue(QString::fromLatin1(key_smoothing), seconds);
+}
+
+QString bbq_settings::theme() {
+	return open().value(QString::fromLatin1(key_theme),
+	                    QStringLiteral("auto")).toString().trimmed();
+}
+
+void bbq_settings::set_theme(const QString &preference) {
+	open().setValue(QString::fromLatin1(key_theme), preference.trimmed());
 }
 
 QString bbq_settings::layout() {

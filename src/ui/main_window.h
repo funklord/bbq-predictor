@@ -3,6 +3,8 @@
 
 #include <QList>
 #include <QMargins>
+
+#include "ui/theme.h"
 #include <QWidget>
 
 #include "graph/interpolate.h"
@@ -44,6 +46,7 @@ public:
 	 * wind and left the box unticked.
 	 */
 	void set_show_wind(bool show);
+	void apply_theme(bbq_theme theme);
 
 protected:
 	void showEvent(class QShowEvent *event) override;
@@ -107,6 +110,7 @@ private:
 	 */
 	class QVBoxLayout *m_root_layout = nullptr;
 	QMargins m_base_margins;
+	bbq_metrics m_metrics;
 
 	void apply_safe_area();
 
@@ -125,6 +129,7 @@ private:
 	QString m_last_error;
 	QString m_history_path;
 	QCheckBox *m_wind_box = nullptr;
+	QComboBox *m_theme_box = nullptr;
 };
 
 #endif

@@ -2166,6 +2166,67 @@ window in the shot path rather than in the layout.
   second guess. It is measured from the widest string it has to hold
   now, the same way the tray icon's digits are (sec 4.2.1).
 
+### 10.3 Light, dark, or the device's answer
+
+**This reverses sec 3.8.3**, which fixed the graph's palette to Weather
+Underground's measured colours on a white plot and refused to follow the
+desktop into dark mode. That reasoning is still recorded and was right
+for what it was deciding: a white plot with pale hour bands IS the look
+sec 0 asked for, and following a desktop theme would have traded a
+measured aesthetic for a system preference.
+
+What changed is where the applet runs. **A white rectangle at night on a
+phone is not a style choice, it is a torch.**
+
+The data colours are identical in both schemes. They are measurements of
+somebody else's chart (sec 3.8.2), and a measurement does not change
+because the room got darker -- the temperature red is WU's red either
+way. What changes is the ground it is drawn on and the furniture around
+it: background, grid, band shading, axis text. Two entries are lifted in
+dark rather than the palette being reworked, because WU's darker greens
+and blues were chosen against white and go muddy on black.
+
+Three things were decided while building it:
+
+- **`auto` UNSETS the override rather than pinning the current answer.**
+  Setting today's scheme would freeze it, so a phone switching to dark
+  at sunset would stop being followed and the setting called "auto"
+  would be the one that no longer was.
+- **The palette is set explicitly, not left to the style.** Asking Qt to
+  change colour scheme moved the graph and left the controls light -- a
+  dark plot in a light window, which is worse than either and was the
+  first thing a rendering showed. Whether a style honours the hint is
+  the style's business; what the applet looks like is not.
+- **The whole window follows, not only the graph.** The controls are
+  what the eye lands on first on a phone.
+
+### 10.4 On mobile there is no frame at all, and the numbers sit on the plot
+
+A gutter is a frame by another name. The left margin and the measured
+right one together take about a tenth of a phone screen to hold four
+short labels, and that tenth is plot -- the difference between reading
+an evening and squinting at it.
+
+So on mobile the graph has **no horizontal margins anywhere**: not in
+the window layout, and not inside the graph either. The axis numbers --
+the temperature high and low, `100%`, the rain scale, the wind scale and
+the zone -- are drawn ON TOP of the plot, each on a translucent plate in
+the plot's own background colour. They do not need room; they need
+contrast, which is a different problem with a much cheaper answer.
+
+Both shapes draw their edge labels through one helper, so the desktop's
+gutter and mobile's overlay cannot drift apart. The vertical margins
+stay: the verdict above and the controls below need separating from the
+plot, and the safe area (sec 11.4) is still added on every side, because
+system furniture is not decoration and cannot be traded for width.
+
+**One bug here is worth keeping.** The edge-to-edge rule was written
+inside the `QT_VERSION >= 6.9` guard that the safe-area query needs. The
+desktop build is 6.8, so the whole block compiled away and the mobile
+shape silently kept its margins on the one platform where they could be
+looked at. The shape must not depend on the Qt version; only the safe
+area does.
+
 ## 11. Android
 
 The build is wired and harmonized. **It does not complete on this
@@ -2920,6 +2981,24 @@ would be testing Qt.
 `plot_rect()` is public for this: the assertions have to be made against
 the same rectangle the handlers use, not against a second guess at how
 the margins are computed.
+
+### 13.1.2 Pinch, because a phone has no wheel
+
+Zooming was built on the wheel, which is a desktop instrument. A phone
+has two fingers and no wheel at all, so without a pinch gesture the zoom
+of sec 13 simply does not exist there.
+
+It holds the same invariant the wheel does: **the moment under the
+fingers stays under them.** Zooming about the middle of the widget
+instead would slide the thing being pinched away from the fingers doing
+the pinching -- which feels broken in a way no screenshot can show, and
+is the reason sec 13.1.1 asserts the invariant rather than looking at it.
+
+Fingers apart means see more detail, so the span shrinks: the reciprocal
+of the scale factor, not the factor.
+
+**Unverified on hardware.** It is written and it compiles, and only a
+touchscreen can say whether it feels right.
 
 ### 13.2 The marks stop when they would lie
 

@@ -121,6 +121,7 @@ SOURCES += \
 	src/model/settings.cpp \
 	src/store/history.cpp \
 	src/ui/layout.cpp \
+	src/ui/theme.cpp \
 	src/ui/main_window.cpp \
 	src/ui/tray_icon.cpp \
 	src/wu/client.cpp \
@@ -144,6 +145,7 @@ HEADERS += \
 	src/model/settings.h \
 	src/store/history.h \
 	src/ui/layout.h \
+	src/ui/theme.h \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \
 	src/wu/client.h \
