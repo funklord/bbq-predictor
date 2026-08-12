@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QLibraryInfo>
 #include <QPluginLoader>
 #include <QSslSocket>
 #include <QStringList>
@@ -27,7 +28,24 @@ void bbq_ensure_tls_backend() {
 	 * that does not happen, and it is deliberately narrow: one pattern,
 	 * one load, and it stops as soon as TLS reports itself working.
 	 */
-	for (const QString &path : QCoreApplication::libraryPaths()) {
+	/*
+	 * Where to look, and libraryPaths() alone is NOT enough.
+	 *
+	 * On Android every plugin is flattened into the application's own
+	 * library directory, and that directory is not on libraryPaths() --
+	 * which lists a plugins/ path that does not exist in the package.
+	 * Scanning only the library paths therefore found nothing, gave up
+	 * silently, and left TLS off with the plugin sitting in plain sight
+	 * one directory away. The probe found it because the probe looked
+	 * in both places; this now looks in the same places the probe does,
+	 * which is the only reason it is known to be the right set.
+	 */
+	QStringList places = QCoreApplication::libraryPaths();
+	places << QCoreApplication::applicationDirPath();
+	places << QLibraryInfo::path(QLibraryInfo::PluginsPath);
+	places.removeDuplicates();
+
+	for (const QString &path : places) {
 		const QDir directory(path);
 		const QStringList pattern(QStringLiteral("*tls*openssl*"));
 		const QStringList names = directory.entryList(pattern, QDir::Files);
