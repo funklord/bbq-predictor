@@ -202,6 +202,22 @@ $(ANDROID_BUILD_DIR)/Makefile: android-check bbq-predictor.pro
 # appeared to work only because a previous build had left one behind, which
 # is the same stale-state trap this project keeps finding.
 android: $(ANDROID_BUILD_DIR)/Makefile
+	#
+	# The staging directory is cleared first, because nothing else
+	# prunes it.
+	#
+	# androiddeployqt COPIES extra libraries in and leaves whatever is
+	# already there. Two libraries dropped from ANDROID_EXTRA_LIBS, and
+	# deleted from deps/, still shipped in the package -- the build was
+	# reporting a configuration that no longer existed anywhere in the
+	# tree. Removing a file from a project should remove it from the
+	# artifact.
+	#
+	# Wholesale removal is safe in exactly this shape: the directory is
+	# one this build created, it is named relative to a BUILD_DIR the
+	# project owns, and the next step refills it.
+	@test -n "$(ANDROID_BUILD_DIR)" || { echo "ANDROID_BUILD_DIR is empty" >&2; exit 1; }
+	rm -rf $(ANDROID_BUILD_DIR)/android-build/libs
 	$(MAKE) -C $(ANDROID_BUILD_DIR) apk_install_target
 	$(ANDROID_DEPLOY_QT) \
 	        --input $(ANDROID_BUILD_DIR)/android-$(TARGET)-deployment-settings.json \

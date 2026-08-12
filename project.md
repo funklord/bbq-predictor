@@ -2558,6 +2558,27 @@ its window -- no config was written and no store was created, which is
 correct behaviour for an app that has not been resumed. It needs one
 unlocked run to confirm.
 
+### 11.5.3 A removed library still shipped
+
+Two libraries were dropped from `ANDROID_EXTRA_LIBS` and deleted from
+`deps/`, and the next package contained them anyway.
+
+androiddeployqt COPIES extra libraries into its staging directory and
+leaves whatever is already there. Nothing prunes it, so the artifact
+described a configuration that no longer existed anywhere in the tree --
+and the build reported success while doing it.
+
+**Removing a file from a project has to remove it from the artifact**,
+or every stale build is a package nobody can account for. The staging
+directory is cleared before each deploy. Wholesale removal is right in
+exactly this shape: the directory is one the build created, it is named
+relative to a `BUILD_DIR` the project owns, the variable is checked
+non-empty first, and the next step refills it.
+
+This is the same class as every other stale-state trap here (sec
+11.6.2), and it is the one that would have shipped: the others wasted
+time, this one put files in a package.
+
 ### 11.6 TLS on Android: what it was, after four wrong answers
 
 The applet on the phone could fetch nothing. Qt reported
