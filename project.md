@@ -1809,6 +1809,27 @@ palette entries. This file's own opening note calls a constant beside
 the palette "a third opinion nobody set", and that is exactly what it
 was.
 
+### 5.1.8 The hole scan could not report a hole at the end
+
+`--fetch-once` walks the composite looking for uncovered stretches. Two
+faults sat in its loop and cancelled each other out on ordinary data.
+
+It scanned up to AND INCLUDING the end of coverage. A sample covers a
+half-open span, so `at(end)` is never covered -- meaning every single
+run opened a hole on its final step. And a hole still open when the scan
+finished was dropped: not counted, not printed, not in the total.
+
+Together those were invisible. The spurious final hole was silently
+discarded by the same bug that would have discarded a real one. **A
+genuinely uncovered tail would have been reported as `holes 0`** -- a
+check answering the opposite of the truth, which is worse than one that
+does not exist.
+
+The scan stops before the exclusive end now, and an open hole is closed
+against it. This is the same shape as the signature check in sec 11.2.1
+and the reliability table in sec 12.11: a check that cannot report a
+fault reads exactly like one finding nothing wrong.
+
 ### 5.2 The suite, and what it is for
 
 **Not coverage.** Every test asserts a claim this document makes, on

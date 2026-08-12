@@ -115,7 +115,31 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 	qint64 hole_start = 0;
 	qint64 worst = 0;
 
-	for (qint64 t = begin; t <= end; t += stride) {
+	const auto close_hole = [&](qint64 at) {
+		const qint64 width = at - hole_start;
+		++holes;
+
+		if (width > worst) {
+			worst = width;
+		}
+
+		out << "  hole       " << stamp(hole_start) << "Z..";
+		out << stamp(at) << "Z  (" << (width / 60) << " min)\n";
+		hole_start = 0;
+	};
+
+	/*
+	 * Stops BEFORE the end, and closes an open hole afterwards.
+	 *
+	 * Two faults in one line otherwise. A sample covers a half-open
+	 * span, so at(end) is never covered -- scanning up to and including
+	 * it opened a hole on the final step of every run. And a hole still
+	 * open when the scan finished was simply dropped: not counted, not
+	 * printed. Those cancelled out on ordinary data and hid each other,
+	 * but a genuinely uncovered tail would have been reported as
+	 * "holes 0" -- a check answering the opposite of the truth.
+	 */
+	for (qint64 t = begin; t < end; t += stride) {
 		const bool covered = composite.at(t).is_valid();
 
 		if (!covered && hole_start == 0) {
@@ -123,15 +147,12 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 		}
 
 		if (covered && hole_start != 0) {
-			const qint64 width = t - hole_start;
-			++holes;
-			if (width > worst) {
-				worst = width;
-			}
-			out << "  hole       " << stamp(hole_start) << "Z..";
-			out << stamp(t) << "Z  (" << (width / 60) << " min)\n";
-			hole_start = 0;
+			close_hole(t);
 		}
+	}
+
+	if (hole_start != 0) {
+		close_hole(end);
 	}
 
 	out << "  holes      " << holes;
