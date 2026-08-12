@@ -2,7 +2,12 @@
 #include <QTest>
 #include <QWheelEvent>
 
+#include <QGuiApplication>
+#include <QPalette>
+#include <QStyleHints>
+
 #include "graph/forecast_graph.h"
+#include "ui/theme.h"
 
 /*
  * Panning and zooming (project.md sec 13).
@@ -37,6 +42,9 @@ private slots:
 	void zooming_holds_the_moment_under_the_cursor();
 	void dragging_moves_time_with_the_hand();
 	void double_click_comes_back_to_now();
+	void a_theme_setting_lands_somewhere_defined();
+	void automatic_never_answers_unknown();
+	void automatic_releases_the_override();
 
 private:
 	static void paint_once(probe &graph);
@@ -193,6 +201,76 @@ void test_view::double_click_comes_back_to_now() {
 
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
 	QVERIFY(qAbs(graph.view_from_utc() - (now - 3 * 3600)) <= 2);
+}
+
+void test_view::a_theme_setting_lands_somewhere_defined() {
+	QCOMPARE(bbq_theme_resolve(QStringLiteral("light")), bbq_theme::light);
+	QCOMPARE(bbq_theme_resolve(QStringLiteral("dark")), bbq_theme::dark);
+	QCOMPARE(bbq_theme_resolve(QStringLiteral("auto")), bbq_theme::automatic);
+
+	/*
+	 * A config file is edited by hand. "Dark ", "DARK" and a typo must
+	 * all land somewhere defined rather than somewhere undefined -- the
+	 * same rule the layout setting follows, and the reason both read
+	 * through a resolver instead of comparing strings at the call site.
+	 */
+	QCOMPARE(bbq_theme_resolve(QStringLiteral("  DARK ")), bbq_theme::dark);
+	QCOMPARE(bbq_theme_resolve(QStringLiteral("Light")), bbq_theme::light);
+	QCOMPARE(bbq_theme_resolve(QString()), bbq_theme::automatic);
+	QCOMPARE(bbq_theme_resolve(QStringLiteral("midnight")), bbq_theme::automatic);
+}
+
+void test_view::automatic_never_answers_unknown() {
+	QCOMPARE(bbq_theme_scheme(bbq_theme::light), Qt::ColorScheme::Light);
+	QCOMPARE(bbq_theme_scheme(bbq_theme::dark), Qt::ColorScheme::Dark);
+
+	/*
+	 * Qt returns Unknown where the platform has no opinion, and a caller
+	 * choosing a palette has to pick something. Leaving three cases for
+	 * a two-valued question would push the same decision out to every
+	 * call site, differently each time.
+	 */
+	const Qt::ColorScheme resolved = bbq_theme_scheme(bbq_theme::automatic);
+	QVERIFY(resolved == Qt::ColorScheme::Light ||
+	        resolved == Qt::ColorScheme::Dark);
+}
+
+void test_view::automatic_releases_the_override() {
+	/*
+	 * Asserted on the PALETTE, not on the colour-scheme hint.
+	 *
+	 * The hint is advisory and a platform may ignore it: offscreen does,
+	 * reporting Unknown straight after setColorScheme(Dark). That is not
+	 * a fault to work around -- it is the reason bbq_theme_apply sets a
+	 * palette explicitly rather than asking and hoping, which the first
+	 * rendering had already shown when the graph went dark and the
+	 * controls stayed light.
+	 *
+	 * So the test checks the thing that carries the theme. Asserting on
+	 * the hint would have passed on a platform that honours it and
+	 * failed on one that does not, while telling us nothing about what
+	 * the user sees on either.
+	 */
+	bbq_theme_apply(bbq_theme::dark);
+	const QColor dark_window = QGuiApplication::palette().color(QPalette::Window);
+
+	bbq_theme_apply(bbq_theme::light);
+	const QColor light_window = QGuiApplication::palette().color(QPalette::Window);
+
+	QVERIFY2(dark_window != light_window,
+	         "light and dark produced the same window colour");
+	QVERIFY2(dark_window.lightness() < light_window.lightness(),
+	         "the dark scheme is not darker than the light one");
+
+	/*
+	 * Automatic resolves to one of the two rather than to a third thing,
+	 * so whatever the device says, the applet has a palette.
+	 */
+	bbq_theme_apply(bbq_theme::automatic);
+	const QColor automatic_window =
+	        QGuiApplication::palette().color(QPalette::Window);
+
+	QVERIFY(automatic_window == dark_window || automatic_window == light_window);
 }
 
 /*

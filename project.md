@@ -2197,6 +2197,15 @@ Three things were decided while building it:
   dark plot in a light window, which is worse than either and was the
   first thing a rendering showed. Whether a style honours the hint is
   the style's business; what the applet looks like is not.
+
+  **The hint is advisory, and measurably so.** A test asserting on it
+  found that `colorScheme()` reports Unknown immediately after
+  `setColorScheme(Dark)` on the offscreen platform -- the request is
+  simply ignored. So the theme is carried entirely by the palette, and
+  the test asserts on that: light and dark must differ, and dark must be
+  the darker of the two. Asserting on the hint would have passed where a
+  platform honours it and failed where one does not, while saying
+  nothing about what anybody sees on either.
 - **The whole window follows, not only the graph.** The controls are
   what the eye lands on first on a phone.
 
