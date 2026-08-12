@@ -180,6 +180,28 @@ ordinary reply error, so every band's existing failure path already
 handles it -- no new branch, which is why the change is one line on the
 manager the four providers share.
 
+### 2.3.3 One null timestamp claimed the band began in 1970
+
+The forecast readers take time from `validTimeUtc` where it exists and
+from `validTimeLocal` otherwise. The local path discards the whole band
+on a single unparseable timestamp, and says why: a series missing an
+arbitrary sample from its middle draws a gap that means nothing.
+
+**The UTC path had no such guard**, and `QJsonValue::toDouble()` answers
+0 for anything that is not a number. So one null became a sample at the
+epoch -- and that is not a small wrong number. The series then claims to
+begin on 1 January 1970: `begin_utc()` says so, the composite's coverage
+says so, and the graph draws a gap of fifty-odd years beside an hour of
+weather.
+
+Both paths are equally strict now. **A guard on one branch of a choice
+and not the other is decoration**: the input decides which branch runs,
+and the input is the thing being defended against.
+
+Found by reading rather than by a failure, and pinned by a test that was
+watched failing first -- a null in the middle of an otherwise ordinary
+hourly response.
+
 ### 2.4 Staleness is visible, always
 
 This is the fragile joint in the whole program, and its failure mode is

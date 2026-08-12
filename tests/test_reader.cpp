@@ -22,6 +22,7 @@ private slots:
 	void observed_sorts_rows_that_arrive_newest_first();
 	void observed_takes_the_station_zone_and_wind();
 	void a_malformed_band_comes_back_empty();
+	void a_bad_utc_timestamp_does_not_become_1970();
 
 private:
 	static QJsonDocument parse(const char *json);
@@ -147,6 +148,39 @@ void test_reader::a_malformed_band_comes_back_empty() {
 	QVERIFY(bbq_wu_read_nowcast(broken).is_empty());
 	QVERIFY(bbq_wu_read_hourly(parse("[]")).is_empty());
 	QVERIFY(bbq_wu_read_observed(parse(R"({"observations": []})")).is_empty());
+}
+
+void test_reader::a_bad_utc_timestamp_does_not_become_1970() {
+	/*
+	 * The two time paths must be equally strict.
+	 *
+	 * validTimeLocal already discards the whole band on one unparseable
+	 * timestamp, and says why: a series missing an arbitrary sample from
+	 * its middle draws a gap that means nothing. validTimeUtc had no
+	 * such guard, and QJsonValue::toDouble() answers 0 for anything that
+	 * is not a number -- so a single null became a sample at the epoch.
+	 *
+	 * That is not a small wrong number. The series then claims to begin
+	 * on 1 January 1970: begin_utc reports it, the composite's coverage
+	 * reports it, and the graph sees a gap of fifty-odd years next to
+	 * an hour of weather.
+	 */
+	const QJsonDocument document = parse(R"({
+		"validTimeUtc": [1786100000, null, 1786107200],
+		"temperature": [11, 12, 13],
+		"qpf": [0, 0, 0]
+	})");
+
+	const bbq_series series = bbq_wu_read_hourly(document);
+
+	for (const bbq_sample &sample : series.samples()) {
+		QVERIFY2(sample.start_utc > 1000000000,
+		         "a sample landed at or near the epoch");
+	}
+
+	/* Discarded outright, which is what the local path does. */
+	QVERIFY2(series.is_empty(),
+	         "a band with an unreadable timestamp was kept anyway");
 }
 
 QTEST_APPLESS_MAIN(test_reader)

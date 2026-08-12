@@ -113,6 +113,22 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 	if (!utc.isEmpty()) {
 		starts.reserve(utc.size());
 		for (const QJsonValue &value : utc) {
+			/*
+			 * Checked, because toDouble() answers 0 for anything that is
+			 * not a number -- so one null became a sample at the epoch,
+			 * and the band then claimed to begin on 1 January 1970. That
+			 * is not a small wrong number: begin_utc reports it, the
+			 * composite's coverage reports it, and the graph draws a gap
+			 * of fifty-odd years beside an hour of weather.
+			 *
+			 * Discarding the band is what the validTimeLocal path below
+			 * already does, for the reason given there. The two paths
+			 * have to be equally strict or the stricter one is decoration.
+			 */
+			if (!value.isDouble()) {
+				return series;
+			}
+
 			starts.push_back(static_cast<qint64>(value.toDouble()));
 		}
 	} else {
