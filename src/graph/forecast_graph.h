@@ -66,6 +66,13 @@ struct bbq_graph_palette {
 	 */
 	QColor wind;
 
+	/*
+	 * The line at local midnight. Stronger than the grid on purpose:
+	 * "which day is this" is the question a multi-day graph gets asked
+	 * most, and an hour tick cannot answer it.
+	 */
+	QColor day_divider;
+
 	/* Per band, for the provenance ribbon (sec 3.4). */
 	QColor band_observed;
 	QColor band_current;

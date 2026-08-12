@@ -15,6 +15,7 @@
 #include <QPen>
 #include <QPolygonF>
 #include <QRect>
+#include <QTime>
 #include <QTimeZone>
 
 #include <algorithm>
@@ -549,6 +550,7 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	chosen.readout_text = QColor(0xf0, 0xf0, 0xf0);
 	chosen.corrected = QColor(0x8b, 0x6b, 0xb1);
 	chosen.wind = QColor(0x6b, 0x8b, 0x9a);
+	chosen.day_divider = QColor(0x8c, 0x96, 0xa0);
 	chosen.band_observed = QColor(0x5b, 0x9f, 0x49);
 	chosen.band_current = QColor(0x87, 0xc4, 0x03);
 	chosen.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
@@ -594,6 +596,7 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 * edge to stay a box rather than a smudge. */
 	chosen.readout_back = QColor(0x2b, 0x2f, 0x33);
 	chosen.readout_edge = QColor(0x70, 0x76, 0x7c);
+	chosen.day_divider = QColor(0x6e, 0x7a, 0x86);
 
 	return chosen;
 }
@@ -1278,6 +1281,48 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.drawText(label, Qt::AlignCenter, stamp);
 	}
 
+	/*
+	 * Midnight, in the LOCATION's clock (sec 3.12.1 and sec 3.15).
+	 *
+	 * Stepped a day at a time through QDateTime rather than by adding
+	 * 86400 seconds, because a day is not always 86400 seconds long: on
+	 * the two changeover nights it is 23 or 25 hours, and a fixed stride
+	 * would walk the divider an hour off the boundary and keep it there
+	 * for the rest of the year.
+	 */
+	std::vector<qint64> midnights;
+
+	{
+		QDateTime cursor = local_time(from, zone);
+		cursor.setTime(QTime(0, 0));
+
+		/* The first midnight at or after the left edge. */
+		if (cursor.toSecsSinceEpoch() < from) {
+			cursor = cursor.addDays(1);
+		}
+
+		while (cursor.toSecsSinceEpoch() < to && midnights.size() < 400) {
+			midnights.push_back(cursor.toSecsSinceEpoch());
+			cursor = cursor.addDays(1);
+		}
+	}
+
+	for (qint64 midnight : midnights) {
+		const double x = plot.left() + (midnight - from) / seconds_per_pixel;
+
+		/*
+		 * Deliberately heavier than the grid and than the hour bands it
+		 * crosses. The three-hourly shading is a ruler for the eye; this
+		 * is a boundary, and if the two read alike the boundary is not
+		 * doing its job. It runs the full height of both panels so a day
+		 * is one column all the way down.
+		 */
+		painter.setPen(QPen(m_palette.day_divider, 2.0));
+		painter.drawLine(QPointF(x, plot.top()),
+		                 QPointF(x, chance_plot.bottom() +
+		                                  m_metrics.ribbon_height + 2));
+	}
+
 	/* --- rain, drawn first so the temperature line sits over it -------- */
 	QPainterPath rain_path;
 	bool rain_open = false;
@@ -1583,6 +1628,41 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		const double px = plot.left() + x;
 		painter.drawLine(QPointF(px, chance_plot.bottom() + 2),
 		                 QPointF(px, chance_plot.bottom() + 2 + m_metrics.ribbon_height));
+	}
+
+	/*
+	 * The day each divider opens, named where the day begins.
+	 *
+	 * Drawn after the data so it is never lost under a curve, and on the
+	 * same translucent plate the edge labels use. A divider without a
+	 * name only says "something changed here".
+	 */
+	if (!midnights.empty()) {
+		painter.setFont(label_font);
+
+		for (qint64 midnight : midnights) {
+			const double x = plot.left() + (midnight - from) / seconds_per_pixel;
+			const QString name =
+			        local_time(midnight, zone).toString(QStringLiteral("ddd d"));
+
+			/* Skip one that would be drawn off the right-hand edge. */
+			if (x + 52 > plot.right()) {
+				continue;
+			}
+
+			/*
+			 * Bold, because it names the thing the divider marks and
+			 * has to be findable at a glance among the hour labels
+			 * along the bottom, which are deliberately quiet.
+			 */
+			QFont day_font = label_font;
+			day_font.setBold(true);
+			painter.setFont(day_font);
+
+			edge_label(x + 4, plot.top() + 2, 56, Qt::AlignLeft, name);
+
+			painter.setFont(label_font);
+		}
 	}
 
 	/* --- now ---------------------------------------------------------- */
