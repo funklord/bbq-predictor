@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QSlider>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -203,6 +204,27 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	});
 
 	/*
+	 * How steady the temperature axis is (sec 3.14).
+	 *
+	 * A slider rather than a checkbox because the useful answer is not
+	 * yes or no: a wide graph wants a firm scale to read a trend
+	 * against, a narrow one wants the detail back, and where between
+	 * those is a matter of what somebody is looking for.
+	 */
+	QSlider *steadiness = new QSlider(Qt::Horizontal, this);
+	steadiness->setRange(0, 100);
+	steadiness->setMinimumWidth(80);
+	steadiness->setMaximumWidth(160);
+	steadiness->setValue(
+	        bbq_settings::scale_steadiness(m_graph->scale_steadiness()));
+	m_graph->set_scale_steadiness(steadiness->value());
+
+	connect(steadiness, &QSlider::valueChanged, this, [this](int value) {
+		bbq_settings::set_scale_steadiness(value);
+		m_graph->set_scale_steadiness(value);
+	});
+
+	/*
 	 * The theme. Beside the layout box because they are the same kind of
 	 * choice: a compiled-in default, overridable, with "auto" meaning
 	 * the device's own answer (sec 10.3).
@@ -234,6 +256,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	                << new QLabel(tr("Interpolation:"), this) << method
 	                << new QLabel(tr("Rounding:"), this) << smoothing
 	                << windows << marks << m_wind_box
+	                << new QLabel(tr("Steady scale:"), this) << steadiness
 	                << new QLabel(tr("Layout:"), this) << m_layout_box
 	                << new QLabel(tr("Theme:"), this) << m_theme_box;
 
@@ -634,6 +657,66 @@ void bbq_main_window::set_show_wind(bool show) {
 	m_graph->set_show_wind(show);
 }
 
+QString bbq_main_window::verification_note(const bbq_composite &composite,
+                                           qint64 when_utc, qint64 now_utc) {
+	const bbq_reading reading = composite.at(when_utc);
+	if (!reading.is_valid() || m_feed->station().isEmpty()) {
+		return QString();
+	}
+
+	const bbq_band band = reading.series->band();
+	const bbq_lead_bucket bucket = bbq_lead_bucket_for(when_utc - now_utc);
+	const bbq_history &store = m_feed->history();
+
+	const bbq_verification temperature = store.verification(
+	        m_feed->station(), band, QStringLiteral("temperature"), bucket);
+	const bbq_brier rain = store.brier(m_feed->station(), band, bucket);
+
+	if (temperature.count == 0 && rain.count == 0) {
+		/*
+		 * Said rather than left blank. An empty space reads as "nothing
+		 * to report"; the truth is that nothing has been checked yet,
+		 * which is a different thing and the normal state of a fresh
+		 * install (sec 12.6 -- a forecast is only scored once the hour
+		 * it predicted has been observed).
+		 */
+		return tr("   record: none yet");
+	}
+
+	QString note = tr("   record: ");
+	note += QString::fromLatin1(bbq_band_name(band));
+	note += QStringLiteral(" @");
+	note += QString::fromLatin1(bbq_lead_bucket_name(bucket));
+
+	if (temperature.count > 0) {
+		/*
+		 * The SIGN carries the meaning, so it is always shown: a band
+		 * that runs warm and one that runs cold are different problems
+		 * and "1.2" says neither.
+		 */
+		note += QStringLiteral("  bias %1 C")
+		                .arg(temperature.bias, 0, 'f', 1,
+		                     QLatin1Char(temperature.bias < 0 ? '-' : '+'));
+		note += QStringLiteral(", MAE %1")
+		                .arg(temperature.mean_absolute_error, 0, 'f', 1);
+	}
+
+	if (rain.count > 0) {
+		/*
+		 * Skill rather than the raw Brier score. 0.1 is excellent in a
+		 * dry climate and poor in a changeable one, and only the
+		 * comparison against always-predicting-the-base-rate says which
+		 * this is (sec 12.3).
+		 */
+		note += QStringLiteral(", rain skill %1").arg(rain.skill(), 0, 'f', 2);
+	}
+
+	note += QStringLiteral(" (n=%1)")
+	                .arg(qMax(temperature.count, rain.count));
+
+	return note;
+}
+
 void bbq_main_window::refresh_corrected() {
 	/*
 	 * Recomputed for whatever the graph is looking at, because the
@@ -702,6 +785,20 @@ void bbq_main_window::refresh_status() {
 			verdict += QString::number(windows.size() - 1);
 			verdict += tr(" more");
 		}
+
+		/*
+		 * How well this band has actually done at this lead (sec 12.12).
+		 *
+		 * The verdict names a window; this says whether the forecast it
+		 * came from has earned any trust at that distance. It is the
+		 * only question the verification tables were ever collected to
+		 * answer, and until now they answered it only to --history.
+		 *
+		 * The BAND and LEAD are taken from the window itself rather than
+		 * chosen: a record for some other band at some other lead would
+		 * be a true number about the wrong thing.
+		 */
+		verdict += verification_note(composite, best.start_utc, now);
 
 		m_verdict->setText(verdict);
 	}

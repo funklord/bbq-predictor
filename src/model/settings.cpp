@@ -31,6 +31,7 @@ const char *const key_interpolation = "graph/interpolation";
 const char *const key_smoothing = "graph/rounding_seconds";
 const char *const key_layout = "layout";
 const char *const key_theme = "theme";
+const char *const key_steadiness = "graph/scale_steadiness";
 
 } // namespace
 
@@ -90,6 +91,14 @@ int bbq_settings::smoothing(int fallback) {
 
 void bbq_settings::set_smoothing(int seconds) {
 	open().setValue(QString::fromLatin1(key_smoothing), seconds);
+}
+
+int bbq_settings::scale_steadiness(int fallback) {
+	return open().value(QString::fromLatin1(key_steadiness), fallback).toInt();
+}
+
+void bbq_settings::set_scale_steadiness(int percent) {
+	open().setValue(QString::fromLatin1(key_steadiness), percent);
 }
 
 QString bbq_settings::theme() {

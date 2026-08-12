@@ -56,6 +56,9 @@ public:
 	 * decides, which is right until somebody disagrees with it -- a
 	 * tablet in a keyboard case, a phone on a monitor.
 	 */
+	static int scale_steadiness(int fallback);
+	static void set_scale_steadiness(int percent);
+
 	static QString theme();
 	static void set_theme(const QString &preference);
 

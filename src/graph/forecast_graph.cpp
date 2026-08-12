@@ -661,6 +661,14 @@ void bbq_forecast_graph::set_show_windows(bool show) {
 	update();
 }
 
+void bbq_forecast_graph::set_scale_steadiness(int percent) {
+	m_scale_steadiness = std::max(0, std::min(100, percent));
+
+	/* Forget the held range, or the old one outlives the setting. */
+	m_scale_held = false;
+	update();
+}
+
 void bbq_forecast_graph::set_theme(bbq_theme theme) {
 	m_theme = theme;
 	m_palette = palette_for(bbq_theme_scheme(theme));
@@ -1037,6 +1045,54 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		const double middle = (temperature_high + temperature_low) / 2.0;
 		temperature_low = middle - 2.0;
 		temperature_high = middle + 2.0;
+	}
+
+	/*
+	 * Hold the scale still (project.md sec 3.14).
+	 *
+	 * The range above is exactly what is visible, recomputed every
+	 * paint -- so dragging slides new extremes in and out and the axis
+	 * moves under the curve continuously. That is precise and unreadable:
+	 * the eye cannot tell a temperature rising from an axis falling.
+	 *
+	 * Two things fix it together. The range is rounded OUTWARD to a
+	 * quantum, so it changes in visible steps rather than continuously;
+	 * and the previous range is kept while it still contains the data
+	 * and is not wastefully large, so scrolling within it moves nothing
+	 * at all.
+	 *
+	 * At 0 this is off entirely, because "follows the data exactly" is a
+	 * legitimate thing to want and is what every version before this did.
+	 */
+	if (m_scale_steadiness > 0) {
+		const double fraction = m_scale_steadiness / 100.0;
+		const double quantum = 1.0 + 4.0 * fraction;
+
+		double stepped_low = std::floor(temperature_low / quantum) * quantum;
+		double stepped_high = std::ceil(temperature_high / quantum) * quantum;
+
+		/*
+		 * Keep what was there if it still fits and has not become much
+		 * bigger than needed -- the second half matters, or a scale
+		 * stretched once by a hot afternoon would stay stretched all
+		 * week.
+		 */
+		const bool still_fits = m_scale_held &&
+		                        m_scale_low <= temperature_low &&
+		                        m_scale_high >= temperature_high;
+		const double slack = (stepped_high - stepped_low) + 2.0 * quantum;
+
+		if (still_fits && (m_scale_high - m_scale_low) <= slack) {
+			stepped_low = m_scale_low;
+			stepped_high = m_scale_high;
+		}
+
+		m_scale_low = stepped_low;
+		m_scale_high = stepped_high;
+		m_scale_held = true;
+
+		temperature_low = stepped_low;
+		temperature_high = stepped_high;
 	}
 
 	const double temperature_pad = (temperature_high - temperature_low) * 0.12;

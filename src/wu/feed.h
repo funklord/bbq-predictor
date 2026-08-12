@@ -40,6 +40,7 @@ public:
 	 * forecast bands are geocode-keyed and need no station at all.
 	 */
 	void set_station(const QString &station_id);
+	QString station() const { return m_station_id; }
 
 	/*
 	 * The forecast point. Derived from the station when one is pinned

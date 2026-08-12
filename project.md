@@ -1487,6 +1487,61 @@ deliberately. It answers "how long ago did this machine ask", which is
 a question about the reader rather than about the weather.
 
 
+### 3.14 The temperature axis holds still
+
+The scale is computed from what is visible, which is exact and, while
+scrolling, unreadable. Dragging slides new extremes in and out, so the
+axis moves continuously under the curve -- and **the eye cannot tell a
+temperature rising from an axis falling.**
+
+Measured across five views of the same twelve-hour window, each shifted
+twenty minutes: the top of the scale went 19.14, 19.15, 19.48, 19.81,
+20.15. Every pan, a different axis.
+
+Two things fix it, and both are needed:
+
+- **The range is rounded OUTWARD to a quantum**, so it changes in
+  visible steps rather than continuously.
+- **The previous range is held** while it still contains the data and
+  has not become wastefully large. Without the second half of that
+  condition, a scale stretched once by a hot afternoon would stay
+  stretched all week.
+
+The same five views with the setting at 60 give 10.20 to 20.40, five
+times over.
+
+**It is a slider, not a switch**, because the useful answer is not yes or
+no: a wide graph wants a firm scale to read a trend against, a narrow one
+wants the detail back, and where between those is a matter of what
+somebody is looking for. Zero keeps the exact-following behaviour every
+version before this had, because that is a legitimate thing to want
+rather than a bug being preserved.
+
+### 12.12 The forecast's record, beside the verdict it produced
+
+The verification tables (sec 12.3) were collected to answer one
+question -- how much should this forecast be trusted -- and answered it
+only to `--history`. The verdict line carries it now:
+
+    Best window: Thu 13:00 to 22:00 (9.0 h, score 0.76)
+    record: hourly @12h  bias +1.2 C, MAE 1.7, rain skill 0.34 (n=50)
+
+**The band and the lead are taken from the window itself**, not chosen.
+A record for some other band at some other lead would be a true number
+about the wrong thing.
+
+Two details carry meaning rather than decoration. The bias keeps its
+SIGN, because a band that runs warm and one that runs cold are different
+problems and "1.2" says neither. And rain is reported as skill rather
+than as a raw Brier score, because 0.1 is excellent in a dry climate and
+poor in a changeable one -- only the comparison against always
+predicting the base rate says which this is.
+
+Where nothing has been checked yet it says so, rather than leaving the
+space blank. An absence reads as "nothing to report"; the truth is that
+nothing has been scored yet, which is a different thing and the normal
+state of a fresh install.
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it

@@ -160,6 +160,17 @@ public:
 	 * Light, dark, or the device's answer (sec 10.3). Repaints, so the
 	 * choice is answerable by looking.
 	 */
+	/*
+	 * How steady the temperature axis is, 0 to 100 (sec 3.14).
+	 *
+	 * At 0 the scale follows exactly what is visible, which is precise
+	 * and flutters while scrolling. Higher rounds the range outward and
+	 * then HOLDS it until the data leaves, so panning moves the curve
+	 * rather than the axis under it.
+	 */
+	void set_scale_steadiness(int percent);
+	int scale_steadiness() const { return m_scale_steadiness; }
+
 	void set_theme(bbq_theme theme);
 	bbq_theme theme() const { return m_theme; }
 
@@ -247,6 +258,16 @@ private:
 	bool m_show_samples = true;
 	bool m_show_wind = false;
 	bbq_theme m_theme = bbq_theme::automatic;
+
+	/*
+	 * The held temperature range. Kept across paints, which is the whole
+	 * point: a scale recomputed from scratch every frame is a scale that
+	 * moves every frame.
+	 */
+	int m_scale_steadiness = 60;
+	double m_scale_low = 0.0;
+	double m_scale_high = 0.0;
+	bool m_scale_held = false;
 	int m_smoothing_s = 30 * 60;
 	bool m_show_windows = true;
 

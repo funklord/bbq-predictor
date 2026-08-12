@@ -96,6 +96,8 @@ private:
 	 */
 	void refresh_status();
 	void refresh_corrected();
+	QString verification_note(const class bbq_composite &composite,
+	                          qint64 when_utc, qint64 now_utc);
 
 	QComboBox *m_method_box;
 	QComboBox *m_smoothing_box;
