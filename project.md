@@ -2227,6 +2227,36 @@ shape silently kept its margins on the one platform where they could be
 looked at. The shape must not depend on the Qt version; only the safe
 area does.
 
+### 10.5 Two defects a narrow screen found, and the flag that found them
+
+The Fold's cover screen clipped the controls: the station field ran past
+the right edge and the gutter labels were cut mid-character, `rain %`
+reading as `ra`. Neither showed on the other phone, which is wider.
+
+`--size` renders at a given size, so the defect became reproducible on
+the desktop in one command instead of a build-install-look cycle per
+attempt. **A defect found on one device stays device-specific until it
+can be provoked somewhere it can be iterated on**, and guessing a width
+to test at is how that happens.
+
+Two separate faults came out of it.
+
+**The mobile grid paired controls by POSITION.** It walked the control
+list two at a time, which works exactly as long as every control has a
+label -- and the checkboxes do not. From the first checkbox onward every
+label sat beside somebody else's control: "Layout:" next to "Wind", its
+combo on the following row beside "Theme:". A label that names the wrong
+thing is worse than no label, and this was live on both phones rather
+than being a narrow-screen problem at all. It is paired by meaning now:
+a label takes the control that follows it, and unlabelled controls share
+a row with each other.
+
+**Nothing allowed the fields to shrink.** The station box's 150-pixel
+minimum was chosen for a desktop row and had become a lower bound on the
+whole window, so a narrow screen pushed the controls wider than the
+display and clipped whatever was on the right. The value column takes
+the slack now and the floor is low enough for a phone.
+
 ## 11. Android
 
 The build is wired and harmonized. **It does not complete on this

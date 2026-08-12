@@ -141,6 +141,7 @@ scratch work. All of them run headless.
     ./bbq-predictor --tray-icon icon.png      # the tray icon, which cannot be grabbed
     ./bbq-predictor --interp akima --smooth 1800 --shot out.png
     ./bbq-predictor --view 10800 --shot out.png   # a three-hour zoom
+    ./bbq-predictor --shot out.png --layout mobile --size 320x700
     ./bbq-predictor --history                     # what the archive holds
     ./bbq-predictor --history-path /tmp/x.sqlite  # against a scratch archive
     ./bbq-predictor --seed-verification 0.6 --history-path /tmp/x.sqlite

@@ -516,6 +516,9 @@ int main(int argc, char *argv[]) {
 		window.set_show_wind(true);
 	}
 
+	/* Render at a given size, for reproducing a defect seen on a device. */
+	const QString want_size = option_value(arguments, QStringLiteral("--size"));
+
 	const QString cursor = option_value(arguments, QStringLiteral("--cursor"));
 	if (!cursor.isEmpty()) {
 		window.graph()->set_cursor_column(cursor.toInt());
@@ -560,7 +563,8 @@ int main(int argc, char *argv[]) {
 	bool taken = false;
 
 	if (!shot.isEmpty() || !tray_shot.isEmpty()) {
-		const auto take = [&window, &tray, shot, tray_shot, want_layout, &taken]() {
+		const auto take = [&window, &tray, shot, tray_shot, want_layout, want_size,
+		                   &taken]() {
 			if (taken) {
 				return;
 			}
@@ -582,8 +586,30 @@ int main(int argc, char *argv[]) {
 			 * whatever size it is handed, and this is only how that
 			 * gets looked at from a desktop.
 			 */
-			if (bbq_layout_resolve(want_layout) == bbq_layout::mobile) {
-				window.resize(420, 860);
+			/*
+			 * A phone's proportions, or whatever was asked for.
+			 *
+			 * --size exists because a defect found on one device has to
+			 * be reproducible without it: the Fold's cover screen is
+			 * far narrower in logical pixels than the 420 assumed here,
+			 * and labels clipped there that were fine at this width.
+			 * Guessing a width to test at is how a device-specific
+			 * layout bug stays device-specific.
+			 */
+			int wide = 420;
+			int tall = 860;
+
+			if (!want_size.isEmpty()) {
+				const QStringList parts = want_size.split(QLatin1Char('x'));
+				if (parts.size() == 2) {
+					wide = parts.at(0).toInt();
+					tall = parts.at(1).toInt();
+				}
+			}
+
+			if (bbq_layout_resolve(want_layout) == bbq_layout::mobile ||
+			    !want_size.isEmpty()) {
+				window.resize(wide, tall);
 				QCoreApplication::processEvents();
 			}
 

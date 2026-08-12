@@ -135,7 +135,13 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * is the one field the applet cannot work without and the one the
 	 * empty state tells you to fill.
 	 */
-	m_station_box->setMinimumWidth(150);
+	/*
+	 * A floor low enough for a phone. The old minimum was set for a
+	 * desktop row and became a lower bound on the whole window: on a
+	 * narrow screen it pushed the controls wider than the display, and
+	 * everything to its right was clipped.
+	 */
+	m_station_box->setMinimumWidth(90);
 	m_station_box->setMaximumWidth(190);
 	m_station_box->setText(bbq_settings::station());
 
@@ -329,11 +335,59 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 		grid->setContentsMargins(0, 0, 0, 0);
 		grid->setSpacing(8);
 
+		/*
+		 * The value column takes the slack, so the fields shrink with
+		 * the screen instead of pushing past it. Without this the
+		 * controls kept their preferred width on a narrow phone and the
+		 * right-hand ones were simply cut off -- found by rendering at
+		 * the Fold's cover-screen width rather than on the Fold, which
+		 * is what --size exists for.
+		 */
+		grid->setColumnStretch(0, 0);
+		grid->setColumnStretch(1, 1);
+
+		/*
+		 * Paired by MEANING, not by position.
+		 *
+		 * The old arrangement walked the list two at a time, which works
+		 * only while every control has a label. The checkboxes do not,
+		 * so from the first one onward every label sat beside somebody
+		 * else's control -- "Layout:" next to "Wind", its combo on the
+		 * next row beside "Theme:". A label that names the wrong thing
+		 * is worse than no label.
+		 */
+		int row = 0;
+
 		for (int i = 0; i < m_control_items.size(); ++i) {
-			grid->addWidget(m_control_items.at(i), i / 2, i % 2);
+			QWidget *item = m_control_items.at(i);
+			const bool is_label = qobject_cast<QLabel *>(item) != nullptr;
+
+			if (is_label && i + 1 < m_control_items.size()) {
+				grid->addWidget(item, row, 0);
+				grid->addWidget(m_control_items.at(i + 1), row, 1);
+				++i;
+				++row;
+				continue;
+			}
+
+			/*
+			 * An unlabelled control -- a checkbox. Two of them share a
+			 * row, which is what makes them read as a set rather than as
+			 * values missing their names.
+			 */
+			if (i + 1 < m_control_items.size() &&
+			    qobject_cast<QLabel *>(m_control_items.at(i + 1)) == nullptr) {
+				grid->addWidget(item, row, 0);
+				grid->addWidget(m_control_items.at(i + 1), row, 1);
+				++i;
+			} else {
+				grid->addWidget(item, row, 0, 1, 2);
+			}
+
+			++row;
 		}
 
-		grid->addWidget(m_freshness_label, m_control_items.size() / 2 + 1, 0, 1, 2);
+		grid->addWidget(m_freshness_label, row, 0, 1, 2);
 	} else {
 		QHBoxLayout *row = new QHBoxLayout(m_controls);
 		row->setContentsMargins(0, 0, 0, 0);
