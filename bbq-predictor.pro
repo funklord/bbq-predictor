@@ -82,8 +82,11 @@ android {
 	# should still produce an installable package rather than refusing to
 	# configure -- it simply cannot fetch, and says so on screen.
 	BBQ_SSL_LIB = $$PWD/deps/android/$$ANDROID_TARGET_ARCH/lib
-	BBQ_SSL_CRYPTO = $$BBQ_SSL_LIB/libcrypto.so
-	BBQ_SSL_SSL = $$BBQ_SSL_LIB/libssl.so
+	# The _3 suffix is not decoration: Qt's OpenSSL backend dlopens
+	# "libssl_3.so" by name on Android, and an unsuffixed library is not
+	# the file it asks for. See tools/build-openssl-android.sh.
+	BBQ_SSL_CRYPTO = $$BBQ_SSL_LIB/libcrypto_3.so
+	BBQ_SSL_SSL = $$BBQ_SSL_LIB/libssl_3.so
 
 	exists($$BBQ_SSL_SSL) {
 		ANDROID_EXTRA_LIBS += $$BBQ_SSL_CRYPTO $$BBQ_SSL_SSL

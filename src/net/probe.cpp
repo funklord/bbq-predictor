@@ -160,8 +160,20 @@ int bbq_net_probe(int timeout_s) {
 
 	for (const QString &place : places) {
 		const QDir directory(place);
+		/*
+		 * "libcrypto*", not "libcrypto.*".
+		 *
+		 * The dotted form was copied from the glob inside Qt's own
+		 * fallback search, and it does not match libcrypto_3.so -- the
+		 * name Qt actually dlopens on Android and the name this project
+		 * now ships. So the probe reported "(no ssl libraries)" for the
+		 * directory holding both of them, in the same run where TLS was
+		 * working perfectly. A diagnostic that reports an absence next
+		 * to a success is worse than one that says nothing: it invites
+		 * the reader to explain a fault that is not there.
+		 */
 		QStringList wanted;
-		wanted << QStringLiteral("libcrypto.*") << QStringLiteral("libssl.*");
+		wanted << QStringLiteral("libcrypto*") << QStringLiteral("libssl*");
 
 		const QStringList found = directory.entryList(wanted, QDir::Files);
 

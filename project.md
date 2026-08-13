@@ -2767,9 +2767,50 @@ with `qt.tlsbackend.ossl.debug` turned on. `bbq_ensure_tls_backend()`
 asks: it is a no-op wherever TLS already works, so it needs no platform
 test at the call site.
 
-**THIS IS NOT FIXED, and an earlier version of this section wrongly
-said it was.** What follows is the correction, kept rather than deleted
-because how the wrong claim got here is worth more than the claim was.
+**FIXED, at the fourth attempt, by renaming the libraries.** Qt asks the
+Android linker for `libssl_3.so` and `libcrypto_3.so`; the project was
+shipping `libssl.so` and `libcrypto.so`. The account below is kept in
+full, including two repairs that did not work and one confirmation that
+was false, because the wrong turns are the useful part.
+
+The measured result, on an SM-N960F:
+
+    supportsSsl        yes
+    active backend     openssl
+    found at runtime   OpenSSL 3.5.6 7 Apr 2026
+    OK wunderground, met.no, open-meteo; 1 of 6 failed
+
+The single failure is `api.weather.com` answering HTTP 401 to the
+probe's deliberate `apiKey=0` -- a completed TLS handshake carrying a
+real reply, which is the opposite of the fault.
+
+**Where Qt looks, and why both of its routes missed.**
+`qsslsocket_openssl_symbols.cpp` builds the library name as
+`"ssl" + ANDROID_OPENSSL_SUFFIX`, defaulting to `"_" QT_OPENSSL_VERSION`
+-- `_3` for OpenSSL 3.x -- and dlopens it by name, letting the Android
+linker find it in the application's own library directory. Unsuffixed
+files are simply not what it asked for.
+
+Qt then has a fallback that globs for `libssl.*`, which WOULD have
+matched the old names. It scans `libraryPathList()`: `LD_LIBRARY_PATH`,
+then `/lib`, `/usr/lib`, `/usr/local/lib`, `/lib64` and `/system/lib`.
+**An Android app process has `LD_LIBRARY_PATH` unset** -- measured from
+`/proc/<pid>/environ` -- and its libraries live in
+`/data/app/<package>-<hash>/lib/<abi>`, which is on the LINKER's search
+path and on no list Qt scans. So the first route asked for a name that
+did not exist and the second looked in directories that did not hold it.
+
+**Why the failure was mute, and why `cert-only` was misleading.**
+`QTlsBackend::availableBackendNames()` filters on `backend->isValid()`,
+and for the OpenSSL backend `isValid()` IS `ensureLibraryLoaded()`. The
+plugin was found, loaded and constructed every time; it was discarded
+one step later, by a filter that reports nothing. Meanwhile `cert-only`
+is compiled into QtNetwork and needs no plugin at all, so its presence
+in the list was never evidence that plugin loading worked -- and reading
+it as evidence is what made four wrong answers look reasonable.
+
+An earlier version of this section said the opposite, so the correction
+below stands as written.
 
 Two repairs were tried and neither worked:
 
@@ -2835,8 +2876,17 @@ On the device it said, in one run:
     lib/arm64          libcrypto.so libssl.so
     OK   http, FAIL every https
 
-Libraries present, network fine, backend absent. That is the whole
-diagnosis, and it took one run where inference had taken four.
+Libraries present, network fine, backend absent -- in one run, where
+inference had taken four.
+
+**It was not the whole diagnosis, though this said it was.** Three more
+rounds went by before the reason the backend was absent came out, and
+that line of the report is exactly where the remaining trouble was
+hiding: `libcrypto.so libssl.so` are the names the probe FOUND, and
+they are not the names Qt was asking for. The probe was reporting the
+right directory and the right files and confirming, run after run, a
+premise nobody had thought to doubt. A measurement can be accurate,
+repeatable, and still answer a question next to the one that matters.
 
 **The lesson is the order of operations.** Four inferences were drawn
 from a one-line warning and two of them were wrong; the probe produced
