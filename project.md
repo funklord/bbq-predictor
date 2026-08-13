@@ -1559,11 +1559,33 @@ A heavier line at local midnight, running through both panels and the
 ribbon so that a day reads as one column all the way down, and the day
 it opens named beside it.
 
-**The weight is the whole point.** Drawn at the grid's weight it would
-be one more tick among the hour marks, and the reader would be back to
-counting -- so it is deliberately heavier than both the grid and the
-hour bands it crosses. A boundary that reads like a ruler is not a
-boundary.
+**The differentiator is form, not strength**, and the first version got
+that wrong. It was a 2px line at the strongest contrast on the plot,
+argued from "a boundary must outrank the ruler it interrupts". True,
+and the wrong axis to argue on: in a picture whose lines are otherwise
+measurements, the most emphatic line reads as a measurement.
+
+Measured on the dark scheme, luminance across one row:
+
+    day divider    74      <- brightest thing on the plot
+    temperature    71
+    grill bands    64
+    grid           54
+    background     35
+
+The divider outshone the data it was drawn behind. Reported from the
+phone as needing "less contrast, to signify they are part of the
+background", which is exactly what the numbers say.
+
+So it is broad and solid where the grid is thin and dotted, and it sits
+with the furniture rather than above the data -- 57 against the grid's
+54, below the bands at 64 and the curve at 71. **A band is legible at a
+contrast far below what a line needs**, which is what makes the trade
+available at all: width buys back the visibility that lowering the
+contrast costs.
+
+What actually answers "which day is this" is the NAME, bold on its
+plate. The band only has to say where the day starts.
 
 **The midnights are stepped through `QDateTime::addDays`, not by adding
 86400 seconds.** A day is 23 or 25 hours on the two changeover nights,

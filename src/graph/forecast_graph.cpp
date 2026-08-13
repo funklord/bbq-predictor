@@ -550,7 +550,7 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	chosen.readout_text = QColor(0xf0, 0xf0, 0xf0);
 	chosen.corrected = QColor(0x8b, 0x6b, 0xb1);
 	chosen.wind = QColor(0x6b, 0x8b, 0x9a);
-	chosen.day_divider = QColor(0x8c, 0x96, 0xa0);
+	chosen.day_divider = QColor(0xdd, 0xe1, 0xe5);
 	chosen.band_observed = QColor(0x5b, 0x9f, 0x49);
 	chosen.band_current = QColor(0x87, 0xc4, 0x03);
 	chosen.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
@@ -596,7 +596,7 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 * edge to stay a box rather than a smudge. */
 	chosen.readout_back = QColor(0x2b, 0x2f, 0x33);
 	chosen.readout_edge = QColor(0x70, 0x76, 0x7c);
-	chosen.day_divider = QColor(0x6e, 0x7a, 0x86);
+	chosen.day_divider = QColor(0x34, 0x3a, 0x40);
 
 	return chosen;
 }
@@ -1335,13 +1335,28 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		const double x = plot.left() + (midnight - from) / seconds_per_pixel;
 
 		/*
-		 * Deliberately heavier than the grid and than the hour bands it
-		 * crosses. The three-hourly shading is a ruler for the eye; this
-		 * is a boundary, and if the two read alike the boundary is not
-		 * doing its job. It runs the full height of both panels so a day
-		 * is one column all the way down.
+		 * WIDE AND QUIET, not thin and dark.
+		 *
+		 * The first version was a 2px line at the strongest contrast on
+		 * the plot, on the reasoning that a boundary must outrank the
+		 * ruler it interrupts. That was the wrong axis to argue on: it
+		 * made the divider the most emphatic LINE in a picture whose
+		 * lines are otherwise data, so it read as a measurement of
+		 * something rather than as structure.
+		 *
+		 * The differentiator is form. The grid is thin and dotted; this
+		 * is broad and solid, at a contrast close to the rest of the
+		 * furniture, so the eye files it with the background where it
+		 * belongs. What actually answers "which day is this" is the
+		 * name, which stays bold on its plate -- the band only has to
+		 * say where the day starts, and a band is legible at a contrast
+		 * far below what a line needs.
+		 *
+		 * It still runs the full height of both panels, so a day is one
+		 * column all the way down.
 		 */
-		painter.setPen(QPen(m_palette.day_divider, 2.0));
+		painter.setPen(QPen(m_palette.day_divider, 6.0, Qt::SolidLine,
+		                    Qt::FlatCap));
 		painter.drawLine(QPointF(x, plot.top()),
 		                 QPointF(x, chance_plot.bottom() +
 		                                  m_metrics.ribbon_height + 2));
