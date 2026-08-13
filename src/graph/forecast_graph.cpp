@@ -1261,23 +1261,47 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.setPen(QPen(m_palette.grid, 1, Qt::DotLine));
 		painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
 
+		const QString stamp = local_time(t, zone).toString(ticks.format);
+
+		/*
+		 * The box is MEASURED from the text rather than assumed.
+		 *
+		 * It used to be a hardcoded 48 pixels with the stamp centred in
+		 * it, so any stamp wider than the box overflowed and was cut at
+		 * both ends: "Wed 14:00" came out as "Ved 14:0". "Fri" fits in
+		 * 48 and "Wed", "Thu" and "Sat" do not, which is why the fault
+		 * looked like it followed the day of the week rather than the
+		 * layout -- and why it survived: a third of the labels were
+		 * always correct.
+		 *
+		 * The note this replaces recorded the identical glyph loss at
+		 * the right margin -- "Wed 02:00" clipped to "Ned 02:00" -- and
+		 * answered it by dropping labels near the edges. That hid the
+		 * two labels where it had been noticed and left every clipped
+		 * label in the middle of the graph exactly as it was. The
+		 * measurement fixes both, so the margin test below uses it too
+		 * and now drops a label only when it would genuinely reach past
+		 * a margin rather than when it sits within a guessed 24 pixels
+		 * of one.
+		 */
+		const QFontMetrics tick_measured(label_font);
+		const double tick_half =
+		        tick_measured.horizontalAdvance(stamp) / 2.0 + 2.0;
+
 		/*
 		 * A tick label that would reach past either margin is left out.
-		 *
 		 * On the left the zone name lives there and the two collided
-		 * into "CEST08:00"; on the right the gutter clipped "Wed 02:00"
-		 * to "Ned 02:00", which reads as a typo rather than as a
-		 * truncation. Dropping one label costs nothing -- its neighbour
+		 * into "CEST08:00". Dropping one costs nothing -- its neighbour
 		 * is one step away and says the same kind of thing.
 		 */
-		if (x - 24 < plot.left() || x + 24 > plot.right()) {
+		if (x - tick_half < plot.left() || x + tick_half > plot.right()) {
 			continue;
 		}
 
 		painter.setPen(m_palette.axis_text);
-		const QRectF label(x - 24, chance_plot.bottom() + m_metrics.ribbon_height + 3,
-		                   48, 14);
-		const QString stamp = local_time(t, zone).toString(ticks.format);
+		const QRectF label(x - tick_half,
+		                   chance_plot.bottom() + m_metrics.ribbon_height + 3,
+		                   tick_half * 2.0, 14);
 		painter.drawText(label, Qt::AlignCenter, stamp);
 	}
 

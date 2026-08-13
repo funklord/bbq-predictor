@@ -1486,6 +1486,36 @@ The fetch time in the status line stays in the viewer's clock
 deliberately. It answers "how long ago did this machine ask", which is
 a question about the reader rather than about the weather.
 
+#### 3.12.1.1 Measure the label, do not guess its width
+
+The tick labels were drawn centred in a box hardcoded to 48 pixels, so
+any stamp wider than the box overflowed and was cut at BOTH ends:
+`Wed 14:00` rendered as `Ved 14:0`.
+
+**A third of the labels were always correct, which is why it survived.**
+`Fri` fits in 48 pixels; `Wed`, `Thu` and `Sat` do not. The fault
+therefore appeared to follow the day of the week rather than the
+drawing code, and a screen with `Fri` in the middle of it looked fine.
+
+It had been noticed once before and answered in the wrong place. The
+comment that used to sit above this code recorded the identical glyph
+loss -- `Wed 02:00` clipped to `Ned 02:00` -- and fixed it by dropping
+any label within a guessed 24 pixels of a margin. **That treated the
+two positions where it had been seen and left every clipped label in
+the middle of the graph untouched**, because the margin was never the
+cause; the box was. It also dropped labels that would have fitted.
+
+The box is measured from the text now, and the margin test uses the
+same measurement, so a label is omitted only when it would genuinely
+reach past a margin. `QFontMetrics` was already included and already
+used twice elsewhere in this file -- the measurement was available all
+along and this one site simply assumed instead.
+
+**The general form is worth keeping.** A defect that presents on some
+inputs and not others invites a fix at the position where it was
+noticed, and that fix will pass the test that found it. Ask what
+separates the inputs that fail from the ones that pass -- here, the
+pixel width of three glyphs -- before deciding where the fault is.
 
 ### 3.14 The temperature axis holds still
 
