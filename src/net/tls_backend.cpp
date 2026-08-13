@@ -53,7 +53,25 @@ void bbq_ensure_tls_backend() {
 		for (const QString &name : names) {
 			QPluginLoader loader(directory.absoluteFilePath(name));
 
-			if (loader.load() && QSslSocket::supportsSsl()) {
+			/*
+			 * instance(), not load().
+			 *
+			 * load() maps the shared object and verifies its metadata,
+			 * and that is ALL it does -- it does not construct the
+			 * plugin's root object. A QTlsBackend registers itself when
+			 * it is constructed, so a loaded-but-never-instantiated
+			 * plugin leaves the backend list exactly as it was.
+			 *
+			 * That is what the first version of this did, and it is why
+			 * it appeared to work: load() returned true, the function
+			 * returned happy, and TLS stayed off. The probe reported
+			 * the plugin "loaded" in the same breath as
+			 * "available backends cert-only" and the contradiction sat
+			 * there unread, because cert-only is built into QtNetwork
+			 * and needs no plugin -- so its presence proved nothing
+			 * about discovery.
+			 */
+			if (loader.instance() != nullptr && QSslSocket::supportsSsl()) {
 				return;
 			}
 		}

@@ -192,12 +192,41 @@ int bbq_net_probe(int timeout_s) {
 			QPluginLoader loader(directory.absoluteFilePath(name));
 			const bool loaded = loader.load();
 
-			say(QStringLiteral("probe:   %1  %2")
+			/*
+			 * Both, separately, because they are different questions and
+			 * reporting only the first is what made this probe agree with
+			 * a loader that did not work. load() maps the file;
+			 * instance() constructs the plugin, which is what actually
+			 * registers a TLS backend. A plugin can pass the first and
+			 * fail the second, and that gap is the whole bug.
+			 */
+			const bool built = loaded && loader.instance() != nullptr;
+
+			say(QStringLiteral("probe:   %1  load %2, instance %3%4")
 			            .arg(name,
-			                 loaded ? QStringLiteral("loaded")
-			                        : QStringLiteral("FAILED: %1")
-			                                  .arg(loader.errorString())));
+			                 loaded ? QStringLiteral("ok") : QStringLiteral("NO"),
+			                 built ? QStringLiteral("ok") : QStringLiteral("NO"),
+			                 loaded && !built
+			                         ? QStringLiteral(" -- %1").arg(loader.errorString())
+			                         : QString()));
 		}
+	}
+
+	/*
+	 * Asked again, after the plugins have been constructed rather than
+	 * merely mapped. The difference between this line and the one above
+	 * is the measurement that matters.
+	 */
+	say(QStringLiteral("probe: after instancing:"));
+	say(QStringLiteral("probe:   supportsSsl        %1")
+	            .arg(QSslSocket::supportsSsl() ? QStringLiteral("yes")
+	                                           : QStringLiteral("NO")));
+	say(QStringLiteral("probe:   available backends %1")
+	            .arg(QSslSocket::availableBackends().join(QStringLiteral(", "))));
+	say(QStringLiteral("probe:   found at runtime   %1")
+	            .arg(QSslSocket::sslLibraryVersionString()));
+
+	{
 	}
 
 	say(QStringLiteral("probe: --- what it can reach ---"));

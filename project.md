@@ -2737,31 +2737,51 @@ with `qt.tlsbackend.ossl.debug` turned on. `bbq_ensure_tls_backend()`
 asks: it is a no-op wherever TLS already works, so it needs no platform
 test at the call site.
 
-**Asking was not enough, because the first version asked in the wrong
-place.** It scanned `QCoreApplication::libraryPaths()` and nothing else,
-and on Android that list names a `plugins/` directory the package does
-not contain -- every Qt plugin is flattened into the application's own
-library directory instead. So the scan matched nothing, returned having
-loaded nothing, and left TLS off with the backend sitting one directory
-away. **A loader that finds nothing and a loader that has nothing to
-find are indistinguishable from the outside**, which is why this
-survived a round of testing: the symptom was identical to the bug it was
-written to fix.
+**THIS IS NOT FIXED, and an earlier version of this section wrongly
+said it was.** What follows is the correction, kept rather than deleted
+because how the wrong claim got here is worth more than the claim was.
 
-The probe is what separated them, and only because it looked in a wider
-set of places than the loader did -- it reported the plugin present and
-loadable in the same run where the loader beside it found nothing. That
-located the fault in the search rather than in the packaging or the
-library. The loader now looks in exactly the set the probe looks in:
-`libraryPaths()`, `applicationDirPath()`, and
-`QLibraryInfo::PluginsPath`. **That the two agree is the point** -- a
-diagnostic that searches differently from the code it diagnoses can
-certify something the program will still fail to do.
+Two repairs were tried and neither worked:
 
-Confirmed by data rather than by silence: the write-ahead log had been
-empty through every previous install and reached 832272 bytes within a
-minute of this one. A warning that stops being printed is not evidence
-(sec 11.6.2); observations landing in the archive are.
+- **Widening the search** to `applicationDirPath()` and
+  `QLibraryInfo::PluginsPath` as well as `libraryPaths()`. The search
+  was never the problem: the plugin was always found.
+- **`instance()` instead of `load()`.** This one is a real improvement
+  and is kept -- `load()` only maps the shared object, while a
+  `QTlsBackend` registers when it is CONSTRUCTED -- but it is not the
+  fault either. The plugin now constructs successfully and the backend
+  list does not change.
+
+Measured on an SM-N960F, with the plugin instantiated by hand:
+
+    supportsSsl        NO
+    available backends cert-only
+    libplugins_tls_qopensslbackend_arm64-v8a.so  load ok, instance ok
+
+**A plugin that constructs and still does not appear in
+`availableBackends()` is the actual open question**, and it is a
+different question from the one this section spent four rounds on. Note
+that `cert-only` proves nothing about discovery: it is compiled into
+QtNetwork and needs no plugin, so its presence in the list was never
+evidence that plugin loading worked. That misreading is what made every
+wrong answer look plausible.
+
+Qt emits no diagnostic about any of it, with
+`qt.tlsbackend.ossl.debug=true` set and its output captured to file.
+
+**How the false claim happened, because it is the more useful lesson.**
+The evidence offered was that `history.sqlite-wal` stood at 832272
+bytes after the install. The size was real. The file's mtime was 72
+minutes BEFORE that install, so the data was from an earlier run and
+the number said nothing about the change it was cited for. **A file's
+size answers "is there data", never "did this change produce it"** --
+only the mtime does, and only against a timestamp taken beforehand. The
+`git log` now carries the claim in commit 5866ad0, which is why it is
+corrected here in prose rather than quietly dropped.
+
+This is the vacuous pass of `evidence.md` in its most expensive form:
+not a check that inspected nothing, but a real measurement of the wrong
+thing, cited with confidence.
 
 Four things were blamed first, and each cost a build-install-test cycle:
 the library names, the NDK, whether the libraries were extracted from
