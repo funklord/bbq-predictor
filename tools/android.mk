@@ -50,7 +50,27 @@
 
 ANDROID_SDK_ROOT ?= $(HOME)/Android/Sdk
 ANDROID_API      ?= 26
-ANDROID_TARGET_API ?= 33
+
+# 36, and the floor is Qt's rather than this project's.
+#
+# It was 33, and Qt 6.12 will not build against it. Qt pulls androidx.core
+# transitively, and each release of that library raises the compileSdk it
+# demands of anything depending on it: 1.16 wanted 35, 1.17 wants 36. Gradle
+# refuses in AAR-metadata terms rather than in SDK terms --
+#
+#     3 issues were found when checking AAR metadata:
+#     1.  Dependency 'androidx.core:core:1.17.0' requires libraries and
+#         applications that depend on it to compile against version 36 or
+#         later of the Android APIs.
+#
+# -- which names a library nobody wrote down and never mentions this
+# variable, so the connection back to here has to be made from memory.
+#
+# NOT a check, deliberately. Which androidx versions a given Qt release
+# resolves is not something a Makefile can know without asking Gradle, and a
+# guess would go stale silently -- worse than the real error, which at least
+# names the version it wants. The number is raised when a build says so.
+ANDROID_TARGET_API ?= 36
 
 # EXPORTED, not merely set, and this is load-bearing.
 #
