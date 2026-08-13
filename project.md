@@ -1517,6 +1517,43 @@ somebody is looking for. Zero keeps the exact-following behaviour every
 version before this had, because that is a legitimate thing to want
 rather than a bug being preserved.
 
+### 3.15 The day is a boundary, not another tick
+
+The axis answered "what hour is this" and never "what day". Past a span
+of about a day the three-hourly shading stops carrying it: **that
+shading is a ruler for the eye, and a ruler has no boundaries in it.**
+Placing a point in a day meant counting bands back to a label on the
+bottom edge, which is arithmetic the graph exists to avoid.
+
+A heavier line at local midnight, running through both panels and the
+ribbon so that a day reads as one column all the way down, and the day
+it opens named beside it.
+
+**The weight is the whole point.** Drawn at the grid's weight it would
+be one more tick among the hour marks, and the reader would be back to
+counting -- so it is deliberately heavier than both the grid and the
+hour bands it crosses. A boundary that reads like a ruler is not a
+boundary.
+
+**The midnights are stepped through `QDateTime::addDays`, not by adding
+86400 seconds.** A day is 23 or 25 hours on the two changeover nights,
+so a fixed stride walks the divider an hour off the boundary on the
+first of them and then keeps it there for the rest of the year -- a
+fault that would appear twice a year, in a build nobody changed, and
+look like a rendering bug rather than an arithmetic one. It is the same
+reason the axis itself is in the location's clock (sec 3.12.1): the
+clock the reader is standing in has irregularities that arithmetic on
+epoch seconds does not model.
+
+The name is drawn after the data, on the translucent plate the edge
+labels use, because a divider nothing names says only that something
+changed here. It is bold, since it has to be findable at a glance among
+the hour labels along the bottom, which are quiet on purpose.
+
+The colour is per scheme rather than shared, for the reason the rest of
+the furniture is (sec 10.3): the measured data colours stay put across
+light and dark, and only the ground and the furniture move.
+
 ### 12.12 The forecast's record, beside the verdict it produced
 
 The verification tables (sec 12.3) were collected to answer one
@@ -2699,6 +2736,32 @@ asked directly, and Qt emits no diagnostic about skipping it -- not even
 with `qt.tlsbackend.ossl.debug` turned on. `bbq_ensure_tls_backend()`
 asks: it is a no-op wherever TLS already works, so it needs no platform
 test at the call site.
+
+**Asking was not enough, because the first version asked in the wrong
+place.** It scanned `QCoreApplication::libraryPaths()` and nothing else,
+and on Android that list names a `plugins/` directory the package does
+not contain -- every Qt plugin is flattened into the application's own
+library directory instead. So the scan matched nothing, returned having
+loaded nothing, and left TLS off with the backend sitting one directory
+away. **A loader that finds nothing and a loader that has nothing to
+find are indistinguishable from the outside**, which is why this
+survived a round of testing: the symptom was identical to the bug it was
+written to fix.
+
+The probe is what separated them, and only because it looked in a wider
+set of places than the loader did -- it reported the plugin present and
+loadable in the same run where the loader beside it found nothing. That
+located the fault in the search rather than in the packaging or the
+library. The loader now looks in exactly the set the probe looks in:
+`libraryPaths()`, `applicationDirPath()`, and
+`QLibraryInfo::PluginsPath`. **That the two agree is the point** -- a
+diagnostic that searches differently from the code it diagnoses can
+certify something the program will still fail to do.
+
+Confirmed by data rather than by silence: the write-ahead log had been
+empty through every previous install and reached 832272 bytes within a
+minute of this one. A warning that stops being printed is not evidence
+(sec 11.6.2); observations landing in the archive are.
 
 Four things were blamed first, and each cost a build-install-test cycle:
 the library names, the NDK, whether the libraries were extracted from
