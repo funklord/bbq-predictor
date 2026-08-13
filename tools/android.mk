@@ -49,7 +49,24 @@
 # =============================================================================
 
 ANDROID_SDK_ROOT ?= $(HOME)/Android/Sdk
+
+# The OLDEST Android the app runs on -- its minSdk, not its target.
+#
+# It does not set minSdk; Qt does, and this must be kept equal to what Qt
+# declares. Read it back from a built package rather than trusting either
+# side:
+#
+#     aapt2 dump badging <apk> | grep minSdkVersion
+#
+# EXPORTED, because tools/build-openssl-android.sh reads it and gets the
+# direction of the risk wrong if it disagrees. A dependency cross-compiled
+# for a HIGHER API than the app resolves symbols at build time that are
+# absent at run time on the oldest device the app claims to support -- so
+# the failure lands on somebody else's old phone, not on the desk. That
+# script defaulted to 28 while the package declared 26, and said in a
+# comment that the two matched.
 ANDROID_API      ?= 26
+export ANDROID_API
 
 # 36, and the floor is Qt's rather than this project's.
 #

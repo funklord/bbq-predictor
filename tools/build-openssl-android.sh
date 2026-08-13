@@ -55,10 +55,25 @@ for tool in patchelf perl make; do
 	}
 done
 
-# The API level the app is built for. 28 matches Qt's own default and the
-# minSdk this project declares; building OpenSSL for a HIGHER level than
-# the app would resolve symbols at build time that are absent at run time.
-api=${ANDROID_API:-28}
+# The API level the app is built for, which is its minSdk.
+#
+# Building OpenSSL for a HIGHER level than the app resolves symbols at
+# build time that are absent at run time -- and the device that finds out
+# is the oldest one a user has, not this one.
+#
+# It said 28, and claimed in this comment that 28 was "Qt's own default
+# and the minSdk this project declares". The package declares 26:
+#
+#     aapt2 dump badging bbq-predictor-0.1.0-arm64-v8a.apk
+#     minSdkVersion:'26'
+#     targetSdkVersion:'36'
+#
+# So the number was two levels too high, in the direction that breaks on
+# somebody else's phone, and the comment asserting otherwise is what kept
+# anyone from checking. tools/android.mk exports ANDROID_API so a build
+# driven from there agrees by construction; this default is for a run by
+# hand, and it matches.
+api=${ANDROID_API:-26}
 
 prefix="$root/deps/android/$abi"
 work="$root/deps/build/$abi"
