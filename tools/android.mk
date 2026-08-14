@@ -250,14 +250,25 @@ ANDROID_KEY_ALIAS ?=
 # the same silent retirement this hook exists to prevent, arriving by a
 # different door. Measured on a fixture before it was written this way.
 #
-# `.SECONDEXPANSION` defers the `$$(...)` below to build time, when the
-# variable has its final value, so the order stops mattering. It is enabled
-# from here on and affects only prerequisites written with `$$`, which is why
-# it is safe to turn on inside a fragment somebody else includes.
+# It runs LAST, after the shared checks, and that ordering is the point.
+#
+# It was a prerequisite first -- `android-check: $$(ANDROID_CHECK_LOCAL)` --
+# which make satisfies BEFORE the recipe, so the project's check went first
+# and a failure in it meant the shared checks never ran. That is backwards,
+# because a local check is almost always downstream of the shared ones.
+# Measured in beerssh with `make android-check QT_ANDROID_ROOT=`: it reported
+# "dependencies for  are not built" with an empty ABI and told the reader to
+# run a script with no argument. The ABI was empty BECAUSE no kit was named,
+# which is the shared check's message -- so the local check pre-empted the
+# check that would have explained it, and offered its own symptom as the
+# diagnosis.
+#
+# Invoked with $(MAKE) at the end of the recipe rather than ordered among
+# prerequisites, because prerequisite order is not guaranteed under `make
+# -j`. A recursive call is sequenced by construction.
 ANDROID_CHECK_LOCAL ?=
 
-.SECONDEXPANSION:
-android-check: $$(ANDROID_CHECK_LOCAL)
+android-check:
 	@if [ -z "$(QT_ANDROID_ROOT)" ]; then \
 		echo "android: QT_ANDROID_ROOT is not set." >&2; \
 		echo "android:   point it at a Qt-for-Android kit, e.g." >&2; \
@@ -344,6 +355,10 @@ android-check: $$(ANDROID_CHECK_LOCAL)
 	@echo "android:   jdk $(JAVA_HOME)"
 	@echo "android: kit $(QT_ANDROID_ROOT)"
 	@echo "android:   abi $(ANDROID_ABI), versionCode $(ANDROID_VERSION_CODE)"
+	@# Last, so the shared checks above have already explained anything they
+	@# would have explained. Guarded on the variable being set, since a bare
+	@# `$(MAKE)` with no target would run the default goal.
+	$(if $(ANDROID_CHECK_LOCAL),@$(MAKE) --no-print-directory $(ANDROID_CHECK_LOCAL))
 
 # Whoever signed it, read from the artifact rather than announced.
 #
