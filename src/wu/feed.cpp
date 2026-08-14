@@ -561,6 +561,11 @@ void bbq_wu_feed::discover_stations() {
 	m_client->fetch_nearby(m_latitude, m_longitude);
 }
 
+void bbq_wu_feed::discover_stations_at(double latitude, double longitude) {
+	++m_outstanding;
+	m_client->fetch_nearby(latitude, longitude);
+}
+
 void bbq_wu_feed::search_places(const QString &query) {
 	if (query.trimmed().isEmpty()) {
 		return;

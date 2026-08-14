@@ -4,6 +4,7 @@
 #include <QList>
 #include <QMargins>
 
+#include "ui/locator.h"
 #include "ui/theme.h"
 #include <QWidget>
 
@@ -142,6 +143,7 @@ private:
 
 	/* Rebuilt whenever discovery finds something or a pin changes. */
 	void refresh_station_list();
+	bbq_locator *m_locator = nullptr;
 	void watch_station(const QString &id);
 	QComboBox *m_theme_box = nullptr;
 };

@@ -349,6 +349,41 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * Discovery changed the list, so the list is rebuilt. Nothing on the
 	 * graph changes -- a station list is not weather (sec 13).
 	 */
+	/*
+	 * Ask the device where it is, once, and use the answer for
+	 * DISCOVERY ONLY (sec 13.3). The forecast stays where the watched
+	 * station is.
+	 */
+	m_locator = new bbq_locator(this);
+
+	connect(m_locator, &bbq_locator::located, this,
+	        [this](double latitude, double longitude) {
+		m_feed->discover_stations_at(latitude, longitude);
+	});
+
+	connect(m_locator, &bbq_locator::unavailable, this,
+	        [this](const QString &reason) {
+		/*
+		 * Said where it belongs, which is NOT the freshness line: that
+		 * label is rewritten on every fetch, so a message left there
+		 * survives until the next request and then vanishes without
+		 * anybody having read it. It is also about the data rather than
+		 * about the device.
+		 *
+		 * The reason goes on the control that offers the alternative,
+		 * and the empty list gets a placeholder pointing at it. Where
+		 * stations are already known there is nothing to say: a fix
+		 * would have added to a list that already works.
+		 */
+		m_find_button->setToolTip(
+		        tr("Find stations near a place\n(location: %1)").arg(reason));
+
+		if (m_station_box->count() == 0) {
+			m_station_box->lineEdit()->setPlaceholderText(
+			        tr("no location -- use Find..."));
+		}
+	});
+
 	connect(m_feed, &bbq_wu_feed::stations_discovered, this, [this](int) {
 		refresh_station_list();
 	});
@@ -663,6 +698,13 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 
 	m_feed->refresh();
 	m_feed->start_auto_refresh();
+
+	/*
+	 * Asked after the feed is running, not before. A fix only fills the
+	 * station list; nothing on screen waits for it, and the program is
+	 * fully usable while it is outstanding or if it never arrives.
+	 */
+	m_locator->locate_once();
 }
 
 void bbq_main_window::apply_theme(bbq_theme theme) {

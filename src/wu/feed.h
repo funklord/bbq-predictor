@@ -115,6 +115,15 @@ public:
 	 * user or by a move, never by the heartbeat.
 	 */
 	void discover_stations();
+
+	/*
+	 * Discovery somewhere the feed is not pointed (sec 13.3). A device
+	 * position answers "what is near ME", which is a different question
+	 * from "what is near the station being watched" -- and must not
+	 * move the forecast, or somebody in Gothenburg watching Stockholm
+	 * would silently start being shown Gothenburg's weather.
+	 */
+	void discover_stations_at(double latitude, double longitude);
 	void search_places(const QString &query);
 
 	std::vector<bbq_station> stations() const { return m_history.stations(); }

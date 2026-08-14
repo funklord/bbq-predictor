@@ -24,6 +24,13 @@ DEFINES += BBQ_VERSION_STRING=\\\"$$BBQ_VERSION\\\"
 # program is a client for somebody else's HTTP endpoint (project.md sec 2).
 QT += widgets network sql
 
+# Positioning is how "near me" is answered (sec 13.3). Optional at run
+# time: with no source, or with the permission refused, the station list
+# falls back to searching for a place by name -- which is the only route
+# on a desktop anyway, so the fallback is a path that gets exercised
+# rather than one that waits for a failure to be discovered.
+QT += positioning
+
 # sql is for the permanent history (project.md sec 12). It brings the
 # SQLite driver plugin, which Qt builds in-tree; measured before choosing
 # the dependency -- both Qt6Sql and libqsqlite.so were already installed
@@ -49,6 +56,12 @@ QMAKE_CFLAGS_RELEASE   += -Os
 # construction, which is the point: the mobile difference is a LAYOUT
 # (project.md sec 10), not a second program.
 android {
+	# The manifest is the project's own, not Qt's generated one, because
+	# it carries a permission. Taken verbatim from the Qt template and
+	# changed in exactly one place, so a Qt upgrade can be diffed against
+	# the new template rather than guessed at.
+	ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+
 	# Play rejects any upload whose versionCode does not exceed the last it
 	# accepted, so a hardcoded number allows one upload and blocks every
 	# update after it. The Makefile computes it from VERSION and passes it
@@ -115,6 +128,7 @@ SOURCES += \
 	src/model/settings.cpp \
 	src/store/history.cpp \
 	src/ui/layout.cpp \
+	src/ui/locator.cpp \
 	src/ui/theme.cpp \
 	src/ui/main_window.cpp \
 	src/ui/tray_icon.cpp \
@@ -139,6 +153,7 @@ HEADERS += \
 	src/model/settings.h \
 	src/store/history.h \
 	src/ui/layout.h \
+	src/ui/locator.h \
 	src/ui/theme.h \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \

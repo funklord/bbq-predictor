@@ -3467,6 +3467,49 @@ Checked at both widths that matter: 1080 logical pixels, and the 320 of
 the Fold's cover screen, where `* ISTOCK877  3.7 km` and the `Pin` and
 `Find...` controls all keep their borders.
 
+### 13.3 The device's position is for discovery, and nothing else
+
+A fix answers "which stations are near ME". It does NOT move the
+forecast: somebody watching a station in Stockholm while standing in
+Gothenburg must still be shown Stockholm's weather, and letting a
+sensor change the forecast coordinate would be the
+two-places-on-one-axis failure of sec 2.6.7 arriving through the
+hardware. So a position goes to `discover_stations_at()` and never to
+`set_geocode()`.
+
+**Coarse, and once.** The nearest station is hundreds of metres away at
+best, so precision buys nothing and `ACCESS_COARSE_LOCATION` is all the
+manifest asks for -- a permission that asks for more than it needs is
+one a reader is right to refuse. Once rather than continuously, because
+watching the position would spend battery re-answering a question whose
+answer barely changes.
+
+**Every failure is the same failure from outside.** No positioning
+source compiled in, none on the machine, permission refused, location
+switched off, or no fix before the deadline: all end as `unavailable`
+with a reason. The fallback is identical in each case -- search for a
+place by name -- and it is the ONLY route on a desktop, so it is a path
+that gets exercised daily rather than one that waits to be found
+broken.
+
+A deadline of our own is needed because a source that never answers is
+the ordinary indoor case and emits no error while it waits.
+
+**The reason goes on the control that offers the alternative**, not on
+the freshness line. That was the first attempt and it was wrong twice
+over: the line is rewritten on every fetch, so the message survives
+until the next request and then vanishes unread, and it describes the
+DATA rather than the device. The `Find...` tooltip carries the reason,
+and an empty list gets the placeholder `no location -- use Find...`,
+which is what a fresh install on a desktop shows.
+
+**Nothing was borrowed from fuzzypickles.** It was worth looking, since
+it is the sibling project with location code, but its GPS is `gpsd` on
+Linux feeding the daemon's entropy pool; its Android spike lived in an
+earlier generation its own notes record as gone; and its `client/geo.h`
+is haversine distance and bearing, which this program does not need
+because Weather Underground returns `distanceKm` with each station.
+
 ### 13.1 Two things the discovery endpoints lie about
 
 Both were found by measuring rather than by reading, and both would
