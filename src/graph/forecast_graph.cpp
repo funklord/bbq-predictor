@@ -661,7 +661,25 @@ std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
 }
 
 bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
-	setMinimumSize(360, 180);
+	/*
+	 * 240, and the width is the part that matters (sec 10.5).
+	 *
+	 * It was 360, which is wider than some screens this runs on. A
+	 * widget minimum is a floor under the WINDOW, so on a display
+	 * narrower than the floor the window does not shrink to fit -- it
+	 * overhangs, and everything past the edge is simply cut off.
+	 *
+	 * Found on the Fold's cover screen: 840x2289 physical at 420dpi is
+	 * 320 logical pixels wide, so a 360-wide floor overhung it by 40 --
+	 * about a ninth of the screen. Every control on the right lost its
+	 * border, and the rain label "10 mm/h" was cut to "10". Nothing in
+	 * the layout was wrong; there was no room for it to be right in.
+	 *
+	 * 240 sits below any phone screen this is likely to meet, so the
+	 * layout decides the width and this floor stops mattering, which is
+	 * what a minimum of this kind should do.
+	 */
+	setMinimumSize(240, 180);
 
 	/* Without this the widget hears the mouse only while a button is down. */
 	setMouseTracking(true);

@@ -2476,7 +2476,7 @@ shape silently kept its margins on the one platform where they could be
 looked at. The shape must not depend on the Qt version; only the safe
 area does.
 
-### 10.5 Two defects a narrow screen found, and the flag that found them
+### 10.5 Three defects a narrow screen found, and the flag that found them
 
 The Fold's cover screen clipped the controls: the station field ran past
 the right edge and the gutter labels were cut mid-character, `rain %`
@@ -2505,6 +2505,35 @@ minimum was chosen for a desktop row and had become a lower bound on the
 whole window, so a narrow screen pushed the controls wider than the
 display and clipped whatever was on the right. The value column takes
 the slack now and the floor is low enough for a phone.
+
+#### 10.5.1 The same fault again, in the widget nobody looked at
+
+The cover screen clipped again, months later and in the same way: every
+control on the right lost its border and the rain label `10 mm/h` was
+cut to `10`. The cause was `bbq_forecast_graph`'s own
+`setMinimumSize(360, 180)` -- **the identical mechanism as the station
+box above**, in a different widget, left behind when that one was
+fixed.
+
+The arithmetic is worth stating because it is not visible from the
+screenshot. The cover display is 840x2289 PHYSICAL pixels at 420dpi,
+which is 320 LOGICAL pixels wide. A 360-wide floor overhangs that by
+40, about a ninth of the screen. Nothing in the layout was wrong; there
+was no room for it to be right in.
+
+It also defeated the first attempt to reproduce it. Rendering at
+`--size 840x2289` fits comfortably, because on the desktop those are
+logical pixels and it is 2.6 times the room the phone has. **The size
+to reproduce at is the logical one**, and the way to notice the
+mistake is that the render came back 360 wide when 320 was asked for --
+the floor announcing itself.
+
+The lesson is the one in sec 3.12.1.1, arriving from a different
+direction: the earlier fix addressed the widget where the symptom was
+seen rather than the class of fault, so the same defect waited in the
+next widget with a minimum in it. When a fix is "this floor was too
+high", the question to ask before closing it is which other floors
+there are.
 
 ## 11. Android
 
