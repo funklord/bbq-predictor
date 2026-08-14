@@ -137,7 +137,7 @@ private:
 	 */
 	/*
 	 * Yesterday's observations, which today's request cannot supply
-	 * (sec 12.7). Separate because the two ask for different days on
+	 * (sec 12.13). Separate because the two ask for different days on
 	 * very different schedules: today's answer changes, yesterday's
 	 * cannot.
 	 */

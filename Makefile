@@ -272,13 +272,19 @@ endif
 # construction: a suite that hangs must not hang the machine that ran it.
 TEST_TIMEOUT ?= 120
 
-test: tests-build
+# The suite depends on the APPLICATION as well as on itself, which is new
+# and deliberate: test_seed drives the built binary to check that
+# --seed-verification refuses the real archive, and a guard of that kind
+# cannot be tested by linking a library. BBQ_APP_BINARY tells it where to
+# look, so the test fails loudly rather than skipping when it is absent --
+# a skipped guard reads exactly like a guard that passed.
+test: tests-build $(ARTIFACT)
 	@failed=0; ran=0; \
 	for binary in $(TEST_BUILD_DIR)/test_*; do \
 		[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
 		ran=$$((ran + 1)); \
 		echo "--- $$binary"; \
-		$(TEST_CRASH_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
+		BBQ_APP_BINARY="$(abspath $(ARTIFACT))" $(TEST_CRASH_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
 	done; \
 	if [ "$$ran" -eq 0 ]; then \
 		echo "test: no test binaries were found in $(TEST_BUILD_DIR)." >&2; \

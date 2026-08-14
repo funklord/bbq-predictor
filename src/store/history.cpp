@@ -20,7 +20,7 @@ const double rain_occurred_mm_h = 0.1;
 
 /*
  * When a quantity's observations stop counting as measurements
- * (project.md sec 12.8).
+ * (project.md sec 12.14).
  *
  * A sensor that reports the same number for six hours is not measuring
  * anything, and scoring a forecast against it produces a bias that

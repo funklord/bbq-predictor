@@ -1798,7 +1798,49 @@ while fixing the first, since keeping radar from owning a column is
 only correct if its rain still arrives.
 
 
-### 12.7 The archive has no today in it
+### 12.15 The seeding refusal is tested by running the program
+
+`--seed-verification` writes invented statistics, and it must never
+write them into the real archive. The guard is four lines in `main()`:
+no `--history-path`, no seeding.
+
+Nothing checked it, and it is precisely the kind that stops working
+without anyone noticing. **It produces no output when it is doing its
+job, and what it prevents is silent too** -- fabricated bias rows
+sitting in the store looking like measurements, feeding the corrected
+band onto the graph. The APK signature check in this project stopped
+matching when a tool changed its output format and reported nothing
+wrong for months (sec 11.4); this is the same shape in a place where
+the damage is to data rather than to a build.
+
+It cannot be tested by linking, because it lives in `main()` and a test
+binary cannot have a second one. So `test_seed` runs the built program.
+
+**Both directions, and the second is not garnish.** One case asserts
+the refusal without `--history-path`; the other asserts that seeding a
+scratch file DOES work. Without the second, the first would pass just
+as loudly if the binary were missing, broken, or refusing everything --
+which is exactly the failure the suite hit while being written, and
+which the refusal test alone reported as success.
+
+The check is on the filesystem as well as the exit code. Every standard
+location is redirected into a temporary directory, and the test asserts
+that no `.sqlite` appears anywhere beneath it. A program that refused
+politely and wrote the rows anyway would pass an exit-code assertion.
+
+Two things this cost, both worth knowing:
+
+- **`make test` now builds the application.** The suite exercises the
+  program, so it depends on it. Tests are still not built by the
+  default target; the dependency runs the other way.
+- **The path must be absolute.** `ARTIFACT` is a bare name for an
+  in-place build, `QFile::exists` resolved it against the working
+  directory and `QProcess::start` searched `PATH`, so the child never
+  launched -- and the run took two milliseconds while reporting a
+  failure about missing output rather than about a missing program. A
+  test that cannot start its subject should say so in those words.
+
+### 12.13 The archive has no today in it
 
 `record: none yet` on the verdict line, on two phones, for days. The
 store said why:
@@ -1854,9 +1896,9 @@ one line that could have said otherwise -- `record: none yet` -- reads
 exactly like a feature waiting for enough data. A pipeline starved at
 its source looks identical to one that is merely young.
 
-### 12.8 A sensor that never moves is not a measurement
+### 12.14 A sensor that never moves is not a measurement
 
-With observations finally arriving (sec 12.7), the first real
+With observations finally arriving (sec 12.13), the first real
 verification came out as this, against the station this project was
 written for:
 
@@ -3287,7 +3329,7 @@ go through the application, which writes its own directory perfectly
 well. `adb` can look and cannot touch.
 
 **This was learned by destroying the archive.** The temperature
-verification rows were poisoned by a stuck sensor (sec 12.8) and the
+verification rows were poisoned by a stuck sensor (sec 12.14) and the
 purge was done off-device: copy out, fold the write-ahead log in, drop
 the bad rows, write back. The copy and the purge were correct and
 verified -- `integrity_check` ok, every other table intact. The write
@@ -3305,7 +3347,7 @@ which is the wrong end of the operation and turned a recoverable
 mistake into a destructive one.
 
 What made it survivable is worth recording too. Observations are
-**re-fetchable** -- the backfill of sec 12.7 pulls a full day back from
+**re-fetchable** -- the backfill of sec 12.13 pulls a full day back from
 Weather Underground's archive on the next launch -- and the pending
 queue refills from the next forecast fetch. Only the accumulated
 verification counts were genuinely lost, about a day of them. A store

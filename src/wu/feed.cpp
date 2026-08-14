@@ -53,8 +53,11 @@ int freshness_s(bbq_wu_product product) {
  * and Open-Meteo's extended band is hourly, so these match the same rule
  * the table above follows: ask no faster than the source changes.
  */
+const int radar_freshness_s = 10 * 60;
+const int extended_freshness_s = 60 * 60;
+
 /*
- * Yesterday's observations, asked for on their own schedule (sec 12.7).
+ * Yesterday's observations, asked for on their own schedule (sec 12.13).
  *
  * Weather Underground's PWS history is an ARCHIVE, and today is not in
  * it yet: asking for today returns the first couple of rows of the
@@ -71,9 +74,6 @@ int freshness_s(bbq_wu_product product) {
  * rule this project follows is to ask no faster than the source moves.
  */
 const int backfill_freshness_s = 6 * 3600;
-
-const int radar_freshness_s = 10 * 60;
-const int extended_freshness_s = 60 * 60;
 
 /*
  * Never attempted counts as overdue. Shared by every band so that the

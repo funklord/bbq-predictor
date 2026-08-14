@@ -360,7 +360,7 @@ void test_history::a_brier_score_is_read_against_its_baseline() {
 
 void test_history::a_stuck_sensor_does_not_score_a_forecast() {
 	/*
-	 * Sec 12.8. The station this project was written against reported
+	 * Sec 12.14. The station this project was written against reported
 	 * tempAvg 22 for 288 consecutive observations -- dew point 22 and
 	 * humidity 99 beside it, a soaked probe -- while its wind moved
 	 * normally. Scoring a forecast against that produces a bias of
