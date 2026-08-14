@@ -22,8 +22,16 @@
 
         Everything works without it: the list falls back to searching
         for a place by name, which is also the only route on a desktop.
+
+        THE PACKAGE ALSO ASKS FOR ACCESS_FINE_LOCATION, and not from
+        here. Qt Positioning declares it in its own dependency manifest
+        and androiddeployqt injects it, which is visible only in the
+        built artifact; see project.md sec 13.3. Removing it the
+        Android way, with tools:node="remove", is refused by
+        androiddeployqt's own XML handling before Gradle ever sees it.
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
 
     <application
         android:name="org.qtproject.qt.android.bindings.QtApplication"

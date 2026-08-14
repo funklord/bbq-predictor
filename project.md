@@ -3503,6 +3503,46 @@ DATA rather than the device. The `Find...` tooltip carries the reason,
 and an empty list gets the placeholder `no location -- use Find...`,
 which is what a fresh install on a desktop shows.
 
+#### 13.3.1 The package asks for more than the manifest does
+
+The manifest requests `ACCESS_COARSE_LOCATION` and nothing else. The
+built package requests both:
+
+    uses-permission: android.permission.ACCESS_FINE_LOCATION
+    uses-permission: android.permission.ACCESS_COARSE_LOCATION
+    uses-implied-feature: android.hardware.location
+
+`ACCESS_FINE_LOCATION` comes from
+`Qt6Positioning_arm64-v8a-android-dependencies.xml`, which
+androiddeployqt reads and injects. **It is visible only in the
+artifact**: nothing in this repository asks for precise location, and
+the section above would have been an honest description of the source
+and a false one of the program somebody installs.
+
+Removing it the documented Android way -- a `tools:node="remove"`
+directive for the manifest merger -- is refused before Gradle sees it.
+androiddeployqt parses the manifest itself and rejects the namespaced
+attribute, so the merger never gets the chance.
+
+Left as it is, and recorded rather than hidden. The alternative is
+editing the deployed manifest between androiddeployqt and Gradle, which
+would put a text substitution in the build for a permission that
+changes nothing about what the program does: positioning is asked for
+with `NonSatellitePositioningMethods` either way, and Android's own
+dialog lets the reader grant approximate location whatever the manifest
+requests.
+
+**And a trap in the manifest itself.** XML comments cannot contain a
+double hyphen, and this project's prose uses `--` constantly. Three
+rebuilds were spent on
+
+    Error in AndroidManifest.xml: Expected '>', but got ' '
+
+which names neither the comment nor the character. The first version of
+the comment happened to have none and built; every later edit added
+one. A file that is prose-heavy and XML at the same time needs the
+rule stated where the prose is written, which is why it is here.
+
 **Nothing was borrowed from fuzzypickles.** It was worth looking, since
 it is the sibling project with location code, but its GPS is `gpsd` on
 Linux feeding the daemon's entropy pool; its Android spike lived in an
