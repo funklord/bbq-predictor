@@ -27,6 +27,7 @@ private slots:
 	void a_chance_forecast_is_scored_by_occurrence_not_by_error();
 	void a_brier_score_is_read_against_its_baseline();
 	void a_stuck_sensor_does_not_score_a_forecast();
+	void rediscovery_does_not_unpin_a_station();
 
 private:
 	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
@@ -420,6 +421,51 @@ void test_history::a_stuck_sensor_does_not_score_a_forecast() {
 
 	QCOMPARE(temperature.count, 0);
 	QVERIFY2(rain.count > 0, "the rain moved and should still be scored");
+}
+
+
+void test_history::rediscovery_does_not_unpin_a_station() {
+	/*
+	 * Sec 13. Discovery runs again every time the coordinate moves, so
+	 * remembering has to be an upsert that leaves the pinned flag alone
+	 * -- otherwise walking somewhere would silently unpin whatever the
+	 * user had chosen to keep fetching, and the loss would show up days
+	 * later as a station with no history.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY2(store.open(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(store.last_error()));
+
+	bbq_station found;
+	found.id = QStringLiteral("ISTOCK877");
+	found.name = QStringLiteral("Vasastan");
+	found.latitude = 59.34;
+	found.longitude = 18.05;
+	found.distance_km = 3.7;
+	found.first_seen_utc = 1000;
+	found.last_seen_utc = 1000;
+
+	QVERIFY(store.remember_station(found));
+	QVERIFY(store.set_station_pinned(found.id, true));
+	QCOMPARE(static_cast<int>(store.pinned_stations().size()), 1);
+
+	/* Found again from somewhere else: nearer, renamed, later. */
+	found.name = QStringLiteral("Vasastan north");
+	found.distance_km = 1.2;
+	found.first_seen_utc = 9999;
+	found.last_seen_utc = 2000;
+	QVERIFY(store.remember_station(found));
+
+	const std::vector<bbq_station> all = store.stations();
+	QCOMPARE(static_cast<int>(all.size()), 1);
+	QVERIFY2(all.at(0).pinned, "rediscovery unpinned it");
+	QCOMPARE(all.at(0).name, QStringLiteral("Vasastan north"));
+	QCOMPARE(all.at(0).distance_km, 1.2);
+	QCOMPARE(all.at(0).last_seen_utc, qint64(2000));
+
+	/* First seen is when we first heard of it, not when we last did. */
+	QCOMPARE(all.at(0).first_seen_utc, qint64(1000));
 }
 
 QTEST_GUILESS_MAIN(test_history)

@@ -3391,6 +3391,47 @@ whose contents can be rebuilt from their sources is a store that
 tolerates this kind of mistake; one holding the only copy of anything
 would not have.
 
+## 13. Stations are discovered, remembered, and pinned
+
+The station was a text field somebody had to know the answer to. That
+is a poor way to start, and a worse way to recover: the station this
+project ran against for months reports a dead thermometer (sec 12.14),
+and finding a replacement meant querying an API by hand.
+
+So stations are DISCOVERED -- from a coordinate, or by searching for a
+place -- and then KEPT. The list a reader picks from grows rather than
+being re-derived, so a station found on holiday is still offered at
+home.
+
+**Three states, and they are not the same idea.**
+
+- **Known.** Heard of, remembered, offered in the list. Costs nothing:
+  no requests are made for it.
+- **Pinned.** Fetched, and SPARINGLY -- the backfill only, on its
+  six-hour interval. Four requests a day each, and it is exactly what
+  verification needs, since what a forecast must be scored against is
+  history rather than the present moment.
+- **Watched.** The one being looked at, fetched at the ordinary
+  cadence: observations every ten minutes, current every five,
+  forecasts, backfill. Exactly one at a time, and it is a preference
+  rather than a fact about the world, so it stays in the INI while the
+  station list lives in the archive (sec 12.2).
+
+**The request volume is the reason for the distinction.** The API key
+is scraped from Weather Underground's own site and shared with it, so
+fetching everything remembered would multiply today's traffic by the
+length of a list the user did not think of as a cost. Pinning makes the
+cost visible and chosen, and the interface marks the pinned ones so it
+is obvious which are spending requests.
+
+**Remembering preserves the pinned flag**, which is why it is an upsert
+rather than a replace. Discovery runs again whenever the coordinate
+moves, and a rediscovery that reset the flag would unpin a chosen
+station silently, at the moment somebody walked somewhere -- surfacing
+days later as a station with no history. `first_seen_utc` is preserved
+for the same reason: it records when this program first heard of a
+station, not when it last saw it.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh

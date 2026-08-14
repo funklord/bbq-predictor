@@ -298,16 +298,174 @@ bool bbq_history::create_schema() {
 	 * the makings of a Brier score and a reliability curve, not a mean
 	 * error.
 	 */
+	if (!exec(QStringLiteral(
+	            "CREATE TABLE IF NOT EXISTS reliability ("
+	            "station TEXT NOT NULL,"
+	            "band INTEGER NOT NULL,"
+	            "lead_bucket INTEGER NOT NULL,"
+	            "probability_bin INTEGER NOT NULL,"
+	            "count INTEGER NOT NULL,"
+	            "rain_count INTEGER NOT NULL,"
+	            "sum_square_error REAL NOT NULL,"
+	            "PRIMARY KEY (station, band, lead_bucket, probability_bin))"))) {
+		return false;
+	}
+
+	/*
+	 * The stations the program has heard of (sec 13). Kept in the
+	 * archive rather than in the INI because it is a record of what was
+	 * found, not a preference -- the same division sec 12.2 draws
+	 * between measurement and settings. WHICH one is watched is the
+	 * preference, and stays in the INI.
+	 */
 	return exec(QStringLiteral(
-	        "CREATE TABLE IF NOT EXISTS reliability ("
-	        "station TEXT NOT NULL,"
-	        "band INTEGER NOT NULL,"
-	        "lead_bucket INTEGER NOT NULL,"
-	        "probability_bin INTEGER NOT NULL,"
-	        "count INTEGER NOT NULL,"
-	        "rain_count INTEGER NOT NULL,"
-	        "sum_square_error REAL NOT NULL,"
-	        "PRIMARY KEY (station, band, lead_bucket, probability_bin))"));
+	        "CREATE TABLE IF NOT EXISTS station ("
+	        "id TEXT PRIMARY KEY,"
+	        "name TEXT,"
+	        "latitude REAL,"
+	        "longitude REAL,"
+	        "distance_km REAL,"
+	        "pinned INTEGER NOT NULL DEFAULT 0,"
+	        "first_seen_utc INTEGER NOT NULL,"
+	        "last_seen_utc INTEGER NOT NULL)"));
+}
+
+bool bbq_history::remember_station(const bbq_station &station) {
+	if (!m_open || station.id.isEmpty()) {
+		return false;
+	}
+
+	QSqlDatabase database = QSqlDatabase::database(m_connection);
+	QSqlQuery keep(database);
+
+	/*
+	 * PINNED IS NOT TOUCHED, and that is the point of writing this as an
+	 * upsert rather than a replace. Discovery runs again every time the
+	 * coordinate moves, so a rediscovery that reset the flag would unpin
+	 * whatever the user had chosen, silently, at the moment they walked
+	 * somewhere. first_seen_utc is left alone for the same reason: it
+	 * records when this program first heard of the station, not when it
+	 * last saw it.
+	 */
+	keep.prepare(QStringLiteral(
+	        "INSERT INTO station (id, name, latitude, longitude, distance_km, "
+	        "pinned, first_seen_utc, last_seen_utc) "
+	        "VALUES (?, ?, ?, ?, ?, 0, ?, ?) "
+	        "ON CONFLICT (id) DO UPDATE SET "
+	        "name = excluded.name, latitude = excluded.latitude, "
+	        "longitude = excluded.longitude, "
+	        "distance_km = excluded.distance_km, "
+	        "last_seen_utc = excluded.last_seen_utc"));
+
+	keep.addBindValue(station.id);
+	keep.addBindValue(station.name);
+	keep.addBindValue(station.latitude);
+	keep.addBindValue(station.longitude);
+	keep.addBindValue(station.distance_km);
+	keep.addBindValue(station.first_seen_utc);
+	keep.addBindValue(station.last_seen_utc);
+
+	if (!keep.exec()) {
+		m_last_error = keep.lastError().text();
+		return false;
+	}
+
+	return true;
+}
+
+bool bbq_history::set_station_pinned(const QString &id, bool pinned) {
+	if (!m_open || id.isEmpty()) {
+		return false;
+	}
+
+	QSqlDatabase database = QSqlDatabase::database(m_connection);
+	QSqlQuery pin(database);
+	pin.prepare(QStringLiteral("UPDATE station SET pinned = ? WHERE id = ?"));
+	pin.addBindValue(pinned ? 1 : 0);
+	pin.addBindValue(id);
+
+	if (!pin.exec()) {
+		m_last_error = pin.lastError().text();
+		return false;
+	}
+
+	return true;
+}
+
+namespace {
+
+std::vector<bbq_station> read_stations(QSqlQuery &query) {
+	std::vector<bbq_station> found;
+
+	while (query.next()) {
+		bbq_station station;
+		station.id = query.value(0).toString();
+		station.name = query.value(1).toString();
+		station.latitude = query.value(2).toDouble();
+		station.longitude = query.value(3).toDouble();
+		station.distance_km = query.value(4).toDouble();
+		station.pinned = query.value(5).toInt() != 0;
+		station.first_seen_utc = query.value(6).toLongLong();
+		station.last_seen_utc = query.value(7).toLongLong();
+		found.push_back(station);
+	}
+
+	return found;
+}
+
+/* The column list, written once so the two queries cannot disagree. */
+const char *const station_columns = "id, name, latitude, longitude, distance_km, pinned, first_seen_utc, last_seen_utc";
+
+} // namespace
+
+std::vector<bbq_station> bbq_history::stations() const {
+	std::vector<bbq_station> found;
+
+	if (!m_open) {
+		return found;
+	}
+
+	QSqlDatabase database = QSqlDatabase::database(m_connection);
+	QSqlQuery list(database);
+
+	/*
+	 * Pinned first, then by distance where one is known, then by name.
+	 * A station discovered from somewhere else has a distance measured
+	 * from there and no longer means much here, but it is still a better
+	 * order than none -- and the pinned ones are what the reader is
+	 * looking for.
+	 */
+	list.prepare(QString::fromLatin1(
+	        "SELECT %1 FROM station "
+	        "ORDER BY pinned DESC, "
+	        "CASE WHEN distance_km >= 0 THEN distance_km ELSE 1e9 END, "
+	        "name, id").arg(QString::fromLatin1(station_columns)));
+
+	if (!list.exec()) {
+		return found;
+	}
+
+	return read_stations(list);
+}
+
+std::vector<bbq_station> bbq_history::pinned_stations() const {
+	std::vector<bbq_station> found;
+
+	if (!m_open) {
+		return found;
+	}
+
+	QSqlDatabase database = QSqlDatabase::database(m_connection);
+	QSqlQuery list(database);
+	list.prepare(QString::fromLatin1(
+	        "SELECT %1 FROM station WHERE pinned != 0 ORDER BY id")
+	                     .arg(QString::fromLatin1(station_columns)));
+
+	if (!list.exec()) {
+		return found;
+	}
+
+	return read_stations(list);
 }
 
 int bbq_history::record_observations(const QString &station,

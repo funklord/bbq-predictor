@@ -51,6 +51,35 @@ const char *bbq_lead_bucket_name(bbq_lead_bucket bucket);
 qint64 bbq_lead_bucket_centre_s(bbq_lead_bucket bucket);
 
 /*
+ * A weather station the program has heard of (project.md sec 13).
+ *
+ * Discovered from a coordinate or a place search and then KEPT, so the
+ * list a user picks from grows rather than being re-derived every time
+ * they move. Distance is from wherever it was last discovered and is a
+ * hint for ordering, not an identity: the same station found from two
+ * places is one row.
+ */
+struct bbq_station {
+	QString id;
+	QString name;
+	double latitude = 0.0;
+	double longitude = 0.0;
+	double distance_km = -1.0;
+
+	/*
+	 * Pinned stations are FETCHED, and sparingly: the backfill only,
+	 * on its six-hour interval, which is four requests a day each and
+	 * exactly what verification needs. The watched station -- the one
+	 * being looked at -- is fetched at the ordinary cadence and is a
+	 * separate idea from this flag.
+	 */
+	bool pinned = false;
+
+	qint64 first_seen_utc = 0;
+	qint64 last_seen_utc = 0;
+};
+
+/*
  * What the store knows about one band's error at one lead time, for one
  * quantity. Sums rather than samples, so the table is a fixed size
  * however many years pass (sec 12.1).
@@ -130,6 +159,25 @@ public:
 	bool is_open() const { return m_open; }
 	QString location() const { return m_path; }
 	QString last_error() const { return m_last_error; }
+
+	/*
+	 * The known stations (sec 13).
+	 *
+	 * Remembering is an upsert that PRESERVES the pinned flag, because
+	 * discovery happens repeatedly -- every time a coordinate moves --
+	 * and a rediscovery must not quietly unpin something the user
+	 * chose. The name and coordinate are refreshed; `first_seen_utc` is
+	 * not.
+	 */
+	bool remember_station(const bbq_station &station);
+	bool set_station_pinned(const QString &id, bool pinned);
+
+	/*
+	 * Nearest first where a distance is known, then the rest by name, so
+	 * a list built from one place still reads sensibly from another.
+	 */
+	std::vector<bbq_station> stations() const;
+	std::vector<bbq_station> pinned_stations() const;
 
 	/* Every measurement in a series is archived. Re-storing is harmless. */
 	int record_observations(const QString &station, const bbq_series &series);
