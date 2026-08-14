@@ -277,6 +277,32 @@ android-check: $$(ANDROID_CHECK_LOCAL)
 		echo "android:   artifact after an ABI it does not contain." >&2; \
 		exit 1; \
 	fi
+	@# The kit's own library name, which is the ABI the LINKER will use.
+	@#
+	@# hydra's, and it is better evidence than either source above:
+	@# qdevice.pri is a text file describing intent and the directory name is
+	@# Qt's to change, while libQt6Core_<abi>.so is the artifact that gets
+	@# linked. `qmake -query QT_ARCH` was the obvious source and was tried
+	@# first -- all four kits on the machine this was written for answer
+	@# `**Unknown**`, so it cannot tell them apart at all.
+	@#
+	@# A kit that will not say what it is FAILS here rather than passing. An
+	@# unconfirmed ABI is the state this check exists to refuse, and the cost
+	@# of guessing is a package named after an architecture it does not
+	@# contain -- which installs on nothing and cannot be told by looking.
+	@core=$$(ls $(QT_ANDROID_ROOT)/lib/libQt6Core_*.so 2>/dev/null | head -1); \
+	if [ -z "$$core" ]; then \
+		echo "android: $(QT_ANDROID_ROOT) ships no libQt6Core_<abi>.so," >&2; \
+		echo "android:   so its ABI cannot be confirmed; refusing to guess." >&2; \
+		exit 1; \
+	fi; \
+	kit=$${core##*/libQt6Core_}; kit=$${kit%.so}; \
+	if [ "$$kit" != "$(ANDROID_ABI)" ]; then \
+		echo "android: ABI mismatch. ANDROID_ABI is $(ANDROID_ABI), but that" >&2; \
+		echo "android:   kit links $$kit -- read from its own libQt6Core." >&2; \
+		echo "android:   kit: $(QT_ANDROID_ROOT)" >&2; \
+		exit 1; \
+	fi
 	@if [ -z "$(ANDROID_NDK_ROOT)" ] || [ ! -d "$(ANDROID_NDK_ROOT)" ]; then \
 		echo "android: ANDROID_NDK_ROOT is not set or does not exist." >&2; \
 		echo "android:   the kit above was built against a particular NDK; a" >&2; \
