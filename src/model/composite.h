@@ -69,6 +69,22 @@ public:
 	 */
 	bbq_reading at(qint64 when_utc) const;
 
+	/*
+	 * The reading from the band that OWNS an instant, which is not
+	 * always the finest band covering it (sec 3.18).
+	 *
+	 * A sharpening band refines one quantity and does not describe the
+	 * weather on its own: MET Norway's radar nowcast carries
+	 * air_temperature on its first step and precipitation_rate alone on
+	 * the other twenty-two. Letting it win a column outright therefore
+	 * took the temperature away wherever it reached, which is not what
+	 * a band described as a bonus is supposed to do.
+	 *
+	 * So ownership skips it, and `at()` keeps its old meaning for
+	 * callers that want the finest answer available.
+	 */
+	bbq_reading owner_at(qint64 when_utc) const;
+
 	/* Coverage across every band; both zero when empty. */
 	qint64 begin_utc() const;
 	qint64 end_utc() const;

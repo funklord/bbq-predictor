@@ -92,6 +92,38 @@ bbq_reading bbq_composite::at(qint64 when_utc) const {
 	return best;
 }
 
+bbq_reading bbq_composite::owner_at(qint64 when_utc) const {
+	bbq_reading best;
+	int best_priority = 0;
+
+	for (const bbq_series &series : m_series) {
+		/*
+		 * The one skip, and the whole point of this function. Named
+		 * rather than inferred from whether a particular sample
+		 * happens to carry a temperature: the radar band's FIRST step
+		 * does carry one, so a data-driven test would hand it the
+		 * column for five minutes in every two hours and take it back
+		 * again -- ownership flickering with the clock.
+		 */
+		if (series.band() == bbq_band::nowcast_fine) {
+			continue;
+		}
+
+		const bbq_sample *sample = series.at(when_utc);
+		if (sample == nullptr) {
+			continue;
+		}
+
+		if (!best.is_valid() || series.priority() > best_priority) {
+			best.sample = sample;
+			best.series = &series;
+			best_priority = series.priority();
+		}
+	}
+
+	return best;
+}
+
 qint64 bbq_composite::begin_utc() const {
 	qint64 earliest = 0;
 

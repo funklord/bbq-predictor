@@ -1700,6 +1700,58 @@ dropped at either size:
     320 px    07:15 17.0 C 0.0 mm/h 1% 9 km/h nowcast
     1080 px   Fri 07:00   17.0 C   0.0 mm/h   1%   9 km/h   nowcast
 
+### 3.18 A sharpening band refines a quantity; it does not own a column
+
+The temperature line disappeared, occasionally, in stretches. Reported
+from the phone twice before it was caught in a screenshot, and the
+screenshot is what solved it: the readout at the cursor said
+
+    04:45  0.0 mm/h  radar
+
+-- a time, a rain rate, a band, and **no temperature**.
+
+MET Norway's nowcast is a five-minute radar extrapolation, and asking
+it directly settles what it carries:
+
+    step  0  02:40Z: air_temperature, precipitation_rate, wind_speed, ...
+    step  1  02:45Z: precipitation_rate
+    step 22  04:30Z: precipitation_rate
+    steps carrying air_temperature: 1 of 23
+
+**One step in twenty-three has a temperature.** The radar band is the
+finest thing on the graph, so it won every column inside its two-hour
+window, and `reduce()` gave the winner the whole column. With no
+temperature in twenty-two of its samples there were no temperature
+knots, so no curve was fitted and the line was absent -- exactly where
+the data to draw it had been fetched and was sitting in memory.
+
+**The code contradicted this document**, which already said what the
+band was for: radar and extended "sharpen bands that already have a
+source rather than supplying one that would otherwise be blank". It was
+not sharpening. It was taking over.
+
+So ownership skips it. `bbq_composite::owner_at()` returns the finest
+band that describes the weather, `at()` keeps its old meaning, and the
+rain is then sharpened from radar afterwards -- which is the half that
+makes the band worth fetching at all, five-minute precipitation being a
+better answer than an hourly mean.
+
+**This is not the blending sec 3.7 forbids.** That rule is about one
+quantity averaged across sources. Here each quantity still has exactly
+one source, and the column still reports one band's account of itself;
+radar refines the single field it is expert in. Both the drawn value
+and the knot are replaced together, or the trace and the readout would
+disagree about the same column.
+
+The skip is named rather than inferred from whether a sample happens to
+carry a temperature. A data-driven test would hand radar the column for
+the five minutes of its first step and take it back for the next two
+hours -- ownership flickering with the clock, which is worse than
+either answer consistently.
+
+A column that only radar covers still falls back to it, since a missing
+shower is not an improvement on a missing line.
+
 ### 12.12 The forecast's record, beside the verdict it produced
 
 The verification tables (sec 12.3) were collected to answer one

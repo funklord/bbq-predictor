@@ -162,7 +162,26 @@ QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
 column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	column result;
 
-	const bbq_reading reading = composite.at((from + to) / 2);
+	const qint64 middle = (from + to) / 2;
+
+	/*
+	 * The OWNER, not simply the finest band here (sec 3.18).
+	 *
+	 * The radar band is five-minute precipitation and nothing else
+	 * after its first step, so when it won a column outright it took
+	 * the temperature with it -- the line stopped dead wherever radar
+	 * reached, with the readout showing rain and a band name and no
+	 * degrees. Ownership goes to a band that describes the weather;
+	 * radar sharpens the rain below.
+	 *
+	 * Falling back to at() matters: a column radar alone covers is
+	 * still worth drawing rain in, and refusing to would trade a
+	 * missing line for a missing shower.
+	 */
+	bbq_reading reading = composite.owner_at(middle);
+	if (!reading.is_valid()) {
+		reading = composite.at(middle);
+	}
 	if (!reading.is_valid()) {
 		return result;
 	}
@@ -265,6 +284,49 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 			if (!result.has_chance || value > result.chance) {
 				result.chance = value;
 				result.has_chance = true;
+			}
+		}
+	}
+
+	/*
+	 * Radar sharpens the rain it is expert in, having been kept from
+	 * owning the column above (sec 3.18).
+	 *
+	 * This is the half that makes the band worth fetching: five-minute
+	 * precipitation is a better answer than an hourly mean, and the
+	 * point of not letting it own the column was never to ignore it.
+	 * It is NOT blending in the sense sec 3.7 forbids -- the column
+	 * still reports one band's account of each quantity, and rain has
+	 * one source here rather than an average of two.
+	 *
+	 * Both the drawn value and the knot are replaced, or the trace and
+	 * the readout would disagree about the same column.
+	 */
+	const bbq_series *fine = composite.band(bbq_band::nowcast_fine);
+	if (fine != nullptr && fine != winner && !fine->is_empty()) {
+		const auto fine_span = fine->range(from, to);
+		const std::vector<bbq_sample> &fine_samples = fine->samples();
+
+		for (std::size_t i = fine_span.first; i < fine_span.second; ++i) {
+			if (!fine_samples[i].precip_rate.has_value()) {
+				continue;
+			}
+
+			const double rate = *fine_samples[i].precip_rate;
+
+			if (!result.has_rain || rate > result.rain) {
+				result.rain = rate;
+				result.has_rain = true;
+			}
+
+			const qint64 begins = fine_samples[i].start_utc;
+			const bool starts_here = begins >= from && begins < to;
+			const bool wetter = rate > result.knot_rain;
+			const bool sharper = !result.knot_has_rain || wetter;
+
+			if (starts_here && sharper) {
+				result.knot_rain = rate;
+				result.knot_has_rain = true;
 			}
 		}
 	}
