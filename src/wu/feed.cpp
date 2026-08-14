@@ -393,13 +393,70 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 	if (!m_geocode_pinned) {
 		m_have_geocode = false;
 	}
+
+	/*
+	 * The backfill is due again, whatever the clock says (sec 12.13).
+	 *
+	 * Its six-hour interval is a statement about the DATA -- yesterday
+	 * cannot change -- and that reasoning does not survive the station
+	 * changing, because it is a different station's yesterday. Left
+	 * alone, a station edit inside the window would fetch today's two
+	 * rows for the new station and none of the day behind it, so
+	 * verification for it would start a day late and look like the
+	 * starvation of sec 12.13 all over again.
+	 *
+	 * Changing the station is exactly when somebody most wants the new
+	 * one to have a history: it is what you do after discovering the
+	 * old one was reporting rubbish.
+	 */
+	m_backfill_attempted = 0;
+}
+
+void bbq_wu_feed::forget_location_freshness() {
+	/*
+	 * Only the bands that are asked for BY COORDINATE. The observed and
+	 * current-station products are asked for by station id and are
+	 * re-fetched unconditionally by refresh(), so they need nothing
+	 * here; the backfill has its own reset, for its own reason.
+	 */
+	m_attempted.remove(static_cast<int>(bbq_wu_product::nowcast));
+	m_attempted.remove(static_cast<int>(bbq_wu_product::hourly));
+	m_attempted.remove(static_cast<int>(bbq_wu_product::current_point));
+
+	m_radar_attempted = 0;
+	m_extended_attempted = 0;
 }
 
 void bbq_wu_feed::set_geocode(double latitude, double longitude, bool pinned) {
+	/*
+	 * A MOVE invalidates the forecast bands (sec 2.6.7.5).
+	 *
+	 * Their freshness intervals say how long the weather at a place
+	 * stays worth re-reading; they say nothing about a different place.
+	 * Without this, changing the station left the graph showing the old
+	 * town's forecast until each band's timer ran out on its own -- up
+	 * to fifteen minutes for the nowcast and a full HOUR for the hourly
+	 * band, while the observed band beside it already described
+	 * somewhere else. That is the two-places-on-one-axis failure sec
+	 * 2.6.7 exists to prevent, arriving by the clock rather than by the
+	 * coordinate.
+	 *
+	 * Compared before it is stored, and only a real move counts: this is
+	 * also called every time a coordinate is DERIVED from an observed
+	 * response, which is most fetches, and resetting there would refetch
+	 * every band every time.
+	 */
+	const bool moved = m_have_geocode &&
+	                   (m_latitude != latitude || m_longitude != longitude);
+
 	m_latitude = latitude;
 	m_longitude = longitude;
 	m_have_geocode = true;
 	m_geocode_pinned = pinned;
+
+	if (moved) {
+		forget_location_freshness();
+	}
 }
 
 void bbq_wu_feed::finish_one() {

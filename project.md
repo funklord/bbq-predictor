@@ -517,6 +517,42 @@ the field writes on `editingFinished`, which fires when the box merely
 loses focus -- treating that as a change would throw away a good
 coordinate every time somebody clicked past it.
 
+#### 2.6.7.5 Freshness is about a place, and the place can move
+
+Dropping the stale coordinate (sec 2.6.7.4) was half the repair. The
+other half is that every forecast band carries a freshness interval --
+fifteen minutes for the nowcast, an HOUR for the hourly band -- and
+those intervals answer "has the weather here changed since we asked".
+They say nothing whatever about a different here.
+
+So changing the station left the graph drawing the OLD town's forecast
+until each timer ran out on its own, while the observed band beside it
+already described the new one. That is the two-places-on-one-axis
+failure of sec 2.6.7 arriving by the clock instead of by the
+coordinate, and the earlier fix could not see it because it was looking
+at the coordinate.
+
+A real move now forgets the freshness of the bands that are asked for
+BY COORDINATE -- nowcast, hourly, current-by-point, radar and extended
+-- so the next round re-asks immediately. The station-keyed products
+need nothing: `refresh()` re-fetches them unconditionally.
+
+**Only a real move counts.** `set_geocode` is also how a coordinate
+DERIVED from an observed response is stored, which happens on most
+fetches, so resetting unconditionally would re-fetch every band every
+time. The coordinates are compared before they are stored.
+
+The backfill has its own reset for its own reason (sec 12.13): its
+interval is a statement about yesterday's data rather than about a
+place, and that reasoning fails on a station change too -- a different
+station has a different yesterday.
+
+**Neither reset is covered by a test.** The feed's scheduling state has
+no observable handle, and `test_feed` deliberately touches no network,
+so asserting this would mean either exposing internals for the test or
+firing real requests. Recorded as unverified rather than left to look
+verified.
+
 ### 2.6.8 The command line overrides the run, not the configuration
 
 `--station` and `--geocode` win for the run they are given on and

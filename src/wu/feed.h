@@ -141,6 +141,13 @@ private:
 	 * very different schedules: today's answer changes, yesterday's
 	 * cannot.
 	 */
+	/*
+	 * Forget how fresh the location-dependent bands are, because the
+	 * location has moved (sec 2.6.7.5). Freshness answers "has the
+	 * weather here changed since we asked", and "here" has.
+	 */
+	void forget_location_freshness();
+
 	void attempt_backfill(qint64 now_utc);
 	void attempt_radar(qint64 now_utc);
 	void attempt_extended(qint64 now_utc);
