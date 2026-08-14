@@ -54,3 +54,12 @@ indent_names = []
 exclude = ["attic", "third_party", "vendor", "build", "target",
            "dist", ".pytest_cache", ".claude",
            "build-android", "build-tests"]
+
+# ASCII outside string literals, which is the rule in code-style.md and is
+# free here: the gate reads C and C++ with a scanner rather than checking
+# raw bytes, so a glyph this program prints stays legal inside a literal
+# while an em dash in a comment does not. Measured before turning it on --
+# this tree had zero non-ASCII characters to fix, in any file the gate
+# reads. It costs nothing today and stops the drift that made hydra's
+# comments accumulate 858 of them.
+ascii_only = true
