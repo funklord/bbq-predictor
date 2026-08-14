@@ -62,6 +62,8 @@ const char *bbq_wu_product_name(bbq_wu_product product) {
 		return "nearby";
 	case bbq_wu_product::place_search:
 		return "places";
+	case bbq_wu_product::observed_pinned:
+		return "observed";
 	}
 
 	return "unknown";
@@ -125,6 +127,12 @@ void bbq_wu_client::fetch_observed(const QString &station_id,
 	 * minutes (sec 2.6). The coarser one exists and is not used here.
 	 */
 	send(bbq_wu_product::observed, QStringLiteral("/v2/pws/history/all"),
+	     QStringLiteral("stationId=%1&date=%2").arg(station_id, date), true);
+}
+
+void bbq_wu_client::fetch_observed_pinned(const QString &station_id,
+                                          const QString &date) {
+	send(bbq_wu_product::observed_pinned, QStringLiteral("/v2/pws/history/all"),
 	     QStringLiteral("stationId=%1&date=%2").arg(station_id, date), true);
 }
 

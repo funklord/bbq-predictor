@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 #include "model/composite.h"
 #include "store/history.h"
@@ -181,6 +182,17 @@ private:
 	void forget_location_freshness();
 
 	void attempt_backfill(qint64 now_utc);
+
+	/*
+	 * Pinned stations, fetched sparingly and ONE AT A TIME (sec 13.4).
+	 *
+	 * Sequential is not a performance choice. These answers arrive on
+	 * the same signal as the watched station's, carrying nothing that
+	 * says whose they are, so the only thing that makes an answer
+	 * attributable is that exactly one is outstanding.
+	 */
+	void queue_pinned(qint64 now_utc);
+	void dispatch_pinned();
 	void attempt_radar(qint64 now_utc);
 	void attempt_extended(qint64 now_utc);
 	void finish_one();
@@ -211,6 +223,10 @@ private:
 	qint64 m_loaded_to = 0;
 
 	qint64 m_backfill_attempted = 0;
+
+	QStringList m_pinned_queue;
+	QString m_pinned_in_flight;
+	QHash<QString, qint64> m_pinned_attempted;
 	qint64 m_radar_attempted = 0;
 	qint64 m_extended_attempted = 0;
 	int m_outstanding = 0;

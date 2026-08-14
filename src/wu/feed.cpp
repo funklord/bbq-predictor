@@ -52,6 +52,15 @@ int freshness_s(bbq_wu_product product) {
 	case bbq_wu_product::nearby:
 	case bbq_wu_product::place_search:
 		return 24 * 3600;
+
+	/*
+	 * Pinned history keeps its own schedule, per station, tracked in
+	 * m_pinned_attempted rather than by product (sec 13.4). due() is
+	 * never consulted for it -- one interval shared by every pinned
+	 * station would let the first one fetched suppress the rest.
+	 */
+	case bbq_wu_product::observed_pinned:
+		return 6 * 3600;
 	}
 
 	return 15 * 60;
@@ -113,6 +122,9 @@ bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
 	 * through to an empty series, which would be a band that silently
 	 * never draws.
 	 */
+	case bbq_wu_product::observed_pinned:
+		return bbq_wu_read_observed(document);
+
 	case bbq_wu_product::nearby:
 	case bbq_wu_product::place_search:
 		break;
@@ -254,6 +266,28 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 
 	connect(m_client, &bbq_wu_client::ready, this,
 	        [this](bbq_wu_product product, const QJsonDocument &document) {
+		/*
+		 * A pinned station's history goes to the STORE and nowhere
+		 * else (sec 13.4). It is not this location's weather: putting
+		 * it in the composite would draw another town's measurements
+		 * on the graph.
+		 */
+		if (product == bbq_wu_product::observed_pinned) {
+			const QString whose = m_pinned_in_flight;
+			m_pinned_in_flight.clear();
+
+			if (!whose.isEmpty()) {
+				bbq_series measured = read_for(product, document);
+				if (!measured.is_empty()) {
+					m_history.record_observations(whose, measured);
+				}
+			}
+
+			finish_one();
+			dispatch_pinned();
+			return;
+		}
+
 		bbq_series series = read_for(product, document);
 		series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
 
@@ -315,6 +349,24 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 
 	connect(m_client, &bbq_wu_client::failed, this,
 	        [this](bbq_wu_product product, const QString &reason) {
+		/*
+		 * A pinned station that fails releases the queue (sec 13.4).
+		 *
+		 * Without this the slot stays occupied for the life of the
+		 * process and every other pinned station waits behind a request
+		 * that already ended -- the same shape as the stalled socket
+		 * that killed auto-refresh, in a smaller room. It is also not a
+		 * band failure: nothing on the display depends on it, and
+		 * announcing it would put another station's trouble on the
+		 * watched station's status line.
+		 */
+		if (product == bbq_wu_product::observed_pinned) {
+			m_pinned_in_flight.clear();
+			finish_one();
+			dispatch_pinned();
+			return;
+		}
+
 		const QString name = QString::fromLatin1(bbq_wu_product_name(product));
 		emit band_failed(name, reason);
 		finish_one();
@@ -388,8 +440,15 @@ void bbq_wu_feed::attempt(bbq_wu_product product, qint64 now_utc) {
 	 * m_outstanding above and then sent nothing, which is the leak that
 	 * stops the heartbeat for the life of the process.
 	 */
+	/*
+	 * Neither is scheduled through attempt(): discovery is driven by a
+	 * move or by typing, and pinned history is dispatched one station
+	 * at a time by its own queue (sec 13.4). Reaching here would have
+	 * incremented m_outstanding and sent nothing.
+	 */
 	case bbq_wu_product::nearby:
 	case bbq_wu_product::place_search:
+	case bbq_wu_product::observed_pinned:
 		--m_outstanding;
 		break;
 	}
@@ -428,6 +487,14 @@ void bbq_wu_feed::tick() {
 		if (overdue(m_backfill_attempted, backfill_freshness_s, now)) {
 			attempt_backfill(now);
 		}
+
+		/*
+		 * Pinned stations, asked for on the heartbeat rather than at
+		 * startup: a launch already has everything else outstanding,
+		 * and these are the least urgent thing the program fetches.
+		 */
+		queue_pinned(now);
+
 		if (overdue(m_radar_attempted, radar_freshness_s, now)) {
 			attempt_radar(now);
 		}
@@ -573,6 +640,54 @@ void bbq_wu_feed::search_places(const QString &query) {
 
 	++m_outstanding;
 	m_client->fetch_places(query);
+}
+
+void bbq_wu_feed::queue_pinned(qint64 now_utc) {
+	if (!m_history.is_open()) {
+		return;
+	}
+
+	for (const bbq_station &one : m_history.pinned_stations()) {
+		/*
+		 * The watched station is fetched properly and far more often;
+		 * queueing it here as well would spend a request to learn what
+		 * it already knows.
+		 */
+		if (one.id == m_station_id || one.id.isEmpty()) {
+			continue;
+		}
+
+		if (m_pinned_queue.contains(one.id) || m_pinned_in_flight == one.id) {
+			continue;
+		}
+
+		const qint64 last = m_pinned_attempted.value(one.id, 0);
+		if (overdue(last, backfill_freshness_s, now_utc)) {
+			m_pinned_queue.append(one.id);
+		}
+	}
+
+	dispatch_pinned();
+}
+
+void bbq_wu_feed::dispatch_pinned() {
+	if (!m_pinned_in_flight.isEmpty() || m_pinned_queue.isEmpty()) {
+		return;
+	}
+
+	m_pinned_in_flight = m_pinned_queue.takeFirst();
+	m_pinned_attempted.insert(m_pinned_in_flight,
+	                          QDateTime::currentSecsSinceEpoch());
+	++m_outstanding;
+
+	/*
+	 * Yesterday, for the reason sec 12.13 gives: today is not in the
+	 * archive this endpoint serves. A pinned station is kept for its
+	 * history, so today's two rows would be the wrong day to ask for.
+	 */
+	const QString stamp = QStringLiteral("yyyyMMdd");
+	const QString yesterday = QDate::currentDate().addDays(-1).toString(stamp);
+	m_client->fetch_observed_pinned(m_pinned_in_flight, yesterday);
 }
 
 void bbq_wu_feed::attempt_backfill(qint64 now_utc) {

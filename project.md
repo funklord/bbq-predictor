@@ -3550,6 +3550,52 @@ earlier generation its own notes record as gone; and its `client/geo.h`
 is haversine distance and bearing, which this program does not need
 because Weather Underground returns `distanceKm` with each station.
 
+### 13.4 Pinned stations are fetched sparingly, and one at a time
+
+A pinned station gets the backfill and nothing else: yesterday's day of
+observations, on a six-hour interval, four requests a day. That is the
+whole cost of pinning, and it is deliberately the cheapest fetch that
+is still useful -- a forecast is scored against HISTORY, so history is
+exactly what a station needs to become verifiable while something else
+is being watched.
+
+**One at a time, and that is not a performance choice.** These answers
+arrive on the same signal as the watched station's and carry nothing
+saying whose they are. What makes an answer attributable is that
+exactly one is outstanding. Getting this wrong would file one station's
+measurements under another's id, which is not a bug that shows up as a
+crash -- it shows up months later as a verification record that cannot
+be explained.
+
+Three things keep that true, and each was written for a failure this
+project has already had:
+
+- **A distinct product.** `observed_pinned` rather than `observed`, so
+  the handler can tell them apart at all rather than inferring it from
+  state.
+- **The store only.** A pinned station's series never reaches the
+  composite. It is not this location's weather, and drawing it would
+  put another town's measurements on the graph.
+- **A failure releases the slot.** Without that, one failed request
+  occupies the queue for the life of the process and every other pinned
+  station waits behind something that already ended -- the stalled
+  socket of sec 2.4, in a smaller room. It is also not reported as a
+  band failure: nothing on the display depends on it, and announcing it
+  would put another station's trouble on the watched station's status
+  line.
+
+The watched station is skipped when the queue is built. It is fetched
+properly and far more often, so queueing it would spend a request to
+learn what it already knows.
+
+Measured with `ISTOCK877` watched and `ISOLNA31` pinned, after one run:
+
+    ISOLNA31     288 rows   temp 14.0..26.0
+    ISTOCK877    504 rows   temp 12.0..26.0
+
+One day for the pinned station, filed under its own id, while the
+watched one kept its ordinary two.
+
 ### 13.1 Two things the discovery endpoints lie about
 
 Both were found by measuring rather than by reading, and both would
