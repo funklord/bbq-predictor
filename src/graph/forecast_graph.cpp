@@ -44,6 +44,28 @@ const int chance_height = 46;
 const int chance_gap = 6;
 
 /*
+ * Full height of the rain trace, in mm/h, and FIXED (sec 3.16).
+ *
+ * It used to be the largest rate in view, floored at 1.0. That made the
+ * height meaningless as a quantity: drizzle at 1 mm/h drew to 45% of
+ * the panel exactly as a downpour would, because each was the worst
+ * thing on its own screen. Light rain looked alarming, and the only
+ * clue was a small "1.0 mm/h" label at the edge that nobody reads
+ * before forming an impression.
+ *
+ * 10 mm/h because that is where the meteorological classes fall: light
+ * is under 2.5, moderate runs to about 10, and heavy is past it. So the
+ * bottom quarter of the trace is light rain, the middle is moderate,
+ * and anything filling the band is genuinely heavy. The picture now
+ * means the same thing on every screen and at every zoom.
+ *
+ * Rates above it clamp rather than rescale, and the edge label gains a
+ * "+" so a clipped trace says so -- losing the top of a downpour
+ * silently would be the one thing sec 3.5 refuses to do with rain.
+ */
+const double rain_full_scale_mm_h = 10.0;
+
+/*
  * One pixel column's worth of the composite.
  *
  * Everything the painter needs about a column is decided once, here,
@@ -1016,7 +1038,12 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	double temperature_low = 0.0;
 	double temperature_high = 0.0;
 	bool have_temperature = false;
-	double rain_high = 1.0;
+
+	/*
+	 * The rain PEAK in view, which is no longer a scale (sec 3.16).
+	 * It is kept only to say when the trace has been clamped.
+	 */
+	double rain_peak = 0.0;
 	double wind_high = 1.0;
 
 	for (const column &c : columns) {
@@ -1034,7 +1061,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			temperature_high = std::max(temperature_high, c.temperature);
 		}
 		if (c.has_rain) {
-			rain_high = std::max(rain_high, c.rain);
+			rain_peak = std::max(rain_peak, c.rain);
 		}
 	}
 
@@ -1066,7 +1093,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		}
 
 		if (sample.precip_rate.has_value()) {
-			rain_high = std::max(rain_high, *sample.precip_rate);
+			rain_peak = std::max(rain_peak, *sample.precip_rate);
 		}
 
 		if (sample.wind_kph.has_value()) {
@@ -1156,7 +1183,11 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	};
 
 	const auto y_for_rain = [&](double value) {
-		const double t = value / rain_high;
+		/*
+		 * Clamped, so a rate past full scale draws at the top rather
+		 * than off the panel. The label says when that has happened.
+		 */
+		const double t = std::min(1.0, value / rain_full_scale_mm_h);
 		return plot.bottom() - t * (plot.height() * 0.45);
 	};
 
@@ -1905,7 +1936,16 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	edge_label(left_label_x, chance_plot.bottom() + m_metrics.ribbon_height + 3,
 	           left_label_wide, left_align, clock);
 
-	const QString rain_text = QString::number(rain_high, 'f', 1) + tr(" mm/h");
+	/*
+	 * The top of the rain scale, which is now a constant and so says
+	 * something about the world rather than about this screenful. The
+	 * "+" appears only when the trace has actually been clamped, so it
+	 * is a statement about the data in view rather than decoration.
+	 */
+	const bool rain_clipped = rain_peak > rain_full_scale_mm_h;
+	const QString rain_text =
+	        QString::number(rain_full_scale_mm_h, 'f', 0) +
+	        (rain_clipped ? QStringLiteral("+") : QString()) + tr(" mm/h");
 
 	edge_label(right_label_x, plot.bottom() - plot.height() * 0.45 - 6,
 	           right_label_wide, right_align, rain_text);

@@ -1624,6 +1624,41 @@ The colour is per scheme rather than shared, for the reason the rest of
 the furniture is (sec 10.3): the measured data colours stay put across
 light and dark, and only the ground and the furniture move.
 
+### 3.16 The rain scale is fixed, so light rain looks light
+
+The rain trace was scaled to the largest rate in view, floored at 1.0
+mm/h, and drawn to 45% of the temperature panel at full height. **That
+made the height meaningless as a quantity.** Drizzle at 1 mm/h reached
+the same place as a downpour would, because each was the worst thing on
+its own screen -- and the only clue was a small `1.0 mm/h` label at the
+edge, which nobody reads before forming an impression. Reported from
+the phone as "what is the green thing and why is it high up", which is
+the question a scale like that is guaranteed to produce.
+
+Full scale is now a constant 10 mm/h. The number is the meteorological
+classification rather than a taste: light rain is under 2.5 mm/h,
+moderate runs to about 10, and heavy is past it. So the bottom quarter
+of the trace is light rain, the middle is moderate, and a trace filling
+the band is genuinely heavy -- and it means the same thing on every
+screen, at every zoom, on every day.
+
+**Rates above full scale clamp rather than rescale**, and the edge
+label gains a `+`. Rescaling is what the old behaviour did and it is
+exactly the fault being removed; dropping the excess silently would
+break sec 3.5, which takes the MAXIMUM rain in a column precisely
+because losing a downpour is the one thing this graph cannot afford.
+A clipped trace says so instead.
+
+Measured on a render with synthetic observations at three rates, since
+the live forecast had no rain to draw:
+
+    24 mm/h    clamped at full scale, label reads "10+ mm/h"
+    2.5 mm/h   about a quarter of the band
+    0.4 mm/h   a few percent -- visible, and plainly slight
+
+The old behaviour would have drawn all three at the same height on
+three different screenfuls.
+
 ### 12.12 The forecast's record, beside the verdict it produced
 
 The verification tables (sec 12.3) were collected to answer one
