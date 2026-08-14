@@ -1253,6 +1253,55 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	        overlay_labels ? Qt::AlignRight : Qt::AlignLeft;
 
 
+	/*
+	 * Say which clock. A graph in somebody else's timezone that does
+	 * not admit it is the whole of sec 3.12.1, and the fix is not worth
+	 * much if the reader cannot tell it has been applied.
+	 *
+	 * Computed HERE, well above where it is drawn, because the tick
+	 * labels have to know how much room it takes: it shares their row,
+	 * and on a phone it shares their space as well.
+	 */
+	QString clock = tr("local");
+	if (zone.isValid()) {
+		clock = zone.abbreviation(QDateTime::currentDateTime());
+		if (clock.isEmpty()) {
+			clock = QString::fromUtf8(zone.id());
+		}
+
+		/*
+		 * A zone with no name abbreviates to "UTC+02:00", which does
+		 * not fit and was clipped to "C+02:00" -- a label that looks
+		 * like a typo rather than a truncation. The offset alone says
+		 * the same thing in the space available.
+		 */
+		if (clock.startsWith(QStringLiteral("UTC"))) {
+			clock = clock.mid(3);
+		}
+	}
+
+	/*
+	 * How far left a tick label may reach, which is NOT always the plot
+	 * edge.
+	 *
+	 * With a gutter the zone name sits in it, outside the plot, and the
+	 * plot edge is the true limit. Edge to edge on a phone there is no
+	 * gutter: the zone name is drawn INSIDE the plot, on the same row as
+	 * these labels, and a tick that merely cleared plot.left() landed on
+	 * top of it -- "CEST" and "11:00" printed over each other as
+	 * "CEST |1:00", which reads as a rendering fault rather than as two
+	 * labels wanting the same space.
+	 *
+	 * Measured from the zone string rather than from the 80-pixel box it
+	 * is drawn in, so a short name like "CEST" costs one tick label and
+	 * not three.
+	 */
+	const QFontMetrics zone_measured(label_font);
+	const double tick_left_limit =
+	        overlay_labels
+	                ? left_label_x + zone_measured.horizontalAdvance(clock) + 6.0
+	                : plot.left();
+
 	const qint64 tick_step = ticks.step_s;
 	const qint64 first_tick = ((from / tick_step) + 1) * tick_step;
 
@@ -1289,12 +1338,11 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		        tick_measured.horizontalAdvance(stamp) / 2.0 + 2.0;
 
 		/*
-		 * A tick label that would reach past either margin is left out.
-		 * On the left the zone name lives there and the two collided
-		 * into "CEST08:00". Dropping one costs nothing -- its neighbour
-		 * is one step away and says the same kind of thing.
+		 * A tick label that would reach past either limit is left out.
+		 * Dropping one costs nothing -- its neighbour is one step away
+		 * and says the same kind of thing.
 		 */
-		if (x - tick_half < plot.left() || x + tick_half > plot.right()) {
+		if (x - tick_half < tick_left_limit || x + tick_half > plot.right()) {
 			continue;
 		}
 
@@ -1833,29 +1881,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	           high_text);
 	edge_label(left_label_x, plot.bottom() - 12, left_label_wide, left_align,
 	           low_text);
-
-	/*
-	 * Say which clock. A graph in somebody else's timezone that does
-	 * not admit it is the whole of sec 3.12.1, and the fix is not worth
-	 * much if the reader cannot tell it has been applied.
-	 */
-	QString clock = tr("local");
-	if (zone.isValid()) {
-		clock = zone.abbreviation(QDateTime::currentDateTime());
-		if (clock.isEmpty()) {
-			clock = QString::fromUtf8(zone.id());
-		}
-
-		/*
-		 * A zone with no name abbreviates to "UTC+02:00", which does
-		 * not fit and was clipped to "C+02:00" -- a label that looks
-		 * like a typo rather than a truncation. The offset alone says
-		 * the same thing in the space available.
-		 */
-		if (clock.startsWith(QStringLiteral("UTC"))) {
-			clock = clock.mid(3);
-		}
-	}
 
 	edge_label(left_label_x, chance_plot.bottom() + m_metrics.ribbon_height + 3,
 	           left_label_wide, left_align, clock);

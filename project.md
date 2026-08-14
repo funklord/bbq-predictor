@@ -1517,6 +1517,24 @@ noticed, and that fix will pass the test that found it. Ask what
 separates the inputs that fail from the ones that pass -- here, the
 pixel width of three glyphs -- before deciding where the fault is.
 
+**A label's limit is not always the plot edge.** With a gutter the zone
+name sits outside the plot and the edge is the true boundary; edge to
+edge on a phone there is no gutter, so the zone name is drawn INSIDE
+the plot on the same row as the tick labels. A tick that cleared
+`plot.left()` therefore landed on top of it, printing `CEST` and
+`11:00` over each other as `CEST |1:00`.
+
+That survived the measurement fix above and was photographed on the
+device afterwards, which is the useful part: **the two faults looked
+identical and had nothing to do with each other.** One was a box too
+narrow for its text, the other two labels entitled to the same space.
+A fix that makes a symptom rarer is not evidence that its cause was
+the one found.
+
+The limit is measured from the zone string rather than from the
+80-pixel box it is drawn in, so a short name like `CEST` costs one tick
+label instead of three.
+
 ### 3.14 The temperature axis holds still
 
 The scale is computed from what is visible, which is exact and, while
