@@ -3272,6 +3272,47 @@ The libraries themselves needed one real fix: `legacyPackaging=true`, so
 Android extracts them to `lib/<abi>/` where Qt's directory scan can see
 them. Inside the APK they are invisible to it.
 
+### 11.7 The device archive cannot be written from the desk
+
+`run-as` reads the application's own directory and **cannot write to
+it**. Measured on the SM-F926B running Android 15: reading
+`files/history.sqlite` works, and every attempt to create a file in the
+same directory answers
+
+    /system/bin/sh: can't create probe-write.txt: Read-only file system
+
+So there is no route from a workstation into the on-device store.
+Anything that has to change it -- a purge, an import, a repair -- must
+go through the application, which writes its own directory perfectly
+well. `adb` can look and cannot touch.
+
+**This was learned by destroying the archive.** The temperature
+verification rows were poisoned by a stuck sensor (sec 12.8) and the
+purge was done off-device: copy out, fold the write-ahead log in, drop
+the bad rows, write back. The copy and the purge were correct and
+verified -- `integrity_check` ok, every other table intact. The write
+back failed, and by then the write-ahead log had already been removed
+to keep it from contradicting the file that was about to replace it.
+The WAL held 1.9 MB against a 40 KB main file, so the archive went from
+292 observations, 1396 queued forecasts and 32 verification rows to
+nothing.
+
+**The ordering is the whole lesson.** Write the replacement first and
+remove the old state only once the replacement is confirmed in place;
+better still, prove the destination is writable with a throwaway file
+before touching anything that matters. The check was run afterwards,
+which is the wrong end of the operation and turned a recoverable
+mistake into a destructive one.
+
+What made it survivable is worth recording too. Observations are
+**re-fetchable** -- the backfill of sec 12.7 pulls a full day back from
+Weather Underground's archive on the next launch -- and the pending
+queue refills from the next forecast fetch. Only the accumulated
+verification counts were genuinely lost, about a day of them. A store
+whose contents can be rebuilt from their sources is a store that
+tolerates this kind of mistake; one holding the only copy of anything
+would not have.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
