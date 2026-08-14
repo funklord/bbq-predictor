@@ -82,6 +82,13 @@ public:
 	 */
 	bool open_history(const QString &path = QString());
 	const bbq_history &history() const { return m_history; }
+
+	/*
+	 * Mutable, for the one thing the interface changes about the store:
+	 * which stations are pinned (sec 13). Everything else it does is a
+	 * consequence of fetching.
+	 */
+	bbq_history &history() { return m_history; }
 	QString history_error() const { return m_history_error; }
 
 	/*

@@ -11,6 +11,7 @@
 #include "ui/layout.h"
 
 class QCheckBox;
+class QPushButton;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -123,7 +124,14 @@ private:
 	 * anything twice.
 	 */
 	QList<QWidget *> m_control_items;
-	QLineEdit *m_station_box;
+	/*
+	 * The station is CHOSEN from what has been discovered (sec 13.2),
+	 * and still typeable, because a station id somebody knows should
+	 * not require finding it on a map first.
+	 */
+	QComboBox *m_station_box;
+	QCheckBox *m_pin_box = nullptr;
+	QPushButton *m_find_button = nullptr;
 	QLabel *m_verdict;
 	QLabel *m_freshness_label;
 	bbq_forecast_graph *m_graph;
@@ -131,6 +139,10 @@ private:
 	QString m_last_error;
 	QString m_history_path;
 	QCheckBox *m_wind_box = nullptr;
+
+	/* Rebuilt whenever discovery finds something or a pin changes. */
+	void refresh_station_list();
+	void watch_station(const QString &id);
 	QComboBox *m_theme_box = nullptr;
 };
 

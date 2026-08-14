@@ -3432,6 +3432,41 @@ days later as a station with no history. `first_seen_utc` is preserved
 for the same reason: it records when this program first heard of a
 station, not when it last saw it.
 
+### 13.2 The station is chosen from a list, and pinning is visible
+
+The control was a text box somebody had to know the answer to. It is a
+drop-down of what has been discovered now, nearest first, with the
+pinned ones at the top and MARKED -- a bullet, which survives a narrow
+screen, and bold, which survives a glance.
+
+**Marking is not decoration.** Pinning is what spends requests, and a
+cost the reader cannot see is one they did not choose. The same
+argument puts the `Pin` checkbox beside the list rather than in a menu:
+the state has to be reachable from the thing it describes.
+
+**Still editable.** A station id somebody already knows should not
+require finding it on a map first, and discovery only ever finds what
+is near a coordinate it has been given. A watched station the list has
+never heard of is added to it, which is the ordinary case on a fresh
+install where the id came from a setting or the command line.
+
+`Find...` asks for a place, and the answer is a CHOICE rather than the
+first match. Searching for Gothenburg returns Gothenburg and then
+Shlisselburg, in Russia, so a program that silently took the first
+would send somebody four hundred miles east for a typo they did not
+make. The chosen coordinate is pinned, because the reader named it: an
+unpinned one is replaced by the next coordinate derived from the
+station, and the search would appear to do nothing.
+
+The list is rebuilt wholesale on every change rather than patched. It
+is short, it changes only when discovery runs or a pin is toggled, and
+a partial update is how a control ends up disagreeing with the thing it
+describes -- which this project has already paid for twice.
+
+Checked at both widths that matter: 1080 logical pixels, and the 320 of
+the Fold's cover screen, where `* ISTOCK877  3.7 km` and the `Pin` and
+`Find...` controls all keep their borders.
+
 ### 13.1 Two things the discovery endpoints lie about
 
 Both were found by measuring rather than by reading, and both would

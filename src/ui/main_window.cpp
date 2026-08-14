@@ -7,7 +7,9 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QInputDialog>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QStringList>
 #include <QShowEvent>
 #include <QVBoxLayout>
@@ -128,33 +130,81 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * line is one nobody can configure from the thing they are looking
 	 * at (sec 2.6.5).
 	 */
-	m_station_box = new QLineEdit(this);
-	m_station_box->setPlaceholderText(tr("station, e.g. ISTOCK822"));
 	/*
-	 * A minimum as well as a maximum. Without the floor the controls
-	 * row squeezed it to about forty pixels showing "stati...", which
-	 * is the one field the applet cannot work without and the one the
-	 * empty state tells you to fill.
+	 * A LIST, not a blank field (sec 13.2).
+	 *
+	 * The old control was a text box somebody had to know the answer
+	 * to, which is a poor way to start and a worse way to recover: the
+	 * station this project ran against for months reports a dead
+	 * thermometer, and replacing it meant querying an API by hand.
+	 *
+	 * Editable all the same. A station id somebody already knows should
+	 * not require finding it on a map first, and discovery only ever
+	 * finds what is near a coordinate it has been given.
 	 */
+	m_station_box = new QComboBox(this);
+	m_station_box->setEditable(true);
+	m_station_box->setInsertPolicy(QComboBox::NoInsert);
+	m_station_box->lineEdit()->setPlaceholderText(
+	        tr("station, e.g. ISTOCK822"));
+
 	/*
 	 * A floor low enough for a phone. The old minimum was set for a
 	 * desktop row and became a lower bound on the whole window: on a
 	 * narrow screen it pushed the controls wider than the display, and
-	 * everything to its right was clipped.
+	 * everything to its right was clipped (sec 10.5.1).
 	 */
 	m_station_box->setMinimumWidth(90);
-	m_station_box->setMaximumWidth(190);
-	m_station_box->setText(bbq_settings::station());
+	m_station_box->setMaximumWidth(230);
 
-	connect(m_station_box, &QLineEdit::editingFinished, this, [this]() {
-		const QString wanted = m_station_box->text().trimmed();
-		if (wanted == bbq_settings::station()) {
+	connect(m_station_box, &QComboBox::activated, this, [this](int index) {
+		const QString id = m_station_box->itemData(index).toString();
+		watch_station(id.isEmpty() ? m_station_box->itemText(index) : id);
+	});
+
+	connect(m_station_box->lineEdit(), &QLineEdit::editingFinished, this,
+	        [this]() {
+		watch_station(m_station_box->currentText().trimmed());
+	});
+
+	/*
+	 * Pinning is what makes a station cost requests, so it is a control
+	 * rather than a consequence (sec 13). The list marks the pinned
+	 * ones; this is how one becomes pinned.
+	 */
+	m_pin_box = new QCheckBox(tr("Pin"), this);
+	m_pin_box->setToolTip(
+	        tr("Keep fetching this station's history, so its forecasts can "
+	           "be scored even while another is being watched."));
+
+	connect(m_pin_box, &QCheckBox::toggled, this, [this](bool on) {
+		const QString id = bbq_settings::station();
+		if (id.isEmpty()) {
 			return;
 		}
 
-		bbq_settings::set_station(wanted);
-		m_feed->set_station(wanted);
-		m_feed->refresh();
+		m_feed->history().set_station_pinned(id, on);
+		refresh_station_list();
+	});
+
+	/*
+	 * Somewhere else. Discovery can only look around a coordinate it
+	 * has, so reaching another town means naming it first.
+	 */
+	m_find_button = new QPushButton(tr("Find..."), this);
+	m_find_button->setToolTip(tr("Find stations near a place"));
+
+	connect(m_find_button, &QPushButton::clicked, this, [this]() {
+		bool typed = false;
+		const QString place = QInputDialog::getText(
+		        this, tr("Find stations"), tr("Place:"), QLineEdit::Normal,
+		        QString(), &typed);
+
+		if (!typed || place.trimmed().isEmpty()) {
+			return;
+		}
+
+		m_feed->search_places(place);
 	});
 
 	/*
@@ -253,6 +303,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * a layout it is about to replace.
 	 */
 	m_control_items << new QLabel(tr("Station:"), this) << m_station_box
+	                << m_pin_box << m_find_button
 	                << new QLabel(tr("Interpolation:"), this) << method
 	                << new QLabel(tr("Rounding:"), this) << smoothing
 	                << windows << marks << m_wind_box
@@ -292,6 +343,56 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_feed->set_view_range(from_utc, to_utc);
 		m_graph->set_composite(m_feed->composite());
 		refresh_corrected();
+	});
+
+	/*
+	 * Discovery changed the list, so the list is rebuilt. Nothing on the
+	 * graph changes -- a station list is not weather (sec 13).
+	 */
+	connect(m_feed, &bbq_wu_feed::stations_discovered, this, [this](int) {
+		refresh_station_list();
+	});
+
+	/*
+	 * A search answers with places, not stations. One has to be chosen
+	 * before there is a coordinate to look around, and offering the
+	 * first match silently would send somebody to Shlisselburg for
+	 * asking about Gothenburg -- which is the actual second result.
+	 */
+	connect(m_feed, &bbq_wu_feed::places_found, this,
+	        [this](const std::vector<bbq_wu_place> &places) {
+		if (places.empty()) {
+			m_freshness_label->setText(tr("no such place"));
+			return;
+		}
+
+		QStringList names;
+		for (const bbq_wu_place &place : places) {
+			names << place.address;
+		}
+
+		bool chose = false;
+		const QString picked = QInputDialog::getItem(
+		        this, tr("Find stations"), tr("Which one?"), names, 0, false,
+		        &chose);
+
+		if (!chose) {
+			return;
+		}
+
+		const int index = names.indexOf(picked);
+		if (index < 0) {
+			return;
+		}
+
+		/*
+		 * Pinned, because the reader named it. An unpinned coordinate
+		 * would be replaced by the next one derived from the station
+		 * and the search would appear to do nothing.
+		 */
+		m_feed->set_geocode(places.at(index).latitude,
+		                    places.at(index).longitude, true);
+		m_feed->discover_stations();
 	});
 
 	connect(m_feed, &bbq_wu_feed::band_failed, this,
@@ -509,9 +610,7 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	}
 
 	m_feed->set_station(station);
-	if (m_station_box->text().trimmed().isEmpty()) {
-		m_station_box->setText(station);
-	}
+	refresh_station_list();
 
 	/*
 	 * The forecast point, in the order sec 2.6.7 settled: an explicit
@@ -844,4 +943,93 @@ void bbq_main_window::toggle_visibility() {
 	show();
 	raise();
 	activateWindow();
+}
+
+void bbq_main_window::watch_station(const QString &id) {
+	const QString wanted = id.trimmed();
+
+	if (wanted == bbq_settings::station()) {
+		return;
+	}
+
+	bbq_settings::set_station(wanted);
+	m_feed->set_station(wanted);
+	m_feed->refresh();
+	refresh_station_list();
+}
+
+void bbq_main_window::refresh_station_list() {
+	if (m_station_box == nullptr) {
+		return;
+	}
+
+	const QString watched = bbq_settings::station();
+
+	/*
+	 * Rebuilt wholesale rather than patched. The list is short, it
+	 * changes only when discovery runs or a pin is toggled, and a
+	 * partial update is how a control ends up disagreeing with the
+	 * thing it describes -- which this project has already paid for
+	 * twice (sec 3.11.5).
+	 */
+	const QSignalBlocker quiet(m_station_box);
+	m_station_box->clear();
+
+	const std::vector<bbq_station> known = m_feed->stations();
+	bool watched_listed = false;
+
+	for (const bbq_station &one : known) {
+		/*
+		 * Pinned ones are MARKED, because pinning is what spends
+		 * requests and a cost the reader cannot see is one they did not
+		 * choose. Bold as well as bulleted: the bullet survives a
+		 * narrow screen, the weight survives a glance.
+		 */
+		QString label = one.pinned ? QStringLiteral("* ") : QString();
+		label += one.id;
+
+		if (one.distance_km >= 0.0) {
+			label += QStringLiteral("  ");
+			label += QString::number(one.distance_km, 'f', 1);
+			label += tr(" km");
+		}
+
+		m_station_box->addItem(label, one.id);
+
+		if (one.pinned) {
+			QFont marked = m_station_box->font();
+			marked.setBold(true);
+			m_station_box->setItemData(m_station_box->count() - 1, marked,
+			                           Qt::FontRole);
+		}
+
+		if (one.id == watched) {
+			m_station_box->setCurrentIndex(m_station_box->count() - 1);
+			watched_listed = true;
+		}
+	}
+
+	/*
+	 * A station being watched that discovery has never seen still has
+	 * to show. It is the ordinary case on a fresh install, where the id
+	 * came from a setting or the command line.
+	 */
+	if (!watched.isEmpty() && !watched_listed) {
+		m_station_box->addItem(watched, watched);
+		m_station_box->setCurrentIndex(m_station_box->count() - 1);
+	}
+
+	if (m_pin_box != nullptr) {
+		const QSignalBlocker still(m_pin_box);
+		bool pinned = false;
+
+		for (const bbq_station &one : known) {
+			if (one.id == watched) {
+				pinned = one.pinned;
+			}
+		}
+
+		m_pin_box->setChecked(pinned);
+		m_pin_box->setEnabled(!watched.isEmpty());
+	}
 }
