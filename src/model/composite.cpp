@@ -124,6 +124,34 @@ bbq_reading bbq_composite::owner_at(qint64 when_utc) const {
 	return best;
 }
 
+bbq_sample bbq_composite::resolved_at(qint64 when_utc) const {
+	bbq_reading base = owner_at(when_utc);
+	if (!base.is_valid()) {
+		/*
+		 * Radar alone covers this instant. Its rain is better than
+		 * nothing, and refusing it would trade a missing temperature
+		 * for a missing shower.
+		 */
+		base = at(when_utc);
+	}
+
+	if (!base.is_valid()) {
+		return bbq_sample();
+	}
+
+	bbq_sample composed = *base.sample;
+
+	const bbq_series *fine = band_series(bbq_band::nowcast_fine);
+	if (fine != nullptr && base.series != fine) {
+		const bbq_sample *sharp = fine->at(when_utc);
+		if (sharp != nullptr && sharp->precip_rate.has_value()) {
+			composed.precip_rate = sharp->precip_rate;
+		}
+	}
+
+	return composed;
+}
+
 qint64 bbq_composite::begin_utc() const {
 	qint64 earliest = 0;
 

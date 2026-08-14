@@ -85,6 +85,20 @@ public:
 	 */
 	bbq_reading owner_at(qint64 when_utc) const;
 
+	/*
+	 * One sample for an instant, composed the way the graph draws it
+	 * (sec 3.18): the owner's account of the weather, with the rain
+	 * sharpened from the radar band where it reaches.
+	 *
+	 * This exists so that the rule lives once. Every consumer that asks
+	 * a single instant "what is it like then" wants the same answer,
+	 * and the one that did not -- the grill scorer, calling at()
+	 * directly -- silently dropped temperature from the score for the
+	 * next two hours, because radar outranks the bands that carry it.
+	 * The value is invalid where nothing covers the instant.
+	 */
+	bbq_sample resolved_at(qint64 when_utc) const;
+
 	/* Coverage across every band; both zero when empty. */
 	qint64 begin_utc() const;
 	qint64 end_utc() const;

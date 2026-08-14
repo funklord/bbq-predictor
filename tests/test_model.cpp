@@ -25,6 +25,7 @@ private slots:
 	void rain_outweighs_warmth();
 	void a_short_window_is_not_offered();
 	void range_agrees_with_the_scan_it_replaced();
+	void radar_does_not_hide_the_cold();
 
 private:
 	static bbq_series band_of(bbq_band band, qint64 start, int step_s,
@@ -300,6 +301,69 @@ void test_model::range_agrees_with_the_scan_it_replaced() {
 			QCOMPARE(got.second, want_last);
 		}
 	}
+}
+
+void test_model::radar_does_not_hide_the_cold() {
+	/*
+	 * Sec 3.18, in the place it costs the most.
+	 *
+	 * MET Norway's radar nowcast carries precipitation_rate and nothing
+	 * else on twenty-two of its twenty-three steps, and it outranks
+	 * every forecast band -- so for the next two hours it won the
+	 * instant outright. The scorer treats an absent temperature as
+	 * neutral, which is right when nothing knows it and wrong here,
+	 * where the hourly band knows it and was merely outranked. A
+	 * freezing dry evening therefore scored as though it were warm, in
+	 * exactly the window somebody is deciding whether to light a fire.
+	 */
+	const QTimeZone utc(0);
+	const bbq_grill_policy policy;
+	const qint64 when = 1786125600;
+
+	bbq_series hourly(bbq_band::hourly, QStringLiteral("test"));
+	std::vector<bbq_sample> warm_enough;
+	bbq_sample h;
+	h.start_utc = when - 3600;
+	h.duration_s = 7200;
+	h.temperature = 1.0; /* nobody grills in this */
+	h.precip_rate = 0.0;
+	h.wind_kph = 0.0;
+	warm_enough.push_back(h);
+	hourly.set_samples(std::move(warm_enough));
+
+	/* Rain only, as the real band is after its first step. */
+	bbq_series radar(bbq_band::nowcast_fine, QStringLiteral("test"));
+	std::vector<bbq_sample> fine;
+	bbq_sample r;
+	r.start_utc = when - 300;
+	r.duration_s = 600;
+	r.precip_rate = 0.0;
+	fine.push_back(r);
+	radar.set_samples(std::move(fine));
+
+	bbq_composite composite;
+	composite.set_series(std::move(hourly));
+	composite.set_series(std::move(radar));
+
+	/*
+	 * The cold has to reach the score. Without the fix the radar sample
+	 * owns the instant, carries no temperature, and the score comes out
+	 * as though the evening were fine.
+	 */
+	const double cold = bbq_grill_score(composite, utc, when, policy);
+
+	bbq_composite alone;
+	bbq_series only_hourly(bbq_band::hourly, QStringLiteral("test"));
+	std::vector<bbq_sample> same;
+	same.push_back(h);
+	only_hourly.set_samples(std::move(same));
+	alone.set_series(std::move(only_hourly));
+
+	const double without_radar = bbq_grill_score(alone, utc, when, policy);
+
+	QVERIFY(cold >= 0.0);
+	QCOMPARE(cold, without_radar);
+	QVERIFY2(cold < 0.5, "1 C scored as though the temperature were unknown");
 }
 
 QTEST_APPLESS_MAIN(test_model)

@@ -52,7 +52,24 @@ double bbq_grill_score(const bbq_composite &composite, const QTimeZone &zone,
 		return -1.0;
 	}
 
-	const bbq_sample &sample = *reading.sample;
+	/*
+	 * RESOLVED, not the winning band's raw sample (sec 3.18).
+	 *
+	 * at() returns the finest band covering the instant, and for the
+	 * next two hours that is the radar nowcast, which carries
+	 * precipitation and no temperature on twenty-two of its
+	 * twenty-three steps. The rule below treats an absent temperature
+	 * as neutral -- correct when nothing knows it, wrong here, where
+	 * the hourly and nowcast bands know it perfectly well and were
+	 * simply outranked.
+	 *
+	 * The effect was a score for the nearest two hours computed almost
+	 * entirely from rain: a cold dry evening scored as warm, and the
+	 * best window could open in it. That is the recommendation this
+	 * program exists to make, so it is the worst place in the tree for
+	 * a field to go missing quietly.
+	 */
+	const bbq_sample sample = composite.resolved_at(when_utc);
 	double score = 1.0;
 
 	/*

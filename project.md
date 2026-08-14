@@ -1752,6 +1752,31 @@ either answer consistently.
 A column that only radar covers still falls back to it, since a missing
 shower is not an improvement on a missing line.
 
+#### 3.18.1 The same fault in the scorer, where it cost more
+
+The graph was not the only consumer taking the finest band's word for
+everything. `bbq_grill_score()` called `at()` directly, so for the next
+two hours it scored a radar sample -- and its own rule says an absent
+temperature is neutral rather than cold, which is right when nothing
+knows the temperature and wrong when the hourly band knows it and was
+merely outranked.
+
+**A freezing dry evening therefore scored as though it were warm**, in
+exactly the window somebody is deciding whether to light a fire. The
+graph fault made the picture wrong; this one made the recommendation
+wrong, which is the thing the program is for.
+
+The composition lives in `bbq_composite::resolved_at()` now, so the
+rule is stated once and every consumer asking "what is it like at this
+instant" gets the same answer. That the graph and the scorer had
+drifted apart is the argument for putting it there rather than fixing
+the scorer in place.
+
+Guarded by a test that was watched to fail: with the scorer reading the
+winning band's raw sample again, `radar_does_not_hide_the_cold` reports
+1 C scoring as though the temperature were unknown.
+
+
 ### 12.12 The forecast's record, beside the verdict it produced
 
 The verification tables (sec 12.3) were collected to answer one
