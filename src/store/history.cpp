@@ -19,6 +19,33 @@ namespace {
 const double rain_occurred_mm_h = 0.1;
 
 /*
+ * When a quantity's observations stop counting as measurements
+ * (project.md sec 12.8).
+ *
+ * A sensor that reports the same number for six hours is not measuring
+ * anything, and scoring a forecast against it produces a bias that
+ * looks exactly like a real one. Found on the station this project was
+ * written against: 288 observations in a day, tempAvg 22 for every one
+ * of them, dew point also 22 and humidity 99 -- a soaked or enclosed
+ * probe -- while its wind and pressure moved normally. The temperature
+ * verification came out at -6.67 C, which is not a forecast error but
+ * the distance from the weather to a stuck probe.
+ *
+ * That number does not merely sit in a table. The corrected band is
+ * drawn from it, so a stuck sensor becomes a curve on the graph with
+ * the authority of a measurement behind it.
+ *
+ * Six hours and twenty-four samples, deliberately conservative. An hour
+ * of unchanging temperature is ordinary weather, especially at the
+ * whole-degree quantisation this source reports; six hours of it,
+ * across a sunrise or a sunset, is a fault. The test is exact equality
+ * rather than a tolerance, because the fault this catches is a repeated
+ * number and a tolerance would start refusing calm days.
+ */
+const int stuck_minimum_samples = 24;
+const qint64 stuck_minimum_span_s = 6 * 3600;
+
+/*
  * How long past its valid time a queued forecast waits before it is
  * given up on. A station that goes quiet for a day should not leave the
  * queue holding rows nothing will ever check.
@@ -494,8 +521,63 @@ int bbq_history::verify(const QString &station) {
 
 	int verified = 0;
 
+	/*
+	 * Which quantities are being measured at all, decided before any of
+	 * them is scored. See the note on stuck_minimum_span_s.
+	 */
+	bool stuck[3] = {false, false, false};
+
+	for (int q = 0; q < 3; ++q) {
+		int seen = 0;
+		double lowest = 0.0;
+		double highest = 0.0;
+		qint64 earliest = 0;
+		qint64 latest = 0;
+
+		for (const pairing &found : pairings) {
+			if (!found.have_observed[q]) {
+				continue;
+			}
+
+			if (seen == 0) {
+				lowest = found.observed[q];
+				highest = found.observed[q];
+				earliest = found.valid_utc;
+				latest = found.valid_utc;
+			}
+
+			lowest = std::min(lowest, found.observed[q]);
+			highest = std::max(highest, found.observed[q]);
+			earliest = std::min(earliest, found.valid_utc);
+			latest = std::max(latest, found.valid_utc);
+			++seen;
+		}
+
+		const bool enough = seen >= stuck_minimum_samples;
+		const bool spans = (latest - earliest) >= stuck_minimum_span_s;
+		stuck[q] = enough && spans && highest == lowest;
+
+		if (stuck[q]) {
+			/*
+			 * Said out loud. A quantity quietly missing from the
+			 * record is the shape of fault this whole section keeps
+			 * finding, so refusing to score one announces itself.
+			 */
+			qWarning("bbq-predictor: %s at %s never changed across %lld "
+			         "hours of %d observations; not scoring it",
+			         quantity_name(q).toUtf8().constData(),
+			         station.toUtf8().constData(),
+			         static_cast<long long>((latest - earliest) / 3600),
+			         seen);
+		}
+	}
+
 	for (const pairing &found : pairings) {
 		for (int q = 0; q < 3; ++q) {
+			if (stuck[q]) {
+				continue;
+			}
+
 			if (!found.have_forecast[q] || !found.have_observed[q]) {
 				continue;
 			}

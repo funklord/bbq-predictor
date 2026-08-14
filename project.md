@@ -1854,6 +1854,60 @@ one line that could have said otherwise -- `record: none yet` -- reads
 exactly like a feature waiting for enough data. A pipeline starved at
 its source looks identical to one that is merely young.
 
+### 12.8 A sensor that never moves is not a measurement
+
+With observations finally arriving (sec 12.7), the first real
+verification came out as this, against the station this project was
+written for:
+
+    hourly  temperature  bucket 4  n=12  bias -6.67  MAE 6.67
+
+Bias equal to MAE means every error had the same sign, which is a
+signature rather than a result. The archive said why: 292 observations,
+temperature 22.0 in every one of them. Asking Weather Underground for
+the raw day confirmed it is not a parsing fault -- the API returns
+
+    tempAvg = tempHigh = tempLow = 22
+    dewptAvg = 22
+    humidityAvg = 99
+    windspeedAvg = 0..7        <- moving normally
+    qcStatus = 0
+
+for all 288 rows. Temperature equal to dew point at 99% humidity, held
+for a day while wind and pressure vary, is a soaked or enclosed probe.
+`metric.tempAvg` is the correct field; the data behind it is not a
+measurement.
+
+**The consequence is not confined to a table.** The corrected band
+(sec 12.5) is drawn from these numbers, so a stuck probe becomes a
+curve on the graph carrying the authority of a measurement. -6.67 C is
+not a forecast error; it is the distance between the weather and a
+broken sensor, and it was about to be subtracted from the forecast.
+
+So a quantity whose observations never change across six hours and
+twenty-four samples is not scored, and the refusal says so out loud:
+
+    temperature at ISTOCK822 never changed across 23 hours of 288
+    observations; not scoring it
+
+**Per quantity, not per station.** The same station's wind moves and is
+worth scoring -- its +8.2 km/h bias is a real systematic error, a
+sheltered garden reading lower than a regional forecast, and exactly
+what the correction exists to remove. Refusing the whole station would
+throw that away with the bad field.
+
+The thresholds are deliberately conservative. An hour of unchanging
+temperature is ordinary weather, particularly at the whole-degree
+quantisation this source reports; six hours of it, across a sunrise or
+a sunset, is a fault. The test is exact equality rather than a
+tolerance, because what it catches is a repeated number, and a
+tolerance would begin refusing calm days.
+
+**This does not fix the station.** It stops the program stating a
+confident number about a forecast on the strength of a probe that is
+not reporting the weather. Choosing a better station is the other half,
+and it is not the program's to choose.
+
 ### 12.12 The forecast's record, beside the verdict it produced
 
 The verification tables (sec 12.3) were collected to answer one

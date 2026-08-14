@@ -26,6 +26,7 @@ private slots:
 	void an_unverifiable_forecast_is_given_up_on();
 	void a_chance_forecast_is_scored_by_occurrence_not_by_error();
 	void a_brier_score_is_read_against_its_baseline();
+	void a_stuck_sensor_does_not_score_a_forecast();
 
 private:
 	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
@@ -354,6 +355,71 @@ void test_history::a_brier_score_is_read_against_its_baseline() {
 	        QStringLiteral("ITEST2"), bbq_band::hourly, bbq_lead_bucket::day);
 	QVERIFY(qAbs(perfect.score) < 0.0001);
 	QVERIFY(qAbs(perfect.skill() - 1.0) < 0.0001);
+}
+
+
+void test_history::a_stuck_sensor_does_not_score_a_forecast() {
+	/*
+	 * Sec 12.8. The station this project was written against reported
+	 * tempAvg 22 for 288 consecutive observations -- dew point 22 and
+	 * humidity 99 beside it, a soaked probe -- while its wind moved
+	 * normally. Scoring a forecast against that produces a bias of
+	 * several degrees that is not a forecast error at all, and the
+	 * corrected band is then drawn from it.
+	 *
+	 * The guard is per QUANTITY: the same station's rain is still worth
+	 * scoring, and refusing the lot would throw away good measurements
+	 * along with the bad one.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY2(store.open(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(store.last_error()));
+
+	const qint64 start = 1786000000;
+	const int count = 96; /* eight hours at five minutes */
+
+	std::vector<bbq_sample> measured;
+	for (int i = 0; i < count; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 22.0;          /* stuck */
+		sample.precip_rate = (i % 4) * 0.1; /* moving */
+		measured.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("test"));
+	observed.set_samples(std::move(measured));
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	std::vector<bbq_sample> predicted;
+	for (int i = 0; i < count; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 15.0; /* seven degrees from the stuck value */
+		sample.precip_rate = 0.0;
+		predicted.push_back(sample);
+	}
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples(std::move(predicted));
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, start - 3600);
+
+	QVERIFY(store.verify(QStringLiteral("ITEST1")) > 0);
+
+	const bbq_verification temperature =
+	        store.verification(QStringLiteral("ITEST1"), bbq_band::hourly,
+	                           QStringLiteral("temperature"),
+	                           bbq_lead_bucket::hour);
+	const bbq_verification rain =
+	        store.verification(QStringLiteral("ITEST1"), bbq_band::hourly,
+	                           QStringLiteral("precip_rate"),
+	                           bbq_lead_bucket::hour);
+
+	QCOMPARE(temperature.count, 0);
+	QVERIFY2(rain.count > 0, "the rain moved and should still be scored");
 }
 
 QTEST_GUILESS_MAIN(test_history)
