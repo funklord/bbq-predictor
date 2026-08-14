@@ -659,7 +659,22 @@ void bbq_main_window::set_show_wind(bool show) {
 
 QString bbq_main_window::verification_note(const bbq_composite &composite,
                                            qint64 when_utc, qint64 now_utc) {
-	const bbq_reading reading = composite.at(when_utc);
+	/*
+	 * The owner's band, because that is the band the graph drew
+	 * (sec 3.18.1).
+	 *
+	 * This looks up how well a band has done at this lead time, and
+	 * with at() it asked about whichever band won the instant -- which
+	 * for the next two hours is radar, a band that carries no
+	 * temperature and therefore has no temperature record to report.
+	 * The note would have described a band the reader is not looking
+	 * at, or gone silent for want of one.
+	 */
+	bbq_reading reading = composite.owner_at(when_utc);
+	if (!reading.is_valid()) {
+		reading = composite.at(when_utc);
+	}
+
 	if (!reading.is_valid() || m_feed->station().isEmpty()) {
 		return QString();
 	}

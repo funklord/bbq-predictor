@@ -1776,6 +1776,27 @@ Guarded by a test that was watched to fail: with the scorer reading the
 winning band's raw sample again, `radar_does_not_hide_the_cold` reports
 1 C scoring as though the temperature were unknown.
 
+The tray and the verification note had drifted too, and were found by
+asking the question rather than by anyone noticing:
+
+- **The tray showed `--` and "No reading for now"** whenever the
+  observed band's last measurement had just ended, because radar then
+  won `now` and carries no temperature. Intermittent by construction --
+  it depended on how long ago the station last reported.
+- **The verification note looked up the record of the winning band**,
+  so it described radar rather than the band the graph had drawn, and
+  radar has no temperature record to describe.
+
+`correction.cpp` asks the same question and is correct, which is worth
+recording: it wants only to know that SOMETHING covers the instant and
+reads no field off the winner. A consumer is at risk here when it takes
+a VALUE from the reading, not when it takes coverage.
+
+Both halves are tested now, and both tests were watched to fail --
+`radar_still_sharpens_the_rain` covers the half that is easy to lose
+while fixing the first, since keeping radar from owning a column is
+only correct if its rain still arrives.
+
 
 ### 12.12 The forecast's record, beside the verdict it produced
 

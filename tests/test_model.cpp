@@ -26,6 +26,7 @@ private slots:
 	void a_short_window_is_not_offered();
 	void range_agrees_with_the_scan_it_replaced();
 	void radar_does_not_hide_the_cold();
+	void radar_still_sharpens_the_rain();
 
 private:
 	static bbq_series band_of(bbq_band band, qint64 start, int step_s,
@@ -364,6 +365,49 @@ void test_model::radar_does_not_hide_the_cold() {
 	QVERIFY(cold >= 0.0);
 	QCOMPARE(cold, without_radar);
 	QVERIFY2(cold < 0.5, "1 C scored as though the temperature were unknown");
+}
+
+void test_model::radar_still_sharpens_the_rain() {
+	/*
+	 * The other half of sec 3.18, and the half that is easy to lose
+	 * while fixing the first. Keeping radar from owning the column is
+	 * only correct if its rain still arrives: five-minute
+	 * precipitation is a better answer than an hourly mean, and a fix
+	 * that quietly discarded it would trade one silent loss for
+	 * another.
+	 */
+	const qint64 when = 1786125600;
+
+	bbq_series hourly(bbq_band::hourly, QStringLiteral("test"));
+	std::vector<bbq_sample> coarse;
+	bbq_sample h;
+	h.start_utc = when - 1800;
+	h.duration_s = 3600;
+	h.temperature = 20.0;
+	h.precip_rate = 5.0; /* the hourly mean, which radar disagrees with */
+	coarse.push_back(h);
+	hourly.set_samples(std::move(coarse));
+
+	bbq_series radar(bbq_band::nowcast_fine, QStringLiteral("test"));
+	std::vector<bbq_sample> fine;
+	bbq_sample r;
+	r.start_utc = when - 150;
+	r.duration_s = 300;
+	r.precip_rate = 0.0; /* it has stopped, and radar knows first */
+	fine.push_back(r);
+	radar.set_samples(std::move(fine));
+
+	bbq_composite composite;
+	composite.set_series(std::move(hourly));
+	composite.set_series(std::move(radar));
+
+	const bbq_sample resolved = composite.resolved_at(when);
+
+	QVERIFY(resolved.temperature.has_value());
+	QCOMPARE(*resolved.temperature, 20.0);
+
+	QVERIFY(resolved.precip_rate.has_value());
+	QCOMPARE(*resolved.precip_rate, 0.0);
 }
 
 QTEST_APPLESS_MAIN(test_model)

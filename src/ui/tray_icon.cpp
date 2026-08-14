@@ -82,14 +82,31 @@ void bbq_tray_icon::show_state(const bbq_composite &composite,
 	const qint64 oldest = composite.oldest_fetch_utc();
 	const bool stale = oldest == 0 || (now - oldest) > stale_after_s;
 
-	const bbq_reading reading = composite.at(now);
+	/*
+	 * The OWNER of this instant, not the finest band covering it
+	 * (sec 3.18.1).
+	 *
+	 * The radar band outranks every forecast band and carries no
+	 * temperature after its first step, so whenever the observed band's
+	 * last measurement had just ended, radar won `now` and the tray
+	 * fell to "--" and "No reading for now" -- with the temperature
+	 * fetched, parsed and sitting in the composite. Intermittent by
+	 * construction: it depended on how long ago the station last
+	 * reported.
+	 */
+	bbq_reading reading = composite.owner_at(now);
+	if (!reading.is_valid()) {
+		reading = composite.at(now);
+	}
+
+	const bbq_sample sample = composite.resolved_at(now);
 
 	QString label = QStringLiteral("--");
 	QString detail;
 
-	if (reading.is_valid() && reading.sample->temperature.has_value()) {
-		label = QString::number(*reading.sample->temperature, 'f', 0);
-		detail = QString::number(*reading.sample->temperature, 'f', 1);
+	if (reading.is_valid() && sample.temperature.has_value()) {
+		label = QString::number(*sample.temperature, 'f', 0);
+		detail = QString::number(*sample.temperature, 'f', 1);
 		detail += QStringLiteral(" C from ");
 		detail += QString::fromLatin1(bbq_band_name(reading.series->band()));
 	} else {
