@@ -376,6 +376,132 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
+	/*
+	 * Turn a typed place into coordinates (sec 13), so that discovery
+	 * can reach somewhere the reader is not standing.
+	 */
+	const QString search = option_value(arguments, QStringLiteral("--search"));
+	if (!search.isEmpty()) {
+		QTextStream report(stdout);
+
+		bbq_wu_feed feed;
+		QEventLoop loop;
+		std::vector<bbq_wu_place> answers;
+		bool answered = false;
+
+		QObject::connect(&feed, &bbq_wu_feed::places_found, &loop,
+		                 [&](const std::vector<bbq_wu_place> &places) {
+			answers = places;
+			answered = true;
+			loop.quit();
+		});
+
+		QTimer::singleShot(30000, &loop, &QEventLoop::quit);
+		feed.search_places(search);
+		loop.exec();
+
+		if (!answered) {
+			report << "search: no answer within 30 seconds\n";
+			return 1;
+		}
+
+		report << "search: " << answers.size() << " match(es) for \"" << search
+		       << "\"\n";
+
+		for (const bbq_wu_place &place : answers) {
+			report << "    " << QString::number(place.latitude, 'f', 4) << ","
+			       << QString::number(place.longitude, 'f', 4) << "  "
+			       << place.address << "\n";
+		}
+
+		return 0;
+	}
+
+	/*
+	 * Look for stations around a coordinate and keep what is found
+	 * (sec 13). Bounded twice: the discovery finishes it, and a timer
+	 * finishes it anyway, so a request that never answers cannot leave
+	 * this running.
+	 */
+	if (arguments.contains(QStringLiteral("--discover"))) {
+		QTextStream report(stdout);
+
+		const QString where =
+		        geocode.isEmpty() ? bbq_settings::derived_geocode() : geocode;
+		const QStringList parts = where.split(QLatin1Char(','));
+
+		if (parts.size() != 2) {
+			report << "discover: needs --geocode LAT,LON "
+			       << "(none given and none cached)\n";
+			return 1;
+		}
+
+		bbq_wu_feed feed;
+		feed.open_history(history_path);
+		feed.set_geocode(parts.at(0).toDouble(), parts.at(1).toDouble(), true);
+
+		QEventLoop loop;
+		int discovered = -1;
+
+		QObject::connect(&feed, &bbq_wu_feed::stations_discovered, &loop,
+		                 [&](int count) {
+			discovered = count;
+			loop.quit();
+		});
+
+		QTimer::singleShot(30000, &loop, &QEventLoop::quit);
+		feed.discover_stations();
+		loop.exec();
+
+		if (discovered < 0) {
+			report << "discover: no answer within 30 seconds\n";
+			return 1;
+		}
+
+		report << "discover: remembered " << discovered << " station(s) near "
+		       << where << "\n";
+		return 0;
+	}
+
+	/*
+	 * The station list, and which of them are pinned (sec 13). Exists
+	 * so that discovery can be checked without any interface at all --
+	 * the same reason --history and --probe exist.
+	 */
+	if (arguments.contains(QStringLiteral("--stations"))) {
+		QTextStream report(stdout);
+
+		bbq_history store;
+		if (!store.open(history_path)) {
+			report << "stations: cannot open: " << store.last_error() << "\n";
+			return 1;
+		}
+
+		const std::vector<bbq_station> known = store.stations();
+		report << "stations: " << known.size() << " known, "
+		       << store.pinned_stations().size() << " pinned\n";
+
+		for (const bbq_station &one : known) {
+			report << (one.pinned ? "  * " : "    ");
+			report << one.id.leftJustified(14);
+
+			if (one.distance_km >= 0.0) {
+				report << QString::number(one.distance_km, 'f', 1).rightJustified(6)
+				       << " km";
+			} else {
+				report << "         ";
+			}
+
+			report << "  " << one.name << "\n";
+		}
+
+		if (known.empty()) {
+			report << "  (none yet -- run with --discover to look)\n";
+		}
+
+		return 0;
+	}
+
 	if (arguments.contains(QStringLiteral("--history"))) {
 		const QString wanted =
 		        station.isEmpty() ? bbq_settings::station() : station;

@@ -42,6 +42,16 @@ int freshness_s(bbq_wu_product product) {
 		return 15 * 60;
 	case bbq_wu_product::hourly:
 		return 60 * 60;
+
+	/*
+	 * Discovery is not on this table (sec 13). It is asked for when the
+	 * coordinate moves or when somebody searches, not on a heartbeat,
+	 * and due() is never consulted for it. A long interval here is a
+	 * backstop rather than a schedule.
+	 */
+	case bbq_wu_product::nearby:
+	case bbq_wu_product::place_search:
+		return 24 * 3600;
 	}
 
 	return 15 * 60;
@@ -95,6 +105,17 @@ bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
 		return bbq_wu_read_nowcast(document);
 	case bbq_wu_product::hourly:
 		return bbq_wu_read_hourly(document);
+
+	/*
+	 * Never reached: the client diverts discovery answers to their own
+	 * signals precisely so they cannot arrive here as a band. Listed so
+	 * that adding a product still fails the switch rather than falling
+	 * through to an empty series, which would be a band that silently
+	 * never draws.
+	 */
+	case bbq_wu_product::nearby:
+	case bbq_wu_product::place_search:
+		break;
 	}
 
 	return bbq_series();
@@ -191,6 +212,43 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	 * unaffected.
 	 */
 	connect(m_met, &bbq_met_client::failed, this, [this](const QString &) {
+		finish_one();
+	});
+
+	/*
+	 * Discovery lands in the STORE, not in the composite (sec 13). A
+	 * station list is not weather: nothing on the graph changes, and
+	 * what the user gains is a list to choose from that outlives this
+	 * run.
+	 */
+	connect(m_client, &bbq_wu_client::stations_ready, this,
+	        [this](const QJsonDocument &document) {
+		const qint64 now = QDateTime::currentSecsSinceEpoch();
+		const std::vector<bbq_wu_nearby> found = bbq_wu_read_nearby(document);
+
+		int kept = 0;
+		for (const bbq_wu_nearby &one : found) {
+			bbq_station station;
+			station.id = one.id;
+			station.name = one.name;
+			station.latitude = one.latitude;
+			station.longitude = one.longitude;
+			station.distance_km = one.distance_km;
+			station.first_seen_utc = now;
+			station.last_seen_utc = now;
+
+			if (m_history.remember_station(station)) {
+				++kept;
+			}
+		}
+
+		emit stations_discovered(kept);
+		finish_one();
+	});
+
+	connect(m_client, &bbq_wu_client::places_ready, this,
+	        [this](const QJsonDocument &document) {
+		emit places_found(bbq_wu_read_places(document));
 		finish_one();
 	});
 
@@ -321,6 +379,18 @@ void bbq_wu_feed::attempt(bbq_wu_product product, qint64 now_utc) {
 		break;
 	case bbq_wu_product::hourly:
 		m_client->fetch_hourly(m_latitude, m_longitude);
+		break;
+
+	/*
+	 * Discovery is requested directly rather than through attempt(),
+	 * because it is driven by the coordinate moving or by somebody
+	 * typing, not by a schedule. Reaching here would have incremented
+	 * m_outstanding above and then sent nothing, which is the leak that
+	 * stops the heartbeat for the life of the process.
+	 */
+	case bbq_wu_product::nearby:
+	case bbq_wu_product::place_search:
+		--m_outstanding;
 		break;
 	}
 }
@@ -480,6 +550,24 @@ void bbq_wu_feed::finish_one() {
 
 		emit settled();
 	}
+}
+
+void bbq_wu_feed::discover_stations() {
+	if (!m_have_geocode) {
+		return;
+	}
+
+	++m_outstanding;
+	m_client->fetch_nearby(m_latitude, m_longitude);
+}
+
+void bbq_wu_feed::search_places(const QString &query) {
+	if (query.trimmed().isEmpty()) {
+		return;
+	}
+
+	++m_outstanding;
+	m_client->fetch_places(query);
 }
 
 void bbq_wu_feed::attempt_backfill(qint64 now_utc) {

@@ -3432,6 +3432,42 @@ days later as a station with no history. `first_seen_utc` is preserved
 for the same reason: it records when this program first heard of a
 station, not when it last saw it.
 
+### 13.1 Two things the discovery endpoints lie about
+
+Both were found by measuring rather than by reading, and both would
+have been invisible in code review.
+
+**`units` breaks `/v3/location/near`, and the error blames `format`.**
+Every other endpoint in this project takes
+`units=m&language=en-US&format=json`, so discovery inherited it and
+answered 400:
+
+    {"code":"LOCATION-SERVICES:400",
+     "message":"'format' must be specified"}
+
+with `format=json` plainly in the query. Bisected one parameter at a
+time: `format` alone is 200, `format`+`language` is 200,
+`format`+`units` is 400. **A message that names a parameter which is
+present is worse than no message**, because it sends the reader to
+check the thing that is right. Discovery sends its own query without
+units.
+
+**`updateTimeUtc` is not a heartbeat.** It looks exactly like one, and
+a staleness rule was built on it -- drop any station that has not
+reported for a day, so that a dead sensor never reaches the list. It
+dropped the entire list. Measured: every station the endpoint returns
+carries a timestamp about six weeks old, `ISTOCK877` among them, which
+was confirmed reporting minutes earlier and holds 504 archived
+observations. It is cached registration metadata. Nothing filters on
+it now, and the field carries a comment saying why it is ignored rather
+than being quietly deleted -- the next reader will have the same idea.
+
+There is no liveness signal in this response. Whether a station is
+alive is answered by asking it: `observations/current` returns 204 for
+a station that is not reporting and 200 for one that is, which is how
+`ISTOCKHO936` was ruled out while looking healthy in every other
+respect.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh

@@ -89,4 +89,41 @@ bbq_series bbq_wu_read_nowcast(const QJsonDocument &response);
  */
 bbq_series bbq_wu_read_hourly(const QJsonDocument &response);
 
+
+/*
+ * A station as discovery describes it (project.md sec 13), before the
+ * store has an opinion about it.
+ */
+struct bbq_wu_nearby {
+	QString id;
+	QString name;
+	double latitude = 0.0;
+	double longitude = 0.0;
+	double distance_km = -1.0;
+
+	/*
+	 * What the endpoint calls updateTimeUtc, and it is NOT a heartbeat:
+	 * measured six weeks stale on stations reporting minutes earlier
+	 * (sec 13.1). Kept because it is what the field says, used for
+	 * nothing.
+	 */
+	qint64 updated_utc = 0;
+};
+
+/* A place a search matched, so a typed name can become a coordinate. */
+struct bbq_wu_place {
+	QString address;
+	double latitude = 0.0;
+	double longitude = 0.0;
+};
+
+/*
+ * Both endpoints answer in the columnar shape the forecast endpoints
+ * use -- parallel arrays under `location` rather than a list of
+ * objects -- so a short array is a missing field rather than an error.
+ *
+ */
+std::vector<bbq_wu_nearby> bbq_wu_read_nearby(const QJsonDocument &response);
+std::vector<bbq_wu_place> bbq_wu_read_places(const QJsonDocument &response);
+
 #endif

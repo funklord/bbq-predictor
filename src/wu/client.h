@@ -20,6 +20,15 @@ enum class bbq_wu_product {
 	current_point,
 	nowcast,
 	hourly,
+
+	/*
+	 * Discovery, not weather (sec 13). These two answer with a list of
+	 * places rather than a series, so they never reach read_for() and
+	 * arrive on their own signals -- a product that produced an empty
+	 * bbq_series would be a band that silently never drew.
+	 */
+	nearby,
+	place_search,
 };
 
 const char *bbq_wu_product_name(bbq_wu_product product);
@@ -75,6 +84,15 @@ public:
 	void fetch_current_point(double latitude, double longitude);
 
 	/*
+	 * The personal weather stations around a coordinate, and the
+	 * coordinates of a named place (sec 13). Discovery rather than
+	 * measurement: the first turns "here" into a list to choose from,
+	 * the second turns a typed place into a "here".
+	 */
+	void fetch_nearby(double latitude, double longitude);
+	void fetch_places(const QString &query);
+
+	/*
 	 * How many requests are waiting for a key. Zero at rest.
 	 *
 	 * Exposed because it is the only externally visible consequence of
@@ -88,6 +106,10 @@ signals:
 	 * Raw response for a product. Undigested by design -- see above.
 	 */
 	void ready(bbq_wu_product product, const QJsonDocument &response);
+
+	/* Discovery answers, kept off `ready` because they are not series. */
+	void stations_ready(const QJsonDocument &response);
+	void places_ready(const QJsonDocument &response);
 
 	/*
 	 * A product could not be fetched. Bands fail independently: a dead

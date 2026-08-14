@@ -10,6 +10,7 @@
 #include "met/nowcast.h"
 #include "openmeteo/forecast.h"
 #include "wu/client.h"
+#include "wu/reader.h"
 
 class QNetworkAccessManager;
 class QTimer;
@@ -100,6 +101,17 @@ public:
 	 */
 	bbq_series corrected_forecast(qint64 from_utc, qint64 to_utc) const;
 
+	/*
+	 * Discovery (sec 13). `discover_stations` asks what is around the
+	 * coordinate the feed already holds; `search_places` turns a typed
+	 * name into coordinates to discover from. Both are driven by the
+	 * user or by a move, never by the heartbeat.
+	 */
+	void discover_stations();
+	void search_places(const QString &query);
+
+	std::vector<bbq_station> stations() const { return m_history.stations(); }
+
 	void start_auto_refresh();
 	void stop_auto_refresh();
 
@@ -112,6 +124,10 @@ signals:
 
 	/* A band did not arrive. Named, because absent must not read as empty. */
 	void band_failed(const QString &band, const QString &reason);
+
+	/* Discovery finished; the store has the stations it found. */
+	void stations_discovered(int count);
+	void places_found(const std::vector<bbq_wu_place> &places);
 
 	/* Nothing further is outstanding, however it went. */
 	void settled();

@@ -421,3 +421,99 @@ bbq_series bbq_wu_read_hourly(const QJsonDocument &response) {
 	spec.fallback_step_s = 3600;
 	return read_columns(response, spec);
 }
+
+namespace {
+
+double number_in(const QJsonArray &array, int index) {
+	if (index < 0 || index >= array.size()) {
+		return 0.0;
+	}
+
+	return array.at(index).toDouble();
+}
+
+QString text_in(const QJsonArray &array, int index) {
+	if (index < 0 || index >= array.size()) {
+		return QString();
+	}
+
+	return array.at(index).toString();
+}
+
+} // namespace
+
+std::vector<bbq_wu_nearby> bbq_wu_read_nearby(const QJsonDocument &response) {
+	std::vector<bbq_wu_nearby> found;
+
+	const QJsonObject location =
+	        response.object().value(QStringLiteral("location")).toObject();
+
+	const QJsonArray ids = location.value(QStringLiteral("stationId")).toArray();
+	const QJsonArray names =
+	        location.value(QStringLiteral("stationName")).toArray();
+	const QJsonArray latitudes =
+	        location.value(QStringLiteral("latitude")).toArray();
+	const QJsonArray longitudes =
+	        location.value(QStringLiteral("longitude")).toArray();
+	const QJsonArray distances =
+	        location.value(QStringLiteral("distanceKm")).toArray();
+	const QJsonArray updated =
+	        location.value(QStringLiteral("updateTimeUtc")).toArray();
+
+	for (int i = 0; i < ids.size(); ++i) {
+		bbq_wu_nearby station;
+		station.id = text_in(ids, i);
+
+		if (station.id.isEmpty()) {
+			continue;
+		}
+
+		station.name = text_in(names, i);
+		station.latitude = number_in(latitudes, i);
+		station.longitude = number_in(longitudes, i);
+		station.distance_km = number_in(distances, i);
+		station.updated_utc = static_cast<qint64>(number_in(updated, i));
+
+		/*
+		 * NOT filtered on updated_utc, however much it looks like the
+		 * field for it (sec 13.1). Measured: every station this
+		 * endpoint returns carries an updateTimeUtc about six weeks
+		 * old, including one confirmed reporting minutes earlier and
+		 * holding 504 archived observations. It is cached registration
+		 * metadata rather than a heartbeat, and a staleness rule built
+		 * on it dropped the entire list -- which is how it was caught.
+		 */
+		found.push_back(station);
+	}
+
+	return found;
+}
+
+std::vector<bbq_wu_place> bbq_wu_read_places(const QJsonDocument &response) {
+	std::vector<bbq_wu_place> found;
+
+	const QJsonObject location =
+	        response.object().value(QStringLiteral("location")).toObject();
+
+	const QJsonArray addresses =
+	        location.value(QStringLiteral("address")).toArray();
+	const QJsonArray latitudes =
+	        location.value(QStringLiteral("latitude")).toArray();
+	const QJsonArray longitudes =
+	        location.value(QStringLiteral("longitude")).toArray();
+
+	for (int i = 0; i < addresses.size(); ++i) {
+		bbq_wu_place place;
+		place.address = text_in(addresses, i);
+
+		if (place.address.isEmpty()) {
+			continue;
+		}
+
+		place.latitude = number_in(latitudes, i);
+		place.longitude = number_in(longitudes, i);
+		found.push_back(place);
+	}
+
+	return found;
+}

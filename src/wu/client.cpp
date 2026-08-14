@@ -22,6 +22,28 @@ const char *const api_host = "https://api.weather.com";
  */
 const char *const common_query = "units=m&language=en-US&format=json";
 
+/*
+ * The same, WITHOUT units, for the discovery endpoints (sec 13.1).
+ *
+ * /v3/location/near and /v3/location/search answer 400 when `units` is
+ * present, and the error they return names the wrong parameter:
+ *
+ *     {"code":"LOCATION-SERVICES:400",
+ *      "message":"'format' must be specified"}
+ *
+ * with format=json plainly in the query. Measured by bisecting the
+ * common query one parameter at a time -- format alone is 200,
+ * format+language is 200, format+units is 400. A message that names a
+ * parameter which is present is worse than none: it sends the reader to
+ * check the thing that is right.
+ */
+const char *const discovery_query = "language=en-US&format=json";
+
+bool is_discovery(bbq_wu_product product) {
+	const bool near = product == bbq_wu_product::nearby;
+	return near || product == bbq_wu_product::place_search;
+}
+
 } // namespace
 
 const char *bbq_wu_product_name(bbq_wu_product product) {
@@ -36,6 +58,10 @@ const char *bbq_wu_product_name(bbq_wu_product product) {
 		return "nowcast";
 	case bbq_wu_product::hourly:
 		return "hourly";
+	case bbq_wu_product::nearby:
+		return "nearby";
+	case bbq_wu_product::place_search:
+		return "places";
 	}
 
 	return "unknown";
@@ -117,6 +143,31 @@ void bbq_wu_client::fetch_current_point(double latitude, double longitude) {
 	     QStringLiteral("/v3/wx/observations/current"), query, true);
 }
 
+void bbq_wu_client::fetch_nearby(double latitude, double longitude) {
+	/*
+	 * product=pws asks for personal weather stations rather than the
+	 * airports and official sites, which is what this program archives
+	 * and verifies against.
+	 */
+	QString query = QStringLiteral("geocode=");
+	query += QString::number(latitude);
+	query += QStringLiteral(",");
+	query += QString::number(longitude);
+	query += QStringLiteral("&product=pws");
+
+	send(bbq_wu_product::nearby, QStringLiteral("/v3/location/near"), query,
+	     true);
+}
+
+void bbq_wu_client::fetch_places(const QString &query) {
+	QString search = QStringLiteral("query=");
+	search += QString::fromLatin1(QUrl::toPercentEncoding(query));
+	search += QStringLiteral("&locationType=city");
+
+	send(bbq_wu_product::place_search, QStringLiteral("/v3/location/search"),
+	     search, true);
+}
+
 void bbq_wu_client::send(bbq_wu_product product, const QString &path,
                          const QString &query, bool may_retry) {
 	if (!m_keys->has_key()) {
@@ -139,7 +190,9 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
 	const QUrl url(QStringLiteral("%1%2?apiKey=%3&%4&%5")
 	                       .arg(QString::fromLatin1(api_host), path,
 	                            m_keys->key(), query,
-	                            QString::fromLatin1(common_query)));
+	                            QString::fromLatin1(is_discovery(product)
+	                                                        ? discovery_query
+	                                                        : common_query)));
 
 	QNetworkRequest request(url);
 	QNetworkReply *reply = m_net->get(request);
@@ -196,6 +249,21 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
 		if (document.isNull()) {
 			emit failed(product, tr("malformed response: %1")
 			                             .arg(parse_error.errorString()));
+			return;
+		}
+
+		/*
+		 * Discovery answers leave by another door (sec 13). They are
+		 * lists of places, not series, and everything downstream of
+		 * `ready` assumes a band.
+		 */
+		if (product == bbq_wu_product::nearby) {
+			emit stations_ready(document);
+			return;
+		}
+
+		if (product == bbq_wu_product::place_search) {
+			emit places_ready(document);
 			return;
 		}
 
