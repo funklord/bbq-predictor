@@ -4,7 +4,10 @@
 #include <QColor>
 #include <QSize>
 #include <QRect>
+#include <QTimeZone>
 #include <QWidget>
+
+#include <vector>
 
 #include "graph/interpolate.h"
 #include "ui/layout.h"
@@ -105,6 +108,24 @@ struct bbq_graph_palette {
  * as a prior to confirm by trying. See that section for what trying it
  * actually taught.
  */
+/*
+ * Local midnights in [from_utc, to_utc), in the LOCATION's clock.
+ *
+ * Free rather than a member, and declared here rather than kept private
+ * to the paint code, because the interesting part of it is a claim that
+ * wants asserting: a day is 23 or 25 hours on the two changeover
+ * nights, so the cursor is advanced with QDateTime::addDays and never
+ * by adding 86400 seconds. Buried in paintEvent that claim could only
+ * be read, not checked -- and a stride error there would surface twice
+ * a year, in a build nobody had touched, looking like a rendering fault
+ * rather than an arithmetic one.
+ *
+ * `cap` bounds the result so that a pathological span cannot fill
+ * memory; the graph never needs more than a few hundred.
+ */
+std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
+                                       const QTimeZone &zone, int cap = 400);
+
 class bbq_forecast_graph : public QWidget {
 	Q_OBJECT
 

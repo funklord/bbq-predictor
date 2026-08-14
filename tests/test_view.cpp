@@ -45,6 +45,11 @@ private slots:
 	void a_theme_setting_lands_somewhere_defined();
 	void automatic_never_answers_unknown();
 	void automatic_releases_the_override();
+	void every_day_boundary_is_local_midnight();
+	void the_short_night_is_twenty_three_hours();
+	void the_long_night_is_twenty_five_hours();
+	void a_boundary_on_the_left_edge_is_kept();
+	void the_count_is_bounded();
 
 private:
 	static void paint_once(probe &graph);
@@ -271,6 +276,103 @@ void test_view::automatic_releases_the_override() {
 	        QGuiApplication::palette().color(QPalette::Window);
 
 	QVERIFY(automatic_window == dark_window || automatic_window == light_window);
+}
+
+/*
+ * The day boundaries, and the reason these exist at all.
+ *
+ * Stockholm is the location this project was written for and it keeps
+ * summer time, so both changeover nights are real here: the clocks go
+ * forward on the last Sunday of March and back on the last Sunday of
+ * October. A stride of 86400 seconds walks off the boundary on the
+ * first of those and stays off it, which is a fault that appears twice
+ * a year in a build nobody touched.
+ *
+ * The zone is NAMED rather than taken from the machine. A test that
+ * asked the system for its timezone would pass in Stockholm, pass
+ * uselessly in UTC where there is no transition to get wrong, and be
+ * unreproducible everywhere else.
+ */
+namespace {
+
+const QTimeZone stockholm(QByteArrayLiteral("Europe/Stockholm"));
+
+qint64 at_local(int year, int month, int day, int hour = 0) {
+	const QDateTime when(QDate(year, month, day), QTime(hour, 0), stockholm);
+	return when.toSecsSinceEpoch();
+}
+
+} // namespace
+
+void test_view::every_day_boundary_is_local_midnight() {
+	QVERIFY(stockholm.isValid());
+
+	const qint64 from = at_local(2026, 3, 26, 9);
+	const qint64 to = at_local(2026, 4, 2, 9);
+
+	const std::vector<qint64> found = bbq_day_boundaries(from, to, stockholm);
+
+	QCOMPARE(static_cast<int>(found.size()), 7);
+
+	for (qint64 when : found) {
+		const QDateTime local = QDateTime::fromSecsSinceEpoch(when, stockholm);
+		QCOMPARE(local.time(), QTime(0, 0));
+	}
+}
+
+void test_view::the_short_night_is_twenty_three_hours() {
+	/*
+	 * 29 March 2026, the spring transition: 02:00 becomes 03:00, so the
+	 * gap from that midnight to the next is 23 hours. The assertion is
+	 * on the GAP rather than on the timestamp, because that is what a
+	 * fixed stride would get wrong.
+	 */
+	const std::vector<qint64> found =
+	        bbq_day_boundaries(at_local(2026, 3, 28, 12),
+	                           at_local(2026, 3, 31, 12), stockholm);
+
+	QCOMPARE(static_cast<int>(found.size()), 3);
+	QCOMPARE(found.at(1) - found.at(0), 23 * 3600);
+	QCOMPARE(found.at(2) - found.at(1), 24 * 3600);
+}
+
+void test_view::the_long_night_is_twenty_five_hours() {
+	/* 25 October 2026, the autumn transition: 03:00 becomes 02:00. */
+	const std::vector<qint64> found =
+	        bbq_day_boundaries(at_local(2026, 10, 24, 12),
+	                           at_local(2026, 10, 27, 12), stockholm);
+
+	QCOMPARE(static_cast<int>(found.size()), 3);
+	QCOMPARE(found.at(1) - found.at(0), 25 * 3600);
+	QCOMPARE(found.at(2) - found.at(1), 24 * 3600);
+}
+
+void test_view::a_boundary_on_the_left_edge_is_kept() {
+	/*
+	 * A view starting exactly at midnight has a boundary there, and
+	 * dropping it would leave the leftmost day unnamed. The right edge
+	 * is the other way round: the range is half open, so a boundary
+	 * exactly at `to` belongs to the next view rather than this one.
+	 */
+	const qint64 midnight = at_local(2026, 6, 1);
+
+	const std::vector<qint64> inclusive =
+	        bbq_day_boundaries(midnight, at_local(2026, 6, 2), stockholm);
+	QCOMPARE(static_cast<int>(inclusive.size()), 1);
+	QCOMPARE(inclusive.at(0), midnight);
+
+	const std::vector<qint64> empty =
+	        bbq_day_boundaries(midnight, midnight, stockholm);
+	QVERIFY(empty.empty());
+}
+
+void test_view::the_count_is_bounded() {
+	/* Ten years asked for, and the cap is what comes back. */
+	const std::vector<qint64> found =
+	        bbq_day_boundaries(at_local(2026, 1, 1), at_local(2036, 1, 1),
+	                           stockholm, 400);
+
+	QCOMPARE(static_cast<int>(found.size()), 400);
 }
 
 /*

@@ -603,6 +603,41 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 
 } // namespace
 
+std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
+                                       const QTimeZone &zone, int cap) {
+	std::vector<qint64> found;
+
+	if (to_utc <= from_utc || cap <= 0) {
+		return found;
+	}
+
+	QDateTime cursor = local_time(from_utc, zone);
+	cursor.setTime(QTime(0, 0));
+
+	/* The first midnight at or after the left edge. */
+	if (cursor.toSecsSinceEpoch() < from_utc) {
+		cursor = cursor.addDays(1);
+	}
+
+	while (cursor.toSecsSinceEpoch() < to_utc &&
+	       static_cast<int>(found.size()) < cap) {
+		found.push_back(cursor.toSecsSinceEpoch());
+
+		/*
+		 * addDays, NOT plus 86400 seconds. A day is 23 or 25 hours on
+		 * the two changeover nights, so a fixed stride walks off the
+		 * boundary on the first of them and stays off it for the rest
+		 * of the year -- a fault that would appear twice annually in a
+		 * build nobody changed. Extracted from the paint code so that
+		 * this can be asserted rather than merely claimed: see
+		 * test_view.
+		 */
+		cursor = cursor.addDays(1);
+	}
+
+	return found;
+}
+
 bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	setMinimumSize(360, 180);
 
@@ -1362,22 +1397,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * would walk the divider an hour off the boundary and keep it there
 	 * for the rest of the year.
 	 */
-	std::vector<qint64> midnights;
-
-	{
-		QDateTime cursor = local_time(from, zone);
-		cursor.setTime(QTime(0, 0));
-
-		/* The first midnight at or after the left edge. */
-		if (cursor.toSecsSinceEpoch() < from) {
-			cursor = cursor.addDays(1);
-		}
-
-		while (cursor.toSecsSinceEpoch() < to && midnights.size() < 400) {
-			midnights.push_back(cursor.toSecsSinceEpoch());
-			cursor = cursor.addDays(1);
-		}
-	}
+	const std::vector<qint64> midnights = bbq_day_boundaries(from, to, zone);
 
 	for (qint64 midnight : midnights) {
 		const double x = plot.left() + (midnight - from) / seconds_per_pixel;
