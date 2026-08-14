@@ -135,6 +135,13 @@ private:
 	 * They carry their own last-attempted stamps rather than being
 	 * squeezed into an enum that means something else.
 	 */
+	/*
+	 * Yesterday's observations, which today's request cannot supply
+	 * (sec 12.7). Separate because the two ask for different days on
+	 * very different schedules: today's answer changes, yesterday's
+	 * cannot.
+	 */
+	void attempt_backfill(qint64 now_utc);
 	void attempt_radar(qint64 now_utc);
 	void attempt_extended(qint64 now_utc);
 	void finish_one();
@@ -164,6 +171,7 @@ private:
 	qint64 m_loaded_from = 0;
 	qint64 m_loaded_to = 0;
 
+	qint64 m_backfill_attempted = 0;
 	qint64 m_radar_attempted = 0;
 	qint64 m_extended_attempted = 0;
 	int m_outstanding = 0;

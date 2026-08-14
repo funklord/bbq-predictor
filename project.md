@@ -1798,6 +1798,62 @@ while fixing the first, since keeping radar from owning a column is
 only correct if its rain still arrives.
 
 
+### 12.7 The archive has no today in it
+
+`record: none yet` on the verdict line, on two phones, for days. The
+store said why:
+
+    forecast_pending   1634 rows
+    observation           6 rows
+    verification          1 row
+    reliability           0 rows
+
+Six observations across three days, and their times give it away --
+two per day, always the first eleven minutes of the LOCAL day:
+
+    08-11 22:04Z, 22:09Z
+    08-12 22:04Z, 22:09Z
+    08-13 22:04Z, 22:09Z
+
+The observed band asks `/v2/pws/history/all?date=<today>`, and **that
+endpoint is an archive: today is not in it yet.** Whatever the hour, it
+answers with the first couple of rows of the day and nothing since.
+Every ten-minute refresh got the same two rows, the primary key on
+(station, valid_utc) deduplicated them, and the archive grew by two a
+day.
+
+Measured against the same station on the same afternoon, changing only
+the date:
+
+    date=today       2 samples, 00:04..00:15 local
+    date=yesterday   288 samples, a full day at five minutes
+
+288 is the figure the client's own comment promises of this endpoint.
+Nothing was wrong with the station, the parser, or the store.
+
+**Verification is a whole section of this document and it could never
+have worked.** A forecast is scored by matching it against an
+observation at the same instant; with two observations a day there was
+nothing to match. The queue was not the problem -- 1634 forecasts were
+waiting patiently for measurements that were never going to arrive.
+
+Yesterday is fetched separately now, on a six-hour interval since it
+cannot change, and from the startup path as well as the heartbeat: the
+heartbeat refuses to run while anything is outstanding, a launch has
+everything outstanding, and a phone that is opened and backgrounded may
+never reach an idle beat at all. The same product and handler serve
+both days, because the reply is archived and the series is then rebuilt
+from the STORE rather than from the reply -- so two days accumulate
+instead of replacing one another.
+
+One launch now archives 290 observations where it archived 2.
+
+**The lesson is about silence.** Nothing failed. Every band reported
+success, `missing` said `none`, the fetch log looked healthy, and the
+one line that could have said otherwise -- `record: none yet` -- reads
+exactly like a feature waiting for enough data. A pipeline starved at
+its source looks identical to one that is merely young.
+
 ### 12.12 The forecast's record, beside the verdict it produced
 
 The verification tables (sec 12.3) were collected to answer one

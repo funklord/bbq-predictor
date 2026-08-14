@@ -53,6 +53,25 @@ int freshness_s(bbq_wu_product product) {
  * and Open-Meteo's extended band is hourly, so these match the same rule
  * the table above follows: ask no faster than the source changes.
  */
+/*
+ * Yesterday's observations, asked for on their own schedule (sec 12.7).
+ *
+ * Weather Underground's PWS history is an ARCHIVE, and today is not in
+ * it yet: asking for today returns the first couple of rows of the
+ * local day and nothing since, whatever the hour. Measured against the
+ * same station on the same afternoon --
+ *
+ *     date=today       2 samples, 00:04..00:15 local
+ *     date=yesterday   288 samples, a full day at five minutes
+ *
+ * -- which is the 288 rows a day the client's own comment promises.
+ *
+ * Six hours because yesterday cannot change. Four requests a day is
+ * enough to catch up after a restart and to notice a midnight, and the
+ * rule this project follows is to ask no faster than the source moves.
+ */
+const int backfill_freshness_s = 6 * 3600;
+
 const int radar_freshness_s = 10 * 60;
 const int extended_freshness_s = 60 * 60;
 
@@ -336,6 +355,9 @@ void bbq_wu_feed::tick() {
 		if (m_station_id.isEmpty() && due(bbq_wu_product::current_point, now)) {
 			attempt(bbq_wu_product::current_point, now);
 		}
+		if (overdue(m_backfill_attempted, backfill_freshness_s, now)) {
+			attempt_backfill(now);
+		}
 		if (overdue(m_radar_attempted, radar_freshness_s, now)) {
 			attempt_radar(now);
 		}
@@ -403,6 +425,26 @@ void bbq_wu_feed::finish_one() {
 	}
 }
 
+void bbq_wu_feed::attempt_backfill(qint64 now_utc) {
+	if (m_station_id.isEmpty()) {
+		return;
+	}
+
+	m_backfill_attempted = now_utc;
+	++m_outstanding;
+
+	/*
+	 * The same product as today's request, deliberately. The response
+	 * handler archives whatever arrives and then rebuilds the series
+	 * from the STORE rather than from the reply, so two answers for two
+	 * days accumulate instead of replacing one another -- which is the
+	 * property that makes this a two-line change rather than a new band.
+	 */
+	const QString stamp = QStringLiteral("yyyyMMdd");
+	const QString yesterday = QDate::currentDate().addDays(-1).toString(stamp);
+	m_client->fetch_observed(m_station_id, yesterday);
+}
+
 void bbq_wu_feed::attempt_radar(qint64 now_utc) {
 	m_radar_attempted = now_utc;
 	++m_outstanding;
@@ -448,6 +490,20 @@ void bbq_wu_feed::refresh() {
 	if (!m_station_id.isEmpty()) {
 		attempt(bbq_wu_product::observed, now);
 		attempt(bbq_wu_product::current_station, now);
+
+		/*
+		 * Here as well as in tick(), because tick() refuses to run
+		 * while anything is outstanding and a launch has everything
+		 * outstanding. A phone app that is opened, looked at and
+		 * backgrounded may never reach an idle heartbeat at all, so a
+		 * backfill that only happened there would never happen on the
+		 * device it matters most on. The interval still governs: a
+		 * fresh process has never asked, which is overdue by
+		 * definition.
+		 */
+		if (overdue(m_backfill_attempted, backfill_freshness_s, now)) {
+			attempt_backfill(now);
+		}
 	}
 
 	if (m_have_geocode) {
