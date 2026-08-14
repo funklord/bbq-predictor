@@ -1659,6 +1659,47 @@ the live forecast had no rain to draw:
 The old behaviour would have drawn all three at the same height on
 three different screenfuls.
 
+### 3.17 The readout is a row, not a panel
+
+The readout was six stacked lines in an opaque box pinned inside the
+plot: time, temperature, rain, chance, wind, and the source. It blocked
+the graph it was describing. On a desktop that is a nuisance; on a
+phone the box is a large share of a small picture and there is no
+second window to move it to. Reported as "the box that shows data
+blocks the view pretty seriously".
+
+**Height was the fault, not width**, so the fields join into a single
+row along the top of the plot. Six lines becomes one.
+
+Three things went with it, each because something else already says it:
+
+- **The provider.** `nowcast / wunderground` was the longest line in
+  the old box and therefore set its width, to say what the provenance
+  ribbon underneath says in colour. The band name stays; the provider
+  goes.
+- **The second decimal on rain.** It never decided anything.
+- **The weekday, on a narrow screen.** The graph names every day across
+  the top now (sec 3.15), so a readout repeating it is the cheapest
+  thing in the row to lose.
+
+**The narrow spelling is not a fallback for an unusual case.** The
+Fold's cover screen is 320 logical pixels and the roomy row does not
+fit it at all, so treating narrow as the exception would have stripped
+the row back to the time and the temperature on the device people
+actually carry. Below 420 pixels the weekday goes and the separators
+drop from three spaces to one -- five separators at three spaces is a
+dozen characters of nothing, which on that screen is a whole field.
+
+Measured, and only then dropped. The row is fitted against the plot
+width, and if it still does not fit, fields are removed from the END,
+which is why they are built in order of what a reader wants: the time
+and the temperature survive to the last. Clipping instead would be the
+fault of sec 3.12.1.1 all over again. As it turns out nothing has to be
+dropped at either size:
+
+    320 px    07:15 17.0 C 0.0 mm/h 1% 9 km/h nowcast
+    1080 px   Fri 07:00   17.0 C   0.0 mm/h   1%   9 km/h   nowcast
+
 ### 12.12 The forecast's record, beside the verdict it produced
 
 The verification tables (sec 12.3) were collected to answer one

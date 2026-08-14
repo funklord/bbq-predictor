@@ -1873,68 +1873,119 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 				painter.setBrush(Qt::NoBrush);
 			}
 
-			QStringList lines;
+			/*
+			 * ONE ROW along the top, not a stack beside the cursor
+			 * (sec 3.17).
+			 *
+			 * It was six lines in an opaque box pinned inside the
+			 * plot, and it blocked the graph it was describing --
+			 * worst on a phone, where the box is a large share of a
+			 * small picture and the reader has no second window to
+			 * put it in. Height was the problem rather than width, so
+			 * the fields join into a single row.
+			 *
+			 * Ordered by what somebody reading a weather graph
+			 * actually wants, because that is also the order they get
+			 * dropped in when the row will not fit.
+			 */
 			const QDateTime when = local_time(c.knot_utc, zone);
-			lines.append(when.toString(QStringLiteral("ddd HH:mm")));
+
+			/*
+			 * Two spellings, and the narrow one is not a fallback for
+			 * an unusual case -- a phone is the ordinary case here.
+			 * The Fold's cover screen is 320 logical pixels wide and
+			 * the roomy row does not fit it at all, so without this
+			 * the loop below would strip the row back to the time and
+			 * the temperature on the device people actually carry.
+			 *
+			 * The weekday is what goes first, because the graph now
+			 * names every day across the top (sec 3.15). A readout
+			 * repeating what the divider beside it already says is
+			 * the cheapest thing in the row to lose.
+			 */
+			const bool wide_enough = plot.width() >= 420;
+
+			QStringList parts;
+			parts.append(when.toString(wide_enough
+			                                   ? QStringLiteral("ddd HH:mm")
+			                                   : QStringLiteral("HH:mm")));
 
 			if (c.knot_has_temperature) {
-				lines.append(QString::number(c.knot_temperature, 'f', 1) +
+				parts.append(QString::number(c.knot_temperature, 'f', 1) +
 				             tr(" C"));
 			}
 			if (c.knot_has_rain) {
-				lines.append(QString::number(c.knot_rain, 'f', 2) +
+				/*
+				 * One decimal rather than two. The second never
+				 * decided anything and it cost a character in the
+				 * row that has to fit.
+				 */
+				parts.append(QString::number(c.knot_rain, 'f', 1) +
 				             tr(" mm/h"));
 			}
 			if (c.knot_has_chance) {
-				lines.append(QString::number(c.knot_chance, 'f', 0) +
-				             tr("% rain"));
+				parts.append(QString::number(c.knot_chance, 'f', 0) +
+				             QStringLiteral("%"));
 			}
 			if (c.knot_has_wind) {
-				lines.append(QString::number(c.knot_wind, 'f', 0) +
+				parts.append(QString::number(c.knot_wind, 'f', 0) +
 				             tr(" km/h"));
 			}
 
-			QString source = QString::fromLatin1(bbq_band_name(c.band));
-			const bbq_series *series = m_composite.band(c.band);
-			if (series != nullptr && !series->provider().isEmpty()) {
-				source += QStringLiteral(" / ") + series->provider();
-			}
-			lines.append(source);
-
-			const QFontMetrics metrics(label_font);
-			int text_width = 0;
-			for (const QString &line : lines) {
-				text_width = qMax(text_width, metrics.horizontalAdvance(line));
-			}
-
-			const int pad = 6;
-			const int box_w = text_width + pad * 2;
-			const int box_h = metrics.height() * lines.size() + pad * 2;
+			/*
+			 * The band, without the provider. "nowcast / wunderground"
+			 * was the longest line in the old box and therefore set
+			 * its width, to say something the ribbon underneath
+			 * already says in colour.
+			 */
+			parts.append(QString::fromLatin1(bbq_band_name(c.band)));
 
 			/*
-			 * Flipped to whichever side has room, so the box never
-			 * leaves the widget and never hides the sample it
-			 * describes.
+			 * MEASURED, and shortened by dropping fields rather than
+			 * by clipping. A row wider than the plot would be cut
+			 * mid-character at the edge, which is the fault sec
+			 * 3.12.1.1 exists about; dropping the wind or the band
+			 * loses a field the reader can see elsewhere, and the
+			 * time and temperature at the front survive to the last.
 			 */
-			double box_x = px + 12;
-			if (box_x + box_w > plot.right()) {
-				box_x = px - 12 - box_w;
-			}
-			double box_y = plot.top() + 6;
+			const QFontMetrics metrics(label_font);
+			const int pad = 6;
 
-			const QRectF box(box_x, box_y, box_w, box_h);
+			/*
+			 * The gap between fields is the other thing that scales.
+			 * Five separators at three spaces is a dozen characters
+			 * of nothing, which on a narrow screen is a field.
+			 */
+			const QString gap = wide_enough ? QStringLiteral("   ")
+			                                : QStringLiteral(" ");
+
+			QString text = parts.join(gap);
+			while (parts.size() > 2 &&
+			       metrics.horizontalAdvance(text) + pad * 2 > plot.width() - 8) {
+				parts.removeLast();
+				text = parts.join(gap);
+			}
+
+			const int box_w = metrics.horizontalAdvance(text) + pad * 2;
+			const int box_h = metrics.height() + pad * 2;
+
+			/*
+			 * Centred on the cursor where there is room, and pushed
+			 * inside the plot where there is not, so it stays near
+			 * the finger without ever leaving the widget.
+			 */
+			double box_x = px - box_w / 2.0;
+			box_x = std::max(box_x, static_cast<double>(plot.left()) + 2.0);
+			box_x = std::min(box_x,
+			                 static_cast<double>(plot.right()) - box_w - 2.0);
+
+			const QRectF box(box_x, plot.top() + 4, box_w, box_h);
 			painter.setPen(m_palette.readout_edge);
 			painter.setBrush(m_palette.readout_back);
 			painter.drawRoundedRect(box, 3, 3);
 
 			painter.setPen(m_palette.readout_text);
-			for (int i = 0; i < lines.size(); ++i) {
-				const QRectF row(box.left() + pad,
-				                 box.top() + pad + i * metrics.height(),
-				                 text_width, metrics.height());
-				painter.drawText(row, Qt::AlignLeft | Qt::AlignVCenter,
-				                 lines.at(i));
-			}
+			painter.drawText(box, Qt::AlignCenter, text);
 
 			painter.setBrush(Qt::NoBrush);
 		}
