@@ -40,6 +40,7 @@
 #   APP_ID              reverse-DNS id; the package and the launcher use it
 #   VERSION             the one place a version is stated
 #   ANDROID_BUILD_DIR   where the Qt build tree goes
+#   ANDROID_ARTIFACT    the path the build rule leaves the APK at
 #   android-build       a rule that produces the APK, however this project
 #                       builds; qmake and CMake differ and neither belongs here
 #
@@ -112,6 +113,52 @@ export ANDROID_NDK_ROOT
 # perfectly ordinary SDK.
 ANDROID_PLATFORM ?= android-$(ANDROID_TARGET_API)
 
+# Find the kit if nobody named one. hydra's, taken here because it removes
+# the single most tedious thing about this build.
+#
+# Without it every android target needs QT_ANDROID_ROOT spelled out on the
+# command line, which is a path with a version number in it that changes
+# under you at every Qt update. hydra's default named 6.11.1 -- a version
+# that machine did not have -- so the default was one that had to be
+# overridden every time, which is no default at all.
+#
+# ANDROID_ABI is the input here and the kit is the answer, which is the
+# reverse of the derivation below. The two do not fight: this runs only when
+# QT_ANDROID_ROOT is unset, and whatever it finds is then read back by the
+# ABI derivation and cross-checked by android-check, so a kit found here
+# that disagrees with an explicit ANDROID_ABI is still refused by name.
+#
+# `sort -V`, because a lexical sort puts 6.3.2 above 6.10.0 and would pick
+# the older kit for as long as nobody noticed. `ifndef` rather than `?=` so
+# the search runs once instead of at every reference.
+QT_ROOT ?= $(HOME)/Qt
+QT_KIT_arm64-v8a   = android_arm64_v8a
+QT_KIT_armeabi-v7a = android_armv7
+QT_KIT_x86_64      = android_x86_64
+QT_KIT_x86         = android_x86
+
+ifndef QT_ANDROID_ROOT
+ifneq ($(ANDROID_ABI),)
+QT_ANDROID_ROOT := $(shell ls -d \
+        $(QT_ROOT)/*/$(QT_KIT_$(ANDROID_ABI)) 2>/dev/null | sort -V | tail -1)
+else
+# No ABI named either, so prefer arm64-v8a over whatever sorts last.
+#
+# Sorting the kit names and taking the last gives android_x86_64, which is
+# an emulator build. That installs on no phone anybody owns, and it is the
+# worst kind of wrong default: everything succeeds, the APK is real, and it
+# is discovered by `adb install` refusing it. Every physical device this
+# would be built for is arm64.
+QT_ANDROID_ROOT := $(shell \
+        ls -d $(QT_ROOT)/*/android_arm64_v8a 2>/dev/null | sort -V | tail -1 \
+        || true)
+ifeq ($(QT_ANDROID_ROOT),)
+QT_ANDROID_ROOT := $(shell ls -d $(QT_ROOT)/*/android_* 2>/dev/null \
+                            | sort -V | tail -1)
+endif
+endif
+endif
+
 # The host-side deploy tool, asked for rather than assumed. Qt puts it with
 # the HOST tools, not in the Android kit, and the directory is named
 # differently per platform -- qmake knows where it is.
@@ -176,7 +223,41 @@ ANDROID_VERSION_CODE ?= $(shell echo $(VERSION) | awk -F. \
 ANDROID_KEYSTORE  ?=
 ANDROID_KEY_ALIAS ?=
 
-android-check:
+# A project's own preflight runs as part of this one, not instead of it.
+#
+# Every adopter has something to check that is nobody else's business:
+# beerssh needs libssh built for the ABI, fuzzypickles its vendored archives,
+# hydra its kit selection. Left without somewhere to put those, a project
+# redefines android-check -- and make takes the last definition it read,
+# silently, so the shared preflight stops running the moment a project adds
+# a check of its own. That is the worst possible failure for a preflight:
+# the checks that were paid for in broken builds are the ones that vanish.
+#
+# So name a target and this one will depend on it:
+#
+#   ANDROID_CHECK_LOCAL = android-check-beerssh
+#   android-check-beerssh:
+#           @test -f deps/... || { echo "..." >&2; exit 1; }
+#
+# Unset, nothing extra runs and nothing is reported -- a project with no
+# local preflight is not missing one.
+# Set it wherever you like, including below this include. Make expands an
+# explicit rule's prerequisites AS IT READS THE RULE, so a plain
+# `android-check: $(ANDROID_CHECK_LOCAL)` would see the variable's value at
+# this point in the file and nowhere else -- a project setting it further
+# down would get an android-check with no local prerequisite, running the
+# shared checks, printing nothing about the missing one and passing. That is
+# the same silent retirement this hook exists to prevent, arriving by a
+# different door. Measured on a fixture before it was written this way.
+#
+# `.SECONDEXPANSION` defers the `$$(...)` below to build time, when the
+# variable has its final value, so the order stops mattering. It is enabled
+# from here on and affects only prerequisites written with `$$`, which is why
+# it is safe to turn on inside a fragment somebody else includes.
+ANDROID_CHECK_LOCAL ?=
+
+.SECONDEXPANSION:
+android-check: $$(ANDROID_CHECK_LOCAL)
 	@if [ -z "$(QT_ANDROID_ROOT)" ]; then \
 		echo "android: QT_ANDROID_ROOT is not set." >&2; \
 		echo "android:   point it at a Qt-for-Android kit, e.g." >&2; \
