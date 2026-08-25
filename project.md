@@ -2080,7 +2080,7 @@ the applet's main surface.
   never judging a test from a binary the target did not rebuild.
 - `make check` is what must pass before committing.
 - `make style` gates indentation and the document against the tree.
-- `make hooks` installs the commit-msg hook from `tools/hooks/`.
+- `make hooks` installs the commit-msg hook from `tool/hooks/`.
 - `BUILD_DIR` is the build output directory, and is settable.
 - `-Os`, per the global rule. qmake's release default is `-O2` and is
   applied by the *generated* Makefile, so `bbq-predictor.pro` is the only
@@ -2621,8 +2621,8 @@ supposed to live.
 - Desktop and mobile are two shapes rather than one that scales; the
   device supplies the default and the configuration overrules it, and
   the layout never resizes its own window (sec 10)
-- The Android build runs on the shared vocabulary in `tools/android.mk`,
-  spread from `~/.claude/tools/` like `style_gate.py` (sec 11)
+- The Android build runs on the shared vocabulary in `tool/android.mk`,
+  spread from `~/.claude/tool/` like `style_gate.py` (sec 11)
 - Grilling windows scored and shaded, preferences gathered in one place
   and marked as preferences (sec 7)
 
@@ -2659,7 +2659,7 @@ anything.
   and it is a download and a licence acceptance on a shared SDK rather
   than anything in this tree
 - **Whether the three projects that shipped for Android first adopt
-  `tools/android.mk`.** Their target names differ from the agreed ones
+  `tool/android.mk`.** Their target names differ from the agreed ones
   in ways somebody has to decide about rather than sweep, so it belongs
   to a deliberate cross-project pass
 - **Whether to take Open-Meteo's quarter-hourly block where it is
@@ -2870,9 +2870,9 @@ anything in the tree -- see sec 11.2.
 
 ### 11.1 The vocabulary is shared, the build rule is not
 
-`tools/android.mk` carries the target names, the preflight, the
+`tool/android.mk` carries the target names, the preflight, the
 versionCode, the adb plumbing and the signature check. It is spread
-verbatim from `~/.claude/tools/android.mk`, the same model as
+verbatim from `~/.claude/tool/android.mk`, the same model as
 `style_gate.py` and for the same reason: a copy in the repository is
 reachable by CI, and a file under `~/.claude` is not.
 
@@ -2927,7 +2927,7 @@ desktop one.
 **For four sessions, a plain `make` built nothing.** It ran
 `android-check`, failed for want of `QT_ANDROID_ROOT`, and stopped.
 
-`include` is where make first sees a target, and `tools/android.mk` was
+`include` is where make first sees a target, and `tool/android.mk` was
 pulled in above `all` so that a project rule could use `ANDROID_ABI`
 without redefining it. That placement is right; the consequence is that
 the fragment's first target became the default goal. Nothing warned,
@@ -3042,7 +3042,7 @@ all, and the station field is innocent -- it saved exactly what it was
 given. This is the next piece of work and it is not small: OpenSSL has
 to be cross-compiled for the ABI and bundled through
 `ANDROID_EXTRA_LIBS`. **beerssh already has a script that builds
-precisely this** (`tools/build-deps-android.sh`, which its own header
+precisely this** (`tool/build-deps-android.sh`, which its own header
 says has never been run), so this is a candidate for shared tooling
 rather than a second copy -- and per `harmonization.md` that is an
 observation to raise, not an extraction to make in passing.
@@ -3097,7 +3097,7 @@ fetch nothing, and Qt says so plainly once you look:
 
     W qt.tlsbackend.ossl: Failed to load libssl/libcrypto.
 
-`tools/build-openssl-android.sh` cross-compiles it, and the interesting
+`tool/build-openssl-android.sh` cross-compiles it, and the interesting
 decisions are about the source rather than the compiler.
 
 **The system's OpenSSL cannot be used, and not for one reason but two.**

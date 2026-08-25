@@ -114,7 +114,7 @@ Android needs OpenSSL built for the device first -- Qt ships none, and
 without it the applet can fetch nothing at all:
 
     ANDROID_NDK_ROOT=$HOME/Android/Sdk/ndk/27.2.12479018 \
-        tools/build-openssl-android.sh arm64-v8a
+        tool/build-openssl-android.sh arm64-v8a
 
 The source comes from `apt-get source openssl`, so it is the version the
 distribution pinned and patched rather than one this repository chose.

@@ -1,9 +1,9 @@
-# Copied from ~/.claude/tools/android.mk -- the source. Keep in sync;
+# Copied from ~/.claude/tool/android.mk -- the source. Keep in sync;
 # fix drift the moment you notice it.
 # =============================================================================
 # android.mk -- the shared Android vocabulary for private projects
 #
-# Spread verbatim into each project's tools/ from ~/.claude/tools/android.mk,
+# Spread verbatim into each project's tool/ from ~/.claude/tool/android.mk,
 # the same model as style_gate.py and for the same reason: a copy in the
 # repository is reachable by CI, which a file under ~/.claude is not.
 #
@@ -59,7 +59,7 @@ ANDROID_SDK_ROOT ?= $(HOME)/Android/Sdk
 #
 #     aapt2 dump badging <apk> | grep minSdkVersion
 #
-# EXPORTED, because tools/build-openssl-android.sh reads it and gets the
+# EXPORTED, because tool/build-openssl-android.sh reads it and gets the
 # direction of the risk wrong if it disagrees. A dependency cross-compiled
 # for a HIGHER API than the app resolves symbols at build time that are
 # absent at run time on the oldest device the app claims to support -- so
@@ -185,7 +185,7 @@ endif
 
 export JAVA_HOME
 
-ANDROID_ADB       = $(ANDROID_SDK_ROOT)/platform-tools/adb
+ANDROID_ADB       = $(ANDROID_SDK_ROOT)/platform-tool/adb
 
 # The ABI is the Qt KIT's, read from it rather than chosen a second time.
 #
@@ -377,7 +377,7 @@ android-check:
 # otherwise. Signed with the debug key is the one packaging mistake that
 # cannot be caught by looking at the file.
 define android_verify_signature
-	@signer=$$(ls $(ANDROID_SDK_ROOT)/build-tools/*/apksigner 2>/dev/null | tail -1); \
+	@signer=$$(ls $(ANDROID_SDK_ROOT)/build-tool/*/apksigner 2>/dev/null | tail -1); \
 	if [ -z "$$signer" ]; then \
 		echo "android: NO apksigner in the SDK -- who signed this is unchecked" >&2; \
 		exit 0; \

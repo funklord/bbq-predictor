@@ -20,7 +20,7 @@
 #                        binary this target did not rebuild.
 #   make check        -- everything that must pass before a commit
 #   make style        -- indentation gate, plus project.md against the tree
-#   make hooks        -- install the commit-msg hook from tools/hooks/
+#   make hooks        -- install the commit-msg hook from tool/hooks/
 #   make install      -- install the binary and its desktop entry
 #   make uninstall    -- remove what install put there
 #   make clean        -- remove compilation intermediates only; the built
@@ -42,8 +42,8 @@
 #   make help         -- this list
 #
 # ANDROID
-#   The target names and the adb plumbing come from tools/android.mk, which
-#   is spread verbatim from ~/.claude/tools/android.mk so a habit learned in
+#   The target names and the adb plumbing come from tool/android.mk, which
+#   is spread verbatim from ~/.claude/tool/android.mk so a habit learned in
 #   one project is correct in the next. This file supplies only the build
 #   rule, because qmake and CMake differ and that difference is the project's.
 #
@@ -108,7 +108,7 @@ endif
 
 # The shared vocabulary. Included before the rules below so a project rule
 # can use ANDROID_ABI and friends without redefining any of them.
-include tools/android.mk
+include tool/android.mk
 
 ANDROID_BUILD_DIR ?= build-android
 ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/$(TARGET)-$(VERSION)-$(ANDROID_ABI).apk
@@ -168,7 +168,7 @@ run: $(ARTIFACT)
 	./$(ARTIFACT)
 
 # --- Android ---------------------------------------------------------------
-# The build rule is this project's; everything around it is tools/android.mk.
+# The build rule is this project's; everything around it is tool/android.mk.
 $(ANDROID_BUILD_DIR)/Makefile: android-check bbq-predictor.pro
 	mkdir -p $(ANDROID_BUILD_DIR)
 	cd $(ANDROID_BUILD_DIR) && $(QT_ANDROID_ROOT)/bin/qmake \
@@ -299,13 +299,13 @@ test: tests-build $(ARTIFACT)
 style: style-source style-docs
 
 style-source:
-	python3 tools/style_gate.py check
+	python3 tool/style_gate.py check
 
 # project.md is authoritative, so it is held to the tree: a heading that
 # appears twice means whichever one you find, the other is the one with
 # the answer.
 style-docs:
-	python3 tools/style_gate.py docs
+	python3 tool/style_gate.py docs
 
 # What must pass before committing. GNU's meaning of `check`, and what the
 # sibling projects already do.
@@ -320,8 +320,8 @@ check: style test
 # on a fresh clone.
 hooks:
 	@test -d .git || { echo "hooks: not a git repository" >&2; exit 1; }
-	@install -m 0755 tools/hooks/commit-msg .git/hooks/commit-msg
-	@echo "hooks: commit-msg installed from tools/hooks/"
+	@install -m 0755 tool/hooks/commit-msg .git/hooks/commit-msg
+	@echo "hooks: commit-msg installed from tool/hooks/"
 
 # The binary alone is not an installation: without a .desktop entry the
 # app is invisible to every launcher, which for a tray applet people

@@ -90,14 +90,14 @@ android {
 	# provider this program reads is HTTPS -- so its absence is not a
 	# degraded build, it is a build that can fetch nothing.
 	#
-	# Built by tools/build-openssl-android.sh from the distribution's own
+	# Built by tool/build-openssl-android.sh from the distribution's own
 	# source. Conditional, because a tree that has not run that script
 	# should still produce an installable package rather than refusing to
 	# configure -- it simply cannot fetch, and says so on screen.
 	BBQ_SSL_LIB = $$PWD/deps/android/$$ANDROID_TARGET_ARCH/lib
 	# The _3 suffix is not decoration: Qt's OpenSSL backend dlopens
 	# "libssl_3.so" by name on Android, and an unsuffixed library is not
-	# the file it asks for. See tools/build-openssl-android.sh.
+	# the file it asks for. See tool/build-openssl-android.sh.
 	BBQ_SSL_CRYPTO = $$BBQ_SSL_LIB/libcrypto_3.so
 	BBQ_SSL_SSL = $$BBQ_SSL_LIB/libssl_3.so
 
@@ -107,7 +107,7 @@ android {
 		message("openssl: bundling $$BBQ_SSL_LIB")
 	} else {
 		warning("openssl: $$BBQ_SSL_SSL is missing -- the package will " \
-		        "have no TLS. Run tools/build-openssl-android.sh.")
+		        "have no TLS. Run tool/build-openssl-android.sh.")
 	}
 }
 
