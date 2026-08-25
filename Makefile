@@ -243,12 +243,12 @@ android-aab: $(ANDROID_BUILD_DIR)/Makefile
 	$(MAKE) -C $(ANDROID_BUILD_DIR) aab
 
 # --- the suite ---------------------------------------------------------
-TEST_BUILD_DIR ?= build-tests
-TEST_SOURCES = $(wildcard tests/*.cpp tests/*.pro tests/*.pri)
+TEST_BUILD_DIR ?= build-test
+TEST_SOURCES = $(wildcard test/*.cpp test/*.pro test/*.pri)
 
-$(TEST_BUILD_DIR)/Makefile: tests/tests.pro $(TEST_SOURCES)
+$(TEST_BUILD_DIR)/Makefile: test/tests.pro $(TEST_SOURCES)
 	mkdir -p $(TEST_BUILD_DIR)
-	cd $(TEST_BUILD_DIR) && $(QMAKE) $(CURDIR)/tests/tests.pro $(QMAKE_CONFIG) \
+	cd $(TEST_BUILD_DIR) && $(QMAKE) $(CURDIR)/test/tests.pro $(QMAKE_CONFIG) \
 	        QMAKE_CXX=$(CXX)
 
 tests-build: $(TEST_BUILD_DIR)/Makefile
@@ -290,7 +290,7 @@ test: tests-build $(ARTIFACT)
 		echo "test: no test binaries were found in $(TEST_BUILD_DIR)." >&2; \
 		echo "test:   That is a collapsed suite, not a clean one -- a run" >&2; \
 		echo "test:   over zero binaries exits 0 and reads exactly like a" >&2; \
-		echo "test:   pass. Check that tests/tests.pro still lists them." >&2; \
+		echo "test:   pass. Check that test/tests.pro still lists them." >&2; \
 		exit 1; \
 	fi; \
 	echo "test: $$ran binary(ies), $$failed failed"; \
@@ -310,7 +310,7 @@ style-docs:
 # What must pass before committing. GNU's meaning of `check`, and what the
 # sibling projects already do.
 #
-# `test` joined this the moment tests/ became real, which was the whole
+# `test` joined this the moment test/ became real, which was the whole
 # point of the target that failed until then.
 check: style test
 

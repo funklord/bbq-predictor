@@ -135,7 +135,7 @@ the stale connection reachable. **It worked because the failure case
 had not happened yet**, which is exactly the kind of correctness this
 project does not want to rely on.
 
-**How the fix is known to work.** `tests/test_client.cpp` drives the key
+**How the fix is known to work.** `test/test_client.cpp` drives the key
 source's outcomes by hand -- queue two requests, report a failure,
 then report an acquisition -- and asserts the queue stays empty. The
 old mechanism was reinstated deliberately and the test fails against
@@ -510,7 +510,7 @@ from a station, including the config cache that was derived from one
 earlier, is not, and goes when the station goes.
 
 `has_geocode()` is public so the distinction is assertable from a test
-rather than only reasonable in the source, and `tests/test_feed.cpp`
+rather than only reasonable in the source, and `test/test_feed.cpp`
 asserts all three cases: derived does not survive, pinned does, and
 re-setting the same id changes nothing. That last one matters because
 the field writes on `editingFinished`, which fires when the box merely
@@ -2398,7 +2398,7 @@ has been seen to fail:
   table can.
 
 The suite also refuses to run over zero binaries, and that guard fired
-for real on its first run: the binaries built into `build-tests/`
+for real on its first run: the binaries built into `build-test/`
 rather than the per-test subdirectories the glob expected, so a
 correctly-built suite matched nothing. Without the check it would have
 reported success over an empty list.
@@ -3991,7 +3991,7 @@ that the arithmetic behind the gesture is right**, because a graph
 zoomed about its centre and a graph zoomed about the cursor produce
 pictures that both look entirely reasonable.
 
-So `tests/test_view.cpp` asserts the two invariants that make the
+So `test/test_view.cpp` asserts the two invariants that make the
 gestures feel like anything:
 
 - **Zooming holds the moment under the cursor.** Four steps in and four

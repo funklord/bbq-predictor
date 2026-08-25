@@ -2,7 +2,7 @@
 # conventional variants rather than every path somebody might pass.
 /build/
 /build-*/
-/build-tests/
+/build-test/
 /bbq-predictor
 /bbq-predictor.new
 

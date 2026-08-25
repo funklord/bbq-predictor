@@ -342,7 +342,7 @@ Nothing is vendored here, and everything exempt is generated: three
 build trees, named in `.style-gate.toml`.
 
 - `build/` -- qmake's generated Makefile and the desktop objects.
-- `build-tests/` -- the same for the suite.
+- `build-test/` -- the same for the suite.
 - `build-android/` -- the Qt Android build tree and everything
   `androiddeployqt` puts under it.
 
