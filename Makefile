@@ -110,7 +110,7 @@ endif
 # can use ANDROID_ABI and friends without redefining any of them.
 include tool/android.mk
 
-ANDROID_BUILD_DIR ?= build-android
+ANDROID_BUILD_DIR ?= build-android-$(ANDROID_ABI)
 ANDROID_ARTIFACT = $(ANDROID_BUILD_DIR)/$(TARGET)-$(VERSION)-$(ANDROID_ABI).apk
 
 # Where a build lands, and why a custom BUILD_DIR must not land here.

@@ -49,9 +49,14 @@ indent_names = []
 # plain walk would not, which is precisely the disagreement between the
 # two paths that the tool's own comment warns about. A CI checkout
 # without `.git` that had been built would have gated moc output.
+#
+# The Android tree is build-android-$(ANDROID_ABI) now, per the settled
+# canon, and the exclude is an exact component match with no globbing --
+# so the default ABI's spelling is listed, and the old name stays for
+# trees built before the rename.
 exclude = ["attic", "third_party", "vendor", "build", "target",
            "dist", ".pytest_cache", ".claude",
-           "build-android", "build-tests"]
+           "build-android", "build-android-arm64-v8a", "build-tests"]
 
 # ASCII outside string literals, which is the rule in code-style.md and is
 # free here: the gate reads C and C++ with a scanner rather than checking
