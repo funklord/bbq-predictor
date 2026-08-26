@@ -100,6 +100,17 @@ ANDROID_TARGET_API ?= 36
 # fails at packaging with "Directory /opt/android/sdk/platforms does not
 # exist": a path nobody configured, named by nothing the project can see.
 export ANDROID_SDK_ROOT
+
+# The NDK is found, not asked for, matching what the help in every adopter
+# already promises. sdkmanager installs NDKs under $(ANDROID_SDK_ROOT)/ndk/
+# one directory per version, so the newest by version sort is the default
+# and an explicit ANDROID_NDK_ROOT still wins. Before this, the variable
+# was exported and never defaulted: android-check failed on a machine with
+# the NDK in the standard place, in all four adopters at once, and only a
+# session that happened to carry the variable in its environment could
+# build -- which reads as "works for whoever set it up" and is exactly the
+# per-machine friction the fragment exists to remove.
+ANDROID_NDK_ROOT ?= $(lastword $(sort $(wildcard $(ANDROID_SDK_ROOT)/ndk/*)))
 export ANDROID_NDK_ROOT
 
 # Which platform Gradle compiles against, named rather than guessed.
