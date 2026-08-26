@@ -70,7 +70,7 @@ TARGET = bbq-predictor
 
 # Every packaging file is named after this, and a mismatch shows up as an
 # app that installs, runs, and cannot be found by a launcher.
-APP_ID = se.vibes.bbq-predictor
+APP_ID = se.vibes.bbq_predictor
 
 # The one place the version is stated (project.md sec 0). Passed into the
 # build rather than repeated in a source file, because a second copy is a
