@@ -185,7 +185,7 @@ endif
 
 export JAVA_HOME
 
-ANDROID_ADB       = $(ANDROID_SDK_ROOT)/platform-tool/adb
+ANDROID_ADB       = $(ANDROID_SDK_ROOT)/platform-tools/adb
 
 # The ABI is the Qt KIT's, read from it rather than chosen a second time.
 #
@@ -377,7 +377,7 @@ android-check:
 # otherwise. Signed with the debug key is the one packaging mistake that
 # cannot be caught by looking at the file.
 define android_verify_signature
-	@signer=$$(ls $(ANDROID_SDK_ROOT)/build-tool/*/apksigner 2>/dev/null | tail -1); \
+	@signer=$$(ls $(ANDROID_SDK_ROOT)/build-tools/*/apksigner 2>/dev/null | tail -1); \
 	if [ -z "$$signer" ]; then \
 		echo "android: NO apksigner in the SDK -- who signed this is unchecked" >&2; \
 		exit 0; \
