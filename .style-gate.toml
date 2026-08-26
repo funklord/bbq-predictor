@@ -56,7 +56,7 @@ indent_names = []
 # trees built before the rename.
 exclude = ["attic", "third_party", "vendor", "build", "target",
            "dist", ".pytest_cache", ".claude",
-           "build-android", "build-android-arm64-v8a", "build-tests"]
+           "build-android", "build-android-*", "build-tests"]
 
 # ASCII outside string literals, which is the rule in code-style.md and is
 # free here: the gate reads C and C++ with a scanner rather than checking
