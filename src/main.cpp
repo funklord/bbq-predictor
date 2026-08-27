@@ -3,6 +3,7 @@
 #include <QPixmap>
 #include <QTimer>
 #include <QStringList>
+#include <QFileInfo>
 #include <QTextStream>
 
 #include "ui/accessibility.h"
@@ -747,9 +748,34 @@ int main(int argc, char *argv[]) {
 			}
 
 			if (!tray_shot.isEmpty()) {
-				const QPixmap glyph = tray.icon().pixmap(44, 44);
-				glyph.save(tray_shot);
-				QTextStream(stdout) << "shot: wrote " << tray_shot << "\n";
+				/*
+				 * BOTH sizes, because the icon carries both and the
+				 * small one is what most panels actually draw.
+				 *
+				 * This saved 44 alone, so the size that ships to a
+				 * 22-pixel panel had never been looked at -- and a
+				 * halo that reads well at 44 can close up the counters
+				 * of a digit at 22. A diagnostic that shows half of
+				 * what the program produces invites a conclusion about
+				 * the other half (sec 4.4).
+				 */
+				const QFileInfo where(tray_shot);
+				QTextStream report(stdout);
+
+				for (int size : {44, 22}) {
+					QString path = tray_shot;
+					if (size != 44) {
+						path = where.path() + QStringLiteral("/") +
+						       where.completeBaseName() +
+						       QStringLiteral("-") + QString::number(size) +
+						       QStringLiteral(".") + where.suffix();
+					}
+
+					const QPixmap glyph = tray.icon().pixmap(size, size);
+					if (glyph.save(path)) {
+						report << "shot: wrote " << path << "\n";
+					}
+				}
 			}
 
 			if (!shot.isEmpty()) {

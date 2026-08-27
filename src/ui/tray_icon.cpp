@@ -9,6 +9,7 @@
 #include <QFont>
 #include <QFontMetrics>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QPixmap>
 
@@ -73,6 +74,12 @@ const qint64 stale_after_s = 2 * 60 * 60;
 
 const QColor ink_fresh(0x1e, 0x1e, 0x1e);
 const QColor ink_stale(0xd5, 0x20, 0x2a);
+
+/*
+ * The halo behind both inks. Near-white rather than pure, so it reads
+ * as an outline rather than as a second glyph on a light panel.
+ */
+const QColor halo(0xf2, 0xf2, 0xf2);
 
 } // namespace
 
@@ -174,20 +181,69 @@ QIcon bbq_tray_icon::reading_icon(const QString &text, const QColor &ink) {
 		QFont font = painter.font();
 		font.setBold(true);
 
+		/*
+		 * The halo is part of the glyph's footprint, so the fit has to
+		 * allow for it or the outline is what gets clipped at the
+		 * edges -- which would leave the number looking bitten rather
+		 * than outlined.
+		 */
+		const qreal halo_width = qMax(1.0, size / 12.0);
+
 		int points = size;
 		while (points > 6) {
 			font.setPixelSize(points);
 			const QFontMetrics metrics(font);
 			const QRect bounds = metrics.tightBoundingRect(text);
-			if (bounds.width() <= size && bounds.height() <= size) {
+			if (bounds.width() + halo_width / 2.0 <= size &&
+			    bounds.height() + halo_width / 2.0 <= size) {
 				break;
 			}
 			--points;
 		}
 
-		painter.setFont(font);
-		painter.setPen(ink);
-		painter.drawText(pixmap.rect(), Qt::AlignCenter, text);
+		/*
+		 * OUTLINED, because the panel's colour is not ours to know
+		 * (sec 4.4).
+		 *
+		 * The ink is near-black, which is right on the light panels
+		 * this was written against and all but invisible on a dark one
+		 * -- measured by compositing the icon onto #1c1c1c, where the
+		 * digits disappear entirely. Qt offers no reliable way to ask
+		 * what is behind a tray icon, and the answer changes when
+		 * somebody switches theme without the icon being redrawn, so
+		 * choosing an ink to suit the background is guessing twice.
+		 *
+		 * A light halo under a dark fill needs no such guess: the halo
+		 * carries the contrast on a dark panel and the fill carries it
+		 * on a light one. It is what map labels do, for the same
+		 * reason -- they are drawn over terrain nobody controls.
+		 *
+		 * Centred on the INK box rather than the em box. drawText's
+		 * AlignCenter centres the line box, which includes ascent and
+		 * descent the digits do not use, so a path placed the same way
+		 * would sit visibly high.
+		 */
+		const QFontMetrics metrics(font);
+		const QRect tight = metrics.tightBoundingRect(text);
+
+		const qreal left = (size - tight.width()) / 2.0 - tight.left();
+		const qreal baseline = (size - tight.height()) / 2.0 - tight.top();
+
+		QPainterPath glyphs;
+		glyphs.addText(QPointF(left, baseline), font, text);
+
+		/*
+		 * Stroked first and filled over the top. A stroke is centred on
+		 * the outline, so half of it falls inside the glyph -- filling
+		 * afterwards puts the weight back and keeps the digits the
+		 * shape the font drew them.
+		 */
+		painter.setPen(QPen(halo, halo_width, Qt::SolidLine, Qt::RoundCap,
+		                    Qt::RoundJoin));
+		painter.setBrush(Qt::NoBrush);
+		painter.drawPath(glyphs);
+
+		painter.fillPath(glyphs, ink);
 		painter.end();
 
 		icon.addPixmap(pixmap);

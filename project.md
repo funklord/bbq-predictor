@@ -4615,3 +4615,38 @@ had not. The seed scales the bias BY bucket -- so the four-day bucket is
 is the rain sample. Both numbers were right and the reading was wrong.
 Checking the table settled it in one query, where the alarm would have
 sent somebody looking for a data-corruption bug that does not exist.
+
+### 4.4 The tray number is outlined, because the panel is not ours
+
+The reading was drawn in near-black, which is right on the light panels
+it was written against and all but invisible on a dark one. Measured by
+compositing the icon onto the colours a panel actually is: on `#1c1c1c`
+the digits disappear completely, and on `#2b2b2b` they are a smudge.
+
+Qt offers no reliable way to ask what is behind a tray icon, and the
+answer changes when somebody switches theme without the icon being
+redrawn -- so choosing an ink to suit the background is guessing, twice.
+A light halo under a dark fill needs no guess: the halo carries the
+contrast on a dark panel and the fill carries it on a light one. It is
+what map labels do, and for the same reason, since they are drawn over
+terrain nobody controls.
+
+Stroked first and filled over the top, so the digits keep the weight the
+font gave them -- a stroke is centred on the outline, and filling
+afterwards puts back the half that falls inside. Centred on the INK box
+rather than the em box, because `drawText`'s AlignCenter centres the
+line box, ascent and descent included, and a path placed the same way
+sits visibly high.
+
+**The allowance for the halo is half its width, not all of it, and that
+was decided by looking.** The first version reserved the full width,
+which shrank the font a size at 22 pixels and left the digits thin and
+muddy -- worse than the problem in the case that matters most, since 22
+is what most panels draw. Reserving the outward half keeps the glyph the
+size it was and clips nothing visible.
+
+**`--tray-icon` saved the 44-pixel pixmap alone**, so the size that
+ships to a small panel had never been looked at, and a halo that reads
+well at 44 can close up a digit's counters at 22. It writes both now.
+A diagnostic that shows half of what the program produces invites a
+conclusion about the other half.
