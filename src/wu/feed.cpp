@@ -547,6 +547,39 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 	 * old one was reporting rubbish.
 	 */
 	m_backfill_attempted = 0;
+
+	/*
+	 * AND ITS MEASUREMENTS GO WITH IT (sec 14.8).
+	 *
+	 * The argument above is about a coordinate and applies unchanged to
+	 * data: observations belonging to the old station do not describe
+	 * this one. Nothing dropped them, so the observed band sat in the
+	 * composite until a fetch for the new station happened to replace
+	 * it -- and where that fetch fails, which is the ordinary case on a
+	 * train, the window never closes. The graph then draws the previous
+	 * station's thermometer under the new station's name.
+	 *
+	 * Worse than stale, for the same reason as the geocode: the band
+	 * still carries the OLD fetch time, so sec 2.4's staleness check
+	 * reports it healthy. A wrong number that looks fresh outranks
+	 * every honest one on the same axis.
+	 *
+	 * Replaced with an empty series rather than left out, because
+	 * present-but-empty is what sec 2.6.6 counts as missing -- so the
+	 * display says the observed band is absent, which is true, instead
+	 * of saying nothing.
+	 *
+	 * Only where one is actually held. Setting an empty band on a feed
+	 * that never had one would invent an absence to report, and the
+	 * first station set at startup is exactly that case.
+	 */
+	if (m_composite.has_band(bbq_band::observed)) {
+		m_composite.set_series(bbq_series(bbq_band::observed, QString()));
+	}
+
+	m_observed_fetched_utc = 0;
+	m_loaded_from = 0;
+	m_loaded_to = 0;
 }
 
 void bbq_wu_feed::forget_location_freshness() {

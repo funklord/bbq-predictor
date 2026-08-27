@@ -1,6 +1,8 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <algorithm>
+
 #include "store/history.h"
 #include "wu/feed.h"
 
@@ -22,6 +24,7 @@ private slots:
 	void resetting_the_same_station_changes_nothing();
 	void the_observed_band_is_served_from_the_store();
 	void every_station_with_a_queue_is_scored_not_just_the_watched_one();
+	void one_station_s_measurements_do_not_outlive_the_station();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -235,6 +238,59 @@ void test_feed::every_station_with_a_queue_is_scored_not_just_the_watched_one() 
 		         qPrintable(QStringLiteral("%1 was never scored").arg(one)));
 		QCOMPARE(scored.bias, -2.0);
 	}
+}
+
+void test_feed::one_station_s_measurements_do_not_outlive_the_station() {
+	/*
+	 * TWO PLACES ON ONE AXIS, arriving through the store instead of
+	 * through the coordinate (sec 2.6.7, sec 14.8).
+	 *
+	 * set_station already drops the derived geocode, and says why: a
+	 * coordinate belonging to the old station does not describe this
+	 * one. Its MEASUREMENTS do not either, and nothing dropped them.
+	 * The observed band sat in the composite until a fetch for the new
+	 * station happened to replace it -- so a station changed while the
+	 * network was down went on drawing the previous station's
+	 * thermometer, under the new station's name, with the old
+	 * station's fetch time making it look fresh.
+	 */
+	QTemporaryDir directory;
+
+	bbq_wu_feed feed;
+	QVERIFY2(feed.open_history(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(feed.history_error()));
+	feed.set_station(QStringLiteral("ITEST1"));
+
+	const qint64 long_ago = 1600000000;
+	feed.history().record_observations(QStringLiteral("ITEST1"),
+	                                   observed_of(long_ago, 24, 15.0));
+
+	feed.set_view_range(long_ago, long_ago + 24 * 3600);
+
+	const bbq_series *first = feed.composite().band(bbq_band::observed);
+	QVERIFY2(first != nullptr && !first->is_empty(),
+	         "the first station's observations never reached the composite");
+
+	/*
+	 * No fetch, which is the whole point: the question is what the
+	 * composite holds in the window before one arrives, and on a
+	 * machine with no network that window never closes.
+	 */
+	feed.set_station(QStringLiteral("ITEST2"));
+
+	const bbq_series *after = feed.composite().band(bbq_band::observed);
+	QVERIFY2(after == nullptr || after->is_empty(),
+	         "the old station's measurements survived the station changing");
+
+	/*
+	 * And it must read as MISSING rather than as merely empty, because
+	 * that is the difference between a graph that is thin and one that
+	 * is quietly wrong (sec 2.6.6).
+	 */
+	const std::vector<bbq_band> missing = feed.composite().missing_bands();
+	QVERIFY2(std::find(missing.begin(), missing.end(), bbq_band::observed) !=
+	                 missing.end(),
+	         "the observed band was not reported missing after the change");
 }
 
 QTEST_GUILESS_MAIN(test_feed)

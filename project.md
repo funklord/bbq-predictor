@@ -4316,3 +4316,42 @@ named all six. With the real budget the same command answers in about
 30 s was never tight and has been left alone. The original hang was
 transient, and no timeout would have been a better answer than a correct
 report of one.
+
+### 14.8 The old station's measurements went with its coordinate
+
+`set_station` already drops the derived geocode, and sec 2.6.7.4 gives
+the reason: a coordinate belonging to the previous station does not
+describe this one, and keeping it aims the forecast bands at the old
+station's garden while the observed band reads the new one. Two places
+on one axis.
+
+Its measurements do not describe this one either, and nothing dropped
+them. The observed band stayed in the composite until a fetch for the
+new station happened to replace it -- so in the window before that
+lands, and permanently where it fails, the graph draws the previous
+station's thermometer under the new station's name.
+
+**It is worse than stale for exactly the reason the geocode was.** The
+band still carries the old station's fetch time, so sec 2.4's staleness
+check reports it healthy, and the one instrument that exists to catch a
+band that has stopped being true says nothing. A wrong number that looks
+fresh outranks every honest one on the same axis.
+
+Dropped now, alongside the coordinate, and with it the loaded window and
+the fetch stamp. Replaced by an empty series rather than removed,
+because present-but-empty is what sec 2.6.6 counts as missing: the
+display says the observed band is absent, which is true, rather than
+saying nothing at all.
+
+**The first version of the fix set that empty band unconditionally and
+broke a test that was right.** A feed whose station is set at startup
+has never held an observed band, and inventing one to report as missing
+is an absence that was not there. The existing assertion -- nothing
+asked for a range, so nothing is loaded -- caught it immediately, which
+is the case for keeping assertions that look like they state the
+obvious.
+
+Found by asking what else is scoped to the watched station while
+something else assumes otherwise, which is the same question sec 14.5
+answered for scoring. That lens has now produced three defects: the
+scoring sweep, the unheard signal, and this.
