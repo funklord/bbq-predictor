@@ -312,13 +312,25 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	feed.refresh();
 	loop.exec();
 
-	if (timed_out) {
-		error << QStringLiteral("fetch-once: timed out after %1s\n").arg(timeout_s);
-		++failures;
-	}
-
 	const bbq_composite &composite = feed.composite();
 
+	/*
+	 * A TIMEOUT IS NOT A FAILURE, and saying so cost a real
+	 * investigation (sec 14.7).
+	 *
+	 * This counted the timeout as one failed band, so a run where the
+	 * key scrape was merely slow and FOUR bands were still in flight
+	 * reported "1 band(s) failed" -- a count that is wrong and a word
+	 * that is wrong, since none of them had failed and nothing had
+	 * said they did. Read as a real failure it points at the scraper,
+	 * which is the component this project already documents as fragile,
+	 * so the wrong cause is also the believable one. The same command
+	 * succeeded on the next run.
+	 *
+	 * Named rather than counted, because which bands did not arrive is
+	 * the whole of what the reader needs and a number tells them none
+	 * of it.
+	 */
 	/*
 	 * Reported from the composite rather than as each band lands, so
 	 * every provider is described the same way whoever supplied it.
@@ -327,6 +339,30 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 		bbq_band::observed,  bbq_band::current, bbq_band::nowcast_fine,
 		bbq_band::nowcast,   bbq_band::extended, bbq_band::hourly,
 	};
+
+	if (timed_out) {
+		error << QStringLiteral("fetch-once: no answer within %1s from: ")
+		                 .arg(timeout_s);
+
+		/*
+		 * NOT missing_bands(), which is the display's question and a
+		 * narrower one: it leaves radar and extended out deliberately,
+		 * because they enhance rather than supply and a complaint about
+		 * them would mean nothing to a reader. A diagnostic asking what
+		 * did not answer must not inherit that judgement -- a run where
+		 * only the enhancements hung would have printed an empty list
+		 * and read as though nothing were outstanding.
+		 */
+		for (bbq_band band : order) {
+			if (composite.band(band) == nullptr) {
+				error << QString::fromLatin1(bbq_band_name(band)) << " ";
+			}
+		}
+
+		error << "\n";
+		error << "fetch-once: they had not failed -- they had not "
+		         "answered yet\n";
+	}
 
 	for (bbq_band band : order) {
 		const bbq_series *series = composite.band(band);
@@ -376,6 +412,9 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 
 	if (failures > 0) {
 		error << QStringLiteral("fetch-once: %1 band(s) failed\n").arg(failures);
+	}
+
+	if (failures > 0 || timed_out) {
 		return 1;
 	}
 

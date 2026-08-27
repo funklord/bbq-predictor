@@ -4270,3 +4270,49 @@ inside it.
 Two of this project's last three defects were work that never ran rather
 than work that ran wrongly -- the scoring sweep of sec 14.5, and this.
 Neither was visible in output, both were visible in structure.
+
+### 14.7 A timeout is not a failure, and the wrong word cost an hour
+
+`--fetch-once` reported
+
+    fetch-once: timed out after 30s
+    fetch-once: 1 band(s) failed
+
+on a run where FOUR bands were outstanding and none of them had failed.
+The count came from the timeout incrementing the same `failures` the
+band handlers use, so a single timeout was reported as one failed band,
+and the four that were merely still in flight were described by nothing
+at all.
+
+Read as written it points at the key scraper -- the component sec 2.2
+already documents as fragile and expected to break -- so the wrong cause
+was also the believable one. The investigation it started went looking
+for a broken extraction pattern. The same command succeeded on the next
+run in under a second, which is what a transient hang looks like from
+outside.
+
+Now the timeout says what it is, and names every band that had not
+answered:
+
+    fetch-once: no answer within 0s from: observed current radar
+                nowcast extended hourly
+    fetch-once: they had not failed -- they had not answered yet
+
+**The list is deliberately NOT `missing_bands()`**, and getting that
+wrong once inside this fix is the part worth recording. That function is
+the display's question and a narrower one: it leaves out radar and
+extended on purpose, because they enhance bands that already have a
+source rather than supplying one, and a complaint about them would mean
+nothing to a reader (sec 2.6.6). A diagnostic asking what did not answer
+must not inherit that judgement -- the first draft did, and a run where
+only the enhancements hung would have printed an empty list and read as
+though nothing were outstanding. The fault being fixed, reappearing
+inside the fix.
+
+Proved by forcing the path rather than by reading it: a zero-second
+budget fires the timer before any reply can arrive, and the message
+named all six. With the real budget the same command answers in about
+0.33 s -- the key page is 1.6 MB and fetches in 60 ms on this link, so
+30 s was never tight and has been left alone. The original hang was
+transient, and no timeout would have been a better answer than a correct
+report of one.
