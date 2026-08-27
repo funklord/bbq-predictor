@@ -572,9 +572,34 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 	 * Only where one is actually held. Setting an empty band on a feed
 	 * that never had one would invent an absence to report, and the
 	 * first station set at startup is exactly that case.
+	 *
+	 * EVERY band, not just the observed one (sec 14.8.1). The first
+	 * version of this dropped observations alone and left the identical
+	 * fault in five others -- including the worst of them, since
+	 * `current` is fetched by station id and outranks everything at the
+	 * present instant, so a stale one answers "what is it doing now"
+	 * with another station's thermometer.
+	 *
+	 * The forecast bands are fetched by COORDINATE rather than by
+	 * station, and they go for a consequential reason rather than the
+	 * same one: this function has just dropped the geocode they were
+	 * fetched for, so they describe a place the feed no longer claims.
+	 * Where the geocode was PINNED it is not dropped, it was never the
+	 * station's, and neither are they.
 	 */
-	if (m_composite.has_band(bbq_band::observed)) {
-		m_composite.set_series(bbq_series(bbq_band::observed, QString()));
+	std::vector<bbq_band> stale = {bbq_band::observed, bbq_band::current};
+
+	if (!m_geocode_pinned) {
+		stale.push_back(bbq_band::nowcast_fine);
+		stale.push_back(bbq_band::nowcast);
+		stale.push_back(bbq_band::extended);
+		stale.push_back(bbq_band::hourly);
+	}
+
+	for (bbq_band band : stale) {
+		if (m_composite.has_band(band)) {
+			m_composite.set_series(bbq_series(band, QString()));
+		}
 	}
 
 	m_observed_fetched_utc = 0;

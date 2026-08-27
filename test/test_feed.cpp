@@ -26,6 +26,7 @@ private slots:
 	void every_station_with_a_queue_is_scored_not_just_the_watched_one();
 	void one_station_s_measurements_do_not_outlive_the_station();
 	void a_new_station_has_never_been_asked();
+	void no_band_describing_the_old_place_survives_the_change();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -332,6 +333,86 @@ void test_feed::a_new_station_has_never_been_asked() {
 	         "the new station inherited the old one's freshness");
 	QVERIFY2(feed.due(bbq_wu_product::current_station, now + 60),
 	         "the new station inherited the old one's freshness");
+}
+
+void test_feed::no_band_describing_the_old_place_survives_the_change() {
+	/*
+	 * The whole composite, not just the observed band (sec 14.8.1).
+	 *
+	 * Fixing the observed band alone left the same fault in five
+	 * others, and in the worst one: `current` is fetched by STATION id
+	 * and outranks everything at the present instant, so a stale one
+	 * answers "what is it doing now" with another station's
+	 * thermometer. The forecast bands are fetched by COORDINATE, and
+	 * the coordinate is dropped by this same function -- so they
+	 * describe a place the feed has stopped claiming.
+	 */
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("ITEST1"));
+	feed.set_geocode(59.33, 18.07, false);
+
+	const bbq_band every[] = {
+		bbq_band::observed, bbq_band::current, bbq_band::nowcast_fine,
+		bbq_band::nowcast,  bbq_band::extended, bbq_band::hourly,
+	};
+
+	for (bbq_band band : every) {
+		bbq_series series(band, QStringLiteral("test"));
+		series.set_samples(observed_of(1600000000, 4, 15.0).samples());
+		feed.m_composite.set_series(std::move(series));
+	}
+
+	for (bbq_band band : every) {
+		const bbq_series *held = feed.composite().band(band);
+		QVERIFY2(held != nullptr && !held->is_empty(), "setup failed");
+	}
+
+	feed.set_station(QStringLiteral("ITEST2"));
+
+	for (bbq_band band : every) {
+		const bbq_series *held = feed.composite().band(band);
+		const QString name = QString::fromLatin1(bbq_band_name(band));
+		QVERIFY2(held == nullptr || held->is_empty(),
+		         qPrintable(QStringLiteral("the %1 band survived the station "
+		                                   "changing").arg(name)));
+	}
+
+	/*
+	 * AND THE OTHER WAY, because a fix that simply emptied the whole
+	 * composite would pass everything above and be wrong.
+	 *
+	 * A PINNED coordinate is not the station's and is not dropped, so
+	 * the bands fetched for it still describe the place they were asked
+	 * about. Only the two that are asked for by station id may go.
+	 */
+	bbq_wu_feed pinned;
+	pinned.set_geocode(59.33, 18.07, true);
+	pinned.set_station(QStringLiteral("ITEST1"));
+
+	for (bbq_band band : every) {
+		bbq_series series(band, QStringLiteral("test"));
+		series.set_samples(observed_of(1600000000, 4, 15.0).samples());
+		pinned.m_composite.set_series(std::move(series));
+	}
+
+	pinned.set_station(QStringLiteral("ITEST2"));
+
+	const bbq_band by_coordinate[] = {
+		bbq_band::nowcast_fine, bbq_band::nowcast,
+		bbq_band::extended,     bbq_band::hourly,
+	};
+
+	for (bbq_band band : by_coordinate) {
+		const bbq_series *held = pinned.composite().band(band);
+		const QString name = QString::fromLatin1(bbq_band_name(band));
+		QVERIFY2(held != nullptr && !held->is_empty(),
+		         qPrintable(QStringLiteral("the %1 band was dropped though its "
+		                                   "coordinate was pinned").arg(name)));
+	}
+
+	QVERIFY2(pinned.composite().band(bbq_band::current) == nullptr ||
+	                 pinned.composite().band(bbq_band::current)->is_empty(),
+	         "the station's own current band survived a station change");
 }
 
 QTEST_GUILESS_MAIN(test_feed)

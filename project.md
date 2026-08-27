@@ -4391,3 +4391,34 @@ what is under test is the bookkeeping either side of one. Same device as
 `bbq_wu_key_source`'s, which this tree already uses for the same reason.
 Making `due()` public was tried first and withdrawn: it is genuinely
 internal, and the seam wanted here is a test's, not an API's.
+
+#### 14.8.1 Fixing one band left the fault in five
+
+Dropping the old station's observations was right and was a third of the
+job. The same argument applies to every band the composite holds, and
+the version that fixed only `observed` left the identical fault in the
+worst place available: `current` is fetched by station id and outranks
+everything at the present instant (sec 3.3), so a stale one answers
+"what is it doing now" with another station's thermometer. The observed
+band at least describes the past.
+
+The forecast bands go too, for a consequential reason rather than the
+same one. They are fetched by COORDINATE, and this function has just
+dropped the coordinate they were fetched for -- so they describe a place
+the feed has stopped claiming. Where the geocode is PINNED it is not
+dropped, it was never the station's, and neither are they: those bands
+stay.
+
+**That conditional is the part a test can get wrong by agreeing with
+it.** A fix that simply emptied the whole composite passes every
+assertion about the unpinned case, so the test carries the pinned one as
+well, and it was proved by sabotage -- clearing unconditionally makes it
+report that the radar band was dropped though its coordinate was pinned.
+Without that half the test would have been evidence for a fix that
+throws away four bands nobody asked it to.
+
+The lesson is the one sec 14.5 already paid for, arriving through a
+different door: the first fix was written for the band that had been
+looked at, not for the class the defect belongs to. The question that
+finds the rest is not "is this fixed" but "what else is keyed the way
+this was".
