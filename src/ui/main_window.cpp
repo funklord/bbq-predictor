@@ -260,19 +260,67 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * yes or no: a wide graph wants a firm scale to read a trend
 	 * against, a narrow one wants the detail back, and where between
 	 * those is a matter of what somebody is looking for.
+	 *
+	 * EXCEPT ON ANDROID, where a slider crashes the program (sec 10.6).
+	 * Qt's accessibility bridge builds a RangeInfo for any widget with a
+	 * value, using a constructor that does not exist before API 33, and
+	 * does not clear the JNI exception that raises -- so the next JNI
+	 * call aborts the process. A drop-down carries no value range, so
+	 * the node is never built and the fault cannot occur. The setting is
+	 * the same number either way; only the way of choosing it differs.
 	 */
-	QSlider *steadiness = new QSlider(Qt::Horizontal, this);
-	steadiness->setRange(0, 100);
-	steadiness->setMinimumWidth(80);
-	steadiness->setMaximumWidth(160);
-	steadiness->setValue(
-	        bbq_settings::scale_steadiness(m_graph->scale_steadiness()));
-	m_graph->set_scale_steadiness(steadiness->value());
+	QWidget *steadiness = nullptr;
 
-	connect(steadiness, &QSlider::valueChanged, this, [this](int value) {
+#ifdef Q_OS_ANDROID
+	QComboBox *steadiness_box = new QComboBox(this);
+	steadiness_box->addItem(tr("Off"), 0);
+	steadiness_box->addItem(tr("Slight"), 25);
+	steadiness_box->addItem(tr("Steady"), 60);
+	steadiness_box->addItem(tr("Firm"), 100);
+
+	/*
+	 * Nearest rather than exact, because the stored value may have come
+	 * from a desktop slider that can express anything in between, and a
+	 * phone that silently reset it to Off would be worse than one that
+	 * rounds.
+	 */
+	const int stored = bbq_settings::scale_steadiness(m_graph->scale_steadiness());
+	int nearest = 0;
+	for (int i = 0; i < steadiness_box->count(); ++i) {
+		const int candidate = steadiness_box->itemData(i).toInt();
+		const int best = steadiness_box->itemData(nearest).toInt();
+		if (qAbs(candidate - stored) < qAbs(best - stored)) {
+			nearest = i;
+		}
+	}
+
+	steadiness_box->setCurrentIndex(nearest);
+	m_graph->set_scale_steadiness(steadiness_box->currentData().toInt());
+
+	connect(steadiness_box, &QComboBox::currentIndexChanged, this,
+	        [this, steadiness_box](int) {
+		const int value = steadiness_box->currentData().toInt();
 		bbq_settings::set_scale_steadiness(value);
 		m_graph->set_scale_steadiness(value);
 	});
+
+	steadiness = steadiness_box;
+#else
+	QSlider *steadiness_slider = new QSlider(Qt::Horizontal, this);
+	steadiness_slider->setRange(0, 100);
+	steadiness_slider->setMinimumWidth(80);
+	steadiness_slider->setMaximumWidth(160);
+	steadiness_slider->setValue(
+	        bbq_settings::scale_steadiness(m_graph->scale_steadiness()));
+	m_graph->set_scale_steadiness(steadiness_slider->value());
+
+	connect(steadiness_slider, &QSlider::valueChanged, this, [this](int value) {
+		bbq_settings::set_scale_steadiness(value);
+		m_graph->set_scale_steadiness(value);
+	});
+
+	steadiness = steadiness_slider;
+#endif
 
 	/*
 	 * The theme. Beside the layout box because they are the same kind of
@@ -988,7 +1036,29 @@ void bbq_main_window::toggle_visibility() {
 }
 
 void bbq_main_window::watch_station(const QString &id) {
-	const QString wanted = id.trimmed();
+	QString wanted = id.trimmed();
+
+	/*
+	 * A LABEL IS NOT AN ID (sec 13.2.1).
+	 *
+	 * The list shows "ISTOCK877  4.0 km" because the distance is what
+	 * makes one of ten choosable. That string is what the editable field
+	 * hands back when somebody clicks into it and presses enter, so
+	 * committing the field stored the label as the station -- and the
+	 * next fetch asked Weather Underground for a station called
+	 * "ISTOCK767  0.3 km". Measured on the device: the settings file
+	 * came back holding exactly that.
+	 *
+	 * Resolved against the list rather than parsed. Splitting on the
+	 * spaces would work until a station id contains one.
+	 */
+	const int listed = m_station_box->findText(wanted);
+	if (listed >= 0) {
+		const QString behind = m_station_box->itemData(listed).toString();
+		if (!behind.isEmpty()) {
+			wanted = behind;
+		}
+	}
 
 	if (wanted == bbq_settings::station()) {
 		return;

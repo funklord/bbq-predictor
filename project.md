@@ -2862,6 +2862,46 @@ next widget with a minimum in it. When a fix is "this floor was too
 high", the question to ask before closing it is which other floors
 there are.
 
+### 10.6 A slider crashes the program on Android
+
+Tapping anything in the window killed the process:
+
+    JNI DETECTED ERROR IN APPLICATION: JNI CallVoidMethodV called with
+    pending exception java.lang.NoSuchMethodError: no non-static method
+    "...AccessibilityNodeInfo$RangeInfo;.<init>(IFFF)V"
+    Fatal signal 6 (SIGABRT)
+
+**It is Qt's bug, and it needs three things at once**, which is why
+months of device checks never saw it. Qt's accessibility bridge builds
+a `RangeInfo` for any widget that exposes a value, using a constructor
+that exists only from **API 33**; the device is Android 10, **API 29**.
+Qt guards the result with `if (rangeInfo.isValid())` but never clears
+the JNI exception the failed construction leaves pending, so the next
+JNI call aborts. It happens only while an accessibility service is
+running -- here `com.jamworks.bxactions`, a Bixby-button remapper --
+and only for a widget with a value range. Ours is the "Steady scale"
+slider of sec 3.14.
+
+Qt version-gates other calls in the same function
+(`androidSdkVersion() >= 36`), just not this one.
+
+Untouched, the program runs perfectly, which is exactly why every
+earlier device check passed: nothing had ever tapped the screen.
+
+**On Android the control is a drop-down instead.** A combo box carries
+no value range, so the node is never built and the fault cannot occur.
+The setting is the same number either way -- Off, Slight, Steady, Firm
+against 0, 25, 60, 100 -- and the desktop keeps the slider, because the
+argument in sec 3.14 for a continuous control still holds where it
+does not crash. A stored value from a desktop is matched to the NEAREST
+choice rather than reset, since a phone that silently zeroed it would
+be worse than one that rounds.
+
+This is a workaround for somebody else's defect and should be removed
+when Qt carries the version guard. It is written as a platform
+conditional rather than a layout one for that reason: the fault follows
+the operating system, not the shape of the window.
+
 ## 11. Android
 
 The build is wired and harmonized. **It does not complete on this
@@ -3639,6 +3679,24 @@ Measured with `ISTOCK877` watched and `ISOLNA31` pinned, after one run:
 
 One day for the pinned station, filed under its own id, while the
 watched one kept its ordinary two.
+
+#### 13.2.1 A label is not an id
+
+The list shows `ISTOCK877  4.0 km`, because the distance is what makes
+one of ten choosable. The editable field hands that whole string back,
+so committing it stored the label as the station and the next fetch
+asked Weather Underground for a station called `ISTOCK767  0.3 km`.
+Measured on the device -- the settings file came back holding exactly
+that.
+
+Selecting from the list was always correct; it reads `itemData`. It is
+the typing path that was wrong, and typing is the path that exists so
+that somebody who already knows an id need not find it on a map.
+
+Resolved against the list rather than parsed. Splitting on the spaces
+would work until a station id contains one, and this is a project that
+has already been bitten by a format assumption holding until it did
+not (sec 11.4).
 
 ### 13.1 Two things the discovery endpoints lie about
 
