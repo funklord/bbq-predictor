@@ -4232,3 +4232,41 @@ without the network, and it survived precisely there. The test builds
 three stations with identical queues, watches one, pins another,
 abandons the third, and requires all twelve rows scored. Against the old
 rule it returns 4.
+
+### 14.6 A signal nobody connected, and the gate that finds the next one
+
+Fixing sec 14.5 left a question worth asking of the whole tree, and it
+is the one that lens suggests: what else runs for nobody? The cheapest
+form of it is to count listeners. Sixteen signals are declared here and
+fifteen had one. `verified` had none.
+
+It was emitted for a consumer that was never written, so a program whose
+entire purpose is scoring forecasts scored them and told nothing. The
+consequence was small and precisely placed: `refresh_status` recomputes
+the record note, and it runs on `updated`, which is emitted while a
+response is being handled -- whereas scoring happens when the round
+settles, after it. The note was therefore always one round behind, and
+the round it was behind by is the only one anybody would notice. The
+first time anything is ever scored, the verdict goes on reading `record:
+none yet` until the next fetch, which is exactly the moment somebody is
+watching to see whether it worked.
+
+Connected now, which is what the emit always assumed.
+
+**The instrument is worth more than the defect.** A signal with no
+listener cannot be found by testing behaviour: on the common paths a
+feature that never runs and a feature whose effect is produced some
+other way look identical, and every passing case increases confidence in
+the wrong mechanism. It also needs no sibling to compare against -- zero
+is wrong on its own terms, which makes it one of the few structural
+faults a machine can settle without judgement.
+
+So `tool/signal_listeners.py` counts them on every `make style`, and it
+was watched to fail: repointing this connection at `settled` makes it
+name `verified` and exit 1. It carries an allow list that is empty, and
+should stay empty while every signal this project declares is consumed
+inside it.
+
+Two of this project's last three defects were work that never ran rather
+than work that ran wrongly -- the scoring sweep of sec 14.5, and this.
+Neither was visible in output, both were visible in structure.

@@ -296,7 +296,7 @@ test: tests-build $(ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs
+style: style-source style-docs style-signals
 
 style-source:
 	python3 tool/style_gate.py check
@@ -306,6 +306,12 @@ style-source:
 # the answer.
 style-docs:
 	python3 tool/style_gate.py docs
+
+# A signal nobody connected is not a compile error, not a warning and not
+# a failing test -- the emit runs and nothing happens. Twice now that has
+# been how a feature was missing rather than broken.
+style-signals:
+	python3 tool/signal_listeners.py
 
 # What must pass before committing. GNU's meaning of `check`, and what the
 # sibling projects already do.

@@ -478,6 +478,26 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_feed->discover_stations();
 	});
 
+	/*
+	 * SCORING IS A REASON TO REDRAW (sec 14.6).
+	 *
+	 * The record note in the verdict is recomputed by refresh_status,
+	 * which runs on `updated` -- and `updated` is emitted while a
+	 * response is being handled, whereas scoring happens when the round
+	 * settles, after it. So the note was always one round behind, and
+	 * the round it was behind by is the one that matters: the first
+	 * time anything is ever scored, the display goes on saying "record:
+	 * none yet" until the next fetch, which is exactly when somebody is
+	 * looking to see whether it worked.
+	 *
+	 * Nothing had listened to this signal at all. It was emitted for a
+	 * consumer that was never written.
+	 */
+	connect(m_feed, &bbq_wu_feed::verified, this, [this](int count) {
+		Q_UNUSED(count);
+		refresh_status();
+	});
+
 	connect(m_feed, &bbq_wu_feed::band_failed, this,
 	        [this](const QString &band, const QString &reason) {
 		/*
