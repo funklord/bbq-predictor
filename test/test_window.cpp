@@ -57,6 +57,7 @@ private slots:
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
 	void a_warm_band_and_a_cold_one_read_differently();
+	void the_list_names_the_station_actually_being_read();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -288,6 +289,43 @@ void test_window::a_warm_band_and_a_cold_one_read_differently() {
 
 	/* And the two must not read the same, which is the point. */
 	QVERIFY2(warm != cold, "warm and cold produced the same record line");
+}
+
+void test_window::the_list_names_the_station_actually_being_read() {
+	/*
+	 * TWO PLACES ON ONE AXIS, in the control that names the place
+	 * (sec 14.12).
+	 *
+	 * --station overrides the configuration for one run and
+	 * deliberately does not write to it, so that trying a different
+	 * station leaves the configured one alone. The list did not know
+	 * that: it selected `bbq_settings::station()`, the configured one,
+	 * while the feed read the override. Found in a rendered shot --
+	 * the box said ISTOCK822 and every number beside it came from
+	 * ISTOCK877.
+	 */
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const QString configured = QStringLiteral("ITESTCONF");
+	const QString override_id = QStringLiteral("ITESTOVER");
+
+	for (const QString &id : {configured, override_id}) {
+		bbq_station one;
+		one.id = id;
+		QVERIFY(window.feed()->history().remember_station(one));
+	}
+
+	/* What begin() does with an override: the feed is moved, the
+	 * configuration is not. */
+	bbq_settings::set_station(configured);
+	window.feed()->set_station(override_id);
+
+	window.refresh_station_list();
+
+	QCOMPARE(window.m_station_box->currentData().toString(), override_id);
 }
 
 int main(int argc, char *argv[]) {

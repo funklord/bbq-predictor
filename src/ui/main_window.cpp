@@ -1092,7 +1092,14 @@ void bbq_main_window::watch_station(const QString &id) {
 		}
 	}
 
-	if (wanted == bbq_settings::station()) {
+	/*
+	 * Compared against what the FEED is reading, for the same reason.
+	 * Against the configuration, a run under --station would treat
+	 * choosing the configured station as a no-op -- the one selection
+	 * that actually needs to move the feed, since that is where the two
+	 * disagree.
+	 */
+	if (wanted == m_feed->station()) {
 		return;
 	}
 
@@ -1143,7 +1150,19 @@ void bbq_main_window::refresh_station_list() {
 		return;
 	}
 
-	const QString watched = bbq_settings::station();
+	/*
+	 * THE STATION IN USE, not the configured one (sec 14.12).
+	 *
+	 * --station overrides the configuration for a run and deliberately
+	 * does not write to it, so the two disagree exactly when somebody
+	 * is trying a station out. Selecting the configured one then names
+	 * a station the program is not reading, with every number beside it
+	 * coming from another -- the two-places-on-one-axis failure of sec
+	 * 2.6.7, in the control whose whole job is to say which place.
+	 *
+	 * They are the same string on every ordinary run.
+	 */
+	const QString watched = m_feed->station();
 
 	/*
 	 * Rebuilt wholesale rather than patched. The list is short, it

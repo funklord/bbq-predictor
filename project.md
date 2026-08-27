@@ -4575,3 +4575,43 @@ obliges**, which is the argument for `set_verification` existing at all.
 It is documented as a diagnostic that must never be aimed at the real
 archive, and this is what it is for: the first real score will land on a
 phone, days from now, with nobody able to check it against anything.
+
+### 14.12 The box named one station while the program read another
+
+`--station` overrides the configuration for a run and deliberately does
+not write to it, so that trying a station out leaves the configured one
+alone (sec 14.9's neighbour, and the right rule). The station list did
+not know that. It selected `bbq_settings::station()` -- the configured
+station -- while the feed read the override, so the control whose entire
+job is to say which place this is named a place the program was not
+reading, with every number beside it computed from another.
+
+Found by looking at a rendered shot rather than by reasoning: the box
+said `ISTOCK822` and the record line beside it said `hourly @4d bias
++14.0 C` for `ISTOCK877`. That is what `--shot` is for, and it is the
+second time in this project that a picture has answered a question no
+amount of reading the code had raised.
+
+Both the list and `watch_station`'s no-op guard key off the feed now.
+The guard mattered for the same reason in the other direction: compared
+against the configuration, a run under an override would treat choosing
+the CONFIGURED station as a no-op -- the one selection that actually
+has to move the feed, since that is precisely where the two disagree.
+On every ordinary run the two strings are identical.
+
+**The shot also drew the corrected band for the first time.** That
+overlay has never appeared on any machine, for the reason sec 14.11
+gives: it needs verification rows and there have never been any. Seeding
+2 C per lead bucket into a scratch store and rendering it shows the
+dashed curve sitting below the raw forecast and diverging with lead,
+which is what a bias that grows with distance should look like.
+
+And a correction to a first reading of that picture, kept because the
+mistake is instructive: the record line said `+14.0 C, n=220` where the
+seed had reported `bias 2.00 C per lead bucket, n=50 each`, and the
+first conclusion was that something had polluted the scratch store. It
+had not. The seed scales the bias BY bucket -- so the four-day bucket is
+2.0 x 7 -- and `n` is `qMax` of the temperature and rain counts, which
+is the rain sample. Both numbers were right and the reading was wrong.
+Checking the table settled it in one query, where the alarm would have
+sent somebody looking for a data-corruption bug that does not exist.
