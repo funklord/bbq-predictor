@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QTextStream>
 
+#include "ui/accessibility.h"
 #include "ui/main_window.h"
 #include "ui/tray_icon.h"
 #include "graph/forecast_graph.h"
@@ -79,6 +80,12 @@ QString option_value(const QStringList &arguments, const QString &name) {
 int main(int argc, char *argv[]) {
 	QApplication app(argc, argv);
 	QApplication::setApplicationName(QStringLiteral("bbq-predictor"));
+
+	/*
+	 * Before any widget exists, so no accessible interface is cached
+	 * from Qt's own factory first (sec 10.6).
+	 */
+	bbq_install_accessibility_workaround();
 
 	/*
 	 * Before anything reaches the network, including the diagnostics

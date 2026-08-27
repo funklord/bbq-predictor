@@ -8,8 +8,10 @@ QT += gui widgets
 
 SOURCES += test_view.cpp \
 	$$PWD/../src/graph/forecast_graph.cpp \
+	$$PWD/../src/ui/accessibility.cpp \
 	$$PWD/../src/ui/theme.cpp
 
 HEADERS += \
 	$$PWD/../src/graph/forecast_graph.h \
+	$$PWD/../src/ui/accessibility.h \
 	$$PWD/../src/ui/theme.h

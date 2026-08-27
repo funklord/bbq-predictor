@@ -2897,6 +2897,33 @@ does not crash. A stored value from a desktop is matched to the NEAREST
 choice rather than reset, since a phone that silently zeroed it would
 be worse than one that rounds.
 
+**A drop-down was the first answer and it was too narrow.** Removing
+the slider removed one widget with a range; the station list's popup
+has a SCROLLBAR, which has a range too, and selecting from it aborted
+the program exactly as the slider had. Qt creates scrollbars itself
+inside every scrollable view, so no arrangement of the interface
+avoids them -- which is what makes per-widget avoidance the wrong
+shape of fix.
+
+**What is narrow enough is withholding the VALUE.** Qt sets
+`info.hasValue` if and only if the accessible interface offers a value
+interface, so an accessibility factory that hands sliders, scrollbars,
+dials and progress bars a plain `QAccessibleWidget` -- which has none
+-- means the node is never built. Names, roles, focus and text still
+reach Android; only the number is withheld, and only where it cannot
+be delivered. Everything else is declined, so Qt's own factory answers
+for it and accessibility is otherwise untouched.
+
+The mechanism is tested: `a_slider_reports_no_value_to_accessibility`
+asserts that a slider and a scrollbar come back without a value
+interface and that a label is declined, and it was watched to fail.
+**The Android half is not tested**, and cannot be from here: the phone
+that reproduced the fault no longer runs an accessibility service, both
+emulator images on this machine are API 33 -- above the version where
+the bug exists -- and a test that cannot fail is not evidence. What
+would close it is any accessibility service running for two minutes
+while the station list is opened.
+
 This is a workaround for somebody else's defect and should be removed
 when Qt carries the version guard. It is written as a platform
 conditional rather than a layout one for that reason: the fault follows

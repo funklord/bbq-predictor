@@ -127,6 +127,7 @@ SOURCES += \
 	src/model/series.cpp \
 	src/model/settings.cpp \
 	src/store/history.cpp \
+	src/ui/accessibility.cpp \
 	src/ui/layout.cpp \
 	src/ui/locator.cpp \
 	src/ui/theme.cpp \
@@ -152,6 +153,7 @@ HEADERS += \
 	src/model/series.h \
 	src/model/settings.h \
 	src/store/history.h \
+	src/ui/accessibility.h \
 	src/ui/layout.h \
 	src/ui/locator.h \
 	src/ui/theme.h \

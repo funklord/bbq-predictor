@@ -6,7 +6,13 @@
 #include <QPalette>
 #include <QStyleHints>
 
+#include <QAccessible>
+#include <QLabel>
+#include <QScrollBar>
+#include <QSlider>
+
 #include "graph/forecast_graph.h"
+#include "ui/accessibility.h"
 #include "ui/theme.h"
 
 /*
@@ -50,6 +56,7 @@ private slots:
 	void the_long_night_is_twenty_five_hours();
 	void a_boundary_on_the_left_edge_is_kept();
 	void the_count_is_bounded();
+	void a_slider_reports_no_value_to_accessibility();
 
 private:
 	static void paint_once(probe &graph);
@@ -373,6 +380,49 @@ void test_view::the_count_is_bounded() {
 	                           stockholm, 400);
 
 	QCOMPARE(static_cast<int>(found.size()), 400);
+}
+
+
+void test_view::a_slider_reports_no_value_to_accessibility() {
+	/*
+	 * Sec 10.6. Qt's Android bridge builds an AccessibilityNodeInfo
+	 * RangeInfo for any widget whose accessible interface offers a
+	 * VALUE, using a constructor that does not exist before API 33, and
+	 * aborts the process when it fails. The workaround hands those
+	 * widgets an interface with no value interface at all.
+	 *
+	 * That property is what this checks. It cannot check the Android
+	 * half -- there is no Android here -- but it checks the half that
+	 * was written, and the half that would silently stop working if a
+	 * later Qt returned something else from QAccessibleWidget.
+	 */
+	QSlider slider;
+	QScrollBar bar;
+	QLabel label;
+
+	QAccessibleInterface *from_slider =
+	        bbq_accessible_without_value(QString(), &slider);
+	QVERIFY2(from_slider != nullptr, "the factory declined a slider");
+	QVERIFY2(from_slider->valueInterface() == nullptr,
+	         "a slider still offers a value, which is what crashes Android");
+
+	/*
+	 * The scrollbar matters more than the slider: Qt creates those
+	 * itself inside every scrollable view, so no application choice
+	 * avoids them.
+	 */
+	QAccessibleInterface *from_bar = bbq_accessible_without_value(QString(), &bar);
+	QVERIFY2(from_bar != nullptr, "the factory declined a scrollbar");
+	QVERIFY2(from_bar->valueInterface() == nullptr,
+	         "a scrollbar still offers a value");
+
+	/*
+	 * Everything else is left to Qt. Declining is how the workaround
+	 * stays narrow: a factory that answered for every object would
+	 * replace accessibility wholesale rather than withhold one field.
+	 */
+	QVERIFY2(bbq_accessible_without_value(QString(), &label) == nullptr,
+	         "the factory answered for a widget it has no business with");
 }
 
 /*
