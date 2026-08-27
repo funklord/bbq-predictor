@@ -16,7 +16,7 @@ namespace {
  */
 QSettings open() {
 	const QStandardPaths::StandardLocation where =
-		QStandardPaths::AppConfigLocation;
+	    QStandardPaths::AppConfigLocation;
 	const QString directory = QStandardPaths::writableLocation(where);
 	QDir().mkpath(directory);
 

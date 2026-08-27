@@ -29,8 +29,8 @@ const char *const key_page_url = "https://www.wunderground.com/forecast";
  * A provider reached with a legitimate key gets a truthful agent.
  */
 const char *const browser_agent =
-	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-	"(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 } // namespace
 

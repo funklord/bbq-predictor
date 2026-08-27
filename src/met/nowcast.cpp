@@ -30,10 +30,10 @@ const char *const provider_name = "met.no";
  * comment says the same thing from the other side.
  */
 const char *const agent =
-	"bbq-predictor/0.1 (https://vibes.se; funklord@vibes.se)";
+    "bbq-predictor/0.1 (https://vibes.se; funklord@vibes.se)";
 
 const char *const nowcast_url =
-	"https://api.met.no/weatherapi/nowcast/2.0/complete";
+    "https://api.met.no/weatherapi/nowcast/2.0/complete";
 
 double number_or(const QJsonObject &object, const char *key, bool *found) {
 	const QJsonValue value = object.value(QString::fromLatin1(key));

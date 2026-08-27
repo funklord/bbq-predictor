@@ -44,10 +44,10 @@ const char *const agent = "bbq-predictor/0.1 (funklord@vibes.se)";
  * hourly beats seven days of hourly wearing a finer spacing.
  */
 const char *const endpoint =
-	"https://api.open-meteo.com/v1/forecast"
-	"?hourly=temperature_2m,precipitation,wind_speed_10m,"
-	"precipitation_probability"
-	"&timezone=auto&forecast_days=16";
+    "https://api.open-meteo.com/v1/forecast"
+    "?hourly=temperature_2m,precipitation,wind_speed_10m,"
+    "precipitation_probability"
+    "&timezone=auto&forecast_days=16";
 
 std::optional<double> number_at(const QJsonArray &array, int index) {
 	if (index < 0 || index >= array.size()) {
