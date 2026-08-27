@@ -25,6 +25,7 @@ private slots:
 	void the_observed_band_is_served_from_the_store();
 	void every_station_with_a_queue_is_scored_not_just_the_watched_one();
 	void one_station_s_measurements_do_not_outlive_the_station();
+	void a_new_station_has_never_been_asked();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -291,6 +292,46 @@ void test_feed::one_station_s_measurements_do_not_outlive_the_station() {
 	QVERIFY2(std::find(missing.begin(), missing.end(), bbq_band::observed) !=
 	                 missing.end(),
 	         "the observed band was not reported missing after the change");
+}
+
+void test_feed::a_new_station_has_never_been_asked() {
+	/*
+	 * The freshness record is per PRODUCT; the question it answers is
+	 * per STATION (sec 14.9).
+	 *
+	 * refresh() asks for the observed and current-station products
+	 * unconditionally, which is what makes a station change fetch at
+	 * once -- but it refuses to run while a round is outstanding, and
+	 * changing the station is something somebody does exactly while
+	 * looking at a slow one. Then the next heartbeat consults due(),
+	 * finds the OLD station was asked a minute ago, and declines. The
+	 * new station's measurements arrive an interval late, having been
+	 * ruled fresh on the strength of a question about somewhere else.
+	 */
+	bbq_wu_feed feed;
+	const qint64 now = 1700000000;
+
+	feed.set_station(QStringLiteral("ITEST1"));
+
+	/*
+	 * The record is written directly rather than by fetching, which is
+	 * the whole reason this class is a friend: attempt() would put a
+	 * request on the wire, and what is under test is the bookkeeping
+	 * either side of one.
+	 */
+	feed.m_attempted.insert(static_cast<int>(bbq_wu_product::observed), now);
+	feed.m_attempted.insert(static_cast<int>(bbq_wu_product::current_station),
+	                        now);
+
+	QVERIFY2(!feed.due(bbq_wu_product::observed, now + 60),
+	         "a product asked for a minute ago was already due again");
+
+	feed.set_station(QStringLiteral("ITEST2"));
+
+	QVERIFY2(feed.due(bbq_wu_product::observed, now + 60),
+	         "the new station inherited the old one's freshness");
+	QVERIFY2(feed.due(bbq_wu_product::current_station, now + 60),
+	         "the new station inherited the old one's freshness");
 }
 
 QTEST_GUILESS_MAIN(test_feed)

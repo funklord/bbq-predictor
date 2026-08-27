@@ -580,14 +580,41 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 	m_observed_fetched_utc = 0;
 	m_loaded_from = 0;
 	m_loaded_to = 0;
+
+	/*
+	 * AND THIS STATION HAS NEVER BEEN ASKED (sec 14.9).
+	 *
+	 * The freshness record is kept per PRODUCT, and the question it
+	 * answers -- may this be fetched again yet -- is per STATION for
+	 * these two. refresh() papers over the difference by asking for
+	 * both unconditionally, which is why the gap went unnoticed; but
+	 * refresh() declines while a round is outstanding, and changing
+	 * station is exactly what somebody does while watching a slow one.
+	 * The next heartbeat then finds the OLD station was asked a minute
+	 * ago and declines too, so the new station's measurements arrive an
+	 * interval late, ruled fresh on the strength of a question about
+	 * somewhere else.
+	 *
+	 * Only the two that are asked for by station id. The coordinate
+	 * bands are the geocode's business and are handled where it is
+	 * dropped.
+	 */
+	m_attempted.remove(static_cast<int>(bbq_wu_product::observed));
+	m_attempted.remove(static_cast<int>(bbq_wu_product::current_station));
 }
 
 void bbq_wu_feed::forget_location_freshness() {
 	/*
 	 * Only the bands that are asked for BY COORDINATE. The observed and
-	 * current-station products are asked for by station id and are
-	 * re-fetched unconditionally by refresh(), so they need nothing
-	 * here; the backfill has its own reset, for its own reason.
+	 * current-station products are asked for by station id, so a moved
+	 * coordinate says nothing about them -- they are reset where the
+	 * STATION changes instead, and the backfill has its own reset there
+	 * for its own reason.
+	 *
+	 * This comment used to say they needed no reset at all, on the
+	 * grounds that refresh() asks for them unconditionally. That is
+	 * true and was not enough: refresh() declines while a round is
+	 * outstanding, and sec 14.9 is what that cost.
 	 */
 	m_attempted.remove(static_cast<int>(bbq_wu_product::nowcast));
 	m_attempted.remove(static_cast<int>(bbq_wu_product::hourly));

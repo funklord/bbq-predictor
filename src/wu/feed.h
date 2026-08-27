@@ -259,6 +259,14 @@ private:
 	 * Staleness on the display still reads the SUCCESS times off the
 	 * series (sec 2.4), so a band failing quietly still shows as old.
 	 */
+	/*
+	 * The freshness record is per product and the question it answers
+	 * is per station; where those disagree is reachable only with a
+	 * round in flight, so a test needs to pose it directly (sec 14.9).
+	 * Same device as bbq_wu_key_source's, for the same reason.
+	 */
+	friend class test_feed;
+
 	QHash<int, qint64> m_attempted;
 };
 

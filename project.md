@@ -4355,3 +4355,39 @@ Found by asking what else is scoped to the watched station while
 something else assumes otherwise, which is the same question sec 14.5
 answered for scoring. That lens has now produced three defects: the
 scoring sweep, the unheard signal, and this.
+
+### 14.9 A freshness record kept per product, asked per station
+
+The feed remembers when it last asked for each product, and `due()`
+consults that to decide whether to ask again. Two of those products --
+`observed` and `current_station` -- are requests about a STATION, so the
+record and the question it answers are keyed differently, and nothing
+said so.
+
+`refresh()` hid it. It asks for both unconditionally, without consulting
+`due()`, precisely so that changing station fetches at once. But it
+declines while a round is outstanding, and changing station is something
+somebody does exactly while watching a slow one. Then the next heartbeat
+consults `due()`, finds the old station was asked a minute ago, and
+declines as well -- so the new station's measurements arrive an interval
+late, ruled fresh on the strength of a question about somewhere else.
+
+Reset now where the station changes, beside the geocode and the
+backfill, and only for those two: the coordinate bands belong to the
+geocode and are already handled where it is dropped.
+
+**The comment in `forget_location_freshness` is where this was hiding,
+and it has been corrected rather than left.** It said the two needed no
+reset at all, because refresh() asks for them unconditionally. That is
+true, and it is not enough -- and a reader arriving with exactly this
+question would have been told there was nothing to look for. A rule
+stated with a reason that only holds on the common path is worse than
+one stated flatly, because the reason is what stops the next person
+checking.
+
+The test writes the freshness record directly, which is why the test
+class is a friend -- `attempt()` would put a request on the wire, and
+what is under test is the bookkeeping either side of one. Same device as
+`bbq_wu_key_source`'s, which this tree already uses for the same reason.
+Making `due()` public was tried first and withdrawn: it is genuinely
+internal, and the seam wanted here is a test's, not an API's.
