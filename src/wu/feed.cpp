@@ -55,7 +55,7 @@ int freshness_s(bbq_wu_product product) {
 
 	/*
 	 * Pinned history keeps its own schedule, per station, tracked in
-	 * m_pinned_attempted rather than by product (sec 13.4). due() is
+	 * m_pinned_attempted rather than by product (sec 14.4). due() is
 	 * never consulted for it -- one interval shared by every pinned
 	 * station would let the first one fetched suppress the rest.
 	 */
@@ -268,7 +268,7 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	        [this](bbq_wu_product product, const QJsonDocument &document) {
 		/*
 		 * A pinned station's history goes to the STORE and nowhere
-		 * else (sec 13.4). It is not this location's weather: putting
+		 * else (sec 14.4). It is not this location's weather: putting
 		 * it in the composite would draw another town's measurements
 		 * on the graph.
 		 */
@@ -350,7 +350,7 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	connect(m_client, &bbq_wu_client::failed, this,
 	        [this](bbq_wu_product product, const QString &reason) {
 		/*
-		 * A pinned station that fails releases the queue (sec 13.4).
+		 * A pinned station that fails releases the queue (sec 14.4).
 		 *
 		 * Without this the slot stays occupied for the life of the
 		 * process and every other pinned station waits behind a request
@@ -443,7 +443,7 @@ void bbq_wu_feed::attempt(bbq_wu_product product, qint64 now_utc) {
 	/*
 	 * Neither is scheduled through attempt(): discovery is driven by a
 	 * move or by typing, and pinned history is dispatched one station
-	 * at a time by its own queue (sec 13.4). Reaching here would have
+	 * at a time by its own queue (sec 14.4). Reaching here would have
 	 * incremented m_outstanding and sent nothing.
 	 */
 	case bbq_wu_product::nearby:
@@ -596,6 +596,35 @@ void bbq_wu_feed::set_geocode(double latitude, double longitude, bool pinned) {
 	}
 }
 
+int bbq_wu_feed::verify_all() {
+	if (!m_history.is_open()) {
+		return 0;
+	}
+
+	/*
+	 * DRIVEN BY THE QUEUE, not by what is being watched (sec 14.5).
+	 *
+	 * Asking the queue who has rows reaches three cases with one rule:
+	 * the watched station, a pinned one whose observations are arriving
+	 * precisely so that it can be scored, and one that is neither -- a
+	 * queue somebody moved away from, which under the old rule was never
+	 * scored AND never expired, so it leaked for ever.
+	 *
+	 * The clock is read once. Reading it per station would let a sweep
+	 * that crosses a second expire two stations against two different
+	 * cutoffs, which is a difference nobody could ever reproduce.
+	 */
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	int checked = 0;
+
+	for (const QString &station : m_history.stations_with_pending()) {
+		checked += m_history.verify(station);
+		m_history.expire(station, now);
+	}
+
+	return checked;
+}
+
 void bbq_wu_feed::finish_one() {
 	--m_outstanding;
 	if (m_outstanding <= 0) {
@@ -606,13 +635,9 @@ void bbq_wu_feed::finish_one() {
 		 * own: a round is exactly when new observations have arrived,
 		 * so it is the only moment anything new can be verifiable.
 		 */
-		if (m_history.is_open() && !m_station_id.isEmpty()) {
-			const int checked = m_history.verify(m_station_id);
-			m_history.expire(m_station_id, QDateTime::currentSecsSinceEpoch());
-
-			if (checked > 0) {
-				emit verified(checked);
-			}
+		const int checked = verify_all();
+		if (checked > 0) {
+			emit verified(checked);
 		}
 
 		emit settled();
@@ -801,7 +826,7 @@ void bbq_wu_feed::set_view_range(qint64 from_utc, qint64 to_utc) {
 	/*
 	 * Reload only when the view has left what is in memory. This is
 	 * called on every mouse move of a drag, and a database query per
-	 * frame is exactly the kind of thing sec 13.1 is about.
+	 * frame is exactly the kind of thing sec 14.1 is about.
 	 */
 	if (m_loaded_to > m_loaded_from && from_utc >= m_loaded_from &&
 	    to_utc <= m_loaded_to) {

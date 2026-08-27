@@ -2,6 +2,7 @@
 #define BBQ_STORE_HISTORY_H
 
 #include <QString>
+#include <QStringList>
 #include <QtGlobal>
 
 #include <vector>
@@ -190,6 +191,18 @@ public:
 	 */
 	int record_forecast(const QString &station, const bbq_series &series,
 	                    qint64 issued_utc);
+
+	/*
+	 * Every station with something queued, whether or not anybody is
+	 * watching it.
+	 *
+	 * verify() and expire() are per station, so somebody has to say
+	 * which. Asking the queue itself is the only answer that cannot go
+	 * stale: a station stops appearing here the moment its last row is
+	 * scored or dropped, and one that was watched last month still
+	 * appears while its forecasts are outstanding (sec 14.5).
+	 */
+	QStringList stations_with_pending() const;
 
 	/*
 	 * Check what can be checked: every queued forecast whose valid time

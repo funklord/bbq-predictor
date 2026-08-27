@@ -476,7 +476,7 @@ std::vector<bbq_wu_nearby> bbq_wu_read_nearby(const QJsonDocument &response) {
 
 		/*
 		 * NOT filtered on updated_utc, however much it looks like the
-		 * field for it (sec 13.1). Measured: every station this
+		 * field for it (sec 14.1). Measured: every station this
 		 * endpoint returns carries an updateTimeUtc about six weeks
 		 * old, including one confirmed reporting minutes earlier and
 		 * holding 504 archived observations. It is cached registration

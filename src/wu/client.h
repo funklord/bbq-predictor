@@ -32,7 +32,7 @@ enum class bbq_wu_product {
 
 	/*
 	 * A pinned station's history, which is NOT the watched station's
-	 * (sec 13.4). Distinct from `observed` so the handler can tell them
+	 * (sec 14.4). Distinct from `observed` so the handler can tell them
 	 * apart: they arrive on the same signal and archiving one under the
 	 * other's id would file measurements against a station that never
 	 * made them.
@@ -78,7 +78,7 @@ public:
 	/*
 	 * The same request for a station that is pinned rather than
 	 * watched. One at a time, so the caller always knows whose answer
-	 * this is (sec 13.4).
+	 * this is (sec 14.4).
 	 */
 	void fetch_observed_pinned(const QString &station_id, const QString &date);
 

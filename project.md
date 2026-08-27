@@ -3458,309 +3458,6 @@ whose contents can be rebuilt from their sources is a store that
 tolerates this kind of mistake; one holding the only copy of anything
 would not have.
 
-## 13. Stations are discovered, remembered, and pinned
-
-The station was a text field somebody had to know the answer to. That
-is a poor way to start, and a worse way to recover: the station this
-project ran against for months reports a dead thermometer (sec 12.14),
-and finding a replacement meant querying an API by hand.
-
-So stations are DISCOVERED -- from a coordinate, or by searching for a
-place -- and then KEPT. The list a reader picks from grows rather than
-being re-derived, so a station found on holiday is still offered at
-home.
-
-**Three states, and they are not the same idea.**
-
-- **Known.** Heard of, remembered, offered in the list. Costs nothing:
-  no requests are made for it.
-- **Pinned.** Fetched, and SPARINGLY -- the backfill only, on its
-  six-hour interval. Four requests a day each, and it is exactly what
-  verification needs, since what a forecast must be scored against is
-  history rather than the present moment.
-- **Watched.** The one being looked at, fetched at the ordinary
-  cadence: observations every ten minutes, current every five,
-  forecasts, backfill. Exactly one at a time, and it is a preference
-  rather than a fact about the world, so it stays in the INI while the
-  station list lives in the archive (sec 12.2).
-
-**The request volume is the reason for the distinction.** The API key
-is scraped from Weather Underground's own site and shared with it, so
-fetching everything remembered would multiply today's traffic by the
-length of a list the user did not think of as a cost. Pinning makes the
-cost visible and chosen, and the interface marks the pinned ones so it
-is obvious which are spending requests.
-
-**Remembering preserves the pinned flag**, which is why it is an upsert
-rather than a replace. Discovery runs again whenever the coordinate
-moves, and a rediscovery that reset the flag would unpin a chosen
-station silently, at the moment somebody walked somewhere -- surfacing
-days later as a station with no history. `first_seen_utc` is preserved
-for the same reason: it records when this program first heard of a
-station, not when it last saw it.
-
-### 13.2 The station is chosen from a list, and pinning is visible
-
-The control was a text box somebody had to know the answer to. It is a
-drop-down of what has been discovered now, nearest first, with the
-pinned ones at the top and MARKED -- a bullet, which survives a narrow
-screen, and bold, which survives a glance.
-
-**Marking is not decoration.** Pinning is what spends requests, and a
-cost the reader cannot see is one they did not choose. The same
-argument puts the `Pin` checkbox beside the list rather than in a menu:
-the state has to be reachable from the thing it describes.
-
-**Still editable.** A station id somebody already knows should not
-require finding it on a map first, and discovery only ever finds what
-is near a coordinate it has been given. A watched station the list has
-never heard of is added to it, which is the ordinary case on a fresh
-install where the id came from a setting or the command line.
-
-`Find...` asks for a place, and the answer is a CHOICE rather than the
-first match. Searching for Gothenburg returns Gothenburg and then
-Shlisselburg, in Russia, so a program that silently took the first
-would send somebody four hundred miles east for a typo they did not
-make. The chosen coordinate is pinned, because the reader named it: an
-unpinned one is replaced by the next coordinate derived from the
-station, and the search would appear to do nothing.
-
-The list is rebuilt wholesale on every change rather than patched. It
-is short, it changes only when discovery runs or a pin is toggled, and
-a partial update is how a control ends up disagreeing with the thing it
-describes -- which this project has already paid for twice.
-
-Checked at both widths that matter: 1080 logical pixels, and the 320 of
-the Fold's cover screen, where `* ISTOCK877  3.7 km` and the `Pin` and
-`Find...` controls all keep their borders.
-
-### 13.3 The device's position is for discovery, and nothing else
-
-A fix answers "which stations are near ME". It does NOT move the
-forecast: somebody watching a station in Stockholm while standing in
-Gothenburg must still be shown Stockholm's weather, and letting a
-sensor change the forecast coordinate would be the
-two-places-on-one-axis failure of sec 2.6.7 arriving through the
-hardware. So a position goes to `discover_stations_at()` and never to
-`set_geocode()`.
-
-**Coarse, and once.** The nearest station is hundreds of metres away at
-best, so precision buys nothing and `ACCESS_COARSE_LOCATION` is all the
-manifest asks for -- a permission that asks for more than it needs is
-one a reader is right to refuse. Once rather than continuously, because
-watching the position would spend battery re-answering a question whose
-answer barely changes.
-
-**Every failure is the same failure from outside.** No positioning
-source compiled in, none on the machine, permission refused, location
-switched off, or no fix before the deadline: all end as `unavailable`
-with a reason. The fallback is identical in each case -- search for a
-place by name -- and it is the ONLY route on a desktop, so it is a path
-that gets exercised daily rather than one that waits to be found
-broken.
-
-A deadline of our own is needed because a source that never answers is
-the ordinary indoor case and emits no error while it waits.
-
-**The reason goes on the control that offers the alternative**, not on
-the freshness line. That was the first attempt and it was wrong twice
-over: the line is rewritten on every fetch, so the message survives
-until the next request and then vanishes unread, and it describes the
-DATA rather than the device. The `Find...` tooltip carries the reason,
-and an empty list gets the placeholder `no location -- use Find...`,
-which is what a fresh install on a desktop shows.
-
-#### 13.3.2 A manifest permission is not a granted one
-
-The first Android build asked for a position and never got one, and the
-device said why:
-
-    ACCESS_COARSE_LOCATION: granted=false
-    ACCESS_FINE_LOCATION:   granted=false
-    station: 0 rows
-
-**Nothing had asked.** Declaring a permission in the manifest only makes
-it requestable; since Android 6 it must also be granted at run time, and
-nothing grants it but a dialog somebody answers. The locator created the
-source, requested an update, and the platform refused it without ever
-raising the question -- which from the desk is indistinguishable from a
-phone that cannot see the sky, because both end in the same
-`unavailable`.
-
-`QLocationPermission` at `Approximate` accuracy is asked for before the
-source is touched. Approximate rather than Precise so that three places
-agree: the manifest, this request, and the
-`NonSatellitePositioningMethods` the source is configured with.
-
-Measured on an SM-N960F after the fix:
-
-    ACCESS_COARSE_LOCATION: granted=true
-    ACCESS_FINE_LOCATION:   granted=false
-
-    qt.positioning.android: Positioning start
-    qt.positioning.android: Single update using network
-    qt.positioning.android: Stopping updates
-
-Coarse granted and fine still refused, which is the point of asking for
-the one rather than accepting both. `Single update using network` is Qt
-honouring the non-satellite request. `Stopping updates` is twenty
-seconds later: the deadline of sec 13.3 firing on the ordinary indoor
-case, after which the list showed `no location -- use Find...` exactly
-as it does on a desktop with no source at all.
-
-**Only a device could have found this**, and only a device with somebody
-holding it: the fallback is correct and silent, so a build that never
-asks looks identical to a build that asked and was refused. What
-separated them was reading the permission state out of `dumpsys
-package` rather than watching the program's own behaviour.
-
-#### 13.3.1 The package asks for more than the manifest does
-
-The manifest requests `ACCESS_COARSE_LOCATION` and nothing else. The
-built package requests both:
-
-    uses-permission: android.permission.ACCESS_FINE_LOCATION
-    uses-permission: android.permission.ACCESS_COARSE_LOCATION
-    uses-implied-feature: android.hardware.location
-
-`ACCESS_FINE_LOCATION` comes from
-`Qt6Positioning_arm64-v8a-android-dependencies.xml`, which
-androiddeployqt reads and injects. **It is visible only in the
-artifact**: nothing in this repository asks for precise location, and
-the section above would have been an honest description of the source
-and a false one of the program somebody installs.
-
-Removing it the documented Android way -- a `tools:node="remove"`
-directive for the manifest merger -- is refused before Gradle sees it.
-androiddeployqt parses the manifest itself and rejects the namespaced
-attribute, so the merger never gets the chance.
-
-Left as it is, and recorded rather than hidden. The alternative is
-editing the deployed manifest between androiddeployqt and Gradle, which
-would put a text substitution in the build for a permission that
-changes nothing about what the program does: positioning is asked for
-with `NonSatellitePositioningMethods` either way, and Android's own
-dialog lets the reader grant approximate location whatever the manifest
-requests.
-
-**And a trap in the manifest itself.** XML comments cannot contain a
-double hyphen, and this project's prose uses `--` constantly. Three
-rebuilds were spent on
-
-    Error in AndroidManifest.xml: Expected '>', but got ' '
-
-which names neither the comment nor the character. The first version of
-the comment happened to have none and built; every later edit added
-one. A file that is prose-heavy and XML at the same time needs the
-rule stated where the prose is written, which is why it is here.
-
-**Nothing was borrowed from fuzzypickles.** It was worth looking, since
-it is the sibling project with location code, but its GPS is `gpsd` on
-Linux feeding the daemon's entropy pool; its Android spike lived in an
-earlier generation its own notes record as gone; and its `client/geo.h`
-is haversine distance and bearing, which this program does not need
-because Weather Underground returns `distanceKm` with each station.
-
-### 13.4 Pinned stations are fetched sparingly, and one at a time
-
-A pinned station gets the backfill and nothing else: yesterday's day of
-observations, on a six-hour interval, four requests a day. That is the
-whole cost of pinning, and it is deliberately the cheapest fetch that
-is still useful -- a forecast is scored against HISTORY, so history is
-exactly what a station needs to become verifiable while something else
-is being watched.
-
-**One at a time, and that is not a performance choice.** These answers
-arrive on the same signal as the watched station's and carry nothing
-saying whose they are. What makes an answer attributable is that
-exactly one is outstanding. Getting this wrong would file one station's
-measurements under another's id, which is not a bug that shows up as a
-crash -- it shows up months later as a verification record that cannot
-be explained.
-
-Three things keep that true, and each was written for a failure this
-project has already had:
-
-- **A distinct product.** `observed_pinned` rather than `observed`, so
-  the handler can tell them apart at all rather than inferring it from
-  state.
-- **The store only.** A pinned station's series never reaches the
-  composite. It is not this location's weather, and drawing it would
-  put another town's measurements on the graph.
-- **A failure releases the slot.** Without that, one failed request
-  occupies the queue for the life of the process and every other pinned
-  station waits behind something that already ended -- the stalled
-  socket of sec 2.4, in a smaller room. It is also not reported as a
-  band failure: nothing on the display depends on it, and announcing it
-  would put another station's trouble on the watched station's status
-  line.
-
-The watched station is skipped when the queue is built. It is fetched
-properly and far more often, so queueing it would spend a request to
-learn what it already knows.
-
-Measured with `ISTOCK877` watched and `ISOLNA31` pinned, after one run:
-
-    ISOLNA31     288 rows   temp 14.0..26.0
-    ISTOCK877    504 rows   temp 12.0..26.0
-
-One day for the pinned station, filed under its own id, while the
-watched one kept its ordinary two.
-
-#### 13.2.1 A label is not an id
-
-The list shows `ISTOCK877  4.0 km`, because the distance is what makes
-one of ten choosable. The editable field hands that whole string back,
-so committing it stored the label as the station and the next fetch
-asked Weather Underground for a station called `ISTOCK767  0.3 km`.
-Measured on the device -- the settings file came back holding exactly
-that.
-
-Selecting from the list was always correct; it reads `itemData`. It is
-the typing path that was wrong, and typing is the path that exists so
-that somebody who already knows an id need not find it on a map.
-
-Resolved against the list rather than parsed. Splitting on the spaces
-would work until a station id contains one, and this is a project that
-has already been bitten by a format assumption holding until it did
-not (sec 11.4).
-
-### 13.1 Two things the discovery endpoints lie about
-
-Both were found by measuring rather than by reading, and both would
-have been invisible in code review.
-
-**`units` breaks `/v3/location/near`, and the error blames `format`.**
-Every other endpoint in this project takes
-`units=m&language=en-US&format=json`, so discovery inherited it and
-answered 400:
-
-    {"code":"LOCATION-SERVICES:400",
-     "message":"'format' must be specified"}
-
-with `format=json` plainly in the query. Bisected one parameter at a
-time: `format` alone is 200, `format`+`language` is 200,
-`format`+`units` is 400. **A message that names a parameter which is
-present is worse than no message**, because it sends the reader to
-check the thing that is right. Discovery sends its own query without
-units.
-
-**`updateTimeUtc` is not a heartbeat.** It looks exactly like one, and
-a staleness rule was built on it -- drop any station that has not
-reported for a day, so that a dead sensor never reaches the list. It
-dropped the entire list. Measured: every station the endpoint returns
-carries a timestamp about six weeks old, `ISTOCK877` among them, which
-was confirmed reporting minutes earlier and holds 504 archived
-observations. It is cached registration metadata. Nothing filters on
-it now, and the field carries a comment saying why it is ignored rather
-than being quietly deleted -- the next reader will have the same idea.
-
-There is no liveness signal in this response. Whether a station is
-alive is answered by asking it: `observations/current` returns 204 for
-a station that is not reporting and 200 for one that is, which is how
-`ISTOCKHO936` was ruled out while looking healthy in every other
-respect.
-
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
@@ -4177,3 +3874,361 @@ Absent dots say "zoomed out"; smeared dots say something false.
 The alternative worth considering is a min/max envelope per column, which
 is honest in a different way -- it shows the spread the mean hides -- and
 is more work than the first version of this needs.
+
+## 14. Stations are discovered, remembered, and pinned
+
+The station was a text field somebody had to know the answer to. That
+is a poor way to start, and a worse way to recover: the station this
+project ran against for months reports a dead thermometer (sec 12.14),
+and finding a replacement meant querying an API by hand.
+
+So stations are DISCOVERED -- from a coordinate, or by searching for a
+place -- and then KEPT. The list a reader picks from grows rather than
+being re-derived, so a station found on holiday is still offered at
+home.
+
+**Three states, and they are not the same idea.**
+
+- **Known.** Heard of, remembered, offered in the list. Costs nothing:
+  no requests are made for it.
+- **Pinned.** Fetched, and SPARINGLY -- the backfill only, on its
+  six-hour interval. Four requests a day each, and it is exactly what
+  verification needs, since what a forecast must be scored against is
+  history rather than the present moment.
+- **Watched.** The one being looked at, fetched at the ordinary
+  cadence: observations every ten minutes, current every five,
+  forecasts, backfill. Exactly one at a time, and it is a preference
+  rather than a fact about the world, so it stays in the INI while the
+  station list lives in the archive (sec 12.2).
+
+**The request volume is the reason for the distinction.** The API key
+is scraped from Weather Underground's own site and shared with it, so
+fetching everything remembered would multiply today's traffic by the
+length of a list the user did not think of as a cost. Pinning makes the
+cost visible and chosen, and the interface marks the pinned ones so it
+is obvious which are spending requests.
+
+**Remembering preserves the pinned flag**, which is why it is an upsert
+rather than a replace. Discovery runs again whenever the coordinate
+moves, and a rediscovery that reset the flag would unpin a chosen
+station silently, at the moment somebody walked somewhere -- surfacing
+days later as a station with no history. `first_seen_utc` is preserved
+for the same reason: it records when this program first heard of a
+station, not when it last saw it.
+
+### 14.1 Two things the discovery endpoints lie about
+
+Both were found by measuring rather than by reading, and both would
+have been invisible in code review.
+
+**`units` breaks `/v3/location/near`, and the error blames `format`.**
+Every other endpoint in this project takes
+`units=m&language=en-US&format=json`, so discovery inherited it and
+answered 400:
+
+    {"code":"LOCATION-SERVICES:400",
+     "message":"'format' must be specified"}
+
+with `format=json` plainly in the query. Bisected one parameter at a
+time: `format` alone is 200, `format`+`language` is 200,
+`format`+`units` is 400. **A message that names a parameter which is
+present is worse than no message**, because it sends the reader to
+check the thing that is right. Discovery sends its own query without
+units.
+
+**`updateTimeUtc` is not a heartbeat.** It looks exactly like one, and
+a staleness rule was built on it -- drop any station that has not
+reported for a day, so that a dead sensor never reaches the list. It
+dropped the entire list. Measured: every station the endpoint returns
+carries a timestamp about six weeks old, `ISTOCK877` among them, which
+was confirmed reporting minutes earlier and holds 504 archived
+observations. It is cached registration metadata. Nothing filters on
+it now, and the field carries a comment saying why it is ignored rather
+than being quietly deleted -- the next reader will have the same idea.
+
+There is no liveness signal in this response. Whether a station is
+alive is answered by asking it: `observations/current` returns 204 for
+a station that is not reporting and 200 for one that is, which is how
+`ISTOCKHO936` was ruled out while looking healthy in every other
+respect.
+
+### 14.2 The station is chosen from a list, and pinning is visible
+
+The control was a text box somebody had to know the answer to. It is a
+drop-down of what has been discovered now, nearest first, with the
+pinned ones at the top and MARKED -- a bullet, which survives a narrow
+screen, and bold, which survives a glance.
+
+**Marking is not decoration.** Pinning is what spends requests, and a
+cost the reader cannot see is one they did not choose. The same
+argument puts the `Pin` checkbox beside the list rather than in a menu:
+the state has to be reachable from the thing it describes.
+
+**Still editable.** A station id somebody already knows should not
+require finding it on a map first, and discovery only ever finds what
+is near a coordinate it has been given. A watched station the list has
+never heard of is added to it, which is the ordinary case on a fresh
+install where the id came from a setting or the command line.
+
+`Find...` asks for a place, and the answer is a CHOICE rather than the
+first match. Searching for Gothenburg returns Gothenburg and then
+Shlisselburg, in Russia, so a program that silently took the first
+would send somebody four hundred miles east for a typo they did not
+make. The chosen coordinate is pinned, because the reader named it: an
+unpinned one is replaced by the next coordinate derived from the
+station, and the search would appear to do nothing.
+
+The list is rebuilt wholesale on every change rather than patched. It
+is short, it changes only when discovery runs or a pin is toggled, and
+a partial update is how a control ends up disagreeing with the thing it
+describes -- which this project has already paid for twice.
+
+Checked at both widths that matter: 1080 logical pixels, and the 320 of
+the Fold's cover screen, where `* ISTOCK877  3.7 km` and the `Pin` and
+`Find...` controls all keep their borders.
+
+#### 14.2.1 A label is not an id
+
+The list shows `ISTOCK877  4.0 km`, because the distance is what makes
+one of ten choosable. The editable field hands that whole string back,
+so committing it stored the label as the station and the next fetch
+asked Weather Underground for a station called `ISTOCK767  0.3 km`.
+Measured on the device -- the settings file came back holding exactly
+that.
+
+Selecting from the list was always correct; it reads `itemData`. It is
+the typing path that was wrong, and typing is the path that exists so
+that somebody who already knows an id need not find it on a map.
+
+Resolved against the list rather than parsed. Splitting on the spaces
+would work until a station id contains one, and this is a project that
+has already been bitten by a format assumption holding until it did
+not (sec 11.4).
+
+### 14.3 The device's position is for discovery, and nothing else
+
+A fix answers "which stations are near ME". It does NOT move the
+forecast: somebody watching a station in Stockholm while standing in
+Gothenburg must still be shown Stockholm's weather, and letting a
+sensor change the forecast coordinate would be the
+two-places-on-one-axis failure of sec 2.6.7 arriving through the
+hardware. So a position goes to `discover_stations_at()` and never to
+`set_geocode()`.
+
+**Coarse, and once.** The nearest station is hundreds of metres away at
+best, so precision buys nothing and `ACCESS_COARSE_LOCATION` is all the
+manifest asks for -- a permission that asks for more than it needs is
+one a reader is right to refuse. Once rather than continuously, because
+watching the position would spend battery re-answering a question whose
+answer barely changes.
+
+**Every failure is the same failure from outside.** No positioning
+source compiled in, none on the machine, permission refused, location
+switched off, or no fix before the deadline: all end as `unavailable`
+with a reason. The fallback is identical in each case -- search for a
+place by name -- and it is the ONLY route on a desktop, so it is a path
+that gets exercised daily rather than one that waits to be found
+broken.
+
+A deadline of our own is needed because a source that never answers is
+the ordinary indoor case and emits no error while it waits.
+
+**The reason goes on the control that offers the alternative**, not on
+the freshness line. That was the first attempt and it was wrong twice
+over: the line is rewritten on every fetch, so the message survives
+until the next request and then vanishes unread, and it describes the
+DATA rather than the device. The `Find...` tooltip carries the reason,
+and an empty list gets the placeholder `no location -- use Find...`,
+which is what a fresh install on a desktop shows.
+
+#### 14.3.1 The package asks for more than the manifest does
+
+The manifest requests `ACCESS_COARSE_LOCATION` and nothing else. The
+built package requests both:
+
+    uses-permission: android.permission.ACCESS_FINE_LOCATION
+    uses-permission: android.permission.ACCESS_COARSE_LOCATION
+    uses-implied-feature: android.hardware.location
+
+`ACCESS_FINE_LOCATION` comes from
+`Qt6Positioning_arm64-v8a-android-dependencies.xml`, which
+androiddeployqt reads and injects. **It is visible only in the
+artifact**: nothing in this repository asks for precise location, and
+the section above would have been an honest description of the source
+and a false one of the program somebody installs.
+
+Removing it the documented Android way -- a `tools:node="remove"`
+directive for the manifest merger -- is refused before Gradle sees it.
+androiddeployqt parses the manifest itself and rejects the namespaced
+attribute, so the merger never gets the chance.
+
+Left as it is, and recorded rather than hidden. The alternative is
+editing the deployed manifest between androiddeployqt and Gradle, which
+would put a text substitution in the build for a permission that
+changes nothing about what the program does: positioning is asked for
+with `NonSatellitePositioningMethods` either way, and Android's own
+dialog lets the reader grant approximate location whatever the manifest
+requests.
+
+**And a trap in the manifest itself.** XML comments cannot contain a
+double hyphen, and this project's prose uses `--` constantly. Three
+rebuilds were spent on
+
+    Error in AndroidManifest.xml: Expected '>', but got ' '
+
+which names neither the comment nor the character. The first version of
+the comment happened to have none and built; every later edit added
+one. A file that is prose-heavy and XML at the same time needs the
+rule stated where the prose is written, which is why it is here.
+
+**Nothing was borrowed from fuzzypickles.** It was worth looking, since
+it is the sibling project with location code, but its GPS is `gpsd` on
+Linux feeding the daemon's entropy pool; its Android spike lived in an
+earlier generation its own notes record as gone; and its `client/geo.h`
+is haversine distance and bearing, which this program does not need
+because Weather Underground returns `distanceKm` with each station.
+
+#### 14.3.2 A manifest permission is not a granted one
+
+The first Android build asked for a position and never got one, and the
+device said why:
+
+    ACCESS_COARSE_LOCATION: granted=false
+    ACCESS_FINE_LOCATION:   granted=false
+    station: 0 rows
+
+**Nothing had asked.** Declaring a permission in the manifest only makes
+it requestable; since Android 6 it must also be granted at run time, and
+nothing grants it but a dialog somebody answers. The locator created the
+source, requested an update, and the platform refused it without ever
+raising the question -- which from the desk is indistinguishable from a
+phone that cannot see the sky, because both end in the same
+`unavailable`.
+
+`QLocationPermission` at `Approximate` accuracy is asked for before the
+source is touched. Approximate rather than Precise so that three places
+agree: the manifest, this request, and the
+`NonSatellitePositioningMethods` the source is configured with.
+
+Measured on an SM-N960F after the fix:
+
+    ACCESS_COARSE_LOCATION: granted=true
+    ACCESS_FINE_LOCATION:   granted=false
+
+    qt.positioning.android: Positioning start
+    qt.positioning.android: Single update using network
+    qt.positioning.android: Stopping updates
+
+Coarse granted and fine still refused, which is the point of asking for
+the one rather than accepting both. `Single update using network` is Qt
+honouring the non-satellite request. `Stopping updates` is twenty
+seconds later: the deadline of sec 14.3 firing on the ordinary indoor
+case, after which the list showed `no location -- use Find...` exactly
+as it does on a desktop with no source at all.
+
+**Only a device could have found this**, and only a device with somebody
+holding it: the fallback is correct and silent, so a build that never
+asks looks identical to a build that asked and was refused. What
+separated them was reading the permission state out of `dumpsys
+package` rather than watching the program's own behaviour.
+
+### 14.4 Pinned stations are fetched sparingly, and one at a time
+
+A pinned station gets the backfill and nothing else: yesterday's day of
+observations, on a six-hour interval, four requests a day. That is the
+whole cost of pinning, and it is deliberately the cheapest fetch that
+is still useful -- a forecast is scored against HISTORY, so history is
+exactly what a station needs to become verifiable while something else
+is being watched.
+
+**One at a time, and that is not a performance choice.** These answers
+arrive on the same signal as the watched station's and carry nothing
+saying whose they are. What makes an answer attributable is that
+exactly one is outstanding. Getting this wrong would file one station's
+measurements under another's id, which is not a bug that shows up as a
+crash -- it shows up months later as a verification record that cannot
+be explained.
+
+Three things keep that true, and each was written for a failure this
+project has already had:
+
+- **A distinct product.** `observed_pinned` rather than `observed`, so
+  the handler can tell them apart at all rather than inferring it from
+  state.
+- **The store only.** A pinned station's series never reaches the
+  composite. It is not this location's weather, and drawing it would
+  put another town's measurements on the graph.
+- **A failure releases the slot.** Without that, one failed request
+  occupies the queue for the life of the process and every other pinned
+  station waits behind something that already ended -- the stalled
+  socket of sec 2.4, in a smaller room. It is also not reported as a
+  band failure: nothing on the display depends on it, and announcing it
+  would put another station's trouble on the watched station's status
+  line.
+
+The watched station is skipped when the queue is built. It is fetched
+properly and far more often, so queueing it would spend a request to
+learn what it already knows.
+
+Measured with `ISTOCK877` watched and `ISOLNA31` pinned, after one run:
+
+    ISOLNA31     288 rows   temp 14.0..26.0
+    ISTOCK877    504 rows   temp 12.0..26.0
+
+One day for the pinned station, filed under its own id, while the
+watched one kept its ordinary two.
+
+### 14.5 Scoring follows the queue, not the watched station
+
+Pinning fetches a station's observations sparingly, four times a day,
+and sec 14.4 says why that is worth the requests: forecasts made while
+the station was watched can still be scored after the view has moved on
+to somewhere else. The Pin control says so in its own tooltip -- "keep
+fetching this station's history, so its forecasts can be scored even
+while another is being watched."
+
+It was not true. The scoring sweep ran at the end of a fetch round for
+`m_station_id` alone:
+
+    if (m_history.is_open() && !m_station_id.isEmpty()) {
+            const int checked = m_history.verify(m_station_id);
+            m_history.expire(m_station_id, now);
+    }
+
+So a pinned station's observations arrived, were archived, and were
+never used. Its queue never emptied, and `expire()` never reached it
+either, so the rows it could no longer score leaked for ever -- the
+exact failure sec 12.6 introduced expire() to prevent, reappearing for
+every station except one.
+
+**Nothing could report it.** The fetches succeeded, the rows arrived,
+the statistics simply stayed where they were, and a station nobody is
+looking at is one nobody is reading numbers off. It is this project's
+recurring shape once more: not a check that fails, but work that never
+runs.
+
+The sweep asks the queue instead:
+
+    for (const QString &station : m_history.stations_with_pending()) {
+            checked += m_history.verify(station);
+            m_history.expire(station, now);
+    }
+
+Driven by the queue rather than by an inventory of who is interesting,
+which reaches three cases with one rule -- the watched station, a pinned
+one, and one that is neither, whose queue somebody moved away from. That
+third case had no route to being scored or expired under any
+station-list rule, because it is on no list. It stops appearing here of
+its own accord when its last row is scored or dropped, so nothing has to
+remember to take it off.
+
+The clock is read once for the whole sweep. Per station it would let a
+sweep crossing a second expire two stations against two different
+cutoffs -- a difference nobody could ever reproduce.
+
+`verify_all()` is public for a reason worth stating: the defect lived at
+the end of a fetch round, which is the one place a test cannot reach
+without the network, and it survived precisely there. The test builds
+three stations with identical queues, watches one, pins another,
+abandons the third, and requires all twelve rows scored. Against the old
+rule it returns 4.

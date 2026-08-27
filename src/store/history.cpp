@@ -448,6 +448,29 @@ std::vector<bbq_station> bbq_history::stations() const {
 	return read_stations(list);
 }
 
+QStringList bbq_history::stations_with_pending() const {
+	QStringList found;
+
+	if (!m_open) {
+		return found;
+	}
+
+	QSqlDatabase database = QSqlDatabase::database(m_connection);
+	QSqlQuery list(database);
+	list.prepare(QStringLiteral(
+	        "SELECT DISTINCT station FROM forecast_pending ORDER BY station"));
+
+	if (!list.exec()) {
+		return found;
+	}
+
+	while (list.next()) {
+		found.append(list.value(0).toString());
+	}
+
+	return found;
+}
+
 std::vector<bbq_station> bbq_history::pinned_stations() const {
 	std::vector<bbq_station> found;
 

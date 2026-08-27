@@ -104,7 +104,7 @@ struct bbq_wu_nearby {
 	/*
 	 * What the endpoint calls updateTimeUtc, and it is NOT a heartbeat:
 	 * measured six weeks stale on stations reporting minutes earlier
-	 * (sec 13.1). Kept because it is what the field says, used for
+	 * (sec 14.1). Kept because it is what the field says, used for
 	 * nothing.
 	 */
 	qint64 updated_utc = 0;

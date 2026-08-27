@@ -1,6 +1,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include "store/history.h"
 #include "wu/feed.h"
 
 /*
@@ -20,7 +21,42 @@ private slots:
 	void a_pinned_coordinate_does();
 	void resetting_the_same_station_changes_nothing();
 	void the_observed_band_is_served_from_the_store();
+	void every_station_with_a_queue_is_scored_not_just_the_watched_one();
+
+private:
+	static bbq_series forecast_of(qint64 start, int count, double temperature);
+	static bbq_series observed_of(qint64 start, int count, double temperature);
 };
+
+bbq_series test_feed::forecast_of(qint64 start, int count, double temperature) {
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < count; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = temperature;
+		samples.push_back(sample);
+	}
+
+	bbq_series made(bbq_band::hourly, QStringLiteral("test"));
+	made.set_samples(std::move(samples));
+	return made;
+}
+
+bbq_series test_feed::observed_of(qint64 start, int count, double temperature) {
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < count; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 3600;
+		sample.duration_s = 300;
+		sample.temperature = temperature;
+		samples.push_back(sample);
+	}
+
+	bbq_series seen(bbq_band::observed, QStringLiteral("wunderground"));
+	seen.set_samples(std::move(samples));
+	return seen;
+}
 
 void test_feed::a_derived_coordinate_does_not_survive_the_station_changing() {
 	bbq_wu_feed feed;
@@ -138,6 +174,67 @@ void test_feed::the_observed_band_is_served_from_the_store() {
 	QCOMPARE(static_cast<int>(
 	                 feed.composite().band(bbq_band::observed)->samples().size()),
 	         288);
+}
+
+void test_feed::every_station_with_a_queue_is_scored_not_just_the_watched_one() {
+	/*
+	 * THE DEFECT (sec 14.5).
+	 *
+	 * Pinning fetches a station's observations so that forecasts made
+	 * while it was watched can still be scored after the view has moved
+	 * on -- that is what the Pin control's own tooltip promises. The
+	 * scoring ran for the watched station alone, so those observations
+	 * were archived and never used, and the queue behind them never
+	 * emptied. Nothing reported it: the fetches succeeded, the rows
+	 * arrived, and the statistics simply stayed where they were.
+	 *
+	 * Three stations, and only the first is being watched. ITEST3 is
+	 * neither watched nor pinned -- an abandoned queue, which leaked
+	 * for ever under the old rule because expire() never reached it
+	 * either.
+	 */
+	QTemporaryDir directory;
+
+	bbq_wu_feed feed;
+	QVERIFY2(feed.open_history(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(feed.history_error()));
+	feed.set_station(QStringLiteral("ITEST1"));
+
+	const qint64 issued = 1000000;
+	const qint64 valid = issued + 3600;
+
+	QStringList queued;
+	queued << QStringLiteral("ITEST1") << QStringLiteral("ITEST2")
+	       << QStringLiteral("ITEST3");
+
+	for (const QString &one : queued) {
+		QCOMPARE(feed.history().record_forecast(one, forecast_of(valid, 4, 15.0),
+		                                        issued),
+		         4);
+		feed.history().record_observations(one, observed_of(valid, 4, 17.0));
+	}
+
+	/* Pinned, which is the case the tooltip makes a promise about. */
+	bbq_station second;
+	second.id = QStringLiteral("ITEST2");
+	QVERIFY(feed.history().remember_station(second));
+	QVERIFY(feed.history().set_station_pinned(second.id, true));
+
+	QCOMPARE(feed.history().stations_with_pending(), queued);
+
+	QCOMPARE(feed.verify_all(), 12);
+
+	for (const QString &one : queued) {
+		QCOMPARE(feed.history().pending_count(one), 0);
+
+		const bbq_verification scored = feed.history().verification(
+		        one, bbq_band::hourly, QStringLiteral("temperature"),
+		        bbq_lead_bucket::hour);
+
+		QVERIFY2(scored.count > 0,
+		         qPrintable(QStringLiteral("%1 was never scored").arg(one)));
+		QCOMPARE(scored.bias, -2.0);
+	}
 }
 
 QTEST_GUILESS_MAIN(test_feed)

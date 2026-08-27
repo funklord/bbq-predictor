@@ -7,7 +7,7 @@
 class QGeoPositionInfoSource;
 
 /*
- * Where the device is, asked once, for discovery only (sec 13.3).
+ * Where the device is, asked once, for discovery only (sec 14.3).
  *
  * This answers "which stations are near me" and NOTHING ELSE. It does
  * not move the forecast: somebody watching a station in Stockholm while

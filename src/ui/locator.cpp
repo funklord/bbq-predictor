@@ -30,7 +30,7 @@ void bbq_locator::locate_once(int timeout_ms) {
 	m_answered = false;
 
 	/*
-	 * ASK FIRST (sec 13.3.2).
+	 * ASK FIRST (sec 14.3.2).
 	 *
 	 * A permission in the manifest only makes it requestable. Since
 	 * Android 6 it must also be granted at run time, and nothing grants

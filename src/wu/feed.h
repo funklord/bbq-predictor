@@ -93,6 +93,20 @@ public:
 	QString history_error() const { return m_history_error; }
 
 	/*
+	 * Score everything scoreable, for every station holding a queue --
+	 * not just the watched one (sec 14.5). Returns how many were
+	 * verified, and drops what can no longer be.
+	 *
+	 * Public because it is otherwise reachable only at the end of a
+	 * fetch round, which a test cannot run without the network. The
+	 * defect it replaces was invisible for exactly that reason: pinned
+	 * stations banked observations for months and were never scored
+	 * against them, while the control that pins them promised they
+	 * would be.
+	 */
+	int verify_all();
+
+	/*
 	 * What the graph is looking at. The observed band is served from the
 	 * store rather than from the last fetch (sec 12.8), so panning into
 	 * last month is the same operation as looking at this afternoon.
@@ -118,7 +132,7 @@ public:
 	void discover_stations();
 
 	/*
-	 * Discovery somewhere the feed is not pointed (sec 13.3). A device
+	 * Discovery somewhere the feed is not pointed (sec 14.3). A device
 	 * position answers "what is near ME", which is a different question
 	 * from "what is near the station being watched" -- and must not
 	 * move the forecast, or somebody in Gothenburg watching Stockholm
@@ -184,7 +198,7 @@ private:
 	void attempt_backfill(qint64 now_utc);
 
 	/*
-	 * Pinned stations, fetched sparingly and ONE AT A TIME (sec 13.4).
+	 * Pinned stations, fetched sparingly and ONE AT A TIME (sec 14.4).
 	 *
 	 * Sequential is not a performance choice. These answers arrive on
 	 * the same signal as the watched station's, carrying nothing that

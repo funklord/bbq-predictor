@@ -126,7 +126,7 @@ private:
 	 */
 	QList<QWidget *> m_control_items;
 	/*
-	 * The station is CHOSEN from what has been discovered (sec 13.2),
+	 * The station is CHOSEN from what has been discovered (sec 14.2),
 	 * and still typeable, because a station id somebody knows should
 	 * not require finding it on a map first.
 	 */

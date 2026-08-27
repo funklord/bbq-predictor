@@ -131,7 +131,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * at (sec 2.6.5).
 	 */
 	/*
-	 * A LIST, not a blank field (sec 13.2).
+	 * A LIST, not a blank field (sec 14.2).
 	 *
 	 * The old control was a text box somebody had to know the answer
 	 * to, which is a poor way to start and a worse way to recover: the
@@ -399,7 +399,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 */
 	/*
 	 * Ask the device where it is, once, and use the answer for
-	 * DISCOVERY ONLY (sec 13.3). The forecast stays where the watched
+	 * DISCOVERY ONLY (sec 14.3). The forecast stays where the watched
 	 * station is.
 	 */
 	m_locator = new bbq_locator(this);
@@ -1039,7 +1039,7 @@ void bbq_main_window::watch_station(const QString &id) {
 	QString wanted = id.trimmed();
 
 	/*
-	 * A LABEL IS NOT AN ID (sec 13.2.1).
+	 * A LABEL IS NOT AN ID (sec 14.2.1).
 	 *
 	 * The list shows "ISTOCK877  4.0 km" because the distance is what
 	 * makes one of ten choosable. That string is what the editable field

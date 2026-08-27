@@ -23,7 +23,7 @@ const char *const api_host = "https://api.weather.com";
 const char *const common_query = "units=m&language=en-US&format=json";
 
 /*
- * The same, WITHOUT units, for the discovery endpoints (sec 13.1).
+ * The same, WITHOUT units, for the discovery endpoints (sec 14.1).
  *
  * /v3/location/near and /v3/location/search answer 400 when `units` is
  * present, and the error they return names the wrong parameter:
