@@ -137,6 +137,16 @@ private:
 	QLabel *m_freshness_label;
 	bbq_forecast_graph *m_graph;
 	bbq_wu_feed *m_feed;
+	/*
+	 * The window's own suite reaches watch_station and the station
+	 * list directly. Every defect this layer produced was in the
+	 * WIRING rather than in a function -- a fix to the feed that the
+	 * graph never saw, an error that outlived its station -- and the
+	 * public surface here is begin(), which fetches. Same device
+	 * bbq_wu_key_source and bbq_wu_feed already use (sec 14.10).
+	 */
+	friend class test_window;
+
 	QString m_last_error;
 	QString m_history_path;
 	QCheckBox *m_wind_box = nullptr;

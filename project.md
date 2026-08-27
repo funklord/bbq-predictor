@@ -4484,3 +4484,57 @@ overlay and the status line, which are derived from the same data.
 else would have: there is no test that can see the window, so the fix
 and its inertness are indistinguishable from every instrument this
 project has.
+
+### 14.10 The window has a suite now, and it was sabotaged before it was believed
+
+Every defect this layer produced was found by hand, on a phone: a
+display label written to the configuration as a station id, a value
+interface that aborted the process on touch, an error message that
+outlived the station it described, and a fix to the feed that the graph
+never saw. The store, the feed and the graph all had suites. The window,
+which is where the parts are joined, had none -- and joining is exactly
+what was going wrong.
+
+`test_window` is the twelfth binary and the largest link in the suite,
+deliberately: what it exists to check is the WIRING, which is precisely
+what a narrower link would stub out. It reaches `watch_station` and the
+controls through a `friend`, as `bbq_wu_key_source` and `bbq_wu_feed`
+already do, because the public surface here is `begin()`, and `begin()`
+fetches.
+
+**Two guards, and both had to be got right before any result meant
+anything.**
+
+The window WRITES real configuration -- `watch_station` calls
+`bbq_settings::set_station` -- so a run would otherwise rewrite the
+station somebody is watching. `QStandardPaths::setTestModeEnabled` was
+used first and removed: it protects the real file and it OVERRIDES the
+environment, so pairing it with an `XDG_CONFIG_HOME` redirect is not
+belt and braces -- test mode wins, and the run leaves a settings file in
+`$HOME` on a machine whose owner did not ask for one. The environment is
+set before `QApplication`, which is when Qt resolves and caches those
+paths.
+
+The assertion that caught it is worth copying: it asks whether the
+config location is under `$HOME`, not whether it looks like a test path.
+The first version asked the second question, passed, and was wrong --
+`~/.qttest/config/test_window` satisfies "contains test" and is still in
+somebody's home directory.
+
+And `watch_station` refreshes, which fetches. An application-wide proxy
+pointing at a closed port on loopback means a request that escapes
+cannot leave the machine. This project scrapes a key it is not licensed
+to have; a suite firing at a third party on every run would be wrong
+whatever it was measuring.
+
+**Then all four cases were sabotaged, one at a time, and each produced
+exactly one failure -- the right one.**
+
+    label resolution removed    -> a_label_is_not_stored_as_a_station_id
+    composite push removed      -> changing_station_clears_the_old_curves
+    error clear removed         -> changing_station_clears_the_old_error
+    pin write removed           -> pinning_marks_the_station_in_the_store
+
+The second is the one this binary was built for. It is the defect of sec
+14.8.3, which was committed as a fix, was inert, and was found by
+chance; it now names itself in under a second.
