@@ -33,15 +33,20 @@ namespace {
 const int margin_top = 10;
 
 /*
- * The rain-chance panel, below the main plot and sharing its x axis --
- * the stacked-panel shape WU's own dashboard uses.
+ * The rain chance shares the plot now (sec 3.19).
  *
- * Its own panel rather than a third line in the main one: a percentage
- * has nothing to do with either axis up there, and hanging it off one
- * of them would make a scale mean two things.
+ * It had a 46-pixel panel of its own below the chart, on the reasoning
+ * that a percentage has nothing to do with either axis above it and
+ * hanging it off one would make a scale mean two things. The second
+ * half of that still holds and is why it keeps its own mapping; the
+ * first turned out to cost more than it bought, because a strip that
+ * size is unreadable on a phone and took a fifth of the height from
+ * the series people actually look at.
+ *
+ * Each series spans the full height on its own scale, which is what
+ * WU's forecast chart does -- as against their dashboard, which is
+ * what the stacked panel was copying.
  */
-const int chance_height = 46;
-const int chance_gap = 6;
 
 /*
  * Full height of the rain trace, in mm/h, and FIXED (sec 3.16).
@@ -615,7 +620,22 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	chosen.grid = QColor(0xe7, 0xe7, 0xe7);
 	chosen.axis_text = QColor(0x4a, 0x4a, 0x4a);
 	chosen.temperature = QColor(0xd5, 0x20, 0x2a);
-	chosen.rain = QColor(0x87, 0xc4, 0x03);
+	/*
+	 * WU's FORECAST chart, not their dashboard (sec 3.8.3).
+	 *
+	 * This was #87c403, measured from the dashboard's precipitation
+	 * series -- a yellow-green, and correct as a measurement. It was
+	 * also unreadable as a meaning: asked what it was twice, the
+	 * copyright holder's second answer was "I don't know what the green
+	 * one is", which is the only test of a colour that counts.
+	 *
+	 * The forecast chart is what this graph resembles -- a rain area
+	 * with the temperature over it -- and there rain is blue. Changing
+	 * it is the holder's instruction and supersedes the measurement
+	 * rather than contradicting it: both are WU, and this is the WU
+	 * view this chart actually is.
+	 */
+	chosen.rain = QColor(0x2e, 0x7e, 0xbb);
 
 	/*
 	 * WU's own rain-family cyan, taken from the accumulation series on
@@ -1063,12 +1083,31 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	        overlay_labels ? 0 : qMax(m_metrics.margin_right, widest + 10);
 	const int margin_left = overlay_labels ? 0 : m_metrics.margin_left;
 
-	const int stack = chance_height + chance_gap;
+	/*
+	 * ONE PANEL (sec 3.19).
+	 *
+	 * Rain chance had a strip of its own below the plot, 46 pixels
+	 * tall, which made a dry day's forecast three quarters temperature
+	 * and a quarter of almost nothing. Every series shares the height
+	 * now, each on its own scale, which is what WU's forecast chart
+	 * does and what makes a rain area readable at all on a phone.
+	 *
+	 * Kept as a named zero rather than deleted, because the rest of the
+	 * geometry is expressed relative to the stack and reading `0` at
+	 * the definition is how the next person sees there is no second
+	 * panel any more.
+	 */
+	const int stack = 0;
 	const QRect plot(margin_left, margin_top,
 	                 width() - margin_left - margin_right,
 	                 height() - margin_top - m_metrics.margin_bottom - stack);
-	const QRect chance_plot(plot.left(), plot.bottom() + chance_gap,
-	                        plot.width(), chance_height);
+	/*
+	 * The same rectangle. Everything positioned below the chart --
+	 * the ribbon, the clock, the now marker's foot -- was written
+	 * against the lower panel's bottom edge, and that edge is the
+	 * plot's now.
+	 */
+	const QRect chance_plot = plot;
 
 	if (plot.width() < 20 || plot.height() < 20) {
 		return;
@@ -1268,7 +1307,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		 * than off the panel. The label says when that has happened.
 		 */
 		const double t = std::min(1.0, value / rain_full_scale_mm_h);
-		return plot.bottom() - t * (plot.height() * 0.45);
+		return plot.bottom() - t * plot.height();
 	};
 
 	/*
@@ -1541,6 +1580,50 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		                                  m_metrics.ribbon_height + 2));
 	}
 
+	/* --- rain chance, under everything it might otherwise hide -------- */
+	/*
+	 * FIRST of the series, because it is an area and the others are
+	 * lines (sec 3.19).
+	 *
+	 * It was drawn last while it had a panel to itself, where nothing
+	 * could be hidden behind it. Full height in the shared plot it
+	 * would have covered the temperature line on any hour the chance
+	 * was high -- which is to say on exactly the hours somebody is
+	 * looking at the chart to decide about.
+	 *
+	 * No background fill: the hour bands are drawn tall enough to cover
+	 * the plot and filling over them would erase them, which is what a
+	 * first attempt did.
+	 */
+	QColor chance_fill = m_palette.chance;
+	/*
+	 * Fainter than it was. At 150 over 46 pixels it was a bar; over the
+	 * whole height it is a wash, and a wash that dark competes with the
+	 * lines drawn on top of it.
+	 */
+	chance_fill.setAlpha(90);
+	painter.setPen(Qt::NoPen);
+	painter.setBrush(chance_fill);
+
+	for (int x = 0; x < plot.width(); ++x) {
+		const column &c = columns[x];
+		if (!c.covered || !c.has_chance) {
+			continue;
+		}
+
+		/*
+		 * Fixed 0..100 rather than scaled to what is visible. A
+		 * percentage means the same thing everywhere, and rescaling it
+		 * would make a dry day's five percent look like a downpour.
+		 */
+		const double h = chance_plot.height() * (c.chance / 100.0);
+		painter.drawRect(QRectF(chance_plot.left() + x,
+		                        chance_plot.bottom() - h, 1.0, h));
+	}
+
+	painter.setBrush(Qt::NoBrush);
+
+
 	/* --- rain, drawn first so the temperature line sits over it -------- */
 	QPainterPath rain_path;
 	bool rain_open = false;
@@ -1798,44 +1881,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.setBrush(Qt::NoBrush);
 	}
 
-	/* --- rain chance, its own panel on a fixed 0..100 scale ----------- */
-	/*
-	 * No background fill here: the hour bands are drawn tall enough to
-	 * cover both panels and filling this one would erase them, which is
-	 * what a first attempt did. Sharing the banding is what makes two
-	 * panels read as one chart rather than two.
-	 */
-	QColor chance_fill = m_palette.chance;
-	chance_fill.setAlpha(150);
-	painter.setPen(Qt::NoPen);
-	painter.setBrush(chance_fill);
-
-	for (int x = 0; x < plot.width(); ++x) {
-		const column &c = columns[x];
-		if (!c.covered || !c.has_chance) {
-			continue;
-		}
-
-		/*
-		 * Fixed 0..100 rather than scaled to what is visible. A
-		 * percentage means the same thing everywhere, and rescaling it
-		 * would make a dry day's five percent look like a downpour.
-		 */
-		const double h = chance_plot.height() * (c.chance / 100.0);
-		painter.drawRect(QRectF(chance_plot.left() + x,
-		                        chance_plot.bottom() - h, 1.0, h));
-	}
-
-	painter.setBrush(Qt::NoBrush);
-	painter.setPen(m_palette.grid);
-	painter.drawLine(chance_plot.bottomLeft(), chance_plot.bottomRight());
-
-	painter.setPen(m_palette.axis_text);
-	edge_label(left_label_x, chance_plot.top() - 2, left_label_wide, left_align,
-	           tr("100%"));
-	edge_label(right_label_x, chance_plot.top() - 2, right_label_wide,
-	           right_align, tr("rain %"));
-
 	/* --- the provenance ribbon (sec 3.4) ------------------------------ */
 	for (int x = 0; x < plot.width(); ++x) {
 		if (!columns[x].covered) {
@@ -2078,8 +2123,19 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	        QString::number(rain_full_scale_mm_h, 'f', 0) +
 	        (rain_clipped ? QStringLiteral("+") : QString()) + tr(" mm/h");
 
-	edge_label(right_label_x, plot.bottom() - plot.height() * 0.45 - 6,
-	           right_label_wide, right_align, rain_text);
+	/*
+	 * At the top, because that is where full scale now is. It sat at
+	 * 45% of the height while the rain trace did.
+	 */
+	edge_label(right_label_x, plot.top() - 2, right_label_wide, right_align,
+	           rain_text);
+
+	/*
+	 * And the chance's ceiling directly under it: both are full-height
+	 * scales now, so both are labelled where they top out.
+	 */
+	edge_label(right_label_x, plot.top() - 2 + gutter.height(),
+	           right_label_wide, right_align, tr("100% rain"));
 
 	if (m_show_wind) {
 		const QString wind_text = QString::number(wind_high, 'f', 0) + tr(" km/h");

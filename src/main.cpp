@@ -757,7 +757,7 @@ int main(int argc, char *argv[]) {
 				 * halo that reads well at 44 can close up the counters
 				 * of a digit at 22. A diagnostic that shows half of
 				 * what the program produces invites a conclusion about
-				 * the other half (sec 4.4).
+				 * the other half (sec 4.3).
 				 */
 				const QFileInfo where(tray_shot);
 				QTextStream report(stdout);

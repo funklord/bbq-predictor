@@ -2011,6 +2011,55 @@ space blank. An absence reads as "nothing to report"; the truth is that
 nothing has been scored yet, which is a different thing and the normal
 state of a fresh install.
 
+### 3.19 One plot, and rain is blue
+
+The chart had two panels: temperature, wind and rain rate above, and
+rain chance in a 46-pixel strip below with its own 0..100 scale. The
+reasoning for the split still holds in half -- a percentage has nothing
+to do with either axis above it, and hanging it off one would make a
+scale mean two things -- but the strip cost more than it bought. It is
+unreadable at that size on a phone, and it took a fifth of the height
+from the series people actually look at. The rain RATE had a second
+problem of its own: it was drawn to 45% of the plot height, so it was
+neither full scale nor sharing one.
+
+Every series spans the full height now, each on its own mapping, layered
+rather than stacked. That is what WU's forecast chart does, and it is
+the shape this chart already was -- an area with the temperature over
+it.
+
+**The rain colour changed from green to blue, and that is worth being
+careful about**, because the colour it replaced was a MEASUREMENT: sec
+3.8.2 records the data colours as sampled from WU's own chart, and
+`#87c403` is their dashboard's precipitation series. A measurement is
+not overridden lightly.
+
+What settled it is that the measurement was of the wrong chart. The
+dashboard plots observations in stacked panels; this plots a forecast
+as layered areas, which is WU's FORECAST chart, and there rain is blue.
+So the change supersedes the measurement rather than contradicting it --
+both are WU, and this is the WU view this chart actually is.
+
+It also failed the only test a colour has. Asked twice what the green
+line was, the copyright holder's second answer was "I don't know what
+the green one is". A colour whose meaning has to be looked up is not
+doing the job a colour is for.
+
+**The chance is painted FIRST now, and that is a defect this change
+created and nearly shipped.** It was drawn last while it had a panel to
+itself, where nothing could be hidden behind it. Full height in a shared
+plot it covers the temperature line on any hour the chance is high --
+which is exactly the hours somebody is reading the chart to decide
+about.
+
+A dry forecast cannot ask that question: with no rain the area lies flat
+against the bottom and the line is untouched whatever the order. So the
+test is certain rain -- 100% chance and 8 mm/h -- and it counts unmixed
+temperature-red pixels in a rendered image, because a wash drawn over
+the line BLENDS rather than covers and a blend is what a looser
+assertion would let through. Sabotaged by restoring the old paint order:
+3 unmixed red pixels against several thousand.
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it
@@ -2071,6 +2120,41 @@ large and lost its top and bottom to the edges. Found by rendering the
 icon to a file and looking at it -- `--tray-icon` exists for that,
 because a tray cannot be screenshotted from here and the icon is now
 the applet's main surface.
+
+### 4.3 The tray number is outlined, because the panel is not ours
+
+The reading was drawn in near-black, which is right on the light panels
+it was written against and all but invisible on a dark one. Measured by
+compositing the icon onto the colours a panel actually is: on `#1c1c1c`
+the digits disappear completely, and on `#2b2b2b` they are a smudge.
+
+Qt offers no reliable way to ask what is behind a tray icon, and the
+answer changes when somebody switches theme without the icon being
+redrawn -- so choosing an ink to suit the background is guessing, twice.
+A light halo under a dark fill needs no guess: the halo carries the
+contrast on a dark panel and the fill carries it on a light one. It is
+what map labels do, and for the same reason, since they are drawn over
+terrain nobody controls.
+
+Stroked first and filled over the top, so the digits keep the weight the
+font gave them -- a stroke is centred on the outline, and filling
+afterwards puts back the half that falls inside. Centred on the INK box
+rather than the em box, because `drawText`'s AlignCenter centres the
+line box, ascent and descent included, and a path placed the same way
+sits visibly high.
+
+**The allowance for the halo is half its width, not all of it, and that
+was decided by looking.** The first version reserved the full width,
+which shrank the font a size at 22 pixels and left the digits thin and
+muddy -- worse than the problem in the case that matters most, since 22
+is what most panels draw. Reserving the outward half keeps the glyph the
+size it was and clips nothing visible.
+
+**`--tray-icon` saved the 44-pixel pixmap alone**, so the size that
+ships to a small panel had never been looked at, and a halo that reads
+well at 44 can close up a digit's counters at 22. It writes both now.
+A diagnostic that shows half of what the program produces invites a
+conclusion about the other half.
 
 ## 5. Build
 
@@ -4615,38 +4699,3 @@ had not. The seed scales the bias BY bucket -- so the four-day bucket is
 is the rain sample. Both numbers were right and the reading was wrong.
 Checking the table settled it in one query, where the alarm would have
 sent somebody looking for a data-corruption bug that does not exist.
-
-### 4.4 The tray number is outlined, because the panel is not ours
-
-The reading was drawn in near-black, which is right on the light panels
-it was written against and all but invisible on a dark one. Measured by
-compositing the icon onto the colours a panel actually is: on `#1c1c1c`
-the digits disappear completely, and on `#2b2b2b` they are a smudge.
-
-Qt offers no reliable way to ask what is behind a tray icon, and the
-answer changes when somebody switches theme without the icon being
-redrawn -- so choosing an ink to suit the background is guessing, twice.
-A light halo under a dark fill needs no guess: the halo carries the
-contrast on a dark panel and the fill carries it on a light one. It is
-what map labels do, and for the same reason, since they are drawn over
-terrain nobody controls.
-
-Stroked first and filled over the top, so the digits keep the weight the
-font gave them -- a stroke is centred on the outline, and filling
-afterwards puts back the half that falls inside. Centred on the INK box
-rather than the em box, because `drawText`'s AlignCenter centres the
-line box, ascent and descent included, and a path placed the same way
-sits visibly high.
-
-**The allowance for the halo is half its width, not all of it, and that
-was decided by looking.** The first version reserved the full width,
-which shrank the font a size at 22 pixels and left the digits thin and
-muddy -- worse than the problem in the case that matters most, since 22
-is what most panels draw. Reserving the outward half keeps the glyph the
-size it was and clips nothing visible.
-
-**`--tray-icon` saved the 44-pixel pixmap alone**, so the size that
-ships to a small panel had never been looked at, and a halo that reads
-well at 44 can close up a digit's counters at 22. It writes both now.
-A diagnostic that shows half of what the program produces invites a
-conclusion about the other half.

@@ -203,7 +203,7 @@ QIcon bbq_tray_icon::reading_icon(const QString &text, const QColor &ink) {
 
 		/*
 		 * OUTLINED, because the panel's colour is not ours to know
-		 * (sec 4.4).
+		 * (sec 4.3).
 		 *
 		 * The ink is near-black, which is right on the light panels
 		 * this was written against and all but invisible on a dark one

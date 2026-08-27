@@ -12,6 +12,7 @@
 #include <QSlider>
 
 #include "graph/forecast_graph.h"
+#include "model/composite.h"
 #include "ui/accessibility.h"
 #include "ui/theme.h"
 
@@ -57,6 +58,7 @@ private slots:
 	void a_boundary_on_the_left_edge_is_kept();
 	void the_count_is_bounded();
 	void a_slider_reports_no_value_to_accessibility();
+	void the_temperature_line_survives_a_certain_downpour();
 
 private:
 	static void paint_once(probe &graph);
@@ -430,6 +432,68 @@ void test_view::a_slider_reports_no_value_to_accessibility() {
  * whatever ran it. Widgets need a QApplication; offscreen needs no
  * display.
  */
+void test_view::the_temperature_line_survives_a_certain_downpour() {
+	/*
+	 * Red on top of blue, asserted in pixels (project.md sec 3.19).
+	 *
+	 * Rain chance used to have a panel of its own, where nothing could
+	 * hide behind it, and it was drawn last. Sharing the plot at full
+	 * height it would cover the temperature line on any hour the chance
+	 * was high -- which is to say on exactly the hours somebody is
+	 * looking at the chart to decide about.
+	 *
+	 * A dry forecast cannot ask this question: with no rain the area is
+	 * flat against the bottom and the line is untouched however the
+	 * painting is ordered. So the fixture is certain rain, which is the
+	 * case where the wrong order and the right one differ.
+	 */
+	probe graph;
+
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < 24; ++i) {
+		bbq_sample sample;
+		sample.start_utc = 1600000000 + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 15.0 + (i % 6);
+		sample.precip_chance = 100.0;
+		sample.precip_rate = 8.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	graph.set_composite(composite);
+
+	graph.resize(900, 400);
+	graph.set_view(1600000000, 12 * 3600);
+
+	const QImage shot = graph.grab().toImage();
+
+	/*
+	 * The temperature red, exactly. A wash drawn over it would blend
+	 * rather than cover, so the test is for the colour ARRIVING
+	 * unmixed -- which is what "on top" means and what a blend would
+	 * quietly fail.
+	 */
+	const QRgb wanted = qRgb(0xd5, 0x20, 0x2a);
+	int found = 0;
+	for (int y = 0; y < shot.height(); ++y) {
+		for (int x = 0; x < shot.width(); ++x) {
+			if (shot.pixel(x, y) == wanted) {
+				++found;
+			}
+		}
+	}
+
+	QVERIFY2(found > 100,
+	         qPrintable(QStringLiteral("the temperature line is not drawn over "
+	                                   "the rain: %1 unmixed red pixels")
+	                            .arg(found)));
+}
+
 int main(int argc, char *argv[]) {
 	qputenv("QT_QPA_PLATFORM", "offscreen");
 	QApplication app(argc, argv);
