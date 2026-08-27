@@ -56,6 +56,7 @@ private slots:
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
+	void a_warm_band_and_a_cold_one_read_differently();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -225,6 +226,68 @@ void test_window::pinning_marks_the_station_in_the_store() {
 	window.m_pin_box->setChecked(false);
 	QCOMPARE(static_cast<int>(window.feed()->history().pinned_stations().size()),
 	         0);
+}
+
+void test_window::a_warm_band_and_a_cold_one_read_differently() {
+	/*
+	 * The record line, which has never once been drawn (sec 14.11).
+	 *
+	 * Verification has been empty on every machine this has run on --
+	 * a forecast is scored only after the hour it predicted has been
+	 * observed -- so the code that reports a score has never had a
+	 * score to report. This seeds one, which is the only way to look
+	 * at it before the weather obliges.
+	 *
+	 * The pair is the test. A band that runs warm and one that runs
+	 * cold are different problems, and the sign is the whole of what
+	 * separates them, so a single case cannot ask the question: the
+	 * cold one is right whatever the code does, because the minus
+	 * comes from the number.
+	 */
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	/*
+	 * A station id of its own. The configuration persists across cases
+	 * in one process, and watch_station returns early when the station
+	 * is already the configured one -- so reusing an id from an earlier
+	 * case leaves this window's feed with no station at all, and the
+	 * note comes back empty for a reason that has nothing to do with
+	 * what is being asked.
+	 */
+	const QString station = QStringLiteral("ITESTNOTE");
+	window.watch_station(station);
+
+	const qint64 now = 1700000000;
+	const qint64 when = now + 3600;
+
+	bbq_composite composite;
+	composite.set_series(bandful(bbq_band::hourly, now, 6));
+
+	bbq_history &store = window.feed()->history();
+
+	QVERIFY(store.set_verification(station, bbq_band::hourly,
+	                               QStringLiteral("temperature"),
+	                               bbq_lead_bucket::hour, 12, 1.2, 1.4, 1.6));
+
+	const QString warm = window.verification_note(composite, when, now);
+	QVERIFY2(warm.contains(QStringLiteral("+1.2")),
+	         qPrintable(QStringLiteral("a warm band did not say so: %1")
+	                            .arg(warm)));
+
+	QVERIFY(store.set_verification(station, bbq_band::hourly,
+	                               QStringLiteral("temperature"),
+	                               bbq_lead_bucket::hour, 12, -1.2, 1.4, 1.6));
+
+	const QString cold = window.verification_note(composite, when, now);
+	QVERIFY2(cold.contains(QStringLiteral("-1.2")),
+	         qPrintable(QStringLiteral("a cold band did not say so: %1")
+	                            .arg(cold)));
+
+	/* And the two must not read the same, which is the point. */
+	QVERIFY2(warm != cold, "warm and cold produced the same record line");
 }
 
 int main(int argc, char *argv[]) {

@@ -4538,3 +4538,40 @@ exactly one failure -- the right one.**
 The second is the one this binary was built for. It is the defect of sec
 14.8.3, which was committed as a fix, was inert, and was found by
 chance; it now names itself in under a second.
+
+### 14.11 The record line has never been drawn, and it was wrong
+
+Verification has been empty on every machine this has ever run on. A
+forecast is scored only once the hour it predicted has been observed, so
+until this week nothing had a score, and the code that reports one had
+never had one to report. The line that says how well a band has done is
+the reason the whole store exists, and it had never rendered.
+
+It was wrong. The bias was written as
+
+    note += QStringLiteral("  bias %1 C")
+                    .arg(temperature.bias, 0, 'f', 1,
+                         QLatin1Char(temperature.bias < 0 ? '-' : '+'));
+
+and `arg`'s fifth parameter is the FILL character -- used to pad to a
+field width, which here is zero. So the sign never appeared, and a warm
+band printed `bias 1.2 C`: exactly the string the comment three lines
+above says must not be produced, since "a band that runs warm and one
+that runs cold are different problems and 1.2 says neither".
+
+**A cold band read correctly the whole time**, because its minus comes
+from the number rather than from the code, and that is why nothing ever
+looked wrong. It is the shape sec 14.5 and sec 14.8.3 both had: the
+common case produces the right answer for a reason other than the one
+intended.
+
+The sign is written explicitly now, and the test is a PAIR. A single
+case cannot ask this question -- the cold one passes whatever the code
+does -- and the pair was proved from both sides: without the fix the
+warm case fails, and with the sign hardcoded to `+` the cold case fails.
+
+**Seeding a score is the only way to look at this before the weather
+obliges**, which is the argument for `set_verification` existing at all.
+It is documented as a diagnostic that must never be aimed at the real
+archive, and this is what it is for: the first real score will land on a
+phone, days from now, with nobody able to check it against anything.

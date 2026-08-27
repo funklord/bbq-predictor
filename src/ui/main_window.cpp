@@ -918,9 +918,21 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 		 * that runs warm and one that runs cold are different problems
 		 * and "1.2" says neither.
 		 */
-		note += QStringLiteral("  bias %1 C")
-		                .arg(temperature.bias, 0, 'f', 1,
-		                     QLatin1Char(temperature.bias < 0 ? '-' : '+'));
+		/*
+		 * The sign is written, not asked for (sec 14.11).
+		 *
+		 * This passed the '+' as arg()'s fifth parameter, which is the
+		 * FILL character -- used only to pad to a field width, and the
+		 * width here is zero. So it never appeared, and a warm band
+		 * printed "1.2": exactly the string the comment above says
+		 * must not be produced. A cold band read correctly throughout,
+		 * because its minus comes from the number, which is why
+		 * nothing ever looked wrong.
+		 */
+		const QLatin1Char sign(temperature.bias < 0 ? '-' : '+');
+		note += QStringLiteral("  bias %1%2 C")
+		                .arg(sign)
+		                .arg(qAbs(temperature.bias), 0, 'f', 1);
 		note += QStringLiteral(", MAE %1")
 		                .arg(temperature.mean_absolute_error, 0, 'f', 1);
 	}
