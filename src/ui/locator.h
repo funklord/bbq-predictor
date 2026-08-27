@@ -50,6 +50,13 @@ private:
 	void answer_located(double latitude, double longitude);
 	void answer_unavailable(const QString &reason);
 
+	/*
+	 * Split from locate_once because asking for the permission is
+	 * ASYNCHRONOUS: on Android the answer arrives when the user has
+	 * dealt with a dialog, which may be never.
+	 */
+	void start_source(int timeout_ms);
+
 	QGeoPositionInfoSource *m_source = nullptr;
 	bool m_answered = false;
 };

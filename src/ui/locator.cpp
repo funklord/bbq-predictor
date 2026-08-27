@@ -1,7 +1,9 @@
 #include "ui/locator.h"
 
+#include <QCoreApplication>
 #include <QGeoPositionInfo>
 #include <QGeoPositionInfoSource>
+#include <QPermissions>
 #include <QTimer>
 
 bbq_locator::bbq_locator(QObject *parent) : QObject(parent) {}
@@ -27,6 +29,59 @@ void bbq_locator::answer_unavailable(const QString &reason) {
 void bbq_locator::locate_once(int timeout_ms) {
 	m_answered = false;
 
+	/*
+	 * ASK FIRST (sec 13.3.2).
+	 *
+	 * A permission in the manifest only makes it requestable. Since
+	 * Android 6 it must also be granted at run time, and nothing grants
+	 * it but a dialog somebody answers. Without this the source was
+	 * created, an update was requested, and the platform refused it
+	 * without ever telling the user there was a question -- measured on
+	 * an SM-N960F, where both location permissions read granted=false
+	 * after a launch that had asked for a fix.
+	 *
+	 * Approximate rather than Precise, matching the manifest and the
+	 * NonSatellitePositioningMethods below: three places that have to
+	 * agree, and this is the one the reader sees.
+	 */
+	QLocationPermission wanted;
+	wanted.setAccuracy(QLocationPermission::Approximate);
+
+	/* Said once: refusing outright and refusing the dialog are the
+	 * same answer to the reader, and should read the same. */
+	const QString refused = tr("permission to use location was refused");
+
+	/*
+	 * Declared before the switch, not inside it: a lambda wrapped across
+	 * lines inside a case is where the indentation rule and a case label
+	 * disagree, and the argument is the same either way.
+	 */
+	const auto answered = [this, timeout_ms, refused](const QPermission &given) {
+		if (given.status() != Qt::PermissionStatus::Granted) {
+			answer_unavailable(refused);
+			return;
+		}
+
+		start_source(timeout_ms);
+	};
+
+	switch (qApp->checkPermission(wanted)) {
+	case Qt::PermissionStatus::Granted:
+		break;
+
+	case Qt::PermissionStatus::Denied:
+		answer_unavailable(refused);
+		return;
+
+	case Qt::PermissionStatus::Undetermined:
+		qApp->requestPermission(wanted, this, answered);
+		return;
+	}
+
+	start_source(timeout_ms);
+}
+
+void bbq_locator::start_source(int timeout_ms) {
 	if (m_source == nullptr) {
 		m_source = QGeoPositionInfoSource::createDefaultSource(this);
 	}

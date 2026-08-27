@@ -3503,6 +3503,50 @@ DATA rather than the device. The `Find...` tooltip carries the reason,
 and an empty list gets the placeholder `no location -- use Find...`,
 which is what a fresh install on a desktop shows.
 
+#### 13.3.2 A manifest permission is not a granted one
+
+The first Android build asked for a position and never got one, and the
+device said why:
+
+    ACCESS_COARSE_LOCATION: granted=false
+    ACCESS_FINE_LOCATION:   granted=false
+    station: 0 rows
+
+**Nothing had asked.** Declaring a permission in the manifest only makes
+it requestable; since Android 6 it must also be granted at run time, and
+nothing grants it but a dialog somebody answers. The locator created the
+source, requested an update, and the platform refused it without ever
+raising the question -- which from the desk is indistinguishable from a
+phone that cannot see the sky, because both end in the same
+`unavailable`.
+
+`QLocationPermission` at `Approximate` accuracy is asked for before the
+source is touched. Approximate rather than Precise so that three places
+agree: the manifest, this request, and the
+`NonSatellitePositioningMethods` the source is configured with.
+
+Measured on an SM-N960F after the fix:
+
+    ACCESS_COARSE_LOCATION: granted=true
+    ACCESS_FINE_LOCATION:   granted=false
+
+    qt.positioning.android: Positioning start
+    qt.positioning.android: Single update using network
+    qt.positioning.android: Stopping updates
+
+Coarse granted and fine still refused, which is the point of asking for
+the one rather than accepting both. `Single update using network` is Qt
+honouring the non-satellite request. `Stopping updates` is twenty
+seconds later: the deadline of sec 13.3 firing on the ordinary indoor
+case, after which the list showed `no location -- use Find...` exactly
+as it does on a desktop with no source at all.
+
+**Only a device could have found this**, and only a device with somebody
+holding it: the fallback is correct and silent, so a build that never
+asks looks identical to a build that asked and was refused. What
+separated them was reading the permission state out of `dumpsys
+package` rather than watching the program's own behaviour.
+
 #### 13.3.1 The package asks for more than the manifest does
 
 The manifest requests `ACCESS_COARSE_LOCATION` and nothing else. The
