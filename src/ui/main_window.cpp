@@ -1085,6 +1085,22 @@ void bbq_main_window::watch_station(const QString &id) {
 	}
 
 	bbq_settings::set_station(wanted);
+
+	/*
+	 * AND THE OLD STATION'S COMPLAINT GOES WITH ITS DATA (sec 14.8.2).
+	 *
+	 * set_station drops every band that described the previous station
+	 * or the coordinate derived from it. This line is the same fact
+	 * displayed: "hourly: Connection refused" is about a fetch for
+	 * somewhere the reader has just navigated away from, and leaving it
+	 * up reports a fault in the station now being watched.
+	 *
+	 * It does not weaken what the message exists for. A band that fails
+	 * must not fail invisibly, and this one had already been shown --
+	 * what it must not do is outlive the thing it was about.
+	 */
+	m_last_error.clear();
+
 	m_feed->set_station(wanted);
 	m_feed->refresh();
 	refresh_station_list();

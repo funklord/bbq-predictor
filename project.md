@@ -4422,3 +4422,37 @@ different door: the first fix was written for the band that had been
 looked at, not for the class the defect belongs to. The question that
 finds the rest is not "is this fixed" but "what else is keyed the way
 this was".
+
+#### 14.8.2 The complaint outlived what it was about
+
+`band_failed` puts a message on the status line and it is never cleared.
+That is deliberate as far as it goes -- a band that fails must not fail
+invisibly, and sec 2.4 will not have the difference between a thin graph
+and a wrong one living in a terminal nobody reads. What it must not do
+is outlive the thing it was about.
+
+`hourly: Connection refused` is a fact about a fetch for the previous
+station, or for the coordinate derived from it. Once sec 14.8 drops
+every band that describes that place, the message is the last thing left
+claiming it -- and read on the status line under the new station's name,
+it reports a fault in the station now being watched.
+
+Cleared where the station changes, beside everything else that belonged
+to the old one.
+
+**It is not covered by a test, and the reason is worth stating rather
+than leaving as an omission.** The state lives in the window, and there
+is no test binary for the window layer at all -- reaching it means
+linking essentially the whole application, which is a piece of work
+rather than an assertion. Moving the field into the feed, where the
+station-change tests could reach it, was considered and rejected: the
+other assignment to it is a history-open failure, which is not a band
+and not the feed's to report.
+
+**The real finding is the gap, not the line.** Every defect this session
+found in the window -- a label stored as a station id, a value interface
+that aborts on touch, and this -- was found by hand, on a device,
+because nothing else could look. The store, the feed and the graph all
+have suites. Whether the window earns one is a question for the
+copyright holder, since it is a new test binary and a real cost, not a
+change to make while passing.
