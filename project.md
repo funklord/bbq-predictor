@@ -4456,3 +4456,31 @@ because nothing else could look. The store, the feed and the graph all
 have suites. Whether the window earns one is a question for the
 copyright holder, since it is a new test binary and a real cost, not a
 change to make while passing.
+
+#### 14.8.3 The model was cleared and the screen was not
+
+Dropping the bands from the feed's composite is invisible. The graph
+holds a COPY -- `set_composite` takes one by value -- so the model was
+right and the display went on drawing the previous station's curves.
+
+Nothing pushed the emptied composite through. The graph learns of a
+change in exactly two places, `updated` when a fetch lands and
+`view_changed` when somebody drags, and after a station change neither
+is guaranteed: the refresh that follows usually succeeds a second later
+and hides it, and where it fails -- which is the case the drop exists
+for -- neither ever comes.
+
+So the fix of sec 14.8 was correct and inert, and the thing that made it
+look like a fix is the same thing that makes this class hard: on the
+common path the wrong mechanism produces the right answer. It is the
+rule this project has now met from three directions -- a correct
+function is not a working feature, and the question to ask of a fix is
+not whether it is right but whether anything consumes it.
+
+Pushed explicitly where the station changes, along with the corrected
+overlay and the status line, which are derived from the same data.
+
+**Found by continuing to look after the fix was committed.** Nothing
+else would have: there is no test that can see the window, so the fix
+and its inertness are indistinguishable from every instrument this
+project has.

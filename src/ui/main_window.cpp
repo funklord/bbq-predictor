@@ -1102,6 +1102,26 @@ void bbq_main_window::watch_station(const QString &id) {
 	m_last_error.clear();
 
 	m_feed->set_station(wanted);
+
+	/*
+	 * PUSH THE EMPTIED COMPOSITE, or none of the above is visible
+	 * (sec 14.8.3).
+	 *
+	 * set_station drops every band belonging to the old station, and
+	 * the graph holds a COPY -- set_composite takes one by value. So
+	 * the model was correct and the screen was not: the graph went on
+	 * drawing the previous station's curves until something else
+	 * happened to push a composite through, which is `updated` on a
+	 * successful fetch, or a view change. Where the fetch fails, which
+	 * is the case the drop exists for, neither ever comes.
+	 *
+	 * The refresh below usually hides it by succeeding a second later.
+	 * That is what made a fix of the model alone look like a fix.
+	 */
+	m_graph->set_composite(m_feed->composite());
+	refresh_corrected();
+	refresh_status();
+
 	m_feed->refresh();
 	refresh_station_list();
 }
