@@ -66,6 +66,16 @@ ANDROID_SDK_ROOT ?= $(HOME)/Android/Sdk
 # the failure lands on somebody else's old phone, not on the desk. That
 # script defaulted to 28 while the package declared 26, and said in a
 # comment that the two matched.
+#
+# 26 is Qt's own floor, not a guess: the kit's generated gradle.properties
+# says qtMinSdkVersion=26, so the default agrees with the toolkit every
+# adopter here builds against. RAISE IT PROJECT-SIDE, above the include,
+# when this project's own code needs a later libc -- `ANDROID_API = 28`
+# and the ?= below yields. bionic marks getrandom __INTRODUCED_IN(28), so
+# a tree calling it compiled against 26 fails inside its own entropy
+# source, naming neither this variable nor the floor it wanted; that cost
+# one adopter a debugging session on a clean rebuild. If a compile fails
+# on a libc symbol that exists on your desktop, this is the knob.
 ANDROID_API      ?= 26
 export ANDROID_API
 
