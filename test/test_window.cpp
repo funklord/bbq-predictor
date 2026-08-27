@@ -3,10 +3,12 @@
 #include <QComboBox>
 #include <QDir>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QNetworkProxy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QWheelEvent>
 
 #include "model/settings.h"
 #include "graph/forecast_graph.h"
@@ -58,6 +60,7 @@ private slots:
 	void pinning_marks_the_station_in_the_store();
 	void a_warm_band_and_a_cold_one_read_differently();
 	void the_list_names_the_station_actually_being_read();
+	void the_view_still_pans_and_zooms_through_the_window();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -326,6 +329,71 @@ void test_window::the_list_names_the_station_actually_being_read() {
 	window.refresh_station_list();
 
 	QCOMPARE(window.m_station_box->currentData().toString(), override_id);
+}
+
+void test_window::the_view_still_pans_and_zooms_through_the_window() {
+	/*
+	 * Panning and zooming with the WHOLE window wired up.
+	 *
+	 * test_view drives the same gestures against a bare graph and has
+	 * always passed, which says the arithmetic is right and nothing
+	 * about what happens when the handlers are connected: every
+	 * view_changed runs set_view_range, pushes a composite back into
+	 * the graph and recomputes the corrected overlay, and any of those
+	 * could undo the movement that caused them.
+	 */
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	window.watch_station(QStringLiteral("ITESTPAN"));
+
+	const qint64 base = 1700000000;
+	bbq_composite composite;
+	composite.set_series(bandful(bbq_band::hourly, base, 48));
+	window.m_graph->set_composite(composite);
+
+	/* The handlers need a plot rectangle, which is decided while
+	 * painting: grabbing forces one without a window manager. */
+	window.m_graph->resize(900, 400);
+	window.m_graph->grab();
+	window.m_graph->set_view(base, 24 * 3600);
+
+	const qint64 before_from = window.m_graph->view_from_utc();
+	const qint64 before_span = window.m_graph->view_span_s();
+
+	const double x = window.m_graph->width() / 2.0;
+	QMouseEvent press(QEvent::MouseButtonPress, QPointF(x, 100.0),
+	                  QPointF(x, 100.0), Qt::LeftButton, Qt::LeftButton,
+	                  Qt::NoModifier);
+	QApplication::sendEvent(window.m_graph, &press);
+
+	QMouseEvent move(QEvent::MouseMove, QPointF(x + 150.0, 100.0),
+	                 QPointF(x + 150.0, 100.0), Qt::NoButton, Qt::LeftButton,
+	                 Qt::NoModifier);
+	QApplication::sendEvent(window.m_graph, &move);
+
+	QMouseEvent release(QEvent::MouseButtonRelease, QPointF(x + 150.0, 100.0),
+	                    QPointF(x + 150.0, 100.0), Qt::LeftButton,
+	                    Qt::NoButton, Qt::NoModifier);
+	QApplication::sendEvent(window.m_graph, &release);
+
+	QVERIFY2(window.m_graph->view_from_utc() != before_from,
+	         "a drag through the wired window did not move the view");
+	QCOMPARE(window.m_graph->view_span_s(), before_span);
+
+	const qint64 dragged_from = window.m_graph->view_from_utc();
+
+	QWheelEvent zoom(QPointF(x, 100.0), window.m_graph->mapToGlobal(
+	                                            QPoint(int(x), 100)),
+	                 QPoint(0, 0), QPoint(0, 120), Qt::NoButton,
+	                 Qt::NoModifier, Qt::NoScrollPhase, false);
+	QApplication::sendEvent(window.m_graph, &zoom);
+
+	QVERIFY2(window.m_graph->view_span_s() != before_span,
+	         "a wheel through the wired window did not change the zoom");
+	Q_UNUSED(dragged_from);
 }
 
 int main(int argc, char *argv[]) {
