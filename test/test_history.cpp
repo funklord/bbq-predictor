@@ -28,6 +28,7 @@ private slots:
 	void a_brier_score_is_read_against_its_baseline();
 	void a_stuck_sensor_does_not_score_a_forecast();
 	void rediscovery_does_not_unpin_a_station();
+	void a_station_s_own_cadence_still_pairs_with_the_hour();
 
 private:
 	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
@@ -466,6 +467,68 @@ void test_history::rediscovery_does_not_unpin_a_station() {
 
 	/* First seen is when we first heard of it, not when we last did. */
 	QCOMPARE(all.at(0).first_seen_utc, qint64(1000));
+}
+
+void test_history::a_station_s_own_cadence_still_pairs_with_the_hour() {
+	/*
+	 * REAL TIMESTAMPS, which never line up (project.md sec 12.16).
+	 *
+	 * Every other test here places observations at exactly the instants
+	 * the forecasts are valid for, which is a fixture agreeing with the
+	 * code by construction: it proves the arithmetic and says nothing
+	 * about whether real data pairs at all. A station reports on its
+	 * own cadence -- ISTOCK877's is 299 seconds -- and forecasts fall
+	 * on hour boundaries, so the two are never equal and the whole
+	 * feature rests on the match window being wide enough.
+	 *
+	 * Measured against that station's real archive before this was
+	 * written: all 45 hour boundaries in two days of observations have
+	 * one within 150 seconds, worst case 63.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 hour = 1600000000 / 3600 * 3600;
+
+	store.record_forecast(QStringLiteral("ITEST1"),
+	                      forecast_of(bbq_band::hourly, hour, 4, 15.0), hour - 3600);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 4);
+
+	/*
+	 * The station's own clock: every 299 seconds, from an offset that
+	 * is not a factor of an hour, so nothing can land on one by
+	 * accident.
+	 */
+	std::vector<bbq_sample> measured;
+	for (int i = 0; i < 60; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour - 1800 + 37 + i * 299;
+		sample.duration_s = 299;
+		sample.temperature = 17.0;
+		measured.push_back(sample);
+	}
+
+	/*
+	 * The fixture is only worth anything if it really does disagree
+	 * with the forecast times, so that is asserted rather than assumed
+	 * -- otherwise a later edit could quietly turn this back into the
+	 * aligned test it exists to complement.
+	 */
+	for (const bbq_sample &sample : measured) {
+		for (int i = 0; i < 4; ++i) {
+			QVERIFY2(sample.start_utc != hour + i * 3600,
+			         "an observation landed exactly on a forecast time, so "
+			         "this fixture is no longer asking its question");
+		}
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(measured);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 4);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 0);
 }
 
 QTEST_GUILESS_MAIN(test_history)

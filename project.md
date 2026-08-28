@@ -3890,6 +3890,51 @@ a hole in a record whose entire value is that it has none. It honours
 `--history-path` like everything else, so a check that should not touch
 the archive still need not.
 
+### 12.16 Why nothing has scored, measured rather than explained
+
+Verification is still empty, and the reason has been guessed at twice in
+this project's life. It is now measured, against the desktop's real
+archive, and it is two ordinary things rather than a fault:
+
+    due forecasts                     226
+    due with an observation to match    0
+
+    ISTOCK822    6 observations, ending 2026-08-13
+                 163 due forecasts from 2026-08-26
+                 nearest observation to any of them: 12.5 days
+
+    ISTOCK877    542 observations, ending 2026-08-27 19:09
+                 63 due forecasts, the earliest at 21:10
+
+ISTOCK822 is the dead station of sec 12.13 -- its queue is orphaned and
+will expire rather than score, which is expire() doing its job.
+ISTOCK877's due forecasts are all LATER than its last observation,
+because WU's history endpoint lags its current endpoint by about two
+hours and the machine has not fetched since. Both resolve themselves;
+neither is a defect.
+
+**But the question that produced this was worth asking**, and the answer
+was not obvious: a forecast falls on an hour boundary and a station
+reports on its own cadence, so the two timestamps are never equal, and
+the whole feature rests on the match window being wide enough. A first
+query using exact equality returned zero and looked like proof the
+pairing could never work.
+
+Measured on ISTOCK877's real observations: of the 45 hour boundaries
+inside two days of data, **all 45 have an observation within 150
+seconds, worst case 63**. The window is comfortable rather than
+marginal, which is the number nobody had.
+
+**The suite could not have told us that.** Every verification test here
+places observations at exactly the instants the forecasts are valid for
+-- a fixture that agrees with the code by construction, proving the
+arithmetic and saying nothing about whether real data pairs at all. So
+one test now uses a station's own clock: 299-second spacing from an
+offset that is not a factor of an hour, with an assertion that no
+observation coincides with a forecast time, so a later edit cannot
+quietly turn it back into the aligned test it exists to complement.
+Narrowing the window to 30 seconds makes it fail.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to
