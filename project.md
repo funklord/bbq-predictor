@@ -2089,6 +2089,34 @@ one place this is not literally under everything. A dotted line behind a
 filled area is most of the way to not being drawn, and wind decides a
 grilling window as often as temperature does.
 
+#### 3.19.2 The caption sat on the line it was explaining
+
+The corrected overlay is labelled where it starts, because an
+unexplained second line on a weather graph is worse than no second line.
+It was drawn 16 pixels above the head of that line, which is exactly
+where the temperature trace is: a POSITIVE bias means the forecast runs
+warm, so the correction is drawn BELOW it, and above the head is the red
+line.
+
+Which side is clear depends on the sign of the correction, so it is
+taken from the temperature's own position at that column rather than
+assumed, and the caption goes on the far side. Both branches were
+rendered before this was believed -- seeding +2 C per bucket puts the
+correction below and the caption below it, seeding -2 C puts both above
+-- which is the whole reason `--seed-verification` can take a negative
+number.
+
+It is haloed as well, for the reason sec 4.3 gives for the tray: it is
+drawn over a rain wash and a grill-window shading whose darkness is the
+weather's to decide, not the layout's.
+
+**Not covered by a test, and the reason is the honest one rather than an
+omission.** The invariant is "not on top of the other line", which in
+pixels means measuring the distance from a caption to a curve that moves
+with the data; the fixture would encode the arithmetic it is checking.
+Layout is the one part of this project the documented method is to LOOK
+at, and both branches were looked at.
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it

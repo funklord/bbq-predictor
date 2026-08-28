@@ -1842,11 +1842,54 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 				 * the first.
 				 */
 				if (!doing_rain) {
-					painter.setPen(ink);
 					const QPointF head = corrected_run.first();
-					painter.drawText(QRectF(head.x() + 4, head.y() - 16, 120, 14),
-					                 Qt::AlignLeft | Qt::AlignVCenter,
-					                 tr("bias-corrected"));
+
+					/*
+					 * ON THE FAR SIDE FROM THE LINE IT IS ABOUT
+					 * (sec 3.19.2).
+					 *
+					 * It was always 16 pixels above the head, which put
+					 * it straight through the temperature trace: a
+					 * positive bias draws the corrected line BELOW the
+					 * forecast, so above the head is exactly where the
+					 * red line is. Which side is clear depends on the
+					 * sign of the correction, so it is chosen from the
+					 * temperature's own position rather than assumed.
+					 */
+					const int at = qBound(0, int(head.x() - plot.left()),
+					                      int(columns.size()) - 1);
+					const column &under = columns[at];
+
+					double offset = -16.0;
+					if (under.covered && under.has_temperature &&
+					    head.y() > y_for_temperature(under.temperature)) {
+						offset = 4.0;
+					}
+
+					const QRectF where(head.x() + 4, head.y() + offset, 120, 14);
+					const QString caption = tr("bias-corrected");
+
+					/*
+					 * Haloed for the same reason the tray number is
+					 * (sec 4.3): it is drawn over a rain wash whose
+					 * darkness is the weather's to decide.
+					 */
+					painter.setPen(m_palette.background);
+					for (int dx = -1; dx <= 1; ++dx) {
+						for (int dy = -1; dy <= 1; ++dy) {
+							if (dx == 0 && dy == 0) {
+								continue;
+							}
+
+							painter.drawText(where.translated(dx, dy),
+							                 Qt::AlignLeft | Qt::AlignVCenter,
+							                 caption);
+						}
+					}
+
+					painter.setPen(ink);
+					painter.drawText(where, Qt::AlignLeft | Qt::AlignVCenter,
+					                 caption);
 				}
 			}
 		}
