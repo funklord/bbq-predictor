@@ -1658,6 +1658,46 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.setBrush(rain_fill);
 	painter.drawPath(rain_path);
 
+	/*
+	 * Wind: context for the grilling score rather than a headline, so
+	 * it is thin, dotted, and drawn UNDER the lines (sec 3.19.1).
+	 *
+	 * It said that and was painted after the temperature, which put
+	 * dotted holes in the red line wherever the two crossed -- the same
+	 * defect as the rain chance directly above, and for the same
+	 * reason: an order that was harmless while the series had somewhere
+	 * else to be.
+	 *
+	 * Over the rain areas rather than beneath them, which is the one
+	 * place this is not literally "under everything". A dotted line
+	 * behind a filled area is most of the way to not being drawn, and
+	 * wind is the variable that decides a grilling window as often as
+	 * temperature does.
+	 */
+	if (m_show_wind) {
+		QPolygonF wind_run;
+
+		for (int x = 0; x < plot.width(); ++x) {
+			const column &c = columns[x];
+			if (!c.covered || !c.has_wind) {
+				if (wind_run.size() > 1) {
+					painter.setPen(QPen(m_palette.wind, 1.0, Qt::DotLine));
+					painter.drawPolyline(wind_run);
+				}
+				wind_run.clear();
+				continue;
+			}
+
+			wind_run.append(QPointF(plot.left() + x, y_for_wind(c.wind)));
+		}
+
+		if (wind_run.size() > 1) {
+			painter.setPen(QPen(m_palette.wind, 1.0, Qt::DotLine));
+			painter.setBrush(Qt::NoBrush);
+			painter.drawPolyline(wind_run);
+		}
+	}
+
 	/* --- temperature, broken wherever no band covers a column --------- */
 	painter.setBrush(Qt::NoBrush);
 	painter.setPen(QPen(m_palette.temperature, m_metrics.line_width));
@@ -1684,34 +1724,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 	if (run.size() > 1) {
 		painter.drawPolyline(run);
-	}
-
-	/*
-	 * Wind, under everything else and thinner than everything else. It
-	 * is context for the grilling score rather than a headline.
-	 */
-	if (m_show_wind) {
-		QPolygonF wind_run;
-
-		for (int x = 0; x < plot.width(); ++x) {
-			const column &c = columns[x];
-			if (!c.covered || !c.has_wind) {
-				if (wind_run.size() > 1) {
-					painter.setPen(QPen(m_palette.wind, 1.0, Qt::DotLine));
-					painter.drawPolyline(wind_run);
-				}
-				wind_run.clear();
-				continue;
-			}
-
-			wind_run.append(QPointF(plot.left() + x, y_for_wind(c.wind)));
-		}
-
-		if (wind_run.size() > 1) {
-			painter.setPen(QPen(m_palette.wind, 1.0, Qt::DotLine));
-			painter.setBrush(Qt::NoBrush);
-			painter.drawPolyline(wind_run);
-		}
 	}
 
 	/*

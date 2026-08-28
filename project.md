@@ -2060,6 +2060,35 @@ the line BLENDS rather than covers and a blend is what a looser
 assertion would let through. Sabotaged by restoring the old paint order:
 3 unmixed red pixels against several thousand.
 
+#### 3.19.1 The wind was on top of the line it is context for
+
+The wind trace carries a comment saying it is drawn "under everything
+else... context for the grilling score rather than a headline", and it
+was painted after the temperature. So wherever the two crossed, a dotted
+grey line put holes in the red one.
+
+The same defect as the rain chance directly above it, from the same
+cause: an order that was harmless while each series had somewhere else
+to be, and stopped being harmless when they came to share a plot.
+Finding the second one took asking what else in that function was
+ordered on an assumption that had just changed -- not reading the code
+again, which had already been read.
+
+**The test asserts a relationship, because a count could not be made
+sharp here.** Contriving a fixture where wind and temperature coincide
+needs both scales solved at once and they are derived from the data. But
+whether the wind is SHOWN cannot change the temperature line at all --
+so the same render with wind on and off must give pixel-identical red,
+and every crossing is a place where a wrong order breaks it. Against the
+old order it reports one pixel lost, which is the true size of the
+defect and exactly the kind of number a threshold would have waved
+through.
+
+It is drawn over the rain areas rather than beneath them, which is the
+one place this is not literally under everything. A dotted line behind a
+filled area is most of the way to not being drawn, and wind decides a
+grilling window as often as temperature does.
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it

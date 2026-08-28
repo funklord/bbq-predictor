@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QSet>
 #include <QTest>
 #include <QWheelEvent>
 
@@ -59,6 +60,7 @@ private slots:
 	void the_count_is_bounded();
 	void a_slider_reports_no_value_to_accessibility();
 	void the_temperature_line_survives_a_certain_downpour();
+	void showing_the_wind_does_not_touch_the_temperature_line();
 
 private:
 	static void paint_once(probe &graph);
@@ -492,6 +494,76 @@ void test_view::the_temperature_line_survives_a_certain_downpour() {
 	         qPrintable(QStringLiteral("the temperature line is not drawn over "
 	                                   "the rain: %1 unmixed red pixels")
 	                            .arg(found)));
+}
+
+void test_view::showing_the_wind_does_not_touch_the_temperature_line() {
+	/*
+	 * Wind is context, not a headline (project.md sec 3.19.1).
+	 *
+	 * Its comment says it is drawn under everything else, and it was
+	 * painted after the temperature -- so wherever the two crossed, a
+	 * dotted grey line put holes in the red one. Harmless-looking, and
+	 * the same defect as the rain chance one directly above it: an
+	 * ordering that was fine when the series had somewhere else to be.
+	 *
+	 * ASSERTED AS A RELATIONSHIP rather than a count, which is what
+	 * makes it sharp. Contriving a fixture where wind and temperature
+	 * coincide needs both scales solved simultaneously and they are
+	 * derived from the data. But whether the wind is SHOWN cannot
+	 * change the temperature line at all -- so the same render with the
+	 * wind on and off must give pixel-identical red, and every crossing
+	 * is a place where a wrong order breaks that.
+	 */
+	probe graph;
+
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < 24; ++i) {
+		bbq_sample sample;
+		sample.start_utc = 1600000000 + i * 3600;
+		sample.duration_s = 3600;
+
+		/* Opposed ramps, so they cross in the middle of the plot. */
+		sample.temperature = 10.0 + i;
+		sample.wind_kph = 40.0 - i;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	graph.set_composite(composite);
+	graph.resize(900, 400);
+	graph.set_view(1600000000, 23 * 3600);
+
+	const QRgb red = qRgb(0xd5, 0x20, 0x2a);
+
+	const auto red_pixels = [&](bool wind) {
+		graph.set_show_wind(wind);
+		const QImage shot = graph.grab().toImage();
+
+		QSet<QPair<int, int>> found;
+		for (int y = 0; y < shot.height(); ++y) {
+			for (int x = 0; x < shot.width(); ++x) {
+				if (shot.pixel(x, y) == red) {
+					found.insert(qMakePair(x, y));
+				}
+			}
+		}
+		return found;
+	};
+
+	const QSet<QPair<int, int>> without = red_pixels(false);
+	const QSet<QPair<int, int>> with = red_pixels(true);
+
+	QVERIFY2(!without.isEmpty(), "no temperature line was drawn at all");
+
+	const QSet<QPair<int, int>> lost = without - with;
+	QVERIFY2(lost.isEmpty(),
+	         qPrintable(QStringLiteral("showing the wind erased %1 pixels of "
+	                                   "the temperature line")
+	                            .arg(lost.size())));
 }
 
 int main(int argc, char *argv[]) {
