@@ -2571,6 +2571,35 @@ is runtime state that is never written down (sec 2.3), which is what
 makes the property easy to hold: there is nowhere in the tree a key is
 supposed to live.
 
+### 8.2 The holder is named, and that is not a licence
+
+Instructed by the copyright holder 2026-08-29, across every private
+project: the holder is named in the `--version` output, in the About
+window where there is one, and in the README. Here that is two surfaces
+-- this program has no About window -- and the line is the spelling two
+sibling projects already carried, so it standardises rather than
+invents:
+
+    Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
+
+The year is this project's own: the first commit is 2026-08-07.
+
+**This is attribution and changes nothing above.** Authorship vests
+automatically, so naming the holder states a fact and grants nobody
+anything; sec 8's absence of a licence is untouched and stays
+deliberate. The README's two sections are kept apart for that reason,
+and the licence paragraph was not edited while adding the other.
+
+**Explicitly not a per-file banner**, which the instruction ruled out.
+Three surfaces because those are where a person actually looks -- what
+the program says about itself, what its About box says, and what its
+documentation says -- and a sweep that put a header on 67 source files
+would be a different and unwanted change.
+
+`code-style.md` deliberately gets nothing. It is a verbatim copy of the
+global source, and a line added here would be drift from it rather than
+attribution.
+
 ## 9. What has been decided, and what has not
 
 ### 9.1 Settled

@@ -106,6 +106,21 @@ int main(int argc, char *argv[]) {
 
 	if (arguments.contains(QStringLiteral("--version"))) {
 		out << "bbq-predictor " << BBQ_VERSION_STRING << "\n";
+
+		/*
+		 * ATTRIBUTION, not a licence (sec 8.2).
+		 *
+		 * Naming the holder is a statement of fact: authorship vests
+		 * automatically, saying who wrote something grants nothing, and
+		 * this creates no obligation to add a LICENSE. Sec 8 records
+		 * that this project deliberately has none, and that stays true
+		 * with this line here.
+		 *
+		 * One of the two surfaces a person actually looks at for it,
+		 * the other being the README. Deliberately NOT a per-file
+		 * banner.
+		 */
+		out << "Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>\n";
 		return 0;
 	}
 

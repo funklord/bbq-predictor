@@ -154,6 +154,13 @@ what can be checked mechanically, and `make check` adds the tests.
 
     make hooks      # install the commit-msg hook
 
+## Copyright
+
+    Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
+
+Attribution rather than a grant: naming the holder says who wrote this
+and confers no rights on anybody.
+
 ## Licence
 
 None. That is deliberate rather than an oversight -- see `project.md`
