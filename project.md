@@ -370,6 +370,38 @@ which is exactly the failure nobody would see coming.
 supplying sub-hourly precipitation is the insurance on the single most
 important band, and it should not wait for the day this stops answering.
 
+### 2.6.4.1 Re-measured against live responses, 2026-08-28
+
+The reader's fixtures are hand-written from our understanding of WU's
+shapes, which is one witness: they prove the arithmetic and cannot prove
+the format. So the three responses were captured live and their field
+names compared against what the reader asks for.
+
+**Every field each product needs is present.** hourly answers with
+`validTimeUtc`, `temperature`, `qpf`, `precipChance`, `windSpeed`;
+fifteenminute with `validTimeLocal`, `temperature`, `precipRate`,
+`precipChance`, `windSpeed`; history with `epoch`, `metric`,
+`observations`, `tempAvg`, `precipRate`, `windspeedAvg`, `tz`. Nothing
+the reader names is missing and nothing it needs has been renamed.
+
+**The nowcast still carries no `validTimeUtc`**, so sec 2.6.2's awkward
+case stands -- local time with an offset is the only clock that band
+has. This was briefly and wrongly thought to have changed, by a probe
+that truncated its own output with a `[:14]` slice and hid the field
+from the list of absences. The instrument, not the endpoint.
+
+**The nowcast carries `snowRate`, and the reader ignores it.** That
+sounds like a barbecue program that cannot see a blizzard, and it is
+not: `bbq_grill_score` is MULTIPLICATIVE and `cold_zero_c` is 5 C, so
+any hour cold enough to snow already scores zero on temperature and
+takes the whole window with it. Snow is excluded by cold rather than by
+precipitation. Recorded because the question looks like a defect and is
+not, and somebody will ask it again.
+
+The other unused fields are the same kind of thing: `relativeHumidity`,
+`temperatureFeelsLike`, `windDirection`, `precipType`, `wxPhraseLong`.
+None is wanted by the grilling score as sec 7 defines it.
+
 ### 2.6.5 The station is chosen by the user and pinned
 
 The observed band (sec 2.6) is per-station: `/v2/pws/history/all` takes a
@@ -1571,6 +1603,53 @@ The limit is measured from the zone string rather than from the
 80-pixel box it is drawn in, so a short name like `CEST` costs one tick
 label instead of three.
 
+### 3.13 The graph was read end to end, and held
+
+A thousand lines, the largest surface with no automated coverage, read
+for the same faults the network paths turned out to have. **It held.**
+No live defect. Recorded because "we looked and found nothing" is a
+result, and an unwritten one gets re-looked-for.
+
+What was checked and why each is safe: every divisor is guarded before
+use -- `plot.width()` by the 20-pixel early return, `rain_high` by
+starting at 1.0 and only growing, the temperature span by the
+four-degree widening that runs before the padding. Column indices are
+bounded by `plot.width()` on both the cursor search and the three draw
+passes, and `columns` is filled with exactly that many entries. The
+rain path's subpaths each open and close on the baseline, so the
+implicit close a filled `QPainterPath` performs runs along the bottom
+rather than across the data.
+
+Three latent things, none of them reachable today, all worth knowing
+before somebody makes them reachable:
+
+- **`set_window()` has no callers.** It is superseded by `set_layout`,
+  which takes the span from the layout metrics, and it is the only
+  entry point that could set a zero span -- which would divide by zero
+  in `seconds_per_pixel`. Left alone rather than deleted: removing
+  public API is not a decision to take while reviewing something else.
+- **The knot invariant depends on arithmetic nobody stated.** A column
+  holding two sample starts would mean the readout's mean temperature
+  carried the first sample's timestamp, which breaks sec 3.11.3's
+  promise that every number in the box is one a provider reported.
+  Measured rather than assumed: columns come out at 77 s on the desktop
+  and about 130 s on mobile, against a finest band of 300 s, and the
+  window cannot be dragged narrow enough to close the gap because the
+  controls set a larger minimum than the graph does. **It is safe by a
+  factor of two, not by construction.** A finer band, or a much wider
+  span, would end that quietly.
+- **The readout box flips left when it will not fit right**, and the
+  flipped position is not clamped, so a widget narrower than the box
+  would push it off the left edge. The comment says the box "never
+  leaves the widget", which is true only because the flip is triggered
+  by being near the right edge.
+
+One thing was wrong and is fixed: the readout's text colour was written
+into the painter as a literal while the box's background and border were
+palette entries. This file's own opening note calls a constant beside
+the palette "a third opinion nobody set", and that is exactly what it
+was.
+
 ### 3.14 The temperature axis holds still
 
 The scale is computed from what is visible, which is exact and, while
@@ -1833,183 +1912,6 @@ Both halves are tested now, and both tests were watched to fail --
 while fixing the first, since keeping radar from owning a column is
 only correct if its rain still arrives.
 
-
-### 12.15 The seeding refusal is tested by running the program
-
-`--seed-verification` writes invented statistics, and it must never
-write them into the real archive. The guard is four lines in `main()`:
-no `--history-path`, no seeding.
-
-Nothing checked it, and it is precisely the kind that stops working
-without anyone noticing. **It produces no output when it is doing its
-job, and what it prevents is silent too** -- fabricated bias rows
-sitting in the store looking like measurements, feeding the corrected
-band onto the graph. The APK signature check in this project stopped
-matching when a tool changed its output format and reported nothing
-wrong for months (sec 11.4); this is the same shape in a place where
-the damage is to data rather than to a build.
-
-It cannot be tested by linking, because it lives in `main()` and a test
-binary cannot have a second one. So `test_seed` runs the built program.
-
-**Both directions, and the second is not garnish.** One case asserts
-the refusal without `--history-path`; the other asserts that seeding a
-scratch file DOES work. Without the second, the first would pass just
-as loudly if the binary were missing, broken, or refusing everything --
-which is exactly the failure the suite hit while being written, and
-which the refusal test alone reported as success.
-
-The check is on the filesystem as well as the exit code. Every standard
-location is redirected into a temporary directory, and the test asserts
-that no `.sqlite` appears anywhere beneath it. A program that refused
-politely and wrote the rows anyway would pass an exit-code assertion.
-
-Two things this cost, both worth knowing:
-
-- **`make test` now builds the application.** The suite exercises the
-  program, so it depends on it. Tests are still not built by the
-  default target; the dependency runs the other way.
-- **The path must be absolute.** `ARTIFACT` is a bare name for an
-  in-place build, `QFile::exists` resolved it against the working
-  directory and `QProcess::start` searched `PATH`, so the child never
-  launched -- and the run took two milliseconds while reporting a
-  failure about missing output rather than about a missing program. A
-  test that cannot start its subject should say so in those words.
-
-### 12.13 The archive has no today in it
-
-`record: none yet` on the verdict line, on two phones, for days. The
-store said why:
-
-    forecast_pending   1634 rows
-    observation           6 rows
-    verification          1 row
-    reliability           0 rows
-
-Six observations across three days, and their times give it away --
-two per day, always the first eleven minutes of the LOCAL day:
-
-    08-11 22:04Z, 22:09Z
-    08-12 22:04Z, 22:09Z
-    08-13 22:04Z, 22:09Z
-
-The observed band asks `/v2/pws/history/all?date=<today>`, and **that
-endpoint is an archive: today is not in it yet.** Whatever the hour, it
-answers with the first couple of rows of the day and nothing since.
-Every ten-minute refresh got the same two rows, the primary key on
-(station, valid_utc) deduplicated them, and the archive grew by two a
-day.
-
-Measured against the same station on the same afternoon, changing only
-the date:
-
-    date=today       2 samples, 00:04..00:15 local
-    date=yesterday   288 samples, a full day at five minutes
-
-288 is the figure the client's own comment promises of this endpoint.
-Nothing was wrong with the station, the parser, or the store.
-
-**Verification is a whole section of this document and it could never
-have worked.** A forecast is scored by matching it against an
-observation at the same instant; with two observations a day there was
-nothing to match. The queue was not the problem -- 1634 forecasts were
-waiting patiently for measurements that were never going to arrive.
-
-Yesterday is fetched separately now, on a six-hour interval since it
-cannot change, and from the startup path as well as the heartbeat: the
-heartbeat refuses to run while anything is outstanding, a launch has
-everything outstanding, and a phone that is opened and backgrounded may
-never reach an idle beat at all. The same product and handler serve
-both days, because the reply is archived and the series is then rebuilt
-from the STORE rather than from the reply -- so two days accumulate
-instead of replacing one another.
-
-One launch now archives 290 observations where it archived 2.
-
-**The lesson is about silence.** Nothing failed. Every band reported
-success, `missing` said `none`, the fetch log looked healthy, and the
-one line that could have said otherwise -- `record: none yet` -- reads
-exactly like a feature waiting for enough data. A pipeline starved at
-its source looks identical to one that is merely young.
-
-### 12.14 A sensor that never moves is not a measurement
-
-With observations finally arriving (sec 12.13), the first real
-verification came out as this, against the station this project was
-written for:
-
-    hourly  temperature  bucket 4  n=12  bias -6.67  MAE 6.67
-
-Bias equal to MAE means every error had the same sign, which is a
-signature rather than a result. The archive said why: 292 observations,
-temperature 22.0 in every one of them. Asking Weather Underground for
-the raw day confirmed it is not a parsing fault -- the API returns
-
-    tempAvg = tempHigh = tempLow = 22
-    dewptAvg = 22
-    humidityAvg = 99
-    windspeedAvg = 0..7        <- moving normally
-    qcStatus = 0
-
-for all 288 rows. Temperature equal to dew point at 99% humidity, held
-for a day while wind and pressure vary, is a soaked or enclosed probe.
-`metric.tempAvg` is the correct field; the data behind it is not a
-measurement.
-
-**The consequence is not confined to a table.** The corrected band
-(sec 12.5) is drawn from these numbers, so a stuck probe becomes a
-curve on the graph carrying the authority of a measurement. -6.67 C is
-not a forecast error; it is the distance between the weather and a
-broken sensor, and it was about to be subtracted from the forecast.
-
-So a quantity whose observations never change across six hours and
-twenty-four samples is not scored, and the refusal says so out loud:
-
-    temperature at ISTOCK822 never changed across 23 hours of 288
-    observations; not scoring it
-
-**Per quantity, not per station.** The same station's wind moves and is
-worth scoring -- its +8.2 km/h bias is a real systematic error, a
-sheltered garden reading lower than a regional forecast, and exactly
-what the correction exists to remove. Refusing the whole station would
-throw that away with the bad field.
-
-The thresholds are deliberately conservative. An hour of unchanging
-temperature is ordinary weather, particularly at the whole-degree
-quantisation this source reports; six hours of it, across a sunrise or
-a sunset, is a fault. The test is exact equality rather than a
-tolerance, because what it catches is a repeated number, and a
-tolerance would begin refusing calm days.
-
-**This does not fix the station.** It stops the program stating a
-confident number about a forecast on the strength of a probe that is
-not reporting the weather. Choosing a better station is the other half,
-and it is not the program's to choose.
-
-### 12.12 The forecast's record, beside the verdict it produced
-
-The verification tables (sec 12.3) were collected to answer one
-question -- how much should this forecast be trusted -- and answered it
-only to `--history`. The verdict line carries it now:
-
-    Best window: Thu 13:00 to 22:00 (9.0 h, score 0.76)
-    record: hourly @12h  bias +1.2 C, MAE 1.7, rain skill 0.34 (n=50)
-
-**The band and the lead are taken from the window itself**, not chosen.
-A record for some other band at some other lead would be a true number
-about the wrong thing.
-
-Two details carry meaning rather than decoration. The bias keeps its
-SIGN, because a band that runs warm and one that runs cold are different
-problems and "1.2" says neither. And rain is reported as skill rather
-than as a raw Brier score, because 0.1 is excellent in a dry climate and
-poor in a changeable one -- only the comparison against always
-predicting the base rate says which this is.
-
-Where nothing has been checked yet it says so, rather than leaving the
-space blank. An absence reads as "nothing to report"; the truth is that
-nothing has been scored yet, which is a different thing and the normal
-state of a fresh install.
 
 ### 3.19 One plot, and rain is blue
 
@@ -2427,53 +2329,6 @@ behind a target that had been present for weeks. **A gate nobody runs is
 not a gate**, which is the same lesson as the four sessions of not
 building, arriving from the other direction.
 
-### 3.13 The graph was read end to end, and held
-
-A thousand lines, the largest surface with no automated coverage, read
-for the same faults the network paths turned out to have. **It held.**
-No live defect. Recorded because "we looked and found nothing" is a
-result, and an unwritten one gets re-looked-for.
-
-What was checked and why each is safe: every divisor is guarded before
-use -- `plot.width()` by the 20-pixel early return, `rain_high` by
-starting at 1.0 and only growing, the temperature span by the
-four-degree widening that runs before the padding. Column indices are
-bounded by `plot.width()` on both the cursor search and the three draw
-passes, and `columns` is filled with exactly that many entries. The
-rain path's subpaths each open and close on the baseline, so the
-implicit close a filled `QPainterPath` performs runs along the bottom
-rather than across the data.
-
-Three latent things, none of them reachable today, all worth knowing
-before somebody makes them reachable:
-
-- **`set_window()` has no callers.** It is superseded by `set_layout`,
-  which takes the span from the layout metrics, and it is the only
-  entry point that could set a zero span -- which would divide by zero
-  in `seconds_per_pixel`. Left alone rather than deleted: removing
-  public API is not a decision to take while reviewing something else.
-- **The knot invariant depends on arithmetic nobody stated.** A column
-  holding two sample starts would mean the readout's mean temperature
-  carried the first sample's timestamp, which breaks sec 3.11.3's
-  promise that every number in the box is one a provider reported.
-  Measured rather than assumed: columns come out at 77 s on the desktop
-  and about 130 s on mobile, against a finest band of 300 s, and the
-  window cannot be dragged narrow enough to close the gap because the
-  controls set a larger minimum than the graph does. **It is safe by a
-  factor of two, not by construction.** A finer band, or a much wider
-  span, would end that quietly.
-- **The readout box flips left when it will not fit right**, and the
-  flipped position is not clamped, so a widget narrower than the box
-  would push it off the left edge. The comment says the box "never
-  leaves the widget", which is true only because the flip is triggered
-  by being near the right edge.
-
-One thing was wrong and is fixed: the readout's text colour was written
-into the painter as a literal while the box's background and border were
-palette entries. This file's own opening note calls a constant beside
-the palette "a third opinion nobody set", and that is exactly what it
-was.
-
 ### 5.1.8 The hole scan could not report a hole at the end
 
 `--fetch-once` walks the composite looking for uncovered stretches. Two
@@ -2568,6 +2423,22 @@ root.
 Qt's own API is called exactly as it is spelled (`setWindowTitle`,
 `paintEvent`); names this project introduces stay `snake_case` with the
 `bbq_` prefix where they reach the linker.
+
+**A second gate fault deformed a test here, and the deformation is
+still in the tree.** `style_gate.py` counts a braced INITIALISER as a
+nesting level, so an aligned continuation inside `= {` is rejected while
+the identical continuation inside `(` is accepted -- three fixtures
+isolate it to the brace alone. `test/test_feed.cpp` builds a station
+list as `QStringList queued; queued << ...` for no reason except to get
+past that, and the braced list it replaced was correct.
+
+It is signalled to `claude-guidelines` (commit `5c5a0de`), where the
+session working on that lexer reproduced all three fixtures and judged
+this the more tractable of its two open faults: it has an agreed-correct
+answer, since the paren case already behaves as `code-style.md` says.
+**When the gate is fixed, revert that line to a braced list** -- it is
+the visible half of the cost, and a deformation nobody reverts is how a
+tool's error becomes the house style.
 
 **One shape came up repeatedly and is not settled**: a statement
 continued across lines without an open bracket -- an operator-led
@@ -2794,11 +2665,25 @@ anything.
   that are the holder's alone: that `debian/copyright` needs a
   `License:` field this project deliberately cannot supply, and that a
   `.deb` is a distribution artifact where the source is not
-- **Finishing the Android build.** It stops at a `compileSdk 35` floor
-  set by Qt's own AndroidX dependencies against an SDK whose newest
-  platform is android-33 (sec 11.2). One `sdkmanager` line fixes it,
-  and it is a download and a licence acceptance on a shared SDK rather
-  than anything in this tree
+- ~~**Finishing the Android build.**~~ Done. android-36 is installed,
+  `ANDROID_TARGET_API` is 36, and the APK builds, installs and runs on
+  the Note 9. The `compileSdk 35` floor sec 11.2 describes was real and
+  is cleared; the entry is struck rather than deleted because the floor
+  is Qt's and will move again
+- **Whether the steadiness slider comes back on Android.** It is a
+  drop-down there because a slider aborted the process (sec 11.6), and
+  the accessibility factory that should make a slider safe is written,
+  tested as a mechanism, and UNVERIFIED on a device -- the phone no
+  longer runs an accessibility service and both emulator images are API
+  33, above the range where the fault lives. Two minutes with any
+  accessibility service running would settle it. The slider was asked
+  for by name, so the drop-down is a workaround holding a place rather
+  than a design
+- **How strong the rain wash should be.** The chance area is drawn at
+  alpha 90 over the full plot height (sec 3.19). That number was chosen
+  by rendering a certain-downpour fixture and looking, which is the
+  right method for the extreme and says nothing about how it reads on
+  an ordinary day. It is a judgement for whoever uses the thing
 - **Whether the three projects that shipped for Android first adopt
   `tool/android.mk`.** Their target names differ from the agreed ones
   in ways somebody has to decide about rather than sweep, so it belongs
@@ -3716,6 +3601,87 @@ handful of comparisons is noise, not a bias -- so a minimum sample count
 gates it, and below that the band is simply absent rather than
 uncorrected-but-drawn.
 
+### 12.6 The give-up rule
+
+A pending forecast whose valid time has passed without an observation
+ever arriving must expire, or every outage leaks rows for ever. It is
+deleted once its valid time is far enough in the past that no
+observation is coming.
+
+The queue is bounded a second way, deliberately. The same valid time is
+re-forecast on every refresh, and keeping all of them would store the
+same hour hundreds of times. **One forecast is kept per band, per valid
+time, per lead-time bucket** -- the first seen in that bucket -- which is
+exactly one verification sample per bucket and turns an unbounded queue
+into a few thousand rows.
+
+### 12.7 Three numbers the implementation forced
+
+None of these was in the design and all three had to be decided to make
+it work. Recorded because each is a threshold, and a threshold nobody
+wrote down gets treated as a law later.
+
+- **The bands do not share a clock.** An hourly forecast lands on the
+  hour; the station reports whenever it feels like it. Demanding an
+  exact match between a forecast's valid time and an observation would
+  verify almost nothing, so they pair within 150 seconds -- about half
+  the station's cadence, which is the widest that cannot reach the wrong
+  sample.
+- **Rain is taken to have occurred above 0.1 mm/h.** The Brier score
+  needs a yes-or-no outcome and the world supplies a rate, so something
+  has to draw the line. This is that line and nothing else depends on it.
+- **A forecast is given up on 36 hours after its valid time.** Long
+  enough that a station down overnight still gets verified when it comes
+  back, short enough that the queue does not carry an outage for ever.
+
+The database runs in WAL mode with `synchronous = NORMAL`. Two copies of
+the applet open at once is a real case on this machine and the default
+journal makes one block the other; the risk accepted in exchange is that
+a crash can lose the last transaction, which is five minutes of weather
+that gets re-fetched anyway.
+
+### 12.8 The observed band is served from the store, not from the fetch
+
+The obvious wiring keeps the fetched band in memory and reaches for the
+database only when somebody pans past it. That makes history a special
+case, and special cases are where the disagreements live -- two paths to
+the same band, and a seam at the edge of the fetched window where they
+meet.
+
+**So the fetch's only job is to keep the store current, and the composite
+always reads its observed band back out.** Panning into last March is the
+same operation as looking at this afternoon, and there is no seam because
+there is no second path.
+
+Three consequences worth stating:
+
+- **The `current` band is NOT archived**, and that is correctness rather
+  than an oversight. A current reading carries the declared validity of
+  sec 3.9, and storing it with that span would put a band of priority
+  300 across minutes nobody measured, overruling the forecasts sec 3.3
+  ranks above it exactly so its extension stays harmless. Nothing is
+  lost: the station's own history reports the same reading on the next
+  observed fetch, with an honest duration.
+- **A store read is stamped with when the band was FETCHED**, not when it
+  was read back. Reading from disk is not freshness, and a store read
+  that stamped itself as new would make sec 2.4's staleness check report
+  a dead feed as healthy every time the view moved.
+- **Reloading is skipped when the view is already inside what is
+  loaded**, and a margin of one span either side is taken when it is not.
+  The view emits on every mouse move of a drag, so this has to be cheap
+  when the answer is already in memory.
+
+Verification runs when a round settles rather than on a timer of its own:
+a round is precisely when new observations have arrived, so it is the
+only moment anything new can be checkable.
+
+`--history` reports what is actually in there -- row counts, the earliest
+observation, how many forecasts are waiting, and the error table by band
+and lead time. Measured on the first live run: two observations, because
+that is all the station published today, and 775 forecasts queued.
+**Nothing verified yet, which is right**: every queued forecast is still
+in the future.
+
 ### 12.9 What building it changed
 
 Three things the design got wrong, all found in the first hour of the
@@ -3809,87 +3775,6 @@ dropped entirely**, so rain could never be corrected on its own. It was
 invisible in every rendering, because the bands that carry rain here
 carry temperature as well.
 
-### 12.6 The give-up rule
-
-A pending forecast whose valid time has passed without an observation
-ever arriving must expire, or every outage leaks rows for ever. It is
-deleted once its valid time is far enough in the past that no
-observation is coming.
-
-The queue is bounded a second way, deliberately. The same valid time is
-re-forecast on every refresh, and keeping all of them would store the
-same hour hundreds of times. **One forecast is kept per band, per valid
-time, per lead-time bucket** -- the first seen in that bucket -- which is
-exactly one verification sample per bucket and turns an unbounded queue
-into a few thousand rows.
-
-### 12.7 Three numbers the implementation forced
-
-None of these was in the design and all three had to be decided to make
-it work. Recorded because each is a threshold, and a threshold nobody
-wrote down gets treated as a law later.
-
-- **The bands do not share a clock.** An hourly forecast lands on the
-  hour; the station reports whenever it feels like it. Demanding an
-  exact match between a forecast's valid time and an observation would
-  verify almost nothing, so they pair within 150 seconds -- about half
-  the station's cadence, which is the widest that cannot reach the wrong
-  sample.
-- **Rain is taken to have occurred above 0.1 mm/h.** The Brier score
-  needs a yes-or-no outcome and the world supplies a rate, so something
-  has to draw the line. This is that line and nothing else depends on it.
-- **A forecast is given up on 36 hours after its valid time.** Long
-  enough that a station down overnight still gets verified when it comes
-  back, short enough that the queue does not carry an outage for ever.
-
-The database runs in WAL mode with `synchronous = NORMAL`. Two copies of
-the applet open at once is a real case on this machine and the default
-journal makes one block the other; the risk accepted in exchange is that
-a crash can lose the last transaction, which is five minutes of weather
-that gets re-fetched anyway.
-
-### 12.8 The observed band is served from the store, not from the fetch
-
-The obvious wiring keeps the fetched band in memory and reaches for the
-database only when somebody pans past it. That makes history a special
-case, and special cases are where the disagreements live -- two paths to
-the same band, and a seam at the edge of the fetched window where they
-meet.
-
-**So the fetch's only job is to keep the store current, and the composite
-always reads its observed band back out.** Panning into last March is the
-same operation as looking at this afternoon, and there is no seam because
-there is no second path.
-
-Three consequences worth stating:
-
-- **The `current` band is NOT archived**, and that is correctness rather
-  than an oversight. A current reading carries the declared validity of
-  sec 3.9, and storing it with that span would put a band of priority
-  300 across minutes nobody measured, overruling the forecasts sec 3.3
-  ranks above it exactly so its extension stays harmless. Nothing is
-  lost: the station's own history reports the same reading on the next
-  observed fetch, with an honest duration.
-- **A store read is stamped with when the band was FETCHED**, not when it
-  was read back. Reading from disk is not freshness, and a store read
-  that stamped itself as new would make sec 2.4's staleness check report
-  a dead feed as healthy every time the view moved.
-- **Reloading is skipped when the view is already inside what is
-  loaded**, and a margin of one span either side is taken when it is not.
-  The view emits on every mouse move of a drag, so this has to be cheap
-  when the answer is already in memory.
-
-Verification runs when a round settles rather than on a timer of its own:
-a round is precisely when new observations have arrived, so it is the
-only moment anything new can be checkable.
-
-`--history` reports what is actually in there -- row counts, the earliest
-observation, how many forecasts are waiting, and the error table by band
-and lead time. Measured on the first live run: two observations, because
-that is all the station published today, and 775 forecasts queued.
-**Nothing verified yet, which is right**: every queued forecast is still
-in the future.
-
 ### 12.11 Reading the chance score, and archiving the diagnostic
 
 **The reliability table was write-only.** It accumulated on every check
@@ -3917,6 +3802,183 @@ discarding them because the caller happened to be a diagnostic would put
 a hole in a record whose entire value is that it has none. It honours
 `--history-path` like everything else, so a check that should not touch
 the archive still need not.
+
+### 12.12 The forecast's record, beside the verdict it produced
+
+The verification tables (sec 12.3) were collected to answer one
+question -- how much should this forecast be trusted -- and answered it
+only to `--history`. The verdict line carries it now:
+
+    Best window: Thu 13:00 to 22:00 (9.0 h, score 0.76)
+    record: hourly @12h  bias +1.2 C, MAE 1.7, rain skill 0.34 (n=50)
+
+**The band and the lead are taken from the window itself**, not chosen.
+A record for some other band at some other lead would be a true number
+about the wrong thing.
+
+Two details carry meaning rather than decoration. The bias keeps its
+SIGN, because a band that runs warm and one that runs cold are different
+problems and "1.2" says neither. And rain is reported as skill rather
+than as a raw Brier score, because 0.1 is excellent in a dry climate and
+poor in a changeable one -- only the comparison against always
+predicting the base rate says which this is.
+
+Where nothing has been checked yet it says so, rather than leaving the
+space blank. An absence reads as "nothing to report"; the truth is that
+nothing has been scored yet, which is a different thing and the normal
+state of a fresh install.
+
+### 12.13 The archive has no today in it
+
+`record: none yet` on the verdict line, on two phones, for days. The
+store said why:
+
+    forecast_pending   1634 rows
+    observation           6 rows
+    verification          1 row
+    reliability           0 rows
+
+Six observations across three days, and their times give it away --
+two per day, always the first eleven minutes of the LOCAL day:
+
+    08-11 22:04Z, 22:09Z
+    08-12 22:04Z, 22:09Z
+    08-13 22:04Z, 22:09Z
+
+The observed band asks `/v2/pws/history/all?date=<today>`, and **that
+endpoint is an archive: today is not in it yet.** Whatever the hour, it
+answers with the first couple of rows of the day and nothing since.
+Every ten-minute refresh got the same two rows, the primary key on
+(station, valid_utc) deduplicated them, and the archive grew by two a
+day.
+
+Measured against the same station on the same afternoon, changing only
+the date:
+
+    date=today       2 samples, 00:04..00:15 local
+    date=yesterday   288 samples, a full day at five minutes
+
+288 is the figure the client's own comment promises of this endpoint.
+Nothing was wrong with the station, the parser, or the store.
+
+**Verification is a whole section of this document and it could never
+have worked.** A forecast is scored by matching it against an
+observation at the same instant; with two observations a day there was
+nothing to match. The queue was not the problem -- 1634 forecasts were
+waiting patiently for measurements that were never going to arrive.
+
+Yesterday is fetched separately now, on a six-hour interval since it
+cannot change, and from the startup path as well as the heartbeat: the
+heartbeat refuses to run while anything is outstanding, a launch has
+everything outstanding, and a phone that is opened and backgrounded may
+never reach an idle beat at all. The same product and handler serve
+both days, because the reply is archived and the series is then rebuilt
+from the STORE rather than from the reply -- so two days accumulate
+instead of replacing one another.
+
+One launch now archives 290 observations where it archived 2.
+
+**The lesson is about silence.** Nothing failed. Every band reported
+success, `missing` said `none`, the fetch log looked healthy, and the
+one line that could have said otherwise -- `record: none yet` -- reads
+exactly like a feature waiting for enough data. A pipeline starved at
+its source looks identical to one that is merely young.
+
+### 12.14 A sensor that never moves is not a measurement
+
+With observations finally arriving (sec 12.13), the first real
+verification came out as this, against the station this project was
+written for:
+
+    hourly  temperature  bucket 4  n=12  bias -6.67  MAE 6.67
+
+Bias equal to MAE means every error had the same sign, which is a
+signature rather than a result. The archive said why: 292 observations,
+temperature 22.0 in every one of them. Asking Weather Underground for
+the raw day confirmed it is not a parsing fault -- the API returns
+
+    tempAvg = tempHigh = tempLow = 22
+    dewptAvg = 22
+    humidityAvg = 99
+    windspeedAvg = 0..7        <- moving normally
+    qcStatus = 0
+
+for all 288 rows. Temperature equal to dew point at 99% humidity, held
+for a day while wind and pressure vary, is a soaked or enclosed probe.
+`metric.tempAvg` is the correct field; the data behind it is not a
+measurement.
+
+**The consequence is not confined to a table.** The corrected band
+(sec 12.5) is drawn from these numbers, so a stuck probe becomes a
+curve on the graph carrying the authority of a measurement. -6.67 C is
+not a forecast error; it is the distance between the weather and a
+broken sensor, and it was about to be subtracted from the forecast.
+
+So a quantity whose observations never change across six hours and
+twenty-four samples is not scored, and the refusal says so out loud:
+
+    temperature at ISTOCK822 never changed across 23 hours of 288
+    observations; not scoring it
+
+**Per quantity, not per station.** The same station's wind moves and is
+worth scoring -- its +8.2 km/h bias is a real systematic error, a
+sheltered garden reading lower than a regional forecast, and exactly
+what the correction exists to remove. Refusing the whole station would
+throw that away with the bad field.
+
+The thresholds are deliberately conservative. An hour of unchanging
+temperature is ordinary weather, particularly at the whole-degree
+quantisation this source reports; six hours of it, across a sunrise or
+a sunset, is a fault. The test is exact equality rather than a
+tolerance, because what it catches is a repeated number, and a
+tolerance would begin refusing calm days.
+
+**This does not fix the station.** It stops the program stating a
+confident number about a forecast on the strength of a probe that is
+not reporting the weather. Choosing a better station is the other half,
+and it is not the program's to choose.
+
+### 12.15 The seeding refusal is tested by running the program
+
+`--seed-verification` writes invented statistics, and it must never
+write them into the real archive. The guard is four lines in `main()`:
+no `--history-path`, no seeding.
+
+Nothing checked it, and it is precisely the kind that stops working
+without anyone noticing. **It produces no output when it is doing its
+job, and what it prevents is silent too** -- fabricated bias rows
+sitting in the store looking like measurements, feeding the corrected
+band onto the graph. The APK signature check in this project stopped
+matching when a tool changed its output format and reported nothing
+wrong for months (sec 11.4); this is the same shape in a place where
+the damage is to data rather than to a build.
+
+It cannot be tested by linking, because it lives in `main()` and a test
+binary cannot have a second one. So `test_seed` runs the built program.
+
+**Both directions, and the second is not garnish.** One case asserts
+the refusal without `--history-path`; the other asserts that seeding a
+scratch file DOES work. Without the second, the first would pass just
+as loudly if the binary were missing, broken, or refusing everything --
+which is exactly the failure the suite hit while being written, and
+which the refusal test alone reported as success.
+
+The check is on the filesystem as well as the exit code. Every standard
+location is redirected into a temporary directory, and the test asserts
+that no `.sqlite` appears anywhere beneath it. A program that refused
+politely and wrote the rows anyway would pass an exit-code assertion.
+
+Two things this cost, both worth knowing:
+
+- **`make test` now builds the application.** The suite exercises the
+  program, so it depends on it. Tests are still not built by the
+  default target; the dependency runs the other way.
+- **The path must be absolute.** `ARTIFACT` is a bare name for an
+  in-place build, `QFile::exists` resolved it against the working
+  directory and `QProcess::start` searched `PATH`, so the child never
+  launched -- and the run took two milliseconds while reporting a
+  failure about missing output rather than about a missing program. A
+  test that cannot start its subject should say so in those words.
 
 ### 12.16 Why nothing has scored, measured rather than explained
 
@@ -3962,6 +4024,51 @@ offset that is not a factor of an hour, with an assertion that no
 observation coincides with a forecast time, so a later edit cannot
 quietly turn it back into the aligned test it exists to complement.
 Narrowing the window to 30 seconds makes it fail.
+
+### 12.17 One question found most of these, and it is worth keeping
+
+Eight defects were found in a single pass, and they are one family
+rather than eight. None of them made anything fail: every one was work
+that did not run, or ran for a reason other than the intended one, on a
+path where the common case looked right.
+
+    14.5   scoring ran for the watched station only
+    14.6   `verified` was emitted to nobody
+    14.8   the old station's bands outlived the station
+    14.8.1 fixing one band left the fault in five others
+    14.8.3 the fix was correct and the graph never saw it
+    14.9   freshness kept per product, asked per station
+    14.11  a warm bias printed without its sign
+    3.19.1 the wind was painted over the line it is context for
+
+**The question that produced them is not "is this correct".** It is
+**"what else was keyed on the assumption that just changed"** -- and it
+has to be asked after each fix rather than once at the start, because
+each answer moves the assumption again. Scoring keyed to the watched
+station led to bands keyed the same way, which led to freshness, which
+led to the graph's copy of the bands; folding the rain chance into the
+plot led to the wind painted above it.
+
+Three shapes recur inside that, and they are what to look for first:
+
+- **A consumer that is right by coincidence.** A cold bias printed
+  correctly because the minus comes from the number; the graph usually
+  showed the new station because a fetch usually succeeds. Every extra
+  passing case raises confidence in the wrong mechanism.
+- **An order that was safe while the parts were apart.** Both paint-order
+  faults were correct while each series had its own panel, and neither
+  changed when the panels merged.
+- **A fix nothing consumes.** Correct in the model, invisible on the
+  screen, and indistinguishable from a working one by every instrument
+  the project had -- which is what bought `test_window` (sec 14.10).
+
+**The instruments that answered where reading did not**: counting
+listeners for every signal, now a gate; sabotaging each fix and watching
+exactly one test go red; asserting a RELATIONSHIP where a value would go
+stale, such as the temperature line being pixel-identical whether or not
+the wind is shown; and rendering the thing and looking at it, which is
+how the tray's invisible digits, the caption on the wrong side and a
+station box naming a station the program was not reading were all found.
 
 ## 13. Navigating the graph
 
@@ -4542,42 +4649,6 @@ something else assumes otherwise, which is the same question sec 14.5
 answered for scoring. That lens has now produced three defects: the
 scoring sweep, the unheard signal, and this.
 
-### 14.9 A freshness record kept per product, asked per station
-
-The feed remembers when it last asked for each product, and `due()`
-consults that to decide whether to ask again. Two of those products --
-`observed` and `current_station` -- are requests about a STATION, so the
-record and the question it answers are keyed differently, and nothing
-said so.
-
-`refresh()` hid it. It asks for both unconditionally, without consulting
-`due()`, precisely so that changing station fetches at once. But it
-declines while a round is outstanding, and changing station is something
-somebody does exactly while watching a slow one. Then the next heartbeat
-consults `due()`, finds the old station was asked a minute ago, and
-declines as well -- so the new station's measurements arrive an interval
-late, ruled fresh on the strength of a question about somewhere else.
-
-Reset now where the station changes, beside the geocode and the
-backfill, and only for those two: the coordinate bands belong to the
-geocode and are already handled where it is dropped.
-
-**The comment in `forget_location_freshness` is where this was hiding,
-and it has been corrected rather than left.** It said the two needed no
-reset at all, because refresh() asks for them unconditionally. That is
-true, and it is not enough -- and a reader arriving with exactly this
-question would have been told there was nothing to look for. A rule
-stated with a reason that only holds on the common path is worse than
-one stated flatly, because the reason is what stops the next person
-checking.
-
-The test writes the freshness record directly, which is why the test
-class is a friend -- `attempt()` would put a request on the wire, and
-what is under test is the bookkeeping either side of one. Same device as
-`bbq_wu_key_source`'s, which this tree already uses for the same reason.
-Making `due()` public was tried first and withdrawn: it is genuinely
-internal, and the seam wanted here is a test's, not an API's.
-
 #### 14.8.1 Fixing one band left the fault in five
 
 Dropping the old station's observations was right and was a third of the
@@ -4670,6 +4741,42 @@ overlay and the status line, which are derived from the same data.
 else would have: there is no test that can see the window, so the fix
 and its inertness are indistinguishable from every instrument this
 project has.
+
+### 14.9 A freshness record kept per product, asked per station
+
+The feed remembers when it last asked for each product, and `due()`
+consults that to decide whether to ask again. Two of those products --
+`observed` and `current_station` -- are requests about a STATION, so the
+record and the question it answers are keyed differently, and nothing
+said so.
+
+`refresh()` hid it. It asks for both unconditionally, without consulting
+`due()`, precisely so that changing station fetches at once. But it
+declines while a round is outstanding, and changing station is something
+somebody does exactly while watching a slow one. Then the next heartbeat
+consults `due()`, finds the old station was asked a minute ago, and
+declines as well -- so the new station's measurements arrive an interval
+late, ruled fresh on the strength of a question about somewhere else.
+
+Reset now where the station changes, beside the geocode and the
+backfill, and only for those two: the coordinate bands belong to the
+geocode and are already handled where it is dropped.
+
+**The comment in `forget_location_freshness` is where this was hiding,
+and it has been corrected rather than left.** It said the two needed no
+reset at all, because refresh() asks for them unconditionally. That is
+true, and it is not enough -- and a reader arriving with exactly this
+question would have been told there was nothing to look for. A rule
+stated with a reason that only holds on the common path is worse than
+one stated flatly, because the reason is what stops the next person
+checking.
+
+The test writes the freshness record directly, which is why the test
+class is a friend -- `attempt()` would put a request on the wire, and
+what is under test is the bookkeeping either side of one. Same device as
+`bbq_wu_key_source`'s, which this tree already uses for the same reason.
+Making `due()` public was tried first and withdrawn: it is genuinely
+internal, and the seam wanted here is a test's, not an API's.
 
 ### 14.10 The window has a suite now, and it was sabotaged before it was believed
 
@@ -4801,3 +4908,5 @@ had not. The seed scales the bias BY bucket -- so the four-day bucket is
 is the rain sample. Both numbers were right and the reading was wrong.
 Checking the table settled it in one query, where the alarm would have
 sent somebody looking for a data-corruption bug that does not exist.
+
+
