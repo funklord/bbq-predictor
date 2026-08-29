@@ -3513,6 +3513,40 @@ whose contents can be rebuilt from their sources is a store that
 tolerates this kind of mistake; one holding the only copy of anything
 would not have.
 
+### 11.8 The launcher icon was never in the package
+
+The project has had an icon since August -- `packaging/`'s SVG, the
+graph drawn in the chart's own colours -- and Android had never seen it.
+Measured on the built APK:
+
+    application: label='bbq-predictor' icon=''
+
+Qt's manifest template carries `%%INSERT_APP_ICON%%`, and
+androiddeployqt DROPS the attribute when nothing is configured rather
+than failing, so the package shipped with no icon at all and the
+launcher fell back to its default. Nothing reported it, and the label
+beside it substituted correctly the whole time -- which is why it read
+as working.
+
+**It is an adaptive icon, because the minimum SDK is 26.** From that
+version a launcher masks the icon to whatever shape it prefers and
+guarantees only the central 72 of 108 units survive. A full card handed
+over as the foreground would be cropped into by every round mask, so
+the foreground is the three marks alone, scaled 72/64 and centred, with
+the card returning as the background layer. Rendered under a circle, a
+squircle and a square before it was believed; nothing clips.
+
+The legacy `ic_launcher.png` is kept beside it at five densities for
+anything older than the adaptive path, which costs 23 kB.
+
+**The icon was also stale**, and that is the more interesting half. Its
+rain was `#87c403` because the chart's was, and the chart moved to blue
+in sec 3.19 while the icon did not. An icon that disagrees with the
+thing it opens is worse than a plain one, so it follows the chart. The
+two files are separate rather than generated from one another: a
+complete icon and a layer somebody else will crop are different
+questions.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh

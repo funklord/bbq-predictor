@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+	<!--
+	  The adaptive-icon foreground (project.md sec 11.8).
+
+	  Android 26 and later mask a launcher icon to whatever shape the
+	  launcher prefers, and guarantee only the central 72 of these 108
+	  units survive that. So this is the same three marks as
+	  se.vibes.bbq-predictor.svg with the card and its border removed,
+	  scaled by 72/64 and centred, which puts every mark inside the safe
+	  zone. The card comes back as the adaptive background layer.
+
+	  Kept as its own file rather than generated from the other, because
+	  the two answer different questions: one is a complete icon, this is
+	  a layer that will be cropped by somebody else's mask.
+	-->
+	<g transform="translate(18,18) scale(1.125)">
+		<rect x="26" y="7" width="17" height="50" fill="#ff8b33" opacity="0.45"/>
+
+		<path d="M7 57 L7 44 L17 41 L26 46 L35 36 L44 40 L53 33 L57 35 L57 57 Z"
+		      fill="#2e7ebb"/>
+
+		<path d="M7 37 C14 17 22 15 30 23 C36 29 41 18 49 14 C53 12 55 13 57 16"
+		      fill="none" stroke="#d5202a" stroke-width="7"
+		      stroke-linecap="round" stroke-linejoin="round"/>
+	</g>
+</svg>

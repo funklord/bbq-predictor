@@ -5,8 +5,13 @@
 	  It is the graph, because the graph is the program (project.md sec 3),
 	  and it is drawn in the palette measured from Weather Underground's own
 	  chart (sec 3.8.2) rather than in colours picked to look nice: the red
-	  is the temperature curve's, the green is the rain's, and the orange is
+	  is the temperature curve's, the blue is the rain's, and the orange is
 	  what a grilling window is shaded with.
+
+	  The rain was green until the chart's was, and followed it to blue when
+	  the graph moved from WU's dashboard palette to their forecast one
+	  (sec 3.19). An icon that disagrees with the thing it opens is worse
+	  than a plain one.
 
 	  Three marks, not four. The first version also carried a pale blue hour
 	  band, which is a four percent tint of white and disappeared at every
@@ -31,7 +36,7 @@
 
 	<!-- Rain, along the bottom as the app draws it. -->
 	<path d="M7 57 L7 44 L17 41 L26 46 L35 36 L44 40 L53 33 L57 35 L57 57 Z"
-	      fill="#87c403"/>
+	      fill="#2e7ebb"/>
 
 	<!-- Temperature: one bold curve, sized to hold together at 16 px. -->
 	<path d="M7 37 C14 17 22 15 30 23 C36 29 41 18 49 14 C53 12 55 13 57 16"
