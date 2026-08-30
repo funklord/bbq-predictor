@@ -2708,6 +2708,11 @@ anything.
   accessibility service running would settle it. The slider was asked
   for by name, so the drop-down is a workaround holding a place rather
   than a design
+- **The fetching server of sec 15**, proposed 2026-08-31 and recorded
+  as a design rather than started. It is the precondition for a home
+  screen widget and for verification accumulating while nobody is
+  looking, and it needs five decisions before any of it is code -- most
+  of them the holder's rather than technical (sec 15.4)
 - **How strong the rain wash should be.** The chance area is drawn at
   alpha 90 over the full plot height (sec 3.19). That number was chosen
   by rendering a certain-downpour fixture and looking, which is the
@@ -4972,4 +4977,90 @@ is the rain sample. Both numbers were right and the reading was wrong.
 Checking the table settled it in one query, where the alarm would have
 sent somebody looking for a data-corruption bug that does not exist.
 
+## 15. A fetching server, published statically
 
+**Proposed by the copyright holder 2026-08-31, and not yet decided.** A
+machine that is always on fetches the bands, writes them as static files,
+and serves them over HTTP; the applet asks that first and falls back to
+the providers it uses today. Recorded here as a design rather than
+started as work, because several of its forks change what gets built.
+
+### 15.1 What it is actually for
+
+The obvious reading is caching, and that is the least of it.
+
+**The phone only fetches while somebody is looking at it.** Qt stops the
+activity when the screen locks, so the archive advances when the app is
+opened and not otherwise -- which is why the launch-time backfill of sec
+12.13 exists at all, and why two days of observations arrive in one
+burst rather than continuously. A server fetching on its own clock ends
+that, and it is the precondition for two things already wanted: a home
+screen widget has nothing to show without background data, and
+verification cannot accumulate for a station nobody opens.
+
+**It also collapses the request budget.** Sec 2.5 asks for sparing use
+of a key this project is not licensed to hold, and today every device
+scrapes its own and fetches its own. One fetcher for several clients is
+strictly fewer requests against WU, not more.
+
+**And it fixes a divergence that already exists.** The desktop archive
+and the phone archive are different databases with different stations in
+them -- ISTOCK822 with six observations on one, ISTOCK877 with 542 on
+the other. Neither is wrong and they will never agree. One published
+archive is one answer.
+
+### 15.2 It is a provider, which sec 2.7 already allows
+
+Nothing in the client needs a new concept. Sec 2.7 settled that the
+internal series is the project's own and that every provider, WU
+included, is a translation into it -- so this is one more translation,
+placed first in the chain. That is why the proposal is cheap on the
+client side and expensive on the other.
+
+**Static files rather than an API**, which is the holder's framing and
+the right one: no dynamic server, no request handling, no attack
+surface, and any web server or object store will do. The fetcher writes
+a directory; something else serves it.
+
+### 15.3 The trap to design against first
+
+**A published band must carry when it was FETCHED, not when it was
+published or served.** Sec 2.4's whole instrument is the age of the
+oldest band, and sec 12.8 already records the same trap one layer down:
+reading a series back from the store stamps it with the fetch time
+rather than the read time, because "a store read that stamped itself as
+new would make the staleness check report a dead feed as healthy every
+time the view moved".
+
+A server gets that wrong more expensively. If the publish stamps itself,
+every client reports a healthy feed forever, because the file is always
+fresh even when the fetcher behind it died a week ago. The staleness
+check would be structurally incapable of firing -- the vacuous pass, at
+the scale of every device at once.
+
+### 15.4 What has to be decided before it is built
+
+- **Whose it is.** One machine for one household, or an endpoint other
+  people could point a client at. That decides whether the geocode in a
+  published file discloses where somebody lives, whether the format has
+  to stay stable for strangers, and how much the next question matters.
+- **Whether it republishes WU's data or only our derivation of it.**
+  Sec 8.1 already draws the line this sits on: keeping something on one
+  machine and publishing it are different acts. Fetching under a scraped
+  key is what sec 2.2 accepted; serving the result to others is a wider
+  act, and it is the holder's call rather than a technical one.
+- **Whether the server also VERIFIES.** It could publish bands only and
+  leave every client to score against its own archive, or score
+  centrally and publish the statistics too. Central scoring is the only
+  way the record accumulates while nobody is looking, and it makes the
+  bias correction one shared opinion rather than each device's own.
+- **Whether it publishes history.** If it does, a fresh install rebuilds
+  a month of observations in one request instead of a day at a time, and
+  the loss of a device's archive stops mattering. That is a much larger
+  publish and a different retention question.
+- **What the format is.** The internal series has no wire form yet;
+  today the readers translate each provider into it in memory. If the
+  answer is binary rather than JSON, `situ` is the sibling project built
+  for exactly that and should be evaluated rather than hand-rolled --
+  the standing instruction in `build-and-commit.md`. If the answer is
+  JSON, situ does not apply and the question is only what the schema is.
