@@ -52,16 +52,6 @@ Qt::ColorScheme bbq_theme_scheme(bbq_theme theme);
  */
 QStringList bbq_scheme_sources();
 
-/*
- * The LXQt palette files, resolved from its config: LXQt names its
- * palette by theme= in lxqt.conf rather than keeping it at a fixed path.
- * The name LOCATES the file and is never read as a predicate -- of the
- * twelve palettes LXQt ships, luminance classifies all twelve correctly
- * while eight are named something that says nothing about which they
- * are. Parameters, so this is testable without an LXQt session.
- */
-QStringList bbq_lxqt_palette_files(const QString &config,
-                                    const QStringList &data_dirs);
 
 /*
  * Tier 4 of the shared dark-desktop rule (claude-guidelines

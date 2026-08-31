@@ -225,86 +225,24 @@ bool parse_triple(const QString &value, int *r, int *g, int *b) {
 
 }  // namespace
 
-QStringList bbq_lxqt_palette_files(const QString &config,
-                                    const QStringList &data_dirs) {
-	QFile file(config);
-	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		return {};
-	}
-
-	QTextStream in(&file);
-	QString section;
-	QString name;
-	while (!in.atEnd()) {
-		const QString line = in.readLine().trimmed();
-		if (line.startsWith(QLatin1Char('[')) && line.endsWith(QLatin1Char(']'))) {
-			section = line.mid(1, line.size() - 2);
-			continue;
-		}
-
-		if (section.compare(QStringLiteral("General"), Qt::CaseInsensitive) != 0) {
-			continue;
-		}
-
-		const int eq = line.indexOf(QLatin1Char('='));
-		if (eq < 0) {
-			continue;
-		}
-
-		if (line.left(eq).trimmed().compare(QStringLiteral("theme"),
-		                                     Qt::CaseInsensitive) == 0) {
-			name = line.mid(eq + 1).trimmed();
-		}
-	}
-
-	if (name.isEmpty()) {
-		return {};
-	}
-
-	/*
-	 * A palette name is a filename component. One carrying a separator
-	 * would reach outside the palette directories, and none legitimately
-	 * does: refuse rather than resolve.
-	 */
-	if (name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')) ||
-	    name.startsWith(QLatin1Char('.'))) {
-		return {};
-	}
-
-	QStringList out;
-	for (const QString &dir : data_dirs) {
-		out << dir + QStringLiteral("/lxqt/palettes/") + name;
-	}
-
-	return out;
-}
-
 QStringList bbq_scheme_sources() {
 	const QString home = QDir::homePath();
 	const QByteArray xdg = qgetenv("XDG_CONFIG_HOME");
 	const QString cfg = xdg.isEmpty() ? home + QStringLiteral("/.config")
 	                                   : QString::fromLocal8Bit(xdg);
 
-	/* XDG's own defaults: a desktop that sets neither is exactly the kind
-	 * this rung exists for. */
-	const QByteArray dh = qgetenv("XDG_DATA_HOME");
-	const QByteArray dd = qgetenv("XDG_DATA_DIRS");
-	const QString data_home = dh.isEmpty()
-	    ? home + QStringLiteral("/.local/share")
-	    : QString::fromLocal8Bit(dh);
-	const QString data_rest = dd.isEmpty()
-	    ? QStringLiteral("/usr/local/share:/usr/share")
-	    : QString::fromLocal8Bit(dd);
-	QStringList data_dirs;
-	data_dirs << data_home;
-	data_dirs << data_rest.split(QLatin1Char(':'), Qt::SkipEmptyParts);
-
 	QStringList sources;
 	sources << cfg + QStringLiteral("/kdeglobals");
 	sources << home + QStringLiteral("/.trinity/share/config/kdeglobals");
 	sources << home + QStringLiteral("/.kde/share/config/kdeglobals");
-	sources << bbq_lxqt_palette_files(
-	    cfg + QStringLiteral("/lxqt/lxqt.conf"), data_dirs);
+	/*
+	 * LXQt writes the APPLIED palette into its own config, under
+	 * [Palette]. The files under <data>/lxqt/palettes/ are the library
+	 * its "Load Palette" dialog reads from, loaded only when
+	 * palette_override is on, and nothing records which one is active --
+	 * so consulting them can answer about a palette nobody is using.
+	 */
+	sources << cfg + QStringLiteral("/lxqt/lxqt.conf");
 	return sources;
 }
 

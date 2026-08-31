@@ -72,8 +72,7 @@ private slots:
 	void an_lxqt_palette_is_read_though_it_spells_it_differently();
 	void an_lxqt_light_palette_reads_light();
 	void an_lxqt_file_named_light_holding_dark_colours_reads_dark();
-	void the_lxqt_theme_name_locates_the_file_it_does_not_judge_it();
-	void an_lxqt_theme_name_with_a_separator_is_refused();
+	void the_applied_lxqt_palette_is_read_from_lxqt_conf_itself();
 	void every_day_boundary_is_local_midnight();
 	void the_short_night_is_twenty_three_hours();
 	void the_long_night_is_twenty_five_hours();
@@ -758,38 +757,29 @@ void test_view::an_lxqt_file_named_light_holding_dark_colours_reads_dark() {
 	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Dark);
 }
 
-/* The indirection LXQt needs and kdeglobals does not. */
-void test_view::the_lxqt_theme_name_locates_the_file_it_does_not_judge_it() {
+/*
+ * **The applied palette lives in lxqt.conf, not in the library.** This
+ * first read <data>/lxqt/palettes/<theme=>, wrong twice over: that file
+ * is loaded only when palette_override is on, so it can describe a
+ * palette nobody is using; and LXQt title-cases the name before building
+ * the path, so seven of the twelve themes installed here -- ambiance,
+ * dark, frost, kvantum, light, silver, system -- did not resolve at all.
+ * The shipped /etc/xdg/lxqt/lxqt.conf says theme=frost, so a DEFAULT
+ * install silently found nothing: the failure this rung removes.
+ */
+void test_view::the_applied_lxqt_palette_is_read_from_lxqt_conf_itself() {
 	QTemporaryDir dir;
 	QVERIFY(dir.isValid());
 	const QString conf = write_kdeglobals(dir, QStringLiteral("lxqt.conf"),
 	    QStringLiteral("[General]\n"
-	                    "theme=Clearlooks\n"
+	                    "theme=frost\n"
+	                    "icon_theme=oxygen\n"
+	                    "[Palette]\n"
+	                    "window_color=#232323\n"
+	                    "window_text_color=#e1e6e6\n"
 	                    "[Qt]\n"
 	                    "style=Fusion\n"));
-	QStringList dirs;
-	dirs << QStringLiteral("/a");
-	dirs << QStringLiteral("/b");
-	QStringList want;
-	want << QStringLiteral("/a/lxqt/palettes/Clearlooks");
-	want << QStringLiteral("/b/lxqt/palettes/Clearlooks");
-	QCOMPARE(bbq_lxqt_palette_files(conf, dirs), want);
-
-	const QString bare = write_kdeglobals(dir, QStringLiteral("bare.conf"),
-	    QStringLiteral("[General]\n" "icon_theme=breeze\n"));
-	QVERIFY(bbq_lxqt_palette_files(bare, dirs).isEmpty());
-}
-
-/*
- * A palette name is a filename component; one carrying a separator would
- * reach outside the palette directories. Refuse rather than resolve.
- */
-void test_view::an_lxqt_theme_name_with_a_separator_is_refused() {
-	QTemporaryDir dir;
-	QVERIFY(dir.isValid());
-	const QString conf = write_kdeglobals(dir, QStringLiteral("escape.conf"),
-	    QStringLiteral("[General]\n" "theme=../../../../etc/shadow\n"));
-	QStringList dirs;
-	dirs << QStringLiteral("/a");
-	QVERIFY(bbq_lxqt_palette_files(conf, dirs).isEmpty());
+	/* theme= is lowercase and names no palette file; the answer is in
+	 * this file regardless. */
+	QCOMPARE(bbq_scheme_from_desktop_files({conf}), Qt::ColorScheme::Dark);
 }
