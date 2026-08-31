@@ -309,6 +309,37 @@ ANDROID_KEY_ALIAS ?=
 ANDROID_CHECK_LOCAL ?=
 
 android-check:
+	@# ANDROID_API must not exceed what the app declares.
+	@#
+	@# The invariant the comment on ANDROID_API states, checked rather
+	@# than asserted -- it was written 2026-09-01 with nothing enforcing
+	@# it, and an adopter whose app drops below the default would break
+	@# it silently. Dependencies cross-compiled ABOVE the app's declared
+	@# minimum resolve symbols that are absent on the oldest device the
+	@# app claims to support, so the failure lands on somebody else's
+	@# phone. Below is the safe side and equal is fine.
+	@#
+	@# It reads the generated gradle.properties, which is the file the
+	@# old comment cited as ANDROID_API's own justification -- it is not
+	@# that, but it IS where the app's declared minimum can be read
+	@# without a device or aapt2.
+	@#
+	@# **This cannot check a first build**, because that file does not
+	@# exist until Qt has generated it, and the check passes quietly when
+	@# it is absent. Said out loud rather than left as a surprise: a
+	@# green android-check on a clean tree has not verified this.
+	@decl="$(ANDROID_BUILD_DIR)/android-build/gradle.properties"; \
+	if [ -f "$$decl" ]; then \
+		want=`sed -n 's/^qtMinSdkVersion=\([0-9][0-9]*\)$$/\1/p' "$$decl"`; \
+		if [ -n "$$want" ] && [ "$(ANDROID_API)" -gt "$$want" ]; then \
+			echo "android: ANDROID_API is $(ANDROID_API), the app declares minSdk $$want." >&2; \
+			echo "android:   Dependencies would be cross-compiled against a later" >&2; \
+			echo "android:   libc than the oldest device this app admits to, and" >&2; \
+			echo "android:   the failure lands there rather than here." >&2; \
+			echo "android:   Lower ANDROID_API, or raise what the app declares." >&2; \
+			exit 1; \
+		fi; \
+	fi
 	@if [ -z "$(QT_ANDROID_ROOT)" ]; then \
 		echo "android: QT_ANDROID_ROOT is not set." >&2; \
 		echo "android:   point it at a Qt-for-Android kit, e.g." >&2; \
