@@ -325,20 +325,30 @@ android-check:
 	@# without a device or aapt2.
 	@#
 	@# **This cannot check a first build**, because that file does not
-	@# exist until Qt has generated it, and the check passes quietly when
-	@# it is absent. Said out loud rather than left as a surprise: a
-	@# green android-check on a clean tree has not verified this.
+	@# exist until Qt has generated it. It says which of the two happened
+	@# rather than passing identically either way: a check whose skip is
+	@# indistinguishable from its pass is one a later reader quotes as
+	@# "android-check is green" without knowing what was compared, which
+	@# is the shape `evidence.md` refuses. Measured by hydra against a
+	@# real build -- three lines of output whether it verified or not --
+	@# and the line below is what closes it.
 	@decl="$(ANDROID_BUILD_DIR)/android-build/gradle.properties"; \
 	if [ -f "$$decl" ]; then \
 		want=`sed -n 's/^qtMinSdkVersion=\([0-9][0-9]*\)$$/\1/p' "$$decl"`; \
-		if [ -n "$$want" ] && [ "$(ANDROID_API)" -gt "$$want" ]; then \
+		if [ -z "$$want" ]; then \
+			echo "android:   api $(ANDROID_API), app declares nothing readable -- NOT checked"; \
+		elif [ "$(ANDROID_API)" -gt "$$want" ]; then \
 			echo "android: ANDROID_API is $(ANDROID_API), the app declares minSdk $$want." >&2; \
 			echo "android:   Dependencies would be cross-compiled against a later" >&2; \
 			echo "android:   libc than the oldest device this app admits to, and" >&2; \
 			echo "android:   the failure lands there rather than here." >&2; \
 			echo "android:   Lower ANDROID_API, or raise what the app declares." >&2; \
 			exit 1; \
+		else \
+			echo "android:   api $(ANDROID_API), app declares $$want -- at or below, as required"; \
 		fi; \
+	else \
+		echo "android:   api $(ANDROID_API), app declares nothing yet -- NOT checked"; \
 	fi
 	@if [ -z "$(QT_ANDROID_ROOT)" ]; then \
 		echo "android: QT_ANDROID_ROOT is not set." >&2; \
