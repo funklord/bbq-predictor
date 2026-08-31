@@ -67,9 +67,28 @@ ANDROID_SDK_ROOT ?= $(HOME)/Android/Sdk
 # script defaulted to 28 while the package declared 26, and said in a
 # comment that the two matched.
 #
-# 26 is Qt's own floor, not a guess: the kit's generated gradle.properties
-# says qtMinSdkVersion=26, so the default agrees with the toolkit every
-# adopter here builds against. RAISE IT PROJECT-SIDE, above the include,
+# 26 is a FLOOR BENEATH EVERY ADOPTER, which is the only thing it can
+# safely be. It used to say "26 is Qt's own floor: the kit's generated
+# gradle.properties says qtMinSdkVersion=26", and that cited the wrong
+# number for the wrong reason.
+#
+# ANDROID_API and qtMinSdkVersion are different quantities. This one is
+# the NDK level DEPENDENCIES are cross-compiled against; qtMinSdkVersion
+# is what the APP declares, which Qt writes per build. They do not track
+# each other: measured 2026-09-01, hydra sets nothing here, takes this
+# default of 26, and ships an app declaring 28.
+#
+# Nor is qtMinSdkVersion a property of the kit. The same Qt 6.12.0
+# generates 26 for beerssh and bbq-predictor and 28 for hydra and
+# fuzzypickles. So "track what Qt declares" names no single number, and
+# raising this default to 28 would cross-compile dependencies at 28 for
+# two trees whose apps declare 26 -- exactly the failure the paragraph
+# above describes, introduced by the fix for it.
+#
+# So the default belongs at or below the LOWEST minimum any adopter
+# declares, and it is checked against the artifact rather than against a
+# comment: `aapt2 dump badging <apk> | grep minSdkVersion`. RAISE IT
+# PROJECT-SIDE, above the include,
 # when this project's own code needs a later libc -- `ANDROID_API = 28`
 # and the ?= below yields. bionic marks getrandom __INTRODUCED_IN(28), so
 # a tree calling it compiled against 26 fails inside its own entropy
