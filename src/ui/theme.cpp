@@ -67,7 +67,7 @@ Qt::ColorScheme bbq_theme_scheme(bbq_theme theme) {
 	 * said, in the only place it says it, that it is dark.
 	 */
 	const Qt::ColorScheme written =
-	    bbq_scheme_from_kdeglobals(bbq_kdeglobals_sources());
+	    bbq_scheme_from_desktop_files(bbq_scheme_sources());
 	if (written != Qt::ColorScheme::Unknown) {
 		return written;
 	}
@@ -182,6 +182,28 @@ double luminance_709(int r, int g, int b) {
  * decimal triples; anything else is not this format and is not guessed
  * at.
  */
+/*
+ * "#232323" -> three channels, or false. LXQt writes hex where TDE writes
+ * decimal triples: two spellings of one statement, so both are read.
+ */
+bool parse_hex(const QString &value, int *r, int *g, int *b) {
+	const QString s = value.trimmed();
+	if (s.size() != 7 || !s.startsWith(QLatin1Char('#'))) {
+		return false;
+	}
+
+	bool ok = false;
+	const uint n = s.mid(1).toUInt(&ok, 16);
+	if (!ok) {
+		return false;
+	}
+
+	*r = int((n >> 16) & 0xff);
+	*g = int((n >> 8) & 0xff);
+	*b = int(n & 0xff);
+	return true;
+}
+
 bool parse_triple(const QString &value, int *r, int *g, int *b) {
 	const QStringList parts = value.split(QLatin1Char(','));
 	if (parts.size() != 3) {
@@ -203,20 +225,90 @@ bool parse_triple(const QString &value, int *r, int *g, int *b) {
 
 }  // namespace
 
-QStringList bbq_kdeglobals_sources() {
+QStringList bbq_lxqt_palette_files(const QString &config,
+                                    const QStringList &data_dirs) {
+	QFile file(config);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		return {};
+	}
+
+	QTextStream in(&file);
+	QString section;
+	QString name;
+	while (!in.atEnd()) {
+		const QString line = in.readLine().trimmed();
+		if (line.startsWith(QLatin1Char('[')) && line.endsWith(QLatin1Char(']'))) {
+			section = line.mid(1, line.size() - 2);
+			continue;
+		}
+
+		if (section.compare(QStringLiteral("General"), Qt::CaseInsensitive) != 0) {
+			continue;
+		}
+
+		const int eq = line.indexOf(QLatin1Char('='));
+		if (eq < 0) {
+			continue;
+		}
+
+		if (line.left(eq).trimmed().compare(QStringLiteral("theme"),
+		                                     Qt::CaseInsensitive) == 0) {
+			name = line.mid(eq + 1).trimmed();
+		}
+	}
+
+	if (name.isEmpty()) {
+		return {};
+	}
+
+	/*
+	 * A palette name is a filename component. One carrying a separator
+	 * would reach outside the palette directories, and none legitimately
+	 * does: refuse rather than resolve.
+	 */
+	if (name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')) ||
+	    name.startsWith(QLatin1Char('.'))) {
+		return {};
+	}
+
+	QStringList out;
+	for (const QString &dir : data_dirs) {
+		out << dir + QStringLiteral("/lxqt/palettes/") + name;
+	}
+
+	return out;
+}
+
+QStringList bbq_scheme_sources() {
 	const QString home = QDir::homePath();
 	const QByteArray xdg = qgetenv("XDG_CONFIG_HOME");
 	const QString cfg = xdg.isEmpty() ? home + QStringLiteral("/.config")
 	                                   : QString::fromLocal8Bit(xdg);
 
-	return QStringList{
-		cfg + QStringLiteral("/kdeglobals"),
-		home + QStringLiteral("/.trinity/share/config/kdeglobals"),
-		home + QStringLiteral("/.kde/share/config/kdeglobals"),
-	};
+	/* XDG's own defaults: a desktop that sets neither is exactly the kind
+	 * this rung exists for. */
+	const QByteArray dh = qgetenv("XDG_DATA_HOME");
+	const QByteArray dd = qgetenv("XDG_DATA_DIRS");
+	const QString data_home = dh.isEmpty()
+	    ? home + QStringLiteral("/.local/share")
+	    : QString::fromLocal8Bit(dh);
+	const QString data_rest = dd.isEmpty()
+	    ? QStringLiteral("/usr/local/share:/usr/share")
+	    : QString::fromLocal8Bit(dd);
+	QStringList data_dirs;
+	data_dirs << data_home;
+	data_dirs << data_rest.split(QLatin1Char(':'), Qt::SkipEmptyParts);
+
+	QStringList sources;
+	sources << cfg + QStringLiteral("/kdeglobals");
+	sources << home + QStringLiteral("/.trinity/share/config/kdeglobals");
+	sources << home + QStringLiteral("/.kde/share/config/kdeglobals");
+	sources << bbq_lxqt_palette_files(
+	    cfg + QStringLiteral("/lxqt/lxqt.conf"), data_dirs);
+	return sources;
 }
 
-Qt::ColorScheme bbq_scheme_from_kdeglobals(const QStringList &sources) {
+Qt::ColorScheme bbq_scheme_from_desktop_files(const QStringList &sources) {
 	for (const QString &path : sources) {
 		QFile file(path);
 		if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -244,7 +336,11 @@ Qt::ColorScheme bbq_scheme_from_kdeglobals(const QStringList &sources) {
 			 * per-application sections, and taking whichever came last
 			 * would answer about some other program's colours.
 			 */
-			if (section.compare(QStringLiteral("General"), Qt::CaseInsensitive) != 0) {
+			const bool general = section.compare(QStringLiteral("General"),
+			                                      Qt::CaseInsensitive) == 0;
+			const bool palette = section.compare(QStringLiteral("Palette"),
+			                                      Qt::CaseInsensitive) == 0;
+			if (!general && !palette) {
 				continue;
 			}
 
@@ -255,12 +351,22 @@ Qt::ColorScheme bbq_scheme_from_kdeglobals(const QStringList &sources) {
 
 			const QString key = line.left(eq).trimmed();
 			const QString value = line.mid(eq + 1).trimmed();
-			if (key.compare(QStringLiteral("windowBackground"),
-			                 Qt::CaseInsensitive) == 0) {
-				parse_triple(value, &br, &bg, &bb);
-			} else if (key.compare(QStringLiteral("windowForeground"),
+			if (general) {
+				/* TDE and KDE 3. */
+				if (key.compare(QStringLiteral("windowBackground"),
+				                 Qt::CaseInsensitive) == 0) {
+					parse_triple(value, &br, &bg, &bb);
+				} else if (key.compare(QStringLiteral("windowForeground"),
+				                        Qt::CaseInsensitive) == 0) {
+					parse_triple(value, &fr, &fg, &fb);
+				}
+			} else if (key.compare(QStringLiteral("window_color"),
 			                        Qt::CaseInsensitive) == 0) {
-				parse_triple(value, &fr, &fg, &fb);
+				/* LXQt. */
+				parse_hex(value, &br, &bg, &bb);
+			} else if (key.compare(QStringLiteral("window_text_color"),
+			                        Qt::CaseInsensitive) == 0) {
+				parse_hex(value, &fr, &fg, &fb);
 			}
 		}
 

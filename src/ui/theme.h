@@ -43,10 +43,25 @@ const char *bbq_theme_name(bbq_theme theme);
 Qt::ColorScheme bbq_theme_scheme(bbq_theme theme);
 
 /*
- * The kdeglobals files a TDE or KDE 3 desktop writes, most authoritative
+ * The colour-scheme files the desktops here write, most authoritative
  * first. Separate from the parser below so a test can supply its own.
+ *
+ * Two dialects, because a desktop with no dark-mode status is the normal
+ * case and each spells the same statement differently: TDE and KDE 3 use
+ * [General] with decimal triples, LXQt uses [Palette] with #rrggbb.
  */
-QStringList bbq_kdeglobals_sources();
+QStringList bbq_scheme_sources();
+
+/*
+ * The LXQt palette files, resolved from its config: LXQt names its
+ * palette by theme= in lxqt.conf rather than keeping it at a fixed path.
+ * The name LOCATES the file and is never read as a predicate -- of the
+ * twelve palettes LXQt ships, luminance classifies all twelve correctly
+ * while eight are named something that says nothing about which they
+ * are. Parameters, so this is testable without an LXQt session.
+ */
+QStringList bbq_lxqt_palette_files(const QString &config,
+                                    const QStringList &data_dirs);
 
 /*
  * Tier 4 of the shared dark-desktop rule (claude-guidelines
@@ -69,7 +84,7 @@ QStringList bbq_kdeglobals_sources();
  * Unlike bbq_theme_scheme this DOES return Unknown, because it is a
  * source rather than the decision.
  */
-Qt::ColorScheme bbq_scheme_from_kdeglobals(const QStringList &sources);
+Qt::ColorScheme bbq_scheme_from_desktop_files(const QStringList &sources);
 
 /*
  * Apply to the whole application, so the widgets around the graph agree

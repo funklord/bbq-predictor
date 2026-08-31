@@ -67,6 +67,13 @@ private slots:
 	void the_keys_are_taken_from_general_and_not_another_section();
 	void a_file_that_cannot_be_read_abstains_rather_than_guessing();
 	void a_half_written_scheme_abstains_and_the_next_file_answers();
+
+	/* The second dialect: LXQt states the same thing another way. */
+	void an_lxqt_palette_is_read_though_it_spells_it_differently();
+	void an_lxqt_light_palette_reads_light();
+	void an_lxqt_file_named_light_holding_dark_colours_reads_dark();
+	void the_lxqt_theme_name_locates_the_file_it_does_not_judge_it();
+	void an_lxqt_theme_name_with_a_separator_is_refused();
 	void every_day_boundary_is_local_midnight();
 	void the_short_night_is_twenty_three_hours();
 	void the_long_night_is_twenty_five_hours();
@@ -623,7 +630,7 @@ void test_view::the_desktops_own_colours_are_read_when_qt_says_nothing() {
 	                    "colorScheme=DarkBlue.kcsrc\n"
 	                    "windowBackground=0,42,78\n"
 	                    "windowForeground=220,220,220\n"));
-	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Dark);
+	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Dark);
 }
 
 /* The control. Without it a parser hardcoded to dark would pass. */
@@ -634,7 +641,7 @@ void test_view::a_light_scheme_in_the_same_format_reads_light() {
 	    QStringLiteral("[General]\n"
 	                    "windowBackground=255,255,255\n"
 	                    "windowForeground=0,0,0\n"));
-	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Light);
+	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Light);
 }
 
 /*
@@ -651,7 +658,7 @@ void test_view::the_colours_decide_and_the_scheme_name_does_not() {
 	                    "colorScheme=DarkBlue.kcsrc\n"
 	                    "windowBackground=255,255,255\n"
 	                    "windowForeground=0,0,0\n"));
-	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Light);
+	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Light);
 }
 
 /*
@@ -669,7 +676,7 @@ void test_view::the_keys_are_taken_from_general_and_not_another_section() {
 	                    "[konsole]\n"
 	                    "windowBackground=255,255,255\n"
 	                    "windowForeground=0,0,0\n"));
-	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Dark);
+	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Dark);
 }
 
 /*
@@ -682,8 +689,8 @@ void test_view::a_file_that_cannot_be_read_abstains_rather_than_guessing() {
 	QTemporaryDir dir;
 	QVERIFY(dir.isValid());
 	const QString absent = dir.filePath(QStringLiteral("no-such-file"));
-	QCOMPARE(bbq_scheme_from_kdeglobals({absent}), Qt::ColorScheme::Unknown);
-	QCOMPARE(bbq_scheme_from_kdeglobals({}), Qt::ColorScheme::Unknown);
+	QCOMPARE(bbq_scheme_from_desktop_files({absent}), Qt::ColorScheme::Unknown);
+	QCOMPARE(bbq_scheme_from_desktop_files({}), Qt::ColorScheme::Unknown);
 }
 
 /*
@@ -698,11 +705,91 @@ void test_view::a_half_written_scheme_abstains_and_the_next_file_answers() {
 	const QString half = write_kdeglobals(dir, QStringLiteral("half"),
 	    QStringLiteral("[General]\n"
 	                    "windowBackground=0,42,78\n"));
-	QCOMPARE(bbq_scheme_from_kdeglobals({half}), Qt::ColorScheme::Unknown);
+	QCOMPARE(bbq_scheme_from_desktop_files({half}), Qt::ColorScheme::Unknown);
 
 	const QString whole = write_kdeglobals(dir, QStringLiteral("whole"),
 	    QStringLiteral("[General]\n"
 	                    "windowBackground=0,42,78\n"
 	                    "windowForeground=220,220,220\n"));
-	QCOMPARE(bbq_scheme_from_kdeglobals({half, whole}), Qt::ColorScheme::Dark);
+	QCOMPARE(bbq_scheme_from_desktop_files({half, whole}), Qt::ColorScheme::Dark);
+}
+
+/*
+ * The second dialect. LXQt is the other session installed on the machine
+ * this was written on, and before this the parser found NOTHING in its
+ * config -- not a wrong answer, which would have been noticed, but
+ * silence, which reads as no opinion and falls through to light. That is
+ * the failure this rung exists to prevent, one desktop over.
+ */
+void test_view::an_lxqt_palette_is_read_though_it_spells_it_differently() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString path = write_kdeglobals(dir, QStringLiteral("pal-dark"),
+	    QStringLiteral("[Palette]\n"
+	                    "base_color=#282828\n"
+	                    "window_color=#232323\n"
+	                    "window_text_color=#e1e6e6\n"));
+	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Dark);
+}
+
+void test_view::an_lxqt_light_palette_reads_light() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString path = write_kdeglobals(dir, QStringLiteral("pal-light"),
+	    QStringLiteral("[Palette]\n"
+	                    "window_color=#efefef\n"
+	                    "window_text_color=#000000\n"));
+	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Light);
+}
+
+/*
+ * Of the twelve palettes LXQt ships, luminance classifies all twelve
+ * correctly while EIGHT are named something that says nothing. Here the
+ * file is called "Light" and holds Silver's colours, which are dark, so
+ * a substring test gets it backwards.
+ */
+void test_view::an_lxqt_file_named_light_holding_dark_colours_reads_dark() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString path = write_kdeglobals(dir, QStringLiteral("Light"),
+	    QStringLiteral("[Palette]\n"
+	                    "window_color=#636464\n"
+	                    "window_text_color=#f9f9f9\n"));
+	QCOMPARE(bbq_scheme_from_desktop_files({path}), Qt::ColorScheme::Dark);
+}
+
+/* The indirection LXQt needs and kdeglobals does not. */
+void test_view::the_lxqt_theme_name_locates_the_file_it_does_not_judge_it() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString conf = write_kdeglobals(dir, QStringLiteral("lxqt.conf"),
+	    QStringLiteral("[General]\n"
+	                    "theme=Clearlooks\n"
+	                    "[Qt]\n"
+	                    "style=Fusion\n"));
+	QStringList dirs;
+	dirs << QStringLiteral("/a");
+	dirs << QStringLiteral("/b");
+	QStringList want;
+	want << QStringLiteral("/a/lxqt/palettes/Clearlooks");
+	want << QStringLiteral("/b/lxqt/palettes/Clearlooks");
+	QCOMPARE(bbq_lxqt_palette_files(conf, dirs), want);
+
+	const QString bare = write_kdeglobals(dir, QStringLiteral("bare.conf"),
+	    QStringLiteral("[General]\n" "icon_theme=breeze\n"));
+	QVERIFY(bbq_lxqt_palette_files(bare, dirs).isEmpty());
+}
+
+/*
+ * A palette name is a filename component; one carrying a separator would
+ * reach outside the palette directories. Refuse rather than resolve.
+ */
+void test_view::an_lxqt_theme_name_with_a_separator_is_refused() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString conf = write_kdeglobals(dir, QStringLiteral("escape.conf"),
+	    QStringLiteral("[General]\n" "theme=../../../../etc/shadow\n"));
+	QStringList dirs;
+	dirs << QStringLiteral("/a");
+	QVERIFY(bbq_lxqt_palette_files(conf, dirs).isEmpty());
 }
