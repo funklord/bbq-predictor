@@ -2,6 +2,7 @@
 #define BBQ_UI_THEME_H
 
 #include <QString>
+#include <QStringList>
 #include <Qt>
 
 /*
@@ -40,6 +41,35 @@ const char *bbq_theme_name(bbq_theme theme);
  * so callers have two cases rather than three.
  */
 Qt::ColorScheme bbq_theme_scheme(bbq_theme theme);
+
+/*
+ * The kdeglobals files a TDE or KDE 3 desktop writes, most authoritative
+ * first. Separate from the parser below so a test can supply its own.
+ */
+QStringList bbq_kdeglobals_sources();
+
+/*
+ * Tier 4 of the shared dark-desktop rule (claude-guidelines
+ * harmonization.md): the scheme the desktop wrote down, or Unknown.
+ *
+ * The platform hint above does not fail VISIBLY on a Trinity or KDE 3
+ * session, which is what makes this worth asking separately. That
+ * desktop exposes no Qt 6 platform theme and runs no XDG portal, so the
+ * hint answers Unknown -- and the applet then defaults to light and
+ * shows a white rectangle on a dark desktop at night, which is the exact
+ * thing sec 10.3 added a dark mode to stop.
+ *
+ * THE COLOURS DECIDE, NEVER THE SCHEME NAME. `colorScheme=DarkBlue.kcsrc`
+ * contains "Dark" by luck; plenty of dark schemes do not, and a name is
+ * not a predicate about luminance.
+ *
+ * Returns Unknown when no file can be read or parsed -- ABSTAIN RATHER
+ * THAN GUESS. The errors are not symmetric: a wrong light answer is
+ * merely plain, a wrong dark one is unreadable text on a pale ground.
+ * Unlike bbq_theme_scheme this DOES return Unknown, because it is a
+ * source rather than the decision.
+ */
+Qt::ColorScheme bbq_scheme_from_kdeglobals(const QStringList &sources);
 
 /*
  * Apply to the whole application, so the widgets around the graph agree

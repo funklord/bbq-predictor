@@ -1,8 +1,11 @@
 #include "ui/theme.h"
 
+#include <QDir>
+#include <QFile>
 #include <QGuiApplication>
 #include <QPalette>
 #include <QStyleHints>
+#include <QTextStream>
 
 bbq_theme bbq_theme_resolve(const QString &preference) {
 	const QString wanted = preference.trimmed().toLower();
@@ -49,8 +52,24 @@ Qt::ColorScheme bbq_theme_scheme(bbq_theme theme) {
 	 * every call site, differently each time.
 	 */
 	const QStyleHints *hints = QGuiApplication::styleHints();
-	if (hints != nullptr && hints->colorScheme() == Qt::ColorScheme::Dark) {
-		return Qt::ColorScheme::Dark;
+	if (hints != nullptr) {
+		const Qt::ColorScheme hinted = hints->colorScheme();
+		if (hinted != Qt::ColorScheme::Unknown) {
+			return hinted;
+		}
+	}
+
+	/*
+	 * The desktop's own file, asked before defaulting to light rather
+	 * than instead of the hint. A Trinity or KDE 3 session tells Qt
+	 * nothing, so the hint above is Unknown there and the default below
+	 * would light up a white rectangle at night on a desktop that has
+	 * said, in the only place it says it, that it is dark.
+	 */
+	const Qt::ColorScheme written =
+	    bbq_scheme_from_kdeglobals(bbq_kdeglobals_sources());
+	if (written != Qt::ColorScheme::Unknown) {
+		return written;
 	}
 
 	return Qt::ColorScheme::Light;
@@ -145,4 +164,129 @@ void bbq_theme_apply(bbq_theme theme) {
 	}
 
 	hints->setColorScheme(bbq_theme_scheme(theme));
+}
+
+namespace {
+
+/*
+ * Rec.709 luminance, the comparison harmonization.md specifies. Plain
+ * integers rather than QColor: nothing here needs a colour object, and
+ * the arithmetic is the whole of the decision.
+ */
+double luminance_709(int r, int g, int b) {
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/*
+ * "0,42,78" -> three channels, or false. TDE and KDE 3 write plain
+ * decimal triples; anything else is not this format and is not guessed
+ * at.
+ */
+bool parse_triple(const QString &value, int *r, int *g, int *b) {
+	const QStringList parts = value.split(QLatin1Char(','));
+	if (parts.size() != 3) {
+		return false;
+	}
+
+	bool ok_r = false;
+	bool ok_g = false;
+	bool ok_b = false;
+	*r = parts.at(0).trimmed().toInt(&ok_r);
+	*g = parts.at(1).trimmed().toInt(&ok_g);
+	*b = parts.at(2).trimmed().toInt(&ok_b);
+	if (!ok_r || !ok_g || !ok_b) {
+		return false;
+	}
+
+	return *r >= 0 && *r <= 255 && *g >= 0 && *g <= 255 && *b >= 0 && *b <= 255;
+}
+
+}  // namespace
+
+QStringList bbq_kdeglobals_sources() {
+	const QString home = QDir::homePath();
+	const QByteArray xdg = qgetenv("XDG_CONFIG_HOME");
+	const QString cfg = xdg.isEmpty() ? home + QStringLiteral("/.config")
+	                                   : QString::fromLocal8Bit(xdg);
+
+	return QStringList{
+		cfg + QStringLiteral("/kdeglobals"),
+		home + QStringLiteral("/.trinity/share/config/kdeglobals"),
+		home + QStringLiteral("/.kde/share/config/kdeglobals"),
+	};
+}
+
+Qt::ColorScheme bbq_scheme_from_kdeglobals(const QStringList &sources) {
+	for (const QString &path : sources) {
+		QFile file(path);
+		if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+			continue;
+		}
+
+		QTextStream in(&file);
+		QString section;
+		int br = -1;
+		int bg = -1;
+		int bb = -1;
+		int fr = -1;
+		int fg = -1;
+		int fb = -1;
+
+		while (!in.atEnd()) {
+			const QString line = in.readLine().trimmed();
+			if (line.startsWith(QLatin1Char('[')) && line.endsWith(QLatin1Char(']'))) {
+				section = line.mid(1, line.size() - 2);
+				continue;
+			}
+
+			/*
+			 * Only under [General]. The same key names appear in
+			 * per-application sections, and taking whichever came last
+			 * would answer about some other program's colours.
+			 */
+			if (section.compare(QStringLiteral("General"), Qt::CaseInsensitive) != 0) {
+				continue;
+			}
+
+			const int eq = line.indexOf(QLatin1Char('='));
+			if (eq < 0) {
+				continue;
+			}
+
+			const QString key = line.left(eq).trimmed();
+			const QString value = line.mid(eq + 1).trimmed();
+			if (key.compare(QStringLiteral("windowBackground"),
+			                 Qt::CaseInsensitive) == 0) {
+				parse_triple(value, &br, &bg, &bb);
+			} else if (key.compare(QStringLiteral("windowForeground"),
+			                        Qt::CaseInsensitive) == 0) {
+				parse_triple(value, &fr, &fg, &fb);
+			}
+		}
+
+		/* This file had no answer; the next one may. */
+		if (br < 0 || fr < 0) {
+			continue;
+		}
+
+		const double back = luminance_709(br, bg, bb);
+		const double fore = luminance_709(fr, fg, fb);
+		if (back < fore) {
+			return Qt::ColorScheme::Dark;
+		}
+		if (back > fore) {
+			return Qt::ColorScheme::Light;
+		}
+
+		/* Identical luminance states nothing. */
+		return Qt::ColorScheme::Unknown;
+	}
+
+	/*
+	 * ABSTAIN RATHER THAN GUESS. The errors are not symmetric: a wrong
+	 * light answer is merely plain, while a wrong dark one is unreadable
+	 * text on a pale ground. No readable file means no opinion, and
+	 * bbq_theme_scheme keeps its own default.
+	 */
+	return Qt::ColorScheme::Unknown;
 }

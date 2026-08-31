@@ -1,5 +1,7 @@
 #include <QApplication>
+#include <QFile>
 #include <QSet>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QWheelEvent>
 
@@ -53,6 +55,18 @@ private slots:
 	void a_theme_setting_lands_somewhere_defined();
 	void automatic_never_answers_unknown();
 	void automatic_releases_the_override();
+
+	/*
+	 * Tier 4: the scheme a TDE or KDE 3 desktop writes to kdeglobals,
+	 * which is the only place it says so. The parser takes its sources
+	 * as an argument precisely so this runs without such a desktop.
+	 */
+	void the_desktops_own_colours_are_read_when_qt_says_nothing();
+	void a_light_scheme_in_the_same_format_reads_light();
+	void the_colours_decide_and_the_scheme_name_does_not();
+	void the_keys_are_taken_from_general_and_not_another_section();
+	void a_file_that_cannot_be_read_abstains_rather_than_guessing();
+	void a_half_written_scheme_abstains_and_the_next_file_answers();
 	void every_day_boundary_is_local_midnight();
 	void the_short_night_is_twenty_three_hours();
 	void the_long_night_is_twenty_five_hours();
@@ -574,3 +588,121 @@ int main(int argc, char *argv[]) {
 }
 
 #include "test_view.moc"
+
+/*
+ * Tier 4, and why the applet needs it.
+ *
+ * A Trinity or KDE 3 session exposes no Qt 6 platform theme, so the
+ * hint answers Unknown and `automatic` falls to light -- a white
+ * rectangle at night on a desktop that has said, in the only place it
+ * says it, that it is dark. That is precisely what sec 10.3 added a
+ * dark mode to stop: not a style choice somebody made, a torch.
+ *
+ * The values are the real ones, measured on the desktop that prompted
+ * the rule: windowBackground=0,42,78 against windowForeground=220,220,220.
+ */
+namespace {
+
+QString write_kdeglobals(const QTemporaryDir &dir, const QString &name,
+                          const QString &body) {
+	const QString path = dir.filePath(name);
+	QFile file(path);
+	file.open(QIODevice::WriteOnly | QIODevice::Text);
+	file.write(body.toUtf8());
+	file.close();
+	return path;
+}
+
+}  // namespace
+
+void test_view::the_desktops_own_colours_are_read_when_qt_says_nothing() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString path = write_kdeglobals(dir, QStringLiteral("dark"),
+	    QStringLiteral("[General]\n"
+	                    "colorScheme=DarkBlue.kcsrc\n"
+	                    "windowBackground=0,42,78\n"
+	                    "windowForeground=220,220,220\n"));
+	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Dark);
+}
+
+/* The control. Without it a parser hardcoded to dark would pass. */
+void test_view::a_light_scheme_in_the_same_format_reads_light() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString path = write_kdeglobals(dir, QStringLiteral("light"),
+	    QStringLiteral("[General]\n"
+	                    "windowBackground=255,255,255\n"
+	                    "windowForeground=0,0,0\n"));
+	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Light);
+}
+
+/*
+ * The name is not a predicate. This desktop's scheme is called
+ * DarkBlue.kcsrc and IS dark, which is luck. So a file whose name says
+ * dark and whose colours say light must read light, or the parser is
+ * reading the name and passing the case above by coincidence.
+ */
+void test_view::the_colours_decide_and_the_scheme_name_does_not() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString path = write_kdeglobals(dir, QStringLiteral("misnamed"),
+	    QStringLiteral("[General]\n"
+	                    "colorScheme=DarkBlue.kcsrc\n"
+	                    "windowBackground=255,255,255\n"
+	                    "windowForeground=0,0,0\n"));
+	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Light);
+}
+
+/*
+ * kdeglobals carries per-application sections using the same key names.
+ * Taking whichever came last would answer about some other program's
+ * colours -- here a dark [General] followed by a light section.
+ */
+void test_view::the_keys_are_taken_from_general_and_not_another_section() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString path = write_kdeglobals(dir, QStringLiteral("sectioned"),
+	    QStringLiteral("[General]\n"
+	                    "windowBackground=0,42,78\n"
+	                    "windowForeground=220,220,220\n"
+	                    "[konsole]\n"
+	                    "windowBackground=255,255,255\n"
+	                    "windowForeground=0,0,0\n"));
+	QCOMPARE(bbq_scheme_from_kdeglobals({path}), Qt::ColorScheme::Dark);
+}
+
+/*
+ * Abstain rather than guess. A wrong light answer is merely plain; a
+ * wrong dark one is unreadable text on a pale ground. So no readable
+ * file means Unknown -- NOT light dressed up as an answer, which is the
+ * caller's default to apply and not this function's to invent.
+ */
+void test_view::a_file_that_cannot_be_read_abstains_rather_than_guessing() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString absent = dir.filePath(QStringLiteral("no-such-file"));
+	QCOMPARE(bbq_scheme_from_kdeglobals({absent}), Qt::ColorScheme::Unknown);
+	QCOMPARE(bbq_scheme_from_kdeglobals({}), Qt::ColorScheme::Unknown);
+}
+
+/*
+ * A file missing one of the pair says nothing, and the list is an order
+ * of authority rather than a set: the next file answers. Both halves in
+ * one case, because a parser skipping the first file for the wrong
+ * reason would still pass the second half alone.
+ */
+void test_view::a_half_written_scheme_abstains_and_the_next_file_answers() {
+	QTemporaryDir dir;
+	QVERIFY(dir.isValid());
+	const QString half = write_kdeglobals(dir, QStringLiteral("half"),
+	    QStringLiteral("[General]\n"
+	                    "windowBackground=0,42,78\n"));
+	QCOMPARE(bbq_scheme_from_kdeglobals({half}), Qt::ColorScheme::Unknown);
+
+	const QString whole = write_kdeglobals(dir, QStringLiteral("whole"),
+	    QStringLiteral("[General]\n"
+	                    "windowBackground=0,42,78\n"
+	                    "windowForeground=220,220,220\n"));
+	QCOMPARE(bbq_scheme_from_kdeglobals({half, whole}), Qt::ColorScheme::Dark);
+}
