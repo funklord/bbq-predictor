@@ -2436,6 +2436,12 @@ It is signalled to `claude-guidelines` (commit `5c5a0de`), where the
 session working on that lexer reproduced all three fixtures and judged
 this the more tractable of its two open faults: it has an agreed-correct
 answer, since the paren case already behaves as `code-style.md` says.
+
+**That fix has since been attempted and failed**, producing 764 findings
+across eleven trees -- for the reason the signal predicted, which is
+that a change loosening the frame stack generally passes all three
+fixtures and is worse than the fault. So do not wait on it: the
+deformation below is here for a while.
 **When the gate is fixed, revert that line to a braced list** -- it is
 the visible half of the cost, and a deformation nobody reverts is how a
 tool's error becomes the house style.
@@ -2713,6 +2719,14 @@ anything.
   screen widget and for verification accumulating while nobody is
   looking, and it needs five decisions before any of it is code -- most
   of them the holder's rather than technical (sec 15.4)
+- **CI, which is free for this repository and unused.** There is no
+  `.github/workflows` here and the repo is public, so GitHub Actions
+  costs nothing -- unlike the sibling trees that are private and
+  currently blocked on billing. The gates that would run are already
+  written and already run locally: `make check` is style, the signal
+  gate and twelve test binaries. What stops it being free of judgement
+  is that the Android build needs an SDK and the fetch tests must not
+  reach WU from a shared runner
 - **How strong the rain wash should be.** The chance area is drawn at
   alpha 90 over the full plot height (sec 3.19). That number was chosen
   by rendering a certain-downpour fixture and looking, which is the
@@ -3551,6 +3565,40 @@ thing it opens is worse than a plain one, so it follows the chart. The
 two files are separate rather than generated from one another: a
 complete icon and a layer somebody else will crop are different
 questions.
+
+### 11.9 Where the device stands, 2026-08-31
+
+Written down because it is the kind of thing only a session knows, and
+sessions end.
+
+**The phone's archive was destroyed by an uninstall** between 28 and 29
+August -- `firstInstallTime` equal to `lastUpdateTime` and the uid moved
+from `u0_a714` to `u0_a1077`, which only happens on a first install. It
+took 542 observations, 797 queued forecasts and the station setting.
+`adb install -r` preserves data, so the installs from this tree were not
+the cause; who or what removed it is not known.
+
+**It was restored** from a copy taken on the 28th, and the restore is
+worth recording because two things about it were not obvious:
+
+- `run-as` can write to the app's own directory but CANNOT read
+  `/sdcard`, so the obvious `adb push` then `cp` fails with a
+  permission error that names the destination. Streaming the file in
+  through `run-as sh -c 'cat > ...'`, base64-encoded, works.
+- Comparing checksums afterwards said the copies DIFFERED, which looked
+  like corruption and was not. Six bytes, all SQLite header: the app had
+  opened the file and switched the journal mode back to WAL. **Byte
+  comparison is the wrong instrument for a live database** -- the
+  content matched exactly, and `integrity_check` passed.
+
+After restore and one launch: 542 observations, 713 pending (expire()
+dropped 84 it could no longer score), 13 stations, verification still 0.
+
+**The launcher icon is built and committed but NOT installed.** The
+phone disconnected before `make android-install` could run, so the
+device is still on the build from the 29th -- no icon, and without the
+graph rework. Reinstalling is the first thing to do when it is next
+plugged in.
 
 ## 12. The history is permanent, the forecasts are not
 
@@ -5038,29 +5086,47 @@ fresh even when the fetcher behind it died a week ago. The staleness
 check would be structurally incapable of firing -- the vacuous pass, at
 the scale of every device at once.
 
-### 15.4 What has to be decided before it is built
+### 15.4 Decided, 2026-08-31
 
-- **Whose it is.** One machine for one household, or an endpoint other
-  people could point a client at. That decides whether the geocode in a
-  published file discloses where somebody lives, whether the format has
-  to stay stable for strangers, and how much the next question matters.
-- **Whether it republishes WU's data or only our derivation of it.**
-  Sec 8.1 already draws the line this sits on: keeping something on one
-  machine and publishing it are different acts. Fetching under a scraped
-  key is what sec 2.2 accepted; serving the result to others is a wider
-  act, and it is the holder's call rather than a technical one.
-- **Whether the server also VERIFIES.** It could publish bands only and
-  leave every client to score against its own archive, or score
-  centrally and publish the statistics too. Central scoring is the only
-  way the record accumulates while nobody is looking, and it makes the
-  bias correction one shared opinion rather than each device's own.
-- **Whether it publishes history.** If it does, a fresh install rebuilds
-  a month of observations in one request instead of a day at a time, and
-  the loss of a device's archive stops mattering. That is a much larger
-  publish and a different retention question.
-- **What the format is.** The internal series has no wire form yet;
-  today the readers translate each provider into it in memory. If the
-  answer is binary rather than JSON, `situ` is the sibling project built
-  for exactly that and should be evaluated rather than hand-rolled --
-  the standing instruction in `build-and-commit.md`. If the answer is
-  JSON, situ does not apply and the question is only what the schema is.
+The holder answered the three that change the shape, and each answer
+takes the larger option:
+
+- **A service others could use.** Not a private box on the LAN: other
+  people may point a client at it. So the published format is a
+  contract that has to stay stable for strangers rather than something
+  this project can break when convenient, and the geocode question is
+  live -- a published file says where a station is, and the watched one
+  is somebody's garden.
+- **The server verifies too**, not only publishes bands. It keeps the
+  archive, scores continuously and publishes the record. This is the
+  answer that makes verification actually happen: sec 12.16 measured
+  why nothing has scored, and every reason there is a device nobody
+  opened. It also makes the bias correction one shared opinion rather
+  than each device's own, which is a change in kind and not only in
+  place.
+- **History is published**, not just the current bands. A fresh install
+  rebuilds months in one request, and losing a device's archive stops
+  mattering -- which stopped being hypothetical this week when the
+  phone's 542 observations went with an uninstall.
+
+**Serving WU's data onward was chosen knowingly.** Sec 8.1 draws the
+line -- keeping something on one machine and publishing it are different
+acts -- and the option was put with that cost stated. It is recorded as
+the holder's decision because it is theirs and nobody else's.
+
+### 15.5 Still open, and now the real questions
+
+- **What the format is.** The internal series has no wire form; the
+  readers translate into it in memory. A stable public contract needs
+  one written down. If it is binary, `situ` is the sibling built for
+  byte-exact layouts and must be evaluated rather than hand-rolled
+  (the standing instruction in `build-and-commit.md`); if it is JSON,
+  situ does not apply and the question is only the schema.
+- **Retention.** "History, published" needs a floor: how far back, and
+  what happens when a station has years.
+- **Where it runs**, and what fetches when nothing has asked -- the
+  server has the opposite problem from the phone, in that it must
+  fetch sparingly without a user's attention to pace it.
+- **Whether clients keep their own archive at all** once the server has
+  one, or become readers. That decides whether sec 12's store stays the
+  centre of the program or becomes a cache.

@@ -208,6 +208,22 @@ void test_feed::every_station_with_a_queue_is_scored_not_just_the_watched_one() 
 	const qint64 issued = 1000000;
 	const qint64 valid = issued + 3600;
 
+	/*
+	 * DEFORMED TO PASS THE GATE, and meant to be changed back (sec 6).
+	 *
+	 * This wants to be a braced list:
+	 *
+	 *     const QStringList queued = {QStringLiteral("ITEST1"),
+	 *                                 QStringLiteral("ITEST2"),
+	 *                                 QStringLiteral("ITEST3")};
+	 *
+	 * `style_gate.py` counts a braced INITIALISER as a nesting level,
+	 * so the aligned continuation above is rejected while the identical
+	 * continuation after `(` is accepted. The code was correct and the
+	 * tool was not. Signalled to claude-guidelines; a first fix
+	 * attempt failed across eleven trees, so this will be here a while.
+	 * When the lexer is fixed, restore the braced form.
+	 */
 	QStringList queued;
 	queued << QStringLiteral("ITEST1") << QStringLiteral("ITEST2")
 	       << QStringLiteral("ITEST3");
