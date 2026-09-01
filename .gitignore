@@ -29,3 +29,8 @@ __pycache__/
 
 # Cross-compiled Android dependencies (tool/build-openssl-android.sh).
 deps/
+
+# fmake's object cache. It appears the first time anyone builds with the
+# fmake.toml beside it, is rebuilt from source, and is therefore output --
+# but fmake appends the bare line itself, so this says why.
+.fmake/
