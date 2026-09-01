@@ -103,7 +103,13 @@ Needs Qt 6 (widgets and network) and a C++17 compiler.
 Or with [fmake](../fmake), which needs no build file and nothing beyond the
 Python standard library:
 
-    fmake           # build, same sources, same Qt
+    python3 ~/src/fmake/fmake    # build, same sources, same Qt
+
+**Not `/usr/bin/fmake`.** The packaged one predates `$file()` and leaves the
+reference in the value as text, so the build succeeds and the binary
+carries the literal string. Measured: `--version` printing
+`$file(VERSION)`. Run the one in fmake's own tree until a newer package is
+installed.
 
 `fmake.toml` says two things it cannot read off the tree: the version, from
 the `VERSION` file the Makefile and `debian/changelog` already agree about
