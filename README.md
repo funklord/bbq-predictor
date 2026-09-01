@@ -100,6 +100,17 @@ Needs Qt 6 (widgets and network) and a C++17 compiler.
     make check      # style and tests: what must pass before a commit
     make help       # every target, with what it does
 
+Or with [fmake](../fmake), which needs no build file and nothing beyond the
+Python standard library:
+
+    fmake           # build, same sources, same Qt
+
+`fmake.toml` says two things it cannot read off the tree: the version, from
+the `VERSION` file the Makefile and `debian/changelog` already agree about
+rather than written a third time; and that `build-*` holds qmake's own
+output, which carries a `moc_*.cpp` for every class that fmake also mocs,
+so a tree anybody has built in offers two of each metaobject.
+
 The build is `-Os`; `make DEBUG=1` gives an unoptimised, symbol-rich
 one, and `make SANITIZE=1` adds ASan and UBSan independently of it.
 Build output goes to `build/` and the location is settable:

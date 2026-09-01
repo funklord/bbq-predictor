@@ -1,0 +1,16 @@
+[project]
+# The version the qmake build passes as BBQ_VERSION_STRING, read from the
+# file it and debian/changelog already agree about rather than written a
+# third time here.
+defines = ['BBQ_VERSION_STRING="$file(VERSION)"']
+
+# qmake's own output directories, which hold a moc_*.cpp for every class
+# that already has one in .fmake/moc. Both are untracked build products;
+# fmake reads them because it has no reason to know git was told to ignore
+# them, and then refuses to guess which metaobject is the real one.
+# `build-*` rather than the three by name: qmake writes one per
+# configuration -- build-test, build-tests, build-android-arm64-v8a --
+# and naming them individually is a list that goes stale the next time
+# somebody builds for a new target. Nothing tracked lives under any of
+# them, checked rather than assumed.
+exclude = ["build-*"]
