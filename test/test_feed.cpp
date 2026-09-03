@@ -27,6 +27,7 @@ private slots:
 	void one_station_s_measurements_do_not_outlive_the_station();
 	void a_new_station_has_never_been_asked();
 	void no_band_describing_the_old_place_survives_the_change();
+	void the_correction_is_queued_for_scoring_like_any_forecast();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -429,6 +430,76 @@ void test_feed::no_band_describing_the_old_place_survives_the_change() {
 	QVERIFY2(pinned.composite().band(bbq_band::current) == nullptr ||
 	                 pinned.composite().band(bbq_band::current)->is_empty(),
 	         "the station's own current band survived a station change");
+}
+
+void test_feed::the_correction_is_queued_for_scoring_like_any_forecast() {
+	/*
+	 * THE ONE CLAIM NOTHING CHECKED (project.md sec 12.19).
+	 *
+	 * The corrected band was computed for the screen and never
+	 * archived, so the store held scores for every band the providers
+	 * supply and none for the one this project produces itself. The
+	 * program's only original claim -- that removing a measured bias
+	 * improves a forecast -- was the only claim in it nobody was
+	 * measuring.
+	 */
+	QTemporaryDir directory;
+
+	bbq_wu_feed feed;
+	QVERIFY2(feed.open_history(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(feed.history_error()));
+
+	const QString station = QStringLiteral("ITESTCORR");
+	feed.set_station(station);
+
+	const qint64 now = 1700000000;
+
+	/*
+	 * A measured bias to correct BY. Below the minimum the correction
+	 * is empty by design, so this seeds enough of it to act on.
+	 */
+	QVERIFY(feed.history().set_verification(station, bbq_band::hourly,
+	                                        QStringLiteral("temperature"),
+	                                        bbq_lead_bucket::hour, 40, 2.0,
+	                                        2.0, 2.0));
+	QVERIFY(feed.history().set_verification(station, bbq_band::hourly,
+	                                        QStringLiteral("temperature"),
+	                                        bbq_lead_bucket::three_hours, 40,
+	                                        2.0, 2.0, 2.0));
+
+	/* A forecast to correct. */
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < 8; ++i) {
+		bbq_sample sample;
+		sample.start_utc = now + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 15.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series hourly(bbq_band::hourly, QStringLiteral("test"));
+	hourly.set_samples(std::move(samples));
+	feed.m_composite.set_series(std::move(hourly));
+
+	QCOMPARE(feed.history().pending_count(station), 0);
+
+	const int queued = feed.record_corrected(now);
+
+	QVERIFY2(queued > 0, "the correction was not queued for scoring at all");
+
+	/*
+	 * Asserted on the BAND, not just on the count. Recording the hourly
+	 * band again would satisfy a bare count and would measure the thing
+	 * that was already measured.
+	 */
+	QCOMPARE(feed.history().pending_count(station, bbq_band::corrected), queued);
+
+	/*
+	 * And nothing else. Recording the hourly band again would satisfy a
+	 * bare count while measuring the thing that was already measured.
+	 */
+	QCOMPARE(feed.history().pending_count(station, bbq_band::hourly), 0);
+	QCOMPARE(feed.history().pending_count(station), queued);
 }
 
 QTEST_GUILESS_MAIN(test_feed)

@@ -4495,6 +4495,47 @@ first table produced had Open-Meteo's figures under WU's name. Any
 query against `verification` should take the labels from
 `bbq_band_name` rather than from memory.
 
+### 12.19 The correction was the one claim nothing checked
+
+Sec 12.18 scores three bands -- the nowcast, Open-Meteo's extended and
+WU's hourly. It does not score a fourth, and the omission is the
+interesting one: the CORRECTED band was never in the store at all.
+
+    verification bands on the device: 3, 4, 6
+    the corrected band is 5
+
+Every band that gets scored comes from a provider. The corrected band is
+the only series this project produces itself, and its whole purpose is a
+claim -- that subtracting a measured bias from a forecast makes it
+better. That claim was the only one in the program nothing was
+measuring. It was computed for the screen, drawn, and thrown away.
+
+**It is queued for scoring now**, on the same clock as the raw bands, so
+`verify()` folds it in beside them and the archive answers the question
+by itself. In a few days sec 12.18's table gains a row, and if the
+correction does not help, that will be visible rather than assumed.
+
+Two details that are decisions rather than mechanics:
+
+- **It is recorded over the COMPOSITE's coverage, not the view's.**
+  `corrected_forecast()` is normally asked for whatever is on screen,
+  which is right for drawing and wrong for archiving -- what got stored
+  would otherwise depend on where somebody had dragged the graph.
+- **It is queued before the scoring in the same round**, so a round
+  that settles leaves the raw bands and the correction waiting on the
+  same observations rather than a round apart.
+
+`pending_count` gained a per-band form for the test, because a total
+cannot say WHICH band arrived -- and recording the hourly band twice
+would have satisfied a bare count while measuring the thing that was
+already measured.
+
+**The test was written after the code, which is the wrong order, so it
+was sabotaged before it was believed.** Returning 0 from the archiving
+step -- computing the correction and discarding it, which is precisely
+the old behaviour -- makes it report that the correction was not queued
+at all.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to

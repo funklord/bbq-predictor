@@ -256,6 +256,13 @@ public:
 	int observation_count(const QString &station) const;
 	int pending_count(const QString &station) const;
 
+	/*
+	 * The same, for one band. Distinguishing them matters because the
+	 * corrected band is queued alongside the raw ones (sec 12.19), and
+	 * a total cannot say which of them arrived.
+	 */
+	int pending_count(const QString &station, bbq_band band) const;
+
 private:
 	bool exec(const QString &statement);
 	bool create_schema();

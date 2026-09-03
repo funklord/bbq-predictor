@@ -681,6 +681,37 @@ void bbq_wu_feed::set_geocode(double latitude, double longitude, bool pinned) {
 	}
 }
 
+int bbq_wu_feed::record_corrected(qint64 now_utc) {
+	if (!m_history.is_open() || m_station_id.isEmpty()) {
+		return 0;
+	}
+
+	/*
+	 * Over the composite's own coverage rather than the view's.
+	 *
+	 * corrected_forecast() is normally asked for whatever is on screen,
+	 * which is right for drawing and wrong for archiving: what gets
+	 * stored would then depend on where somebody had dragged the graph.
+	 * The forecast horizon is what the bands cover, so that is what is
+	 * queued.
+	 */
+	const qint64 from = qMax(now_utc, m_composite.begin_utc());
+	const qint64 to = m_composite.end_utc();
+
+	if (to <= from) {
+		return 0;
+	}
+
+	const bbq_series corrected = bbq_corrected_forecast(
+	        m_composite, m_history, m_station_id, from, to, now_utc);
+
+	if (corrected.is_empty()) {
+		return 0;
+	}
+
+	return m_history.record_forecast(m_station_id, corrected, now_utc);
+}
+
 int bbq_wu_feed::verify_all() {
 	if (!m_history.is_open()) {
 		return 0;
@@ -720,6 +751,13 @@ void bbq_wu_feed::finish_one() {
 		 * own: a round is exactly when new observations have arrived,
 		 * so it is the only moment anything new can be verifiable.
 		 */
+		/*
+		 * The correction is queued BEFORE the scoring, so a round that
+		 * settles has both the raw bands and the corrected one waiting
+		 * on the same observations.
+		 */
+		record_corrected(QDateTime::currentSecsSinceEpoch());
+
 		const int checked = verify_all();
 		if (checked > 0) {
 			emit verified(checked);

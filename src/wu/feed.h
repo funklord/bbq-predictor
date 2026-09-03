@@ -107,6 +107,23 @@ public:
 	int verify_all();
 
 	/*
+	 * Queue the CORRECTION for scoring, like any other forecast
+	 * (sec 12.19).
+	 *
+	 * The corrected band was computed for the screen and never
+	 * archived, so the one claim this project makes about its own
+	 * arithmetic -- that removing a measured bias improves a forecast
+	 * -- was the only claim in it nothing checked. Recording it against
+	 * the same clock as the raw bands lets verify() score it beside
+	 * them, and the archive then answers whether it helps.
+	 *
+	 * Returns how many rows were queued. Public for the reason
+	 * verify_all() is: the round that would call it cannot be driven
+	 * from a test without the network.
+	 */
+	int record_corrected(qint64 now_utc);
+
+	/*
 	 * What the graph is looking at. The observed band is served from the
 	 * store rather than from the last fetch (sec 12.8), so panning into
 	 * last month is the same operation as looking at this afternoon.

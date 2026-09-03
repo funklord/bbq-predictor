@@ -1110,3 +1110,22 @@ int bbq_history::pending_count(const QString &station) const {
 
 	return query.value(0).toInt();
 }
+
+int bbq_history::pending_count(const QString &station, bbq_band band) const {
+	if (!m_open) {
+		return 0;
+	}
+
+	QSqlDatabase database = QSqlDatabase::database(m_connection);
+	QSqlQuery count(database);
+	count.prepare(QStringLiteral("SELECT count(*) FROM forecast_pending "
+	                             "WHERE station = ? AND band = ?"));
+	count.addBindValue(station);
+	count.addBindValue(static_cast<int>(band));
+
+	if (!count.exec() || !count.next()) {
+		return 0;
+	}
+
+	return count.value(0).toInt();
+}
