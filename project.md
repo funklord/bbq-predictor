@@ -3122,6 +3122,12 @@ Three things had to be right, and each was wrong first:
   `resizeEvent` caps too, but it runs first and finds nothing to
   measure, so the share was computed once from zero.
 
+**The controls' share is 30%**, chosen by the copyright holder after
+looking at it on the device rather than at a render. The desktop render
+and the phone do not agree on what a given fraction feels like: the
+phone pays for a two-line verdict and a system status bar that the
+render does not.
+
 **None of the shape logic was touched**, which is the point. Rotation
 was already handled by `654c9f6`, committed in this tree by another
 session while the reverted attempt was duplicating it -- discovered only
@@ -3747,6 +3753,29 @@ so the slider is safe HERE and the workaround is buying nothing. It is
 still needed on the Note 9. Conditioning it on the runtime SDK rather
 than on "Android" would give the slider back where it is safe, and is a
 change to make deliberately rather than in passing.
+
+### 11.10 The slider is back, on the devices that can hold one
+
+The steadiness control was a drop-down on Android because a `QSlider`
+aborted the process: Qt's accessibility bridge builds a `RangeInfo` with
+a constructor that does not exist before API 33 and leaves the JNI
+exception pending, so the next JNI call kills the program (sec 11.6).
+
+**The guard asked the wrong question by one word.** It was `#ifdef
+Q_OS_ANDROID` -- a compile-time question about the platform -- when the
+fault belongs to the API LEVEL. Every Android build got the drop-down,
+including the ones where the constructor exists and the abort cannot
+happen. The Fold is SDK 35, so it had been carrying a workaround for a
+fault it is not capable of.
+
+It is a runtime test now, `Build.VERSION.SDK_INT < 33`, read through
+`QJniObject`. The slider returns on any modern device -- which is what
+was asked for, and the right control for a continuous value -- and the
+Note 9 keeps its drop-down.
+
+The accessibility factory of sec 11.6 stays regardless. It costs
+nothing, it is tested, and it is the belt to this braces on exactly the
+devices that still need one.
 
 ## 12. The history is permanent, the forecasts are not
 

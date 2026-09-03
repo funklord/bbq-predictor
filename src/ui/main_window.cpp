@@ -1,5 +1,9 @@
 #include "ui/main_window.h"
 
+#ifdef Q_OS_ANDROID
+#include <QJniObject>
+#endif
+
 #include <QDateTime>
 #include <QCheckBox>
 #include <QComboBox>
@@ -26,6 +30,30 @@
 #include "model/correction.h"
 #include "ui/theme.h"
 #include "wu/feed.h"
+
+namespace {
+
+/*
+ * Whether a QSlider would abort this process (sec 11.6).
+ *
+ * True only on Android before API 33, where Qt's accessibility bridge
+ * builds a RangeInfo with a constructor that does not exist yet and
+ * leaves the JNI exception pending, so the next JNI call aborts.
+ * Everywhere else -- desktop, and any Android new enough to carry that
+ * constructor -- a slider is safe and is the better control for a
+ * continuous value.
+ */
+bool bbq_slider_aborts_here() {
+#ifdef Q_OS_ANDROID
+	const int sdk = QJniObject::getStaticField<jint>(
+	        "android/os/Build$VERSION", "SDK_INT");
+	return sdk < 33;
+#else
+	return false;
+#endif
+}
+
+} // namespace
 
 bbq_main_window::bbq_main_window(QWidget *parent)
         : QWidget(parent), m_method_box(nullptr), m_smoothing_box(nullptr),
@@ -264,7 +292,11 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * against, a narrow one wants the detail back, and where between
 	 * those is a matter of what somebody is looking for.
 	 *
-	 * EXCEPT ON ANDROID, where a slider crashes the program (sec 10.6).
+	 * EXCEPT WHERE A SLIDER ABORTS THE PROGRAM (sec 11.6). Asked of the
+	 * RUNTIME rather than the compiler: this was `#ifdef Q_OS_ANDROID`,
+	 * which is wrong by one word, because the fault belongs to the API
+	 * LEVEL and not to Android. On SDK 33 and later the constructor
+	 * exists, the abort cannot happen, and the slider comes back.
 	 * Qt's accessibility bridge builds a RangeInfo for any widget with a
 	 * value, using a constructor that does not exist before API 33, and
 	 * does not clear the JNI exception that raises -- so the next JNI
@@ -274,56 +306,56 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 */
 	QWidget *steadiness = nullptr;
 
-#ifdef Q_OS_ANDROID
-	QComboBox *steadiness_box = new QComboBox(this);
-	steadiness_box->addItem(tr("Off"), 0);
-	steadiness_box->addItem(tr("Slight"), 25);
-	steadiness_box->addItem(tr("Steady"), 60);
-	steadiness_box->addItem(tr("Firm"), 100);
+	if (bbq_slider_aborts_here()) {
+		QComboBox *steadiness_box = new QComboBox(this);
+		steadiness_box->addItem(tr("Off"), 0);
+		steadiness_box->addItem(tr("Slight"), 25);
+		steadiness_box->addItem(tr("Steady"), 60);
+		steadiness_box->addItem(tr("Firm"), 100);
 
-	/*
-	 * Nearest rather than exact, because the stored value may have come
-	 * from a desktop slider that can express anything in between, and a
-	 * phone that silently reset it to Off would be worse than one that
-	 * rounds.
-	 */
-	const int stored = bbq_settings::scale_steadiness(m_graph->scale_steadiness());
-	int nearest = 0;
-	for (int i = 0; i < steadiness_box->count(); ++i) {
-		const int candidate = steadiness_box->itemData(i).toInt();
-		const int best = steadiness_box->itemData(nearest).toInt();
-		if (qAbs(candidate - stored) < qAbs(best - stored)) {
-			nearest = i;
+		/*
+		 * Nearest rather than exact, because the stored value may have come
+		 * from a desktop slider that can express anything in between, and a
+		 * phone that silently reset it to Off would be worse than one that
+		 * rounds.
+		 */
+		const int stored = bbq_settings::scale_steadiness(m_graph->scale_steadiness());
+		int nearest = 0;
+		for (int i = 0; i < steadiness_box->count(); ++i) {
+			const int candidate = steadiness_box->itemData(i).toInt();
+			const int best = steadiness_box->itemData(nearest).toInt();
+			if (qAbs(candidate - stored) < qAbs(best - stored)) {
+				nearest = i;
+			}
 		}
+
+		steadiness_box->setCurrentIndex(nearest);
+		m_graph->set_scale_steadiness(steadiness_box->currentData().toInt());
+
+		connect(steadiness_box, &QComboBox::currentIndexChanged, this,
+		        [this, steadiness_box](int) {
+			const int value = steadiness_box->currentData().toInt();
+			bbq_settings::set_scale_steadiness(value);
+			m_graph->set_scale_steadiness(value);
+		});
+
+		steadiness = steadiness_box;
+	} else {
+		QSlider *steadiness_slider = new QSlider(Qt::Horizontal, this);
+		steadiness_slider->setRange(0, 100);
+		steadiness_slider->setMinimumWidth(80);
+		steadiness_slider->setMaximumWidth(160);
+		steadiness_slider->setValue(
+		        bbq_settings::scale_steadiness(m_graph->scale_steadiness()));
+		m_graph->set_scale_steadiness(steadiness_slider->value());
+
+		connect(steadiness_slider, &QSlider::valueChanged, this, [this](int value) {
+			bbq_settings::set_scale_steadiness(value);
+			m_graph->set_scale_steadiness(value);
+		});
+
+		steadiness = steadiness_slider;
 	}
-
-	steadiness_box->setCurrentIndex(nearest);
-	m_graph->set_scale_steadiness(steadiness_box->currentData().toInt());
-
-	connect(steadiness_box, &QComboBox::currentIndexChanged, this,
-	        [this, steadiness_box](int) {
-		const int value = steadiness_box->currentData().toInt();
-		bbq_settings::set_scale_steadiness(value);
-		m_graph->set_scale_steadiness(value);
-	});
-
-	steadiness = steadiness_box;
-#else
-	QSlider *steadiness_slider = new QSlider(Qt::Horizontal, this);
-	steadiness_slider->setRange(0, 100);
-	steadiness_slider->setMinimumWidth(80);
-	steadiness_slider->setMaximumWidth(160);
-	steadiness_slider->setValue(
-	        bbq_settings::scale_steadiness(m_graph->scale_steadiness()));
-	m_graph->set_scale_steadiness(steadiness_slider->value());
-
-	connect(steadiness_slider, &QSlider::valueChanged, this, [this](int value) {
-		bbq_settings::set_scale_steadiness(value);
-		m_graph->set_scale_steadiness(value);
-	});
-
-	steadiness = steadiness_slider;
-#endif
 
 	/*
 	 * The theme. Beside the layout box because they are the same kind of
@@ -619,7 +651,12 @@ void bbq_main_window::cap_control_height() {
 	 * they get all of it when they fit, and 42% with a scrollbar when
 	 * they do not.
 	 */
-	const int share = qMax(140, int(height() * 0.42));
+	/*
+	 * 30% by the copyright holder's choice, looked at on the device.
+	 * The chart is the program, so it keeps the clear majority; what
+	 * the controls lose they make up by scrolling.
+	 */
+	const int share = qMax(140, int(height() * 0.30));
 	/*
 	 * Asked of the MINIMUM, not the size hint. `setWidgetResizable`
 	 * sizes the child to the viewport, so once it is inside a scroll
