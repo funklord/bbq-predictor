@@ -18,6 +18,7 @@
 #include <QStringList>
 #include <QShowEvent>
 #include <QScrollArea>
+#include <QScroller>
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QWindow>
@@ -425,6 +426,24 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	m_control_scroll->viewport()->setAutoFillBackground(false);
 	m_control_scroll->setSizePolicy(QSizePolicy::Preferred,
 	                                QSizePolicy::Maximum);
+
+	/*
+	 * A FINGER has to be able to scroll it (sec 10.6).
+	 *
+	 * A QScrollArea scrolls by its scrollbar and by the wheel, and by
+	 * nothing else -- dragging its contents does nothing. On a desktop
+	 * that is fine. On a phone the scrollbar is a few pixels wide and a
+	 * drag is the only gesture anybody will try, so without this the
+	 * controls below the fold were not merely awkward, they were
+	 * unreachable: measured by swiping the panel on the device and
+	 * watching nothing move.
+	 *
+	 * Found because the cap that made the plot bigger is also what put
+	 * controls below a fold in the first place. The fix that gives the
+	 * chart its room has to hand back a way to reach what it displaced.
+	 */
+	QScroller::grabGesture(m_control_scroll->viewport(),
+	                       QScroller::LeftMouseButtonGesture);
 
 	layout->addWidget(m_control_scroll, 0);
 

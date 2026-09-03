@@ -3122,6 +3122,17 @@ Three things had to be right, and each was wrong first:
   `resizeEvent` caps too, but it runs first and finds nothing to
   measure, so the share was computed once from zero.
 
+**A QScrollArea does not scroll under a finger**, and the cap is what
+made that matter. It scrolls by its scrollbar and by the wheel and by
+nothing else -- dragging its contents does nothing at all. On a desktop
+that is invisible; on a phone the scrollbar is a few pixels wide and a
+drag is the only gesture anybody will try, so the controls the cap
+pushed below the fold were not awkward to reach, they were unreachable.
+Measured by swiping the panel on the device and watching nothing move.
+`QScroller::grabGesture` on the viewport fixes it, and the lesson is
+that a change which buys room for one thing owes a way back to what it
+displaced.
+
 **The controls' share is 30%**, chosen by the copyright holder after
 looking at it on the device rather than at a render. The desktop render
 and the phone do not agree on what a given fraction feels like: the
