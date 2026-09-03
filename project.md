@@ -5001,11 +5001,16 @@ it reports a fault in the station now being watched.
 Cleared where the station changes, beside everything else that belonged
 to the old one.
 
-**It is not covered by a test, and the reason is worth stating rather
-than leaving as an omission.** The state lives in the window, and there
-is no test binary for the window layer at all -- reaching it means
-linking essentially the whole application, which is a piece of work
-rather than an assertion. Moving the field into the feed, where the
+~~**It is not covered by a test**, there being no test binary for the
+window layer at all.~~ **Covered since `9395009`, nine minutes after
+this paragraph was written**, by
+`test_window::changing_station_clears_the_old_error` -- which is named
+after the fault this entry describes. The work this paragraph called "a
+piece of work rather than an assertion" was done in the next commit and
+the paragraph was never revisited. Left visible rather than deleted,
+because the reasoning below about where the state should live is still
+the reasoning, and because a gap claim that outlives its gap by a
+quarter of an hour is worth seeing once. Moving the field into the feed, where the
 station-change tests could reach it, was considered and rejected: the
 other assignment to it is a history-open failure, which is not a band
 and not the feed's to report.
@@ -5042,9 +5047,14 @@ Pushed explicitly where the station changes, along with the corrected
 overlay and the status line, which are derived from the same data.
 
 **Found by continuing to look after the fix was committed.** Nothing
-else would have: there is no test that can see the window, so the fix
-and its inertness are indistinguishable from every instrument this
-project has.
+else would have: at the time there was no test that could see the
+window, so the fix and its inertness were indistinguishable from every
+instrument this project had. ~~there is no test that can see the
+window~~ -- **that stopped being true in the next commit**, `9395009`,
+and `test_window::changing_station_clears_the_old_curves` now asserts
+exactly this: an emptied composite that reaches the graph. Both halves
+of the sentence were true when written and one of them was false nine
+minutes later.
 
 ### 14.9 A freshness record kept per product, asked per station
 
