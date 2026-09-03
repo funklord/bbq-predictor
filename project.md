@@ -2111,7 +2111,11 @@ project that paint order has been the defect rather than the drawing
 (sec 3.19, sec 3.19.1).
 
 **The light theme does not take the same two colours**, and that is
-deliberate rather than an oversight. A yellow bright enough to read
+settled: put to the copyright holder as a judgement made against the
+literal request, and confirmed by them 2026-09-03. It is recorded as
+settled rather than as somebody's taste so that a later pass reading
+"yellow and white" in this section does not take the light palette for
+drift and correct it back. A yellow bright enough to read
 against near-black is nearly invisible against white, and a white cut on
 a white ground is nothing at all -- so the light palette uses amber and
 a dark grey. The rule this follows is already the project's: furniture
