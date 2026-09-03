@@ -1199,6 +1199,56 @@ Worth revisiting if the applet turns out to be used mostly on dark
 desktops, which is a question about how people run it rather than one
 this document can answer.
 
+### 3.8.4 Dark detection, measured against the shared rule
+
+`harmonization.md` settled four tiers on 2026-08-31, consulted in order
+and abstaining rather than guessing: the platform's `colorScheme()`, the
+`org.freedesktop.appearance` portal, palette luminance, and the
+`kdeglobals` a TDE or KDE 3 desktop writes.
+
+**Measured here rather than assumed.** This tree implements tiers 1, 3
+and 4 and cites the rule at the luminance comparison. Tier 4 is the one
+that answers on this machine, and it answers correctly: the desktop's
+`~/.trinity/share/config/kdeglobals` gives `windowBackground=0,42,78`
+against `windowForeground=220,220,220`, and a rendered shot comes back
+with a plot pixel of (22, 24, 26). The applet follows the desktop.
+
+That is worth stating because the shots earlier in this project's
+records are on a white ground: the desktop was light then and is dark
+now, and the same binary produced both. The change of appearance is the
+detector working, not drift.
+
+**The consult ORDER here is right, and that is worth stating** because
+the shared rule's first relay had it wrong. Tiers are numbered by
+authority, not by consult order: the palette-luminance heuristic always
+answers -- a palette is either lighter or darker than its text -- so
+consulting it third would mean `kdeglobals` never runs at all, on the
+one desktop it exists for. This tree asks the platform hint, then
+`kdeglobals`, then defaults to light, and uses luminance only as the
+comparison INSIDE the kdeglobals test. That is the corrected order
+(hydra's `f59301d`) reached independently.
+
+Two further settlements need no change here. The luminance is settled as
+the comparison rather than a named constant, partly so that trees
+carrying the raw Rec.709 sum -- as `theme.h` does -- need not change
+working code to no observable effect. And "follow the desktop's darkness,
+never its hue" is already this project's rule: the measured WU colours do
+not follow the desktop, which `theme.h` records.
+
+**Tier 2 is not implemented, and that is the one open question.** The
+portal tier would need `Qt6::DBus`, which this program does not link,
+and it abstains on this machine anyway -- there is no
+`org.freedesktop.portal.Desktop` service file. So it costs a module
+dependency for an answer only another desktop would give, on a platform
+Android does not have at all. Following the shared rule says implement
+it; the dependency says ask. Recorded rather than decided.
+
+**Why any of this matters more here than in a plain widget
+application**: Qt's own widgets follow the palette and look consistent
+whatever happens. The chart does not. Every colour it paints is chosen
+in `palette_for`, so a wrong answer is not a plainer window, it is a
+graph drawn in the wrong ground with measured data colours on top.
+
 ### 3.9 The hole at now, and the current band
 
 **Found by running the model against live data on 2026-08-07**, not by
@@ -2018,56 +2068,6 @@ pixels means measuring the distance from a caption to a curve that moves
 with the data; the fixture would encode the arithmetic it is checking.
 Layout is the one part of this project the documented method is to LOOK
 at, and both branches were looked at.
-
-### 3.8.4 Dark detection, measured against the shared rule
-
-`harmonization.md` settled four tiers on 2026-08-31, consulted in order
-and abstaining rather than guessing: the platform's `colorScheme()`, the
-`org.freedesktop.appearance` portal, palette luminance, and the
-`kdeglobals` a TDE or KDE 3 desktop writes.
-
-**Measured here rather than assumed.** This tree implements tiers 1, 3
-and 4 and cites the rule at the luminance comparison. Tier 4 is the one
-that answers on this machine, and it answers correctly: the desktop's
-`~/.trinity/share/config/kdeglobals` gives `windowBackground=0,42,78`
-against `windowForeground=220,220,220`, and a rendered shot comes back
-with a plot pixel of (22, 24, 26). The applet follows the desktop.
-
-That is worth stating because the shots earlier in this project's
-records are on a white ground: the desktop was light then and is dark
-now, and the same binary produced both. The change of appearance is the
-detector working, not drift.
-
-**The consult ORDER here is right, and that is worth stating** because
-the shared rule's first relay had it wrong. Tiers are numbered by
-authority, not by consult order: the palette-luminance heuristic always
-answers -- a palette is either lighter or darker than its text -- so
-consulting it third would mean `kdeglobals` never runs at all, on the
-one desktop it exists for. This tree asks the platform hint, then
-`kdeglobals`, then defaults to light, and uses luminance only as the
-comparison INSIDE the kdeglobals test. That is the corrected order
-(hydra's `f59301d`) reached independently.
-
-Two further settlements need no change here. The luminance is settled as
-the comparison rather than a named constant, partly so that trees
-carrying the raw Rec.709 sum -- as `theme.h` does -- need not change
-working code to no observable effect. And "follow the desktop's darkness,
-never its hue" is already this project's rule: the measured WU colours do
-not follow the desktop, which `theme.h` records.
-
-**Tier 2 is not implemented, and that is the one open question.** The
-portal tier would need `Qt6::DBus`, which this program does not link,
-and it abstains on this machine anyway -- there is no
-`org.freedesktop.portal.Desktop` service file. So it costs a module
-dependency for an answer only another desktop would give, on a platform
-Android does not have at all. Following the shared rule says implement
-it; the dependency says ask. Recorded rather than decided.
-
-**Why any of this matters more here than in a plain widget
-application**: Qt's own widgets follow the palette and look consistent
-whatever happens. The chart does not. Every colour it paints is chosen
-in `palette_for`, so a wrong answer is not a plainer window, it is a
-graph drawn in the wrong ground with measured data colours on top.
 
 ### 3.20 The furniture stopped competing with the data
 
