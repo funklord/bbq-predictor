@@ -2099,8 +2099,14 @@ because it is sharp, and it takes no plot with it.
 keeping.**
 
 The hour marks were first drawn at the BAND step, which put ticks where
-nothing was written -- the labels are on a different rhythm. They belong
-with the time axis, at the labelled hours.
+nothing was written -- the labels are on a different rhythm. Correcting
+that overshot: marking only the labelled times is one mark every six
+hours at a day's zoom, which is a scale rather than the hour breaks that
+were asked for. Both are drawn now -- every hour short, the labelled
+ones long, so they read as minor and major rather than as a row of
+identical marks -- and the hourly ones are skipped entirely below about
+seven pixels an hour, since a fortnight's zoom would otherwise carry 336
+of them.
 
 And they were drawn with that axis, which is under the series, so the
 rain area buried the bottom half of every mark on exactly the days it

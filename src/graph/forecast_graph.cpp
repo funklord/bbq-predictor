@@ -1932,6 +1932,38 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	}
 
 	/* --- the hour marks, over the series so rain cannot bury them ----- */
+	/*
+	 * EVERY hour, not only the labelled ones (sec 3.20).
+	 *
+	 * The first version marked the labelled times alone, which at a
+	 * day's zoom is one mark every six hours -- a scale, not the hour
+	 * breaks that were asked for. The labelled ones stay longer, so the
+	 * two read as major and minor rather than as a row of identical
+	 * marks.
+	 *
+	 * Skipped entirely when the hours would be closer together than a
+	 * few pixels. At a fortnight's zoom an hourly comb is 336 marks and
+	 * says nothing except that the edge is busy.
+	 */
+	const double hour_px = 3600.0 / seconds_per_pixel;
+
+	if (hour_px >= 7.0) {
+		painter.setPen(QPen(m_palette.grid, 1.0));
+
+		const qint64 first_hour = ((from / 3600) + 1) * 3600;
+		for (qint64 t = first_hour; t < to; t += 3600) {
+			const double x = plot.left() + (t - from) / seconds_per_pixel;
+			if (x < plot.left() || x > plot.right()) {
+				continue;
+			}
+
+			painter.drawLine(QPointF(x, plot.top()),
+			                 QPointF(x, plot.top() + edge_tick_px * 0.5));
+			painter.drawLine(QPointF(x, chance_plot.bottom()),
+			                 QPointF(x, chance_plot.bottom() - edge_tick_px * 0.5));
+		}
+	}
+
 	painter.setPen(QPen(m_palette.grid, 1.0));
 	for (double x : hour_marks) {
 		painter.drawLine(QPointF(x, plot.top()),
