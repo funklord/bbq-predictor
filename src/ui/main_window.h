@@ -62,6 +62,9 @@ protected:
 	 */
 	void resizeEvent(class QResizeEvent *event) override;
 
+	/* Keep the controls to a fraction of the window (sec 10.6). */
+	void cap_control_height();
+
 public:
 
 	bbq_wu_feed *feed() const { return m_feed; }
@@ -114,6 +117,14 @@ private:
 	QComboBox *m_smoothing_box;
 	QComboBox *m_layout_box;
 	QWidget *m_controls;
+
+	/*
+	 * The controls SCROLL rather than push the plot off the screen
+	 * (sec 10.6). Their minimum height is nine finger-height rows,
+	 * which on a tall narrow phone left the graph a fifth of the
+	 * display -- the program's whole point, smallest thing on screen.
+	 */
+	class QScrollArea *m_control_scroll = nullptr;
 
 	/*
 	 * The root layout, kept so the safe area can be applied to it. On a

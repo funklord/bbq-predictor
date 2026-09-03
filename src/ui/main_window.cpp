@@ -13,6 +13,8 @@
 #include <QPushButton>
 #include <QStringList>
 #include <QShowEvent>
+#include <QScrollArea>
+#include <QFrame>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -367,7 +369,32 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	m_base_margins = layout->contentsMargins();
 	layout->addWidget(m_verdict, 0);
 	layout->addWidget(m_graph, 1);
-	layout->addWidget(m_controls, 0);
+	/*
+	 * The controls go inside a scroll area, and that is what stops them
+	 * starving the plot (sec 10.6).
+	 *
+	 * A QScrollArea's minimum height is its own, not its child's, so
+	 * the layout is free to give the graph -- which has the stretch --
+	 * everything the cap below does not reserve. Without it the
+	 * controls' minimum was nine rows at finger height and the graph
+	 * got whatever was left, which on the Fold's cover screen was a
+	 * fifth of a very tall screen.
+	 *
+	 * Horizontal scrolling is off deliberately: the fields shrink to
+	 * the viewport instead, which is what `setWidgetResizable` gives,
+	 * and a control the reader has to scroll sideways to find is worse
+	 * than a narrow one.
+	 */
+	m_control_scroll = new QScrollArea(this);
+	m_control_scroll->setWidget(m_controls);
+	m_control_scroll->setWidgetResizable(true);
+	m_control_scroll->setFrameShape(QFrame::NoFrame);
+	m_control_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_control_scroll->viewport()->setAutoFillBackground(false);
+	m_control_scroll->setSizePolicy(QSizePolicy::Preferred,
+	                                QSizePolicy::Maximum);
+
+	layout->addWidget(m_control_scroll, 0);
 
 	/* The saved choice, applied before anything is shown. */
 	apply_theme(bbq_theme_resolve(bbq_settings::theme()));
@@ -565,10 +592,60 @@ bool bbq_main_window::wants_wide_controls() const {
  * desktop delivers these continuously, and tearing a layout down per
  * pixel is visible.
  */
+void bbq_main_window::cap_control_height() {
+	if (m_control_scroll == nullptr) {
+		return;
+	}
+
+	/*
+	 * A FRACTION of the window, not a fixed number of rows (sec 10.6).
+	 *
+	 * The plot is the program, so it keeps the majority of the height
+	 * on any screen; the controls get the rest and scroll for whatever
+	 * does not fit. On a desktop, where the controls are one row, the
+	 * cap is lifted -- a row is short and capping it would only clip.
+	 */
+	if (m_wide_controls) {
+		m_control_scroll->setMinimumHeight(0);
+		m_control_scroll->setMaximumHeight(QWIDGETSIZE_MAX);
+		return;
+	}
+
+	/*
+	 * A maximum alone was not enough. The scroll area's own size hint
+	 * is small -- it does not inherit the child's -- so the layout gave
+	 * it one row and everything else had to be scrolled for. The share
+	 * is therefore FIXED at whatever the controls want, up to the cap:
+	 * they get all of it when they fit, and 42% with a scrollbar when
+	 * they do not.
+	 */
+	const int share = qMax(140, int(height() * 0.42));
+	/*
+	 * Asked of the MINIMUM, not the size hint. `setWidgetResizable`
+	 * sizes the child to the viewport, so once it is inside a scroll
+	 * area its hint reports the viewport back and the share it asked
+	 * for collapsed to a single row. The minimum is the one number that
+	 * still describes the stacked controls themselves -- set_layout
+	 * computes it from the layout it has just built.
+	 */
+	const int content =
+	        qMax(m_controls->minimumHeight(), m_controls->sizeHint().height());
+	if (content <= 0) {
+		return;
+	}
+
+	const int wanted = qMin(content, share);
+
+	m_control_scroll->setMinimumHeight(wanted);
+	m_control_scroll->setMaximumHeight(wanted);
+}
+
 void bbq_main_window::resizeEvent(QResizeEvent *event) {
 	QWidget::resizeEvent(event);
 
 	if (m_controls == nullptr) return;
+
+	cap_control_height();
 	if (wants_wide_controls() == m_wide_controls) return;
 
 	set_layout(m_layout);
@@ -683,6 +760,33 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 		row->addStretch(1);
 		row->addWidget(m_freshness_label, 0);
 	}
+
+	/*
+	 * The controls assert their own height, so the scroll area SCROLLS
+	 * instead of squashing them (sec 10.6).
+	 *
+	 * `setWidgetResizable` sizes the child to the viewport, and a
+	 * viewport shorter than the child compressed the grid rows until
+	 * the labels overlapped each other -- readable as a smear at the
+	 * bottom of the screen rather than as a control anybody could use.
+	 * Stating the minimum is what turns "too little room" into a
+	 * scrollbar.
+	 *
+	 * Cleared first: the value is computed from the layout that has
+	 * just been built, and a minimum left over from the other shape
+	 * would be measured into it.
+	 */
+	m_controls->setMinimumHeight(0);
+	m_controls->layout()->activate();
+	m_controls->setMinimumHeight(m_controls->sizeHint().height());
+
+	/*
+	 * And re-take the share, now that there is a minimum to measure.
+	 * resizeEvent caps too, but it runs BEFORE this and finds nothing
+	 * to measure -- so without this the cap was computed once, from
+	 * zero, and the scroll area kept its own one-row size hint.
+	 */
+	cap_control_height();
 
 	m_station_box->setVisible(metrics.show_station_field);
 

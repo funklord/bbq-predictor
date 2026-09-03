@@ -3097,12 +3097,35 @@ a phone could not lay itself out at all.
   layout over the mobile one chosen in between.
 
 Guarding all four still produced a 2312-pixel portrait window, at which
-point the attempt was abandoned rather than continued by trial. **The
-lever is probably not the control shape at all**: it is that the
-controls' minimum height is allowed to starve a stretch-1 graph. A
-scroll area around the controls, or a graph minimum expressed as a
-fraction of the window, addresses the complaint directly and does not
-touch the shape logic that produced every fault above.
+point the attempt was abandoned rather than continued by trial.
+
+**The prediction was right and the scroll area is the fix.** The lever
+was never the control shape: it is that the controls' minimum height was
+allowed to starve a stretch-1 graph. `m_controls` now lives in a
+`QScrollArea`, whose minimum is its own rather than its child's, so the
+layout is free to give the graph everything the cap does not reserve.
+Measured on a 420x1144 cover screen, the plot goes from about a fifth of
+the height to about 55%, with every control still reachable; in
+landscape it is about 80% with the controls on one row, which is the
+wide view this chart should be at its best in.
+
+Three things had to be right, and each was wrong first:
+
+- **The child must assert its own height** or `setWidgetResizable`
+  compresses it to the viewport until the labels overlap -- a smear at
+  the bottom of the screen rather than a control anybody could use.
+  Stating the minimum is what turns "too little room" into a scrollbar.
+- **The share is asked of that minimum, not of the size hint.** Once a
+  widget is inside a resizable scroll area its hint reports the viewport
+  back, so the share collapsed to a single row.
+- **And the cap must be re-taken after the layout is built.**
+  `resizeEvent` caps too, but it runs first and finds nothing to
+  measure, so the share was computed once from zero.
+
+**None of the shape logic was touched**, which is the point. Rotation
+was already handled by `654c9f6`, committed in this tree by another
+session while the reverted attempt was duplicating it -- discovered only
+when a second `resizeEvent` declaration would not compile.
 
 ## 11. Android
 
