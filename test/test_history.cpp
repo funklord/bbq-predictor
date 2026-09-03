@@ -31,6 +31,7 @@ private slots:
 	void a_station_s_own_cadence_still_pairs_with_the_hour();
 	void the_corrected_band_scores_like_any_other();
 	void the_verdict_is_scored_and_is_not_its_ingredients();
+	void a_dry_spell_still_scores_the_verdict();
 
 private:
 	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
@@ -657,6 +658,82 @@ void test_history::the_verdict_is_scored_and_is_not_its_ingredients() {
 	                                   "fixture cannot tell a verdict from "
 	                                   "its ingredients")
 	                            .arg(verdict.mean_absolute_error)));
+}
+
+void test_history::a_dry_spell_still_scores_the_verdict() {
+	/*
+	 * THE COMMON CASE (project.md sec 12.20.1).
+	 *
+	 * The stuck-sensor guard fires when a quantity never moves across
+	 * enough samples and enough hours. For rain that is the ordinary
+	 * state of good weather -- measured on the device, 68 observations
+	 * across 23 hours all read 0.0 mm/h -- so vetoing the verdict on it
+	 * made the quantity inert in exactly the weather somebody would
+	 * light a fire in.
+	 *
+	 * Thirty hourly pairs, rain flat at zero, temperature and wind
+	 * moving so that neither of those trips the guard instead.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1600000000;
+	const qint64 valid = issued + 3600;
+
+	std::vector<bbq_sample> predicted;
+	std::vector<bbq_sample> measured;
+
+	for (int i = 0; i < 30; ++i) {
+		bbq_sample forecast;
+		forecast.start_utc = valid + i * 3600;
+		forecast.duration_s = 3600;
+		forecast.temperature = 18.0 + (i % 5);
+		forecast.precip_rate = 0.0;
+		forecast.wind_kph = 8.0 + (i % 3);
+		predicted.push_back(forecast);
+
+		bbq_sample seen;
+		seen.start_utc = valid + i * 3600;
+		seen.duration_s = 300;
+		seen.temperature = 20.0 + (i % 5);
+		seen.precip_rate = 0.0;   /* dry all day, which is not a fault */
+		seen.wind_kph = 9.0 + (i % 3);
+		measured.push_back(seen);
+	}
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples(std::move(predicted));
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(measured);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 30);
+
+	/*
+	 * Rain itself is still not scored -- the guard's own judgement on
+	 * the quantity is left alone, because changing it would move every
+	 * statistic already in the archive. What must survive is the
+	 * VERDICT.
+	 */
+	int verdict_rows = 0;
+	const bbq_lead_bucket every[] = {
+		bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
+		bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
+		bbq_lead_bucket::day};
+
+	for (bbq_lead_bucket bucket : every) {
+		const bbq_verification scored = store.verification(
+		        QStringLiteral("ITEST1"), bbq_band::hourly,
+		        QStringLiteral("grill"), bucket);
+		verdict_rows += scored.count;
+	}
+
+	QVERIFY2(verdict_rows > 0,
+	         "a dry day left the verdict unscored, which is the weather it "
+	         "matters most in");
 }
 
 QTEST_GUILESS_MAIN(test_history)

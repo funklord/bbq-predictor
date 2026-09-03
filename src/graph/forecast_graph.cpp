@@ -70,8 +70,15 @@ const int margin_top = 10;
  */
 const double rain_full_scale_mm_h = 10.0;
 
-/* How far the hour marks reach in from the top and bottom (sec 3.20). */
-const double edge_tick_px = 7.0;
+/*
+ * How far the hour marks reach in from the top and bottom (sec 3.20).
+ *
+ * 7 was the first answer and 9 is the second: at real size on a phone
+ * the marks were almost invisible, which is the opposite failure from
+ * the banding they replaced. A mark nobody can see is not a quieter cue,
+ * it is an absent one.
+ */
+const double edge_tick_px = 9.0;
 
 /*
  * One pixel column's worth of the composite.
@@ -1957,7 +1964,12 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		 * name.
 		 */
 		QColor minor = m_palette.grid;
-		minor.setAlpha(110);
+		/*
+		 * 175, up from 110. Fading them was right in direction and too
+		 * far in degree -- they have to sit BEHIND the labelled hours,
+		 * not disappear.
+		 */
+		minor.setAlpha(175);
 		painter.setPen(QPen(minor, 1.0));
 
 		const qint64 first_hour = ((from / 3600) + 1) * 3600;
@@ -1968,9 +1980,9 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			}
 
 			painter.drawLine(QPointF(x, plot.top()),
-			                 QPointF(x, plot.top() + edge_tick_px * 0.5));
+			                 QPointF(x, plot.top() + edge_tick_px * 0.66));
 			painter.drawLine(QPointF(x, chance_plot.bottom()),
-			                 QPointF(x, chance_plot.bottom() - edge_tick_px * 0.5));
+			                 QPointF(x, chance_plot.bottom() - edge_tick_px * 0.66));
 		}
 	}
 

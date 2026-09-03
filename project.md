@@ -4670,12 +4670,47 @@ was added. It reads
 
 as a tolerance rather than a signed bias: the score runs 0 to 1 and its
 sign says which way a recommendation erred, which is a second question.
+The hour marks were also strengthened at the holder's word -- 9 pixels
+and alpha 175, from 7 and 110. Fading them was right in direction and
+too far in degree: a mark nobody can see is not a quieter cue, it is an
+absent one, which is the opposite failure from the banding it replaced.
 What a reader wants first is how far off the answer has been.
 
 Tested by seeding a grill row and reading the line, because the weather
 takes days to supply one -- sec 14.11 is what happens when a display
 path is never exercised -- and sabotaged by measuring the verdict and
 not printing it, which makes the test name the omission.
+
+#### 12.20.1 A dry spell is not a dead gauge
+
+The verdict shipped inert, and the device said so within the hour: no
+`grill` rows appeared, while temperature and wind gained new ones.
+
+The stuck-sensor guard of sec 12.14 fires when a quantity never moves
+across enough samples and enough hours, and the verdict was vetoed if
+ANY of its three ingredients was stuck. Measured on the phone: 68
+observations across 23 hours, every one reading 0.0 mm/h. A dry day
+trips that guard every time -- so the quantity was skipped in exactly
+the weather somebody would light a fire in, which is the common case and
+the one the program exists for.
+
+**Stuck at zero is not the same as stuck.** For temperature or wind a
+flat line across hours is pathological and still vetoes outright:
+neither has a value meaning "nothing is happening". Rain does. A gauge
+reading zero all day is indistinguishable from a dry day and is far more
+often a dry day; a gauge stuck at 3 mm/h is broken whatever the sky is
+doing. So a stuck rain gauge blocks the verdict only when it is stuck at
+something other than zero.
+
+**The guard's judgement on the QUANTITY is left alone.** Rain still goes
+unscored during a dry spell, and the warning still prints. Changing that
+would move every statistic already in the archive, and it is a separate
+question from whether the verdict can be computed.
+
+Found by looking for the row rather than waiting for it. The feature was
+built, tested, sabotaged, shipped and installed, and every one of those
+steps passed -- the fixtures all had rain in them. Nothing but the
+device's own dry week would have shown it, and only then as an absence.
 
 ## 13. Navigating the graph
 

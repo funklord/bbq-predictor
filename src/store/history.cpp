@@ -717,6 +717,9 @@ int bbq_history::verify(const QString &station) {
 	 */
 	bool stuck[3] = {false, false, false};
 
+	/* What each stuck quantity is stuck AT, which decides sec 12.20.1. */
+	double stuck_at[3] = {0.0, 0.0, 0.0};
+
 	for (int q = 0; q < 3; ++q) {
 		int seen = 0;
 		double lowest = 0.0;
@@ -746,6 +749,7 @@ int bbq_history::verify(const QString &station) {
 		const bool enough = seen >= stuck_minimum_samples;
 		const bool spans = (latest - earliest) >= stuck_minimum_span_s;
 		stuck[q] = enough && spans && highest == lowest;
+		stuck_at[q] = highest;
 
 		if (stuck[q]) {
 			/*
@@ -798,7 +802,32 @@ int bbq_history::verify(const QString &station) {
 					}
 				}
 
-				if (!complete || stuck[0] || stuck[1] || stuck[2]) {
+				/*
+				 * A DRY SPELL IS NOT A DEAD GAUGE (sec 12.20.1).
+				 *
+				 * The stuck guard asks whether a quantity ever moved,
+				 * and for temperature or wind a flat line across hours
+				 * is pathological. For rain it is the ordinary state of
+				 * good weather: measured on the device, 68 observations
+				 * across 23 hours all read 0.0 mm/h, which trips the
+				 * guard every dry day.
+				 *
+				 * Vetoing the verdict on that made this quantity inert
+				 * in exactly the weather somebody would light a fire
+				 * in -- the common case, and the one the program is
+				 * for. So a stuck rain gauge blocks the verdict only
+				 * when it is stuck at something OTHER than zero: stuck
+				 * at zero is indistinguishable from dry and is far more
+				 * often dry, while stuck at 3 mm/h is a broken gauge
+				 * whatever the sky is doing.
+				 *
+				 * Temperature and wind still veto outright. Neither has
+				 * a value that means "nothing is happening".
+				 */
+				const bool rain_is_dry = stuck[1] && stuck_at[1] == 0.0;
+
+				if (!complete || stuck[0] || stuck[2] ||
+				    (stuck[1] && !rain_is_dry)) {
 					continue;
 				}
 
