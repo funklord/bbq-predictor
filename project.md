@@ -2835,11 +2835,12 @@ anything.
   gate and twelve test binaries. What stops it being free of judgement
   is that the Android build needs an SDK and the fetch tests must not
   reach WU from a shared runner
-- **How strong the rain wash should be.** The chance area is drawn at
-  alpha 90 over the full plot height (sec 3.19). That number was chosen
-  by rendering a certain-downpour fixture and looking, which is the
-  right method for the extreme and says nothing about how it reads on
-  an ordinary day. It is a judgement for whoever uses the thing
+- ~~**How strong the rain wash should be.**~~ Settled at alpha 60 by the
+  copyright holder, 2026-09-03. It was 90, chosen against a
+  certain-downpour fixture -- the right method for the extreme, and
+  silent about an ordinary day. What changed the answer is sec 3.20:
+  with the hour bands gone the wash became the only tint left on the
+  plot and carried more weight than it had as one of three
 - **Whether the three projects that shipped for Android first adopt
   `tool/android.mk`.** Their target names differ from the agreed ones
   in ways somebody has to decide about rather than sweep, so it belongs

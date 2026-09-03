@@ -1630,11 +1630,14 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 */
 	QColor chance_fill = m_palette.chance;
 	/*
-	 * Fainter than it was. At 150 over 46 pixels it was a bar; over the
-	 * whole height it is a wash, and a wash that dark competes with the
-	 * lines drawn on top of it.
+	 * Fainter than it was, twice. At 150 over 46 pixels it was a bar;
+	 * over the whole height it is a wash, and a wash that dark competes
+	 * with the lines drawn on top of it. 90 was the first answer and
+	 * still read heavy once sec 3.20 took the hour bands away -- with a
+	 * plain ground behind it, the wash became the only tint left and
+	 * carried more weight than it had when it was one of three.
 	 */
-	chance_fill.setAlpha(90);
+	chance_fill.setAlpha(60);
 	painter.setPen(Qt::NoPen);
 	painter.setBrush(chance_fill);
 
