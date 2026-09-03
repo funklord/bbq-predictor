@@ -1112,7 +1112,16 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 	        m_feed->station(), band, QStringLiteral("temperature"), bucket);
 	const bbq_brier rain = store.brier(m_feed->station(), band, bucket);
 
-	if (temperature.count == 0 && rain.count == 0) {
+	/*
+	 * The verdict's own record (sec 12.20). It is the last thing added
+	 * to the store and the first thing a reader actually wants: the
+	 * three ingredients say whether the numbers were right, and this
+	 * says whether the ANSWER was.
+	 */
+	const bbq_verification verdict = store.verification(
+	        m_feed->station(), band, QStringLiteral("grill"), bucket);
+
+	if (temperature.count == 0 && rain.count == 0 && verdict.count == 0) {
 		/*
 		 * Said rather than left blank. An empty space reads as "nothing
 		 * to report"; the truth is that nothing has been checked yet,
@@ -1163,8 +1172,22 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 		note += QStringLiteral(", rain skill %1").arg(rain.skill(), 0, 'f', 2);
 	}
 
+	if (verdict.count > 0) {
+		/*
+		 * As a tolerance rather than a signed bias. The score runs 0 to
+		 * 1 and its sign says which way a recommendation erred, which
+		 * is a second question; what the reader wants first is how far
+		 * off the answer has been, and a plus-or-minus reads that way
+		 * without inviting the other reading.
+		 */
+		note += QStringLiteral(", verdict %1%2")
+		                .arg(QChar(0x00b1))
+		                .arg(verdict.mean_absolute_error, 0, 'f', 2);
+	}
+
 	note += QStringLiteral(" (n=%1)")
-	                .arg(qMax(temperature.count, rain.count));
+	                .arg(qMax(qMax(temperature.count, rain.count),
+	                          verdict.count));
 
 	return note;
 }

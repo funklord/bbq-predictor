@@ -61,6 +61,7 @@ private slots:
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
 	void a_warm_band_and_a_cold_one_read_differently();
+	void the_record_line_reports_the_verdict_too();
 	void the_list_names_the_station_actually_being_read();
 	void the_view_still_pans_and_zooms_through_the_window();
 	void turning_and_unfolding_the_device_keeps_what_was_on_screen();
@@ -533,6 +534,47 @@ void test_window::turning_and_unfolding_the_device_keeps_what_was_on_screen() {
 		QCOMPARE(window.m_graph->view_from_utc(), from);
 		QCOMPARE(window.m_graph->view_span_s(), span);
 	}
+}
+
+void test_window::the_record_line_reports_the_verdict_too() {
+	/*
+	 * A MEASUREMENT NOTHING DISPLAYS IS THE SAME FAULT AGAIN
+	 * (sec 12.20).
+	 *
+	 * The verdict's record was added to the store in the same hour this
+	 * test was written, and the readout showed temperature and rain and
+	 * not it -- which is precisely the shape of defect this project has
+	 * spent a session finding. Seeded, because the weather takes days
+	 * to supply one and sec 14.11 is what happens when a display path
+	 * is never exercised.
+	 */
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const QString station = QStringLiteral("ITESTVERDICT");
+	window.watch_station(station);
+
+	const qint64 now = 1700000000;
+	const qint64 when = now + 3600;
+
+	bbq_composite composite;
+	composite.set_series(bandful(bbq_band::hourly, now, 6));
+
+	bbq_history &store = window.feed()->history();
+	QVERIFY(store.set_verification(station, bbq_band::hourly,
+	                               QStringLiteral("grill"),
+	                               bbq_lead_bucket::hour, 12, -0.3, 0.42, 0.5));
+
+	const QString note = window.verification_note(composite, when, now);
+
+	QVERIFY2(note.contains(QStringLiteral("verdict")),
+	         qPrintable(QStringLiteral("the verdict is measured and not "
+	                                   "shown: %1").arg(note)));
+	QVERIFY2(note.contains(QStringLiteral("0.42")),
+	         qPrintable(QStringLiteral("the verdict's error is not in the "
+	                                   "line: %1").arg(note)));
 }
 
 int main(int argc, char *argv[]) {

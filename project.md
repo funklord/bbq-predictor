@@ -4660,6 +4660,23 @@ of 0.15, and the honest fix was a sharper fixture, not a lower bar.
 Sabotaged afterwards by scoring three quantities instead of four, which
 makes it report that the verdict was never scored.
 
+**And it is shown, because a measurement nothing displays is the same
+fault one layer up.** The record line carried temperature and rain and
+would have carried the verdict nowhere -- which is exactly the shape
+sec 14.6 and sec 14.11 record, arriving again in the hour the quantity
+was added. It reads
+
+    record: hourly @1h  bias +0.3 C, MAE 0.6, verdict +-0.42 (n=54)
+
+as a tolerance rather than a signed bias: the score runs 0 to 1 and its
+sign says which way a recommendation erred, which is a second question.
+What a reader wants first is how far off the answer has been.
+
+Tested by seeding a grill row and reading the line, because the weather
+takes days to supply one -- sec 14.11 is what happens when a display
+path is never exercised -- and sabotaged by measuring the verdict and
+not printing it, which makes the test name the omission.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to
