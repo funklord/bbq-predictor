@@ -4401,6 +4401,31 @@ observation coincides with a forecast time, so a later edit cannot
 quietly turn it back into the aligned test it exists to complement.
 Narrowing the window to 30 seconds makes it fail.
 
+#### 12.16.1 The sweep, watched working on the real archive
+
+The desktop store sat untouched from 2026-08-28 to 2026-09-04 -- every
+run in between passed `--history-path` at a seeded scratch file, so the
+real one was frozen rather than broken. Its 916 stale rows for a dead
+station read as an expiry defect at first glance, and were not: nothing
+had run against that store. A probe pointed at the wrong file says
+whatever the wrong file happens to hold.
+
+One real round then produced the clearest evidence yet for sec 14.5:
+
+    ISTOCK822    916 -> 478   438 orphaned rows expired
+    ISTOCK877    749 -> 1189  new forecasts queued
+    verification   0 -> 6     the desktop scores for the first time
+
+**ISTOCK822 is not the watched station in that run.** Under the rule
+sec 14.5 replaced, its queue could never be scored and never be expired,
+because both ran for `m_station_id` alone -- so those 438 rows would
+have sat there for ever. The queue-driven sweep is what reaches them.
+
+The 478 that remain are correct rather than missed: they were recorded
+on 26 August against a fifteen-day horizon, so their valid times run to
+about 10 September and most are still ahead of the 36-hour give-up
+window.
+
 ### 12.17 One question found most of these, and it is worth keeping
 
 Eight defects were found in a single pass, and they are one family
