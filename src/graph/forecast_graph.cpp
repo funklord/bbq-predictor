@@ -70,6 +70,9 @@ const int margin_top = 10;
  */
 const double rain_full_scale_mm_h = 10.0;
 
+/* How far the hour marks reach in from the top and bottom (sec 3.20). */
+const double edge_tick_px = 7.0;
+
 /*
  * One pixel column's worth of the composite.
  *
@@ -646,7 +649,17 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 * is drawing.
 	 */
 	chosen.chance = QColor(0x17, 0xaa, 0xdb);
-	chosen.now_marker = QColor(0x00, 0x53, 0xae);
+	/*
+	 * NOW IS YELLOW (sec 3.20). It was WU's blue, which on a chart whose
+	 * rain is now also blue said "another band" rather than "here".
+	 * Yellow is the one hue nothing else on this chart uses.
+	 *
+	 * Amber on a light ground rather than the dark theme's brighter
+	 * yellow: the same colour that reads against near-black is nearly
+	 * invisible against white, and a marker nobody can see is worse
+	 * than one in the wrong hue.
+	 */
+	chosen.now_marker = QColor(0xc8, 0x8a, 0x00);
 	chosen.stale_warning = QColor(0xd5, 0x20, 0x2a);
 	chosen.grill_window = QColor(0xff, 0x8b, 0x33);
 	chosen.readout_back = QColor(0x2b, 0x2b, 0x2b);
@@ -654,7 +667,8 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	chosen.readout_text = QColor(0xf0, 0xf0, 0xf0);
 	chosen.corrected = QColor(0x8b, 0x6b, 0xb1);
 	chosen.wind = QColor(0x6b, 0x8b, 0x9a);
-	chosen.day_divider = QColor(0xdd, 0xe1, 0xe5);
+	/* Dark on a light ground, for the same reason the marker is amber. */
+	chosen.day_divider = QColor(0x55, 0x5b, 0x60);
 	chosen.band_observed = QColor(0x5b, 0x9f, 0x49);
 	chosen.band_current = QColor(0x87, 0xc4, 0x03);
 	chosen.band_nowcast_fine = QColor(0x00, 0x53, 0xae);
@@ -694,13 +708,13 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 * whole palette being reworked.
 	 */
 	chosen.band_observed = QColor(0x7a, 0xc8, 0x64);
-	chosen.now_marker = QColor(0x5a, 0x9d, 0xe8);
+	chosen.now_marker = QColor(0xff, 0xd4, 0x00);
 
 	/* The readout was already a dark box; on a dark ground it needs an
 	 * edge to stay a box rather than a smudge. */
 	chosen.readout_back = QColor(0x2b, 0x2f, 0x33);
 	chosen.readout_edge = QColor(0x70, 0x76, 0x7c);
-	chosen.day_divider = QColor(0x34, 0x3a, 0x40);
+	chosen.day_divider = QColor(0xff, 0xff, 0xff);
 
 	return chosen;
 }
@@ -1324,22 +1338,23 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	const qint64 band_step = ticks.step_s;
 	const qint64 first_band = (from / band_step) * band_step;
 
-	for (qint64 t = first_band; t < to; t += band_step) {
-		if ((t / band_step) % 2 != 0) {
-			continue;
-		}
-
-		const double x0 = plot.left() + (t - from) / seconds_per_pixel;
-		const double x1 = plot.left() + (t + band_step - from) / seconds_per_pixel;
-		const double left = std::max(x0, static_cast<double>(plot.left()));
-		const double right = std::min(x1, static_cast<double>(plot.right()));
-
-		if (right > left) {
-			const double tall = chance_plot.bottom() - plot.top();
-			painter.fillRect(QRectF(left, plot.top(), right - left, tall),
-			                 m_palette.band_shade);
-		}
-	}
+	/*
+	 * TICKS AT THE EDGES, not alternating blocks (sec 3.20).
+	 *
+	 * The banding was measured from WU's chart and is the cheapest
+	 * density cue there is -- but it tints half the plot, and every
+	 * other thing drawn on it is then read against two grounds instead
+	 * of one. On a dark theme with a rain wash over the top that is
+	 * three tints deep before any data is drawn.
+	 *
+	 * Short marks at the top and bottom edges say the same thing and
+	 * leave the middle -- where the data is -- plain. They are drawn
+	 * with the time axis below, at the LABELLED hours, so a mark and
+	 * the text naming it are the same event; marking the band step as
+	 * well was the first attempt and put ticks where nothing was
+	 * written.
+	 */
+	Q_UNUSED(first_band);
 
 	/*
 	 * The grilling windows (sec 7), drawn under the data rather than
@@ -1490,10 +1505,23 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	const qint64 tick_step = ticks.step_s;
 	const qint64 first_tick = ((from / tick_step) + 1) * tick_step;
 
+	std::vector<double> hour_marks;
+
 	for (qint64 t = first_tick; t < to; t += tick_step) {
 		const double x = plot.left() + (t - from) / seconds_per_pixel;
-		painter.setPen(QPen(m_palette.grid, 1, Qt::DotLine));
-		painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()));
+		/*
+		 * SHORT MARKS AT THE EDGES, not a line through the plot
+		 * (sec 3.20). A dotted rule the full height of the chart
+		 * crosses every curve on it, and with the banding gone it was
+		 * the last thing tinting the middle.
+		 *
+		 * Collected here and DRAWN LATER, after the series. The rain
+		 * area starts at the bottom edge, so a mark drawn with the axis
+		 * is under it -- and the lower half of the cue disappeared on
+		 * exactly the days it rained. Seven pixels of furniture at the
+		 * extreme edge is the one thing worth putting over the data.
+		 */
+		hour_marks.push_back(x);
 
 		const QString stamp = local_time(t, zone).toString(ticks.format);
 
@@ -1573,7 +1601,12 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		 * It still runs the full height of both panels, so a day is one
 		 * column all the way down.
 		 */
-		painter.setPen(QPen(m_palette.day_divider, 6.0, Qt::SolidLine,
+		/*
+		 * A THIN CUT rather than a six-pixel band (sec 3.20). The band
+		 * was legible at low contrast because it was wide; a cut is
+		 * legible because it is sharp, and it takes no plot with it.
+		 */
+		painter.setPen(QPen(m_palette.day_divider, 1.0, Qt::SolidLine,
 		                    Qt::FlatCap));
 		painter.drawLine(QPointF(x, plot.top()),
 		                 QPointF(x, chance_plot.bottom() +
@@ -1893,6 +1926,15 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 				}
 			}
 		}
+	}
+
+	/* --- the hour marks, over the series so rain cannot bury them ----- */
+	painter.setPen(QPen(m_palette.grid, 1.0));
+	for (double x : hour_marks) {
+		painter.drawLine(QPointF(x, plot.top()),
+		                 QPointF(x, plot.top() + edge_tick_px));
+		painter.drawLine(QPointF(x, chance_plot.bottom()),
+		                 QPointF(x, chance_plot.bottom() - edge_tick_px));
 	}
 
 	/*

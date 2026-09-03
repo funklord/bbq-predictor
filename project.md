@@ -2069,6 +2069,54 @@ whatever happens. The chart does not. Every colour it paints is chosen
 in `palette_for`, so a wrong answer is not a plainer window, it is a
 graph drawn in the wrong ground with measured data colours on top.
 
+### 3.20 The furniture stopped competing with the data
+
+Four changes, asked for by the copyright holder after using the chart on
+a phone, and they are one idea: the plot should be plain, and everything
+that is not data should say its piece at the edge.
+
+**The alternating hour bands are gone.** They were measured from WU and
+are the cheapest density cue there is -- and they tint half the plot, so
+every curve is read against two grounds instead of one. With a rain wash
+over the top (sec 3.19) that is three tints deep before any data is
+drawn. On a dark theme it reads as noise.
+
+**The full-height dotted rule at each labelled hour is gone too**, for
+the same reason: it crossed every curve on the chart. What is left is a
+short mark at the top edge and one at the bottom, seven pixels each, at
+the hours that carry a label -- so a mark and the text naming it are the
+same event.
+
+**Now is yellow.** It was WU's blue, and on a chart whose rain became
+blue in sec 3.19 that said "another band" rather than "here". Yellow is
+the one hue nothing else on this chart uses.
+
+**The day divider is a thin cut** rather than a six-pixel band. The band
+was legible at low contrast because it was wide; a cut is legible
+because it is sharp, and it takes no plot with it.
+
+**Two of these needed a second attempt, and both for reasons worth
+keeping.**
+
+The hour marks were first drawn at the BAND step, which put ticks where
+nothing was written -- the labels are on a different rhythm. They belong
+with the time axis, at the labelled hours.
+
+And they were drawn with that axis, which is under the series, so the
+rain area buried the bottom half of every mark on exactly the days it
+rains. They are collected during the axis pass and drawn after the data
+now. Seven pixels of furniture at the extreme edge is the one thing on
+this chart worth putting over the top, and it is the third time in this
+project that paint order has been the defect rather than the drawing
+(sec 3.19, sec 3.19.1).
+
+**The light theme does not take the same two colours**, and that is
+deliberate rather than an oversight. A yellow bright enough to read
+against near-black is nearly invisible against white, and a white cut on
+a white ground is nothing at all -- so the light palette uses amber and
+a dark grey. The rule this follows is already the project's: furniture
+follows the desktop, measured data colours do not (sec 3.8.4).
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it
