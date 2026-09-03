@@ -2038,6 +2038,23 @@ records are on a white ground: the desktop was light then and is dark
 now, and the same binary produced both. The change of appearance is the
 detector working, not drift.
 
+**The consult ORDER here is right, and that is worth stating** because
+the shared rule's first relay had it wrong. Tiers are numbered by
+authority, not by consult order: the palette-luminance heuristic always
+answers -- a palette is either lighter or darker than its text -- so
+consulting it third would mean `kdeglobals` never runs at all, on the
+one desktop it exists for. This tree asks the platform hint, then
+`kdeglobals`, then defaults to light, and uses luminance only as the
+comparison INSIDE the kdeglobals test. That is the corrected order
+(hydra's `f59301d`) reached independently.
+
+Two further settlements need no change here. The luminance is settled as
+the comparison rather than a named constant, partly so that trees
+carrying the raw Rec.709 sum -- as `theme.h` does -- need not change
+working code to no observable effect. And "follow the desktop's darkness,
+never its hue" is already this project's rule: the measured WU colours do
+not follow the desktop, which `theme.h` records.
+
 **Tier 2 is not implemented, and that is the one open question.** The
 portal tier would need `Qt6::DBus`, which this program does not link,
 and it abstains on this machine anyway -- there is no
@@ -3041,6 +3058,51 @@ This is a workaround for somebody else's defect and should be removed
 when Qt carries the version guard. It is written as a platform
 conditional rather than a layout one for that reason: the fault follows
 the operating system, not the shape of the window.
+
+### 10.6 The mobile layout gives the plot too little, and one attempt failed
+
+**The complaint is real and measured.** On the Fold's cover screen the
+controls are nine label-and-control rows at finger height, and the plot
+gets about a fifth of a very tall display. The graph is the program and
+it is the smallest thing on screen. Landscape is worse: the same nine
+rows, on the shape with the least height to spare, when a wide screen is
+the best this chart ever looks.
+
+**An attempt was made on 2026-09-03 and reverted.** It is written down
+because the three faults it found are all real, all latent in any future
+attempt, and cost more to rediscover than to read.
+
+The intended shape was: landscape gets the desktop's single row,
+portrait keeps the grid, and the decision is re-taken on rotation. Each
+of the three attempts failed the same way -- the window snapped to 1472
+pixels wide, which is the width of a sentence in the verdict label, and
+a phone could not lay itself out at all.
+
+- **A shape built from the startup size cannot be unbuilt.** The window
+  is 820x400 at construction, so any test evaluated then picks the wide
+  row -- whose own minimum width is about 1470. The window can then
+  never reach the size that would ask for the narrow one. A layout that
+  can only move one way is not deciding, it is latching.
+- **Aspect is the wrong question.** "Wider than tall" says how a phone
+  is held, not whether a row of ten controls fits, and 820x400 is
+  landscape by that test. A width threshold asks what the layout
+  actually needs.
+- **Two label-and-combo pairs abreast need about the same width as the
+  whole row**, so no phone can use them in either orientation. Packing
+  columns is not the lever; it latched at 820 exactly as the row did.
+- **And `resizeEvent` fires during construction**, before `set_layout`
+  has ever run, when the layout member is still its default of
+  `desktop`. Acting on that asks whether a DESKTOP wants the wide row --
+  always yes -- and a deferred rebuild then re-applies the desktop
+  layout over the mobile one chosen in between.
+
+Guarding all four still produced a 2312-pixel portrait window, at which
+point the attempt was abandoned rather than continued by trial. **The
+lever is probably not the control shape at all**: it is that the
+controls' minimum height is allowed to starve a stretch-1 graph. A
+scroll area around the controls, or a graph minimum expressed as a
+fraction of the window, addresses the complaint directly and does not
+touch the shape logic that produced every fault above.
 
 ## 11. Android
 
