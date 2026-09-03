@@ -407,14 +407,35 @@ android-check:
 		echo "android:   platform-tools, a platform and build-tools." >&2; \
 		exit 1; \
 	fi
+	@# build-tools, checked because the message above already promises it
+	@# and because apksigner lives there. Verifying a signature is the one
+	@# packaging check that cannot be done by looking at the file, so the
+	@# absent case belongs HERE -- named once, early, with the fix in the
+	@# sentence -- rather than at the point of verification, where it used
+	@# to exit 0 and let an unchecked signature read as a pass.
+	@if [ -z "$$(ls $(ANDROID_SDK_ROOT)/build-tools/*/apksigner 2>/dev/null)" ]; then \
+		echo "android: no apksigner under $(ANDROID_SDK_ROOT)/build-tools." >&2; \
+		echo "android:   Install build-tools with the SDK manager. Gradle" >&2; \
+		echo "android:   needs them to package, and this build needs" >&2; \
+		echo "android:   apksigner to say who signed the result." >&2; \
+		exit 1; \
+	fi
 	@if [ -z "$(JAVA_HOME)" ] && ! command -v javac >/dev/null 2>&1; then \
 		echo "android: no javac on PATH and JAVA_HOME is unset." >&2; \
 		echo "android:   Gradle needs a JDK; a JRE alone will not do, and it" >&2; \
 		echo "android:   says so only as a toolchain capability error." >&2; \
 		exit 1; \
 	fi
+	@if [ ! -d "$(JAVA_HOME)" ]; then \
+		echo "android: JAVA_HOME=$(JAVA_HOME) is not a directory." >&2; \
+		echo "android:   Nothing was inspected, so whether a JDK is present" >&2; \
+		echo "android:   is unknown -- a stale or mistyped export reaches" >&2; \
+		echo "android:   here unchanged, because JAVA_HOME is only derived" >&2; \
+		echo "android:   from javac when its origin is undefined." >&2; \
+		exit 1; \
+	fi
 	@if [ ! -x "$(JAVA_HOME)/bin/javac" ]; then \
-		echo "android: JAVA_HOME=$(JAVA_HOME) has no bin/javac." >&2; \
+		echo "android: JAVA_HOME=$(JAVA_HOME) exists and has no bin/javac." >&2; \
 		echo "android:   That is a JRE. Gradle reports it as a toolchain" >&2; \
 		echo "android:   lacking JAVA_COMPILER, naming the JVM but not the" >&2; \
 		echo "android:   reason." >&2; \
@@ -460,8 +481,13 @@ android-check:
 define android_verify_signature
 	@signer=$$(ls $(ANDROID_SDK_ROOT)/build-tools/*/apksigner 2>/dev/null | tail -1); \
 	if [ -z "$$signer" ]; then \
-		echo "android: NO apksigner in the SDK -- who signed this is unchecked" >&2; \
-		exit 0; \
+		echo "android: no apksigner under $(ANDROID_SDK_ROOT)/build-tools," >&2; \
+		echo "android:   so who signed $(1) is UNCHECKED. That is the same" >&2; \
+		echo "android:   end state as an unreadable signature below, and it" >&2; \
+		echo "android:   gets the same answer: it must not read as a pass." >&2; \
+		echo "android:   Install build-tools; \`make android-check' says so" >&2; \
+		echo "android:   earlier and more clearly." >&2; \
+		exit 1; \
 	fi; \
 	dn=$$($$signer verify --print-certs "$(1)" 2>/dev/null \
 	      | sed -n -e 's/^Signer #1 certificate DN: //p' \
@@ -491,7 +517,20 @@ android-run: android-install
 # This app's log and nothing else. `adb logcat` unfiltered is every process
 # on the device, which is how a real message gets lost rather than read.
 android-log:
-	@pid=$$($(ANDROID_ADB) shell pidof -s $(APP_ID) 2>/dev/null); \
+	@if [ ! -x "$(ANDROID_ADB)" ] && ! command -v adb >/dev/null 2>&1; then \
+		echo "android-log: no adb at $(ANDROID_ADB) and none on PATH." >&2; \
+		echo "android-log:   Nothing was asked, so whether $(APP_ID) is" >&2; \
+		echo "android-log:   running is unknown. Install platform-tools." >&2; \
+		exit 1; \
+	fi; \
+	n=$$($(ANDROID_ADB) devices 2>/dev/null | grep -cw device); \
+	if [ "$$n" -eq 0 ]; then \
+		echo "android-log: adb reports no attached device." >&2; \
+		echo "android-log:   Nothing was asked, so whether $(APP_ID) is" >&2; \
+		echo "android-log:   running is unknown." >&2; \
+		exit 1; \
+	fi; \
+	pid=$$($(ANDROID_ADB) shell pidof -s $(APP_ID) 2>/dev/null); \
 	if [ -z "$$pid" ]; then \
 		echo "android-log: $(APP_ID) is not running on the device" >&2; \
 		exit 1; \
