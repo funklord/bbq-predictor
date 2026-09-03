@@ -2019,6 +2019,39 @@ with the data; the fixture would encode the arithmetic it is checking.
 Layout is the one part of this project the documented method is to LOOK
 at, and both branches were looked at.
 
+### 3.8.4 Dark detection, measured against the shared rule
+
+`harmonization.md` settled four tiers on 2026-08-31, consulted in order
+and abstaining rather than guessing: the platform's `colorScheme()`, the
+`org.freedesktop.appearance` portal, palette luminance, and the
+`kdeglobals` a TDE or KDE 3 desktop writes.
+
+**Measured here rather than assumed.** This tree implements tiers 1, 3
+and 4 and cites the rule at the luminance comparison. Tier 4 is the one
+that answers on this machine, and it answers correctly: the desktop's
+`~/.trinity/share/config/kdeglobals` gives `windowBackground=0,42,78`
+against `windowForeground=220,220,220`, and a rendered shot comes back
+with a plot pixel of (22, 24, 26). The applet follows the desktop.
+
+That is worth stating because the shots earlier in this project's
+records are on a white ground: the desktop was light then and is dark
+now, and the same binary produced both. The change of appearance is the
+detector working, not drift.
+
+**Tier 2 is not implemented, and that is the one open question.** The
+portal tier would need `Qt6::DBus`, which this program does not link,
+and it abstains on this machine anyway -- there is no
+`org.freedesktop.portal.Desktop` service file. So it costs a module
+dependency for an answer only another desktop would give, on a platform
+Android does not have at all. Following the shared rule says implement
+it; the dependency says ask. Recorded rather than decided.
+
+**Why any of this matters more here than in a plain widget
+application**: Qt's own widgets follow the palette and look consistent
+whatever happens. The chart does not. Every colour it paints is chosen
+in `palette_for`, so a wrong answer is not a plainer window, it is a
+graph drawn in the wrong ground with measured data colours on top.
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it
@@ -2719,6 +2752,9 @@ anything.
   screen widget and for verification accumulating while nobody is
   looking, and it needs five decisions before any of it is code -- most
   of them the holder's rather than technical (sec 15.4)
+- **Whether to implement the portal tier of the dark-desktop rule**,
+  which needs `Qt6::DBus` for an answer that abstains on this machine
+  and does not exist on Android (sec 3.8.4)
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and
