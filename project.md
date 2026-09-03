@@ -2102,9 +2102,12 @@ The hour marks were first drawn at the BAND step, which put ticks where
 nothing was written -- the labels are on a different rhythm. Correcting
 that overshot: marking only the labelled times is one mark every six
 hours at a day's zoom, which is a scale rather than the hour breaks that
-were asked for. Both are drawn now -- every hour short, the labelled
-ones long, so they read as minor and major rather than as a row of
-identical marks -- and the hourly ones are skipped entirely below about
+were asked for. Both are drawn now -- every hour short and at
+under half weight, the labelled ones long and full strength, so they
+read as minor and major rather than as a row of identical marks. Length
+alone was not enough separation at real size: a row of full-strength
+ticks reads as its own rule along the edge, which is close to the thing
+the banding was removed for -- and the hourly ones are skipped entirely below about
 seven pixels an hour, since a fortnight's zoom would otherwise carry 336
 of them.
 

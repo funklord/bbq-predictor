@@ -1948,7 +1948,17 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	const double hour_px = 3600.0 / seconds_per_pixel;
 
 	if (hour_px >= 7.0) {
-		painter.setPen(QPen(m_palette.grid, 1.0));
+		/*
+		 * FAINTER than the labelled marks, not just shorter. Length
+		 * alone did not separate them enough at real size on a phone:
+		 * a row of full-strength ticks reads as its own rule along the
+		 * edge, which is close to the thing the banding was removed
+		 * for. Half the weight puts them behind the hours that carry a
+		 * name.
+		 */
+		QColor minor = m_palette.grid;
+		minor.setAlpha(110);
+		painter.setPen(QPen(minor, 1.0));
 
 		const qint64 first_hour = ((from / 3600) + 1) * 3600;
 		for (qint64 t = first_hour; t < to; t += 3600) {
