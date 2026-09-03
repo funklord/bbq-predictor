@@ -4576,6 +4576,15 @@ the correction reads a curve for. The switch is exhaustive over the
 enum, so a band added later fails to compile rather than quietly
 joining the loop.
 
+**Queued is not scored, and the two are tested separately.** `test_feed`
+proves the correction reaches the queue; that is half the claim, because
+a band can sit in `forecast_pending` for ever if anything downstream
+declines it -- a lead bucket computed differently, a quantity name that
+does not match, the stuck-sensor guard. `test_history` therefore records
+a corrected-band forecast, observes it, and requires a verification row
+with the right bias. Without that pair the answer would have arrived in
+three days as an ABSENCE, which is the hardest kind of result to notice.
+
 **The test was written after the code, which is the wrong order, so it
 was sabotaged before it was believed.** Returning 0 from the archiving
 step -- computing the correction and discarding it, which is precisely

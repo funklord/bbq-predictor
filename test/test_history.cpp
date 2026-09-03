@@ -29,6 +29,7 @@ private slots:
 	void a_stuck_sensor_does_not_score_a_forecast();
 	void rediscovery_does_not_unpin_a_station();
 	void a_station_s_own_cadence_still_pairs_with_the_hour();
+	void the_corrected_band_scores_like_any_other();
 
 private:
 	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
@@ -529,6 +530,56 @@ void test_history::a_station_s_own_cadence_still_pairs_with_the_hour() {
 
 	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 4);
 	QCOMPARE(store.pending_count(QStringLiteral("ITEST1")), 0);
+}
+
+void test_history::the_corrected_band_scores_like_any_other() {
+	/*
+	 * QUEUED IS NOT SCORED (project.md sec 12.19).
+	 *
+	 * test_feed proves the correction reaches the queue. That is half
+	 * the claim: a band can sit in forecast_pending for ever if
+	 * anything downstream declines it -- a lead bucket computed
+	 * differently, a quantity name that does not match, the stuck
+	 * sensor guard. The answer would otherwise arrive in three days, as
+	 * an absence, which is the hardest kind of result to notice.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1600000000;
+	const qint64 valid = issued + 3600;
+
+	store.record_forecast(QStringLiteral("ITEST1"),
+	                      forecast_of(bbq_band::corrected, valid, 4, 15.0),
+	                      issued);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1"),
+	                             bbq_band::corrected), 4);
+
+	/* It was 17 every hour: the correction ran two degrees cold. */
+	std::vector<bbq_sample> measured;
+	for (int i = 0; i < 4; ++i) {
+		bbq_sample sample;
+		sample.start_utc = valid + i * 3600;
+		sample.duration_s = 300;
+		sample.temperature = 17.0;
+		measured.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(measured);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 4);
+	QCOMPARE(store.pending_count(QStringLiteral("ITEST1"),
+	                             bbq_band::corrected), 0);
+
+	const bbq_verification scored = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::corrected,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+
+	QVERIFY2(scored.count > 0, "the corrected band was queued and never scored");
+	QCOMPARE(scored.bias, -2.0);
 }
 
 QTEST_GUILESS_MAIN(test_history)
