@@ -326,6 +326,35 @@ config object is a guess that the name means what it looks like. Match
 `apiKey=([0-9a-f]{32})` and prefer a hit whose URL path matches the
 endpoint about to be called.
 
+#### 2.6.1.1 The scrape fails about half the time, and nothing retries
+
+Measured 2026-09-03, six consecutive runs of `--fetch-once` against a
+working network: three acquired a key and three failed with
+
+    no API key: Error transferring
+    https://www.wunderground.com/forecast - server replied:
+
+**It is not this machine and not the user agent.** `curl` fetched the
+same page four times in the same minutes -- HTTP 200, 1.6 MB each --
+with the app's agent, with a different one, and with none at all. So the
+site is up, the network is fine, and the failure is intermittent on
+WU's side or in the request Qt builds. The empty reason phrase after
+"server replied:" is the whole of what the reply carried.
+
+**What it costs is a whole round.** `acquire()` is asked once per round;
+when it fails, `failed` is emitted and no band is fetched, so a failed
+scrape means that round yields nothing. Nothing retries within the
+round. At a minute's cadence in the foreground that is tolerable, and it
+is the difference between fetching and not fetching for a phone that is
+opened, looked at once, and closed -- which sec 15.1 records as the
+ordinary case.
+
+This is sec 2.2's prediction arriving in a smaller form than expected:
+not the pattern breaking, but the page refusing often enough to matter.
+A retry inside the round is the obvious answer and is not written,
+because the right number of retries against somebody else's rate limit
+is a judgement rather than an obvious constant.
+
 ### 2.6.2 The three traps
 
 Each of these was found by inspecting real responses, and each would
@@ -2836,6 +2865,10 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
+- **Whether the key scrape should retry within a round** (sec 2.6.1.1).
+  It failed three times in six tonight, and a failed scrape costs the
+  whole round. The right number of attempts against somebody else's
+  rate limit is a judgement rather than a constant
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and
