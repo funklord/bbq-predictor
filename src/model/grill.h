@@ -93,6 +93,26 @@ struct bbq_window {
  * pleasant temperature. An averaging score would happily recommend
  * grilling in the rain because it was warm.
  */
+/*
+ * The WEATHER half of the score, for one sample (project.md sec 12.20).
+ *
+ * Temperature, rain rate and wind only. Deliberately NOT the hour
+ * factor and NOT the chance:
+ *
+ *   - the hour is a preference rather than a forecast. It is known
+ *     perfectly in advance and cannot be got wrong, so scoring it would
+ *     flatter every band by the same constant and measure nothing.
+ *   - a probability has no counterpart in an observation. It either
+ *     rained or it did not, so comparing a forecast tempered by
+ *     confidence against a measurement that has none would score the
+ *     confidence rather than the weather.
+ *
+ * What is left is the part that can be right or wrong about the world,
+ * which is the part worth verifying.
+ */
+double bbq_grill_weather_score(const bbq_sample &sample,
+                               const bbq_grill_policy &policy);
+
 double bbq_grill_score(const bbq_composite &composite, const QTimeZone &zone,
                        qint64 when_utc, const bbq_grill_policy &policy);
 

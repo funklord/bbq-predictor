@@ -45,6 +45,32 @@ double hour_factor(int hour, const bbq_grill_policy &policy) {
 
 } // namespace
 
+double bbq_grill_weather_score(const bbq_sample &sample,
+                               const bbq_grill_policy &policy) {
+	double score = 1.0;
+
+	/*
+	 * The same ramps and the same order as the full score below, and
+	 * absent is neutral for the same reason: a missing field should not
+	 * bury a window, and guessing the pessimistic direction would.
+	 */
+	if (sample.temperature.has_value()) {
+		score *= ramp_up(*sample.temperature, policy.cold_zero_c,
+		                 policy.warm_enough_c);
+	}
+
+	if (sample.precip_rate.has_value()) {
+		score *= ramp_down(*sample.precip_rate, 0.0, policy.rain_ruins_mm_h);
+	}
+
+	if (sample.wind_kph.has_value()) {
+		score *= ramp_down(*sample.wind_kph, policy.wind_fine_kph,
+		                   policy.wind_ruins_kph);
+	}
+
+	return score;
+}
+
 double bbq_grill_score(const bbq_composite &composite, const QTimeZone &zone,
                        qint64 when_utc, const bbq_grill_policy &policy) {
 	const bbq_reading reading = composite.at(when_utc);

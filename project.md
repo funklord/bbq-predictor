@@ -2836,13 +2836,6 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
-- **Whether to score the grilling verdict itself** (sec 12.20). The
-  store measures the three ingredients and never the answer they
-  produce, which is the only output anybody acts on. Cheap to add --
-  `verify()` already has both sides in hand -- but it needs one
-  decision that changes what the number means: whether the hour factor,
-  which is a preference rather than a forecast, is scored with it. The
-  recommendation is to leave it out
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and
@@ -4636,9 +4629,36 @@ the honest thing to verify and is NOT quite the number on screen. The
 alternative is to score the verdict exactly as displayed and accept that
 a constant is being carried in it.
 
-Recorded rather than built, because that choice changes what the number
-means and every reading of it afterwards. The recommendation is to leave
-the hour factor out.
+**Built 2026-09-04, with the hour factor left out by the holder's
+choice.** The store scores a fourth quantity, `grill`, folded in beside
+the three ingredients from rows `verify()` had already paired -- no
+schema change, no extra fetch.
+
+**The chance is left out too, for a reason the hour factor's argument
+supplies.** A probability has no counterpart in an observation: it
+either rained or it did not. Comparing a forecast tempered by confidence
+against a measurement that has none would score the confidence rather
+than the weather. So the quantity is temperature, rain rate and wind --
+the part that can be right or wrong about the world -- and it differs
+from the number on screen in exactly two named ways.
+
+Scored only where BOTH sides carry all three fields. A score from two of
+them is not comparable with one from three, and folding both into one
+average would quietly mix two different measurements.
+
+**The test is chosen so the wrong answer differs from the right one.**
+The forecast is a tenth of a degree out on temperature, exact on wind,
+and calls a downpour dry. The rain ramp puts the verdict almost on the
+floor while the temperature record still reads as very nearly correct --
+which is the finding of this section asserted rather than described. A
+fixture whose verdict error merely tracked its temperature error would
+pass against code that never computed a verdict at all.
+
+The first attempt did exactly that, and was corrected rather than
+accommodated: it reported a verdict error of 0.146 against a threshold
+of 0.15, and the honest fix was a sharper fixture, not a lower bar.
+Sabotaged afterwards by scoring three quantities instead of four, which
+makes it report that the verdict was never scored.
 
 ## 13. Navigating the graph
 

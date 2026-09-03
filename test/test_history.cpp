@@ -30,6 +30,7 @@ private slots:
 	void rediscovery_does_not_unpin_a_station();
 	void a_station_s_own_cadence_still_pairs_with_the_hour();
 	void the_corrected_band_scores_like_any_other();
+	void the_verdict_is_scored_and_is_not_its_ingredients();
 
 private:
 	static bbq_series forecast_of(bbq_band band, qint64 start, int count,
@@ -580,6 +581,82 @@ void test_history::the_corrected_band_scores_like_any_other() {
 
 	QVERIFY2(scored.count > 0, "the corrected band was queued and never scored");
 	QCOMPARE(scored.bias, -2.0);
+}
+
+void test_history::the_verdict_is_scored_and_is_not_its_ingredients() {
+	/*
+	 * THE RECOMMENDATION, not the fields behind it (sec 12.20).
+	 *
+	 * The fixture is chosen so the wrong answer differs from the right
+	 * one: the forecast is nearly right on every ingredient and badly
+	 * wrong on the verdict: a tenth of a degree out on temperature,
+	 * exactly right on wind, and rain it called dry. The rain ramp puts
+	 * the verdict almost on the floor while the temperature record
+	 * still reads as very nearly correct, which is the whole reason
+	 * this quantity exists. A test where the
+	 * verdict error merely tracked the temperature error would pass
+	 * against code that never computed a verdict at all.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1600000000;
+	const qint64 valid = issued + 3600;
+
+	std::vector<bbq_sample> predicted;
+	for (int i = 0; i < 4; ++i) {
+		bbq_sample sample;
+		sample.start_utc = valid + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 20.0;
+		sample.precip_rate = 0.0;   /* dry: the ramp is at full marks */
+		sample.wind_kph = 5.0;
+		predicted.push_back(sample);
+	}
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples(std::move(predicted));
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+
+	std::vector<bbq_sample> measured;
+	for (int i = 0; i < 4; ++i) {
+		bbq_sample sample;
+		sample.start_utc = valid + i * 3600;
+		sample.duration_s = 300;
+		sample.temperature = 20.1;  /* a tenth of a degree out */
+		sample.precip_rate = 1.8;   /* a downpour the forecast missed */
+		sample.wind_kph = 5.0;
+		measured.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(measured);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 4);
+
+	const bbq_verification temperature = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+	const bbq_verification verdict = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("grill"), bbq_lead_bucket::hour);
+
+	QVERIFY2(verdict.count > 0, "the verdict was never scored");
+
+	/*
+	 * Nearly right on the ingredient, badly wrong on the answer. That
+	 * gap is the finding sec 12.20 records, asserted rather than
+	 * described.
+	 */
+	QVERIFY2(std::fabs(temperature.mean_absolute_error) < 0.2,
+	         "the fixture is not nearly right on temperature");
+	QVERIFY2(verdict.mean_absolute_error > 0.5,
+	         qPrintable(QStringLiteral("the verdict error is only %1, so this "
+	                                   "fixture cannot tell a verdict from "
+	                                   "its ingredients")
+	                            .arg(verdict.mean_absolute_error)));
 }
 
 QTEST_GUILESS_MAIN(test_history)

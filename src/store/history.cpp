@@ -1,5 +1,7 @@
 #include "store/history.h"
 
+#include "model/grill.h"
+
 #include <QDir>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -71,6 +73,13 @@ QString quantity_name(int index) {
 		return QStringLiteral("precip_rate");
 	case 2:
 		return QStringLiteral("wind_kph");
+	case 3:
+		/*
+		 * The verdict itself (sec 12.20). Not one of the fields a
+		 * provider sends -- it is what this program makes of them, and
+		 * the only output anybody acts on.
+		 */
+		return QStringLiteral("grill");
 	}
 
 	return QStringLiteral("unknown");
@@ -753,17 +762,67 @@ int bbq_history::verify(const QString &station) {
 		}
 	}
 
+	const bbq_grill_policy policy;
+
 	for (const pairing &found : pairings) {
-		for (int q = 0; q < 3; ++q) {
-			if (stuck[q]) {
-				continue;
-			}
+		for (int q = 0; q < 4; ++q) {
+			double error = 0.0;
 
-			if (!found.have_forecast[q] || !found.have_observed[q]) {
-				continue;
-			}
+			if (q == 3) {
+				/*
+				 * THE VERDICT, scored from both sides (sec 12.20).
+				 *
+				 * The three quantities above do not answer this between
+				 * them: the score is a product of ramps, so a forecast
+				 * half a degree out on temperature and a hair out on
+				 * rain can still move a window from 0.6 to 0.2 because
+				 * the rain ramp crossed. "Each ingredient is roughly
+				 * right" and "the recommendation was right" are
+				 * different claims.
+				 *
+				 * Both sides are built from the rows already paired
+				 * here, so this costs no fetch and no schema. Scored
+				 * only where BOTH sides have every field: a score from
+				 * two out of three is not comparable with one from
+				 * three, and averaging them would quietly mix two
+				 * different measurements.
+				 */
+				bool complete = true;
+				bbq_sample predicted;
+				bbq_sample measured;
 
-			const double error = found.forecast[q] - found.observed[q];
+				for (int part = 0; part < 3; ++part) {
+					if (!found.have_forecast[part] ||
+					    !found.have_observed[part]) {
+						complete = false;
+					}
+				}
+
+				if (!complete || stuck[0] || stuck[1] || stuck[2]) {
+					continue;
+				}
+
+				predicted.temperature = found.forecast[0];
+				predicted.precip_rate = found.forecast[1];
+				predicted.wind_kph = found.forecast[2];
+
+				measured.temperature = found.observed[0];
+				measured.precip_rate = found.observed[1];
+				measured.wind_kph = found.observed[2];
+
+				error = bbq_grill_weather_score(predicted, policy) -
+				        bbq_grill_weather_score(measured, policy);
+			} else {
+				if (stuck[q]) {
+					continue;
+				}
+
+				if (!found.have_forecast[q] || !found.have_observed[q]) {
+					continue;
+				}
+
+				error = found.forecast[q] - found.observed[q];
+			}
 
 			fold.addBindValue(station);
 			fold.addBindValue(found.band);
