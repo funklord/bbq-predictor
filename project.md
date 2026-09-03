@@ -3809,6 +3809,16 @@ worth recording because two things about it were not obvious:
 After restore and one launch: 542 observations, 713 pending (expire()
 dropped 84 it could no longer score), 13 stations, verification still 0.
 
+**When adb cannot see the phone, ask the USB bus before blaming adb.**
+Three attempts to capture the device failed across one evening, and
+`lsusb` showed no Samsung device at all -- only hubs and input devices.
+A phone that is plugged in but unauthorised still enumerates and still
+appears in `adb devices` as `unauthorized`, so an empty bus means the
+machine is not seeing it electrically and no amount of
+`kill-server`/`start-server` will help. It returned on its own later.
+The check is one command and it separates "adb problem" from "cable,
+USB mode, or port problem" immediately.
+
 **Installed and verified 2026-09-03 on the Fold.** The icon is
 registered (`icon='res/mipmap-anydpi-v26/ic_launcher.xml'`), the upgrade
 preserved the archive, the dark palette resolves correctly on Android,
@@ -4435,6 +4445,55 @@ stale, such as the temperature line being pixel-identical whether or not
 the wind is shown; and rendering the thing and looking at it, which is
 how the tray's invisible digits, the caption on the wrong side and a
 station box naming a station the program was not reading were all found.
+
+### 12.18 The first real scores, and what they say
+
+Verification fired between 29 August and 3 September, on the Fold, and
+these are the first forecasts this project has ever scored against
+measurements it collected itself. Recorded here because they existed
+only in a session's context, and because the numbers are the entire
+point of sec 12.
+
+    archive on 2026-09-03
+      observations   1719   2026-08-25 22:04 .. 2026-09-03 04:28
+      pending        1786
+      verification     34 rows
+      stations         23
+
+    temperature, mean error / mean absolute error, in C
+
+      lead    extended (Open-Meteo)     hourly (WU)        n
+      1 day       +0.96 / 1.01        +0.32 / 0.56        25
+      2 days      +1.09 / 1.23        +0.30 / 1.41        27
+      4 days      +0.19 / 1.36         0.00 / 1.11        54
+      1 week      -0.29 / 1.35        +0.13 / 0.80        30
+
+**Weather Underground is the better forecast here at every lead**, by
+mean absolute error, and Open-Meteo runs consistently WARM -- about a
+degree at one and two days. That is a systematic bias rather than
+noise, and a systematic bias is exactly what the correction band of
+sec 12.5 exists to remove, so the correction should be worth more on
+the extended band than on the hourly one.
+
+**Read them as provisional.** The samples are 25 to 54 pairs from nine
+days of one station in one season. The two-day row is the one that does
+not fit the story -- WU has the better mean error and the worse mean
+absolute error, which is what a small sample with one bad hour looks
+like. Nothing here justifies dropping a provider.
+
+**Rain is not yet measurable.** The precipitation rows divide into
+count-13 groups with an absolute error of 0.000 and count-22 groups
+around 1.37: dry hours both providers called dry, and a handful of wet
+ones neither got right. Sec 12.4 already says rain needs a different
+instrument from temperature, and this is that saying it in data.
+
+**The band numbers are a trap worth naming.** These were first read out
+with `band 3` labelled `hourly`, because the enum was guessed rather
+than checked -- it is `observed, current, nowcast_fine, nowcast,
+extended, corrected, hourly`, so hourly is 6 and 3 is the nowcast. The
+first table produced had Open-Meteo's figures under WU's name. Any
+query against `verification` should take the labels from
+`bbq_band_name` rather than from memory.
 
 ## 13. Navigating the graph
 
