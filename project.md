@@ -2836,6 +2836,13 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
+- **Whether to score the grilling verdict itself** (sec 12.20). The
+  store measures the three ingredients and never the answer they
+  produce, which is the only output anybody acts on. Cheap to add --
+  `verify()` already has both sides in hand -- but it needs one
+  decision that changes what the number means: whether the hour factor,
+  which is a preference rather than a forecast, is scored with it. The
+  recommendation is to leave it out
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and
@@ -4590,6 +4597,48 @@ was sabotaged before it was believed.** Returning 0 from the archiving
 step -- computing the correction and discarding it, which is precisely
 the old behaviour -- makes it report that the correction was not queued
 at all.
+
+### 12.20 The verdict itself is still unmeasured
+
+Sec 12.19 closed the gap for the corrected band. The same question asked
+once more finds a larger one, and this is as far as this lens goes:
+**nothing scores the grilling verdict.**
+
+The store scores three quantities -- temperature, precipitation rate and
+wind -- for each forecast band. The verdict is a FOURTH thing, computed
+from all three by `bbq_grill_score`, and it is the sentence at the top
+of the window, the thing the program is named for, and the only output
+anybody acts on. It has never been compared with what happened.
+
+The three quantities do not answer it between them. The score is a
+PRODUCT of ramps, so its error is not any combination of theirs: a
+forecast can be half a degree out on temperature, a hair out on rain and
+still move a window's score from 0.6 to 0.2, because the rain ramp
+happened to cross. "Each ingredient is roughly right" and "the
+recommendation was right" are different claims, and only the first is
+being made.
+
+**It is cheap, and that is the argument for doing it.** `verify()`
+already pairs a queued forecast with the observation at its valid time,
+and both rows carry temperature, precipitation and wind -- so a
+forecast-side score and an observed-side score can both be computed
+there, from data already in hand, and folded in as a fourth quantity
+beside the others. No schema change, no new fetch, and the existing
+sabotage-tested machinery does the rest.
+
+**One decision has to be made first, and it belongs to the holder.** The
+score includes an HOUR factor: the small hours score low however good
+the weather is (sec 7). That factor is a preference, not a forecast --
+it is known perfectly in advance and cannot be got wrong -- so scoring
+it would flatter every band equally and measure nothing. Leaving it out
+means the quantity is "how good was the weather for grilling", which is
+the honest thing to verify and is NOT quite the number on screen. The
+alternative is to score the verdict exactly as displayed and accept that
+a constant is being carried in it.
+
+Recorded rather than built, because that choice changes what the number
+means and every reading of it afterwards. The recommendation is to leave
+the hour factor out.
 
 ## 13. Navigating the graph
 
