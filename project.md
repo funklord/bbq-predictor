@@ -5182,3 +5182,49 @@ Twice now that has been how a feature was missing rather than broken."*
 About 43 candidates were read here. The rest were sound, and the negative is
 worth as much as the hits: the Qt test targets, the Android build guards and
 the style gates all refuse rather than pass.
+
+## 17. Two messages that name a cause the code never tested
+
+Reported from claude-guidelines 2026-09-03, from a second sweep of all
+seventeen trees. Recorded, not fixed. Section 16 has this project's three
+gates that can pass having checked nothing; these are the messages.
+
+**`src/wu/fetch_once.cpp:343-364` — "they had not failed, they had not
+answered yet" about bands that failed.**
+
+The list it prints is built from `composite.band(band) == nullptr`, which
+is absence from the composite. A **failed** band looks identical:
+`feed.cpp:370-372` emits `band_failed` and finishes without touching the
+composite, and `fetch_once.cpp:285-293` has already printed `FAIL` for
+that band four lines above. The met.no and Open-Meteo failure paths
+(`feed.cpp:190-191, 226-228`) finish silently, so nothing anywhere
+contradicts the claim. `bbq_wu_product_name` and `bbq_band_name` share
+spellings, so the same token appears in both lists in one run -- printed
+as FAILED and then as "had not answered yet".
+
+The comment at `:316-333` records the previous defect here, which was
+calling a timeout a failure. **The fix over-corrected into asserting the
+negative**: it now says what did not happen, from evidence that cannot
+tell the two apart.
+
+**`tool/build-openssl-android.sh:107-110` — a remedy for a case that
+cannot reach it.**
+
+    "apt-get source produced no source directory.
+     Check that a deb-src line is configured"
+
+Under `set -e` the missing-`deb-src` case exits 100 at `:99` and never
+reaches this message; demonstrated. What does reach it is `apt-get source`
+exiting 0 without leaving an `openssl-*` directory -- apt's own "Check if
+the 'dpkg-dev' package is installed" case. Those readers are sent to edit
+a `sources.list` that is already correct.
+
+**Lower confidence, recorded without a claim:** `fetch_once.cpp:275-278`
+prints "`--geocode wants LAT,LON`" for a malformed value read from the INI
+file, naming a flag that was never passed. `src/main.cpp:456-459` phrases
+the parallel case correctly.
+
+Also workspace-wide rather than this project's: `Makefile:328` uses
+`test -d .git` as the "is this a git repository" test, which is false in a
+worktree and in a submodule checkout. Sixteen of seventeen trees carry it;
+recorded in claude-guidelines' decision list.
