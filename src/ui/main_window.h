@@ -53,6 +53,15 @@ public:
 protected:
 	void showEvent(class QShowEvent *event) override;
 
+	/*
+	 * A phone being turned, and a foldable being opened, arrive here as
+	 * the same event: a window that changed shape. Neither destroys the
+	 * activity -- AndroidManifest.xml declares orientation, screenSize,
+	 * screenLayout, smallestScreenSize and density in configChanges --
+	 * so nothing else in this window would otherwise notice.
+	 */
+	void resizeEvent(class QResizeEvent *event) override;
+
 public:
 
 	bbq_wu_feed *feed() const { return m_feed; }
@@ -115,6 +124,19 @@ private:
 	class QVBoxLayout *m_root_layout = nullptr;
 	QMargins m_base_margins;
 	bbq_metrics m_metrics;
+
+	/* The device kind last asked for, so a reshape can re-ask for it. */
+	bbq_layout m_layout = bbq_layout::desktop;
+
+	/*
+	 * The shape actually built, which is not the same question as which
+	 * device this is: a phone in landscape and an unfolded foldable are
+	 * wide, and want the row rather than the stack.
+	 */
+	bool m_wide_controls = false;
+
+	/* Which shape a window this wide should be wearing. */
+	bool wants_wide_controls() const;
 
 	void apply_safe_area();
 

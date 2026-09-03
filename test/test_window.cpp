@@ -3,6 +3,7 @@
 #include <QComboBox>
 #include <QDir>
 #include <QLineEdit>
+#include <QLayout>
 #include <QMouseEvent>
 #include <QNetworkProxy>
 #include <QStandardPaths>
@@ -14,6 +15,7 @@
 #include "graph/forecast_graph.h"
 #include "model/composite.h"
 #include "store/history.h"
+#include "ui/layout.h"
 #include "ui/main_window.h"
 #include "wu/feed.h"
 
@@ -61,6 +63,7 @@ private slots:
 	void a_warm_band_and_a_cold_one_read_differently();
 	void the_list_names_the_station_actually_being_read();
 	void the_view_still_pans_and_zooms_through_the_window();
+	void turning_and_unfolding_the_device_keeps_what_was_on_screen();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -394,6 +397,142 @@ void test_window::the_view_still_pans_and_zooms_through_the_window() {
 	QVERIFY2(window.m_graph->view_span_s() != before_span,
 	         "a wheel through the wired window did not change the zoom");
 	Q_UNUSED(dragged_from);
+}
+
+/*
+ * TURNING THE PHONE AND OPENING THE FOLD ARE ONE EVENT, and neither may
+ * cost anything that was on screen (project.md sec 10).
+ *
+ * AndroidManifest.xml declares orientation, screenSize, screenLayout,
+ * smallestScreenSize and density in configChanges, so Android resizes
+ * the window rather than destroying and recreating the activity. That
+ * is what keeps the state safe, and it is also what makes this testable
+ * by handing a desktop window the four sizes: a window that changed
+ * shape is the whole of what the app ever sees.
+ *
+ * The risk is local and it is in set_layout, which deletes the
+ * controls' LAYOUT and relies on the widgets being held separately in
+ * m_control_items. A tidy-up that rebuilt them instead would pass every
+ * other test in this binary and silently clear the drop-downs every
+ * time somebody turned the phone -- so the assertion here is on the
+ * widget POINTERS, and the values are only the reason for caring.
+ *
+ * The four sizes are a foldable's, in dp: 360x800 and 800x360 folded,
+ * 674x841 and 841x674 open. 674 is wide by the 600dp rule even though
+ * it is taller than it is wide, which is the case an aspect-ratio test
+ * would get wrong.
+ *
+ * THIS TEST CANNOT PASS WITHOUT DOING SOMETHING: it asserts that the
+ * control shape actually changes, so a resize that never reached the
+ * window fails here rather than reporting that nothing was lost.
+ */
+void test_window::turning_and_unfolding_the_device_keeps_what_was_on_screen() {
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	window.watch_station(QStringLiteral("ITESTROT"));
+
+	/*
+	 * Mobile, deliberately. The desktop shape is never stacked, so a
+	 * desktop-layout run would turn the window through four sizes and
+	 * assert that nothing changed, having changed nothing.
+	 */
+	window.set_layout(bbq_layout::mobile);
+
+	const qint64 base = 1700000000;
+	bbq_composite composite;
+	composite.set_series(bandful(bbq_band::hourly, base, 48));
+	window.m_graph->set_composite(composite);
+
+	/*
+	 * Android hands a window its size; it does not ask. A desktop Qt
+	 * window refuses to go below its layout's minimum, and the WIDE
+	 * row's minimum is about 1660 logical pixels -- so without this the
+	 * window stays 1662 wide however small a phone it is pretending to
+	 * be, and every assertion below would be about a desktop. Measured:
+	 * the first version of this test failed with "the window is
+	 * 1662x800".
+	 */
+	if (window.layout() != nullptr) {
+		window.layout()->setSizeConstraint(QLayout::SetNoConstraint);
+	}
+	window.setMinimumSize(0, 0);
+
+	window.resize(360, 800);
+	window.show();
+	QVERIFY(QTest::qWaitForWindowExposed(&window));
+	QCoreApplication::processEvents();
+	QCOMPARE(window.width(), 360);
+
+	/* The plot rectangle is decided while painting; grab forces one. */
+	window.m_graph->grab();
+	window.m_graph->set_view(base, 24 * 3600);
+
+	/* Two settings the user chose, each with a control that reports it. */
+	window.set_smoothing(3600);
+	window.set_interpolation(bbq_interpolation::linear);
+
+	const QList<QWidget *> items = window.m_control_items;
+	QVERIFY2(!items.isEmpty(), "no controls to lose");
+	QVERIFY2(!window.m_wide_controls,
+	         qPrintable(QStringLiteral("a folded portrait phone must stack its "
+	                                   "controls; the window is %1x%2")
+	                            .arg(window.width())
+	                            .arg(window.height())));
+
+	QComboBox *const smoothing = window.m_smoothing_box;
+	QComboBox *const method = window.m_method_box;
+	QComboBox *const station = window.m_station_box;
+
+	const qint64 from = window.m_graph->view_from_utc();
+	const qint64 span = window.m_graph->view_span_s();
+	const QString named = station->currentText();
+
+	struct shape {
+		int width;
+		int height;
+		bool wide;
+		const char *what;
+	};
+	const shape shapes[] = {
+		{ 800, 360, true,  "folded, turned sideways" },
+		{ 674, 841, true,  "unfolded, held upright" },
+		{ 841, 674, true,  "unfolded, turned sideways" },
+		{ 360, 800, false, "folded again, back upright" },
+	};
+
+	for (const shape &next : shapes) {
+		window.resize(next.width, next.height);
+		QTest::qWait(20);
+
+		QVERIFY2(window.m_wide_controls == next.wide,
+		         qPrintable(QStringLiteral("%1: asked for %2x%3, the window is "
+		                                   "%4x%5, wide=%6 wanted %7")
+		                            .arg(QString::fromUtf8(next.what))
+		                            .arg(next.width)
+		                            .arg(next.height)
+		                            .arg(window.width())
+		                            .arg(window.height())
+		                            .arg(window.m_wide_controls)
+		                            .arg(next.wide)));
+
+		QVERIFY2(window.m_control_items == items,
+		         qPrintable(QStringLiteral("the controls were rebuilt at %1")
+		                            .arg(QString::fromUtf8(next.what))));
+		QCOMPARE(window.m_smoothing_box, smoothing);
+		QCOMPARE(window.m_method_box, method);
+		QCOMPARE(window.m_station_box, station);
+
+		QCOMPARE(window.m_graph->smoothing(), 3600);
+		QVERIFY(window.m_graph->interpolation() == bbq_interpolation::linear);
+		QCOMPARE(smoothing->currentData().toInt(), 3600);
+		QCOMPARE(station->currentText(), named);
+
+		QCOMPARE(window.m_graph->view_from_utc(), from);
+		QCOMPARE(window.m_graph->view_span_s(), span);
+	}
 }
 
 int main(int argc, char *argv[]) {

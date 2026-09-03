@@ -5,6 +5,7 @@
 #include <QComboBox>
 #include <QSlider>
 #include <QGridLayout>
+#include <QResizeEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QInputDialog>
@@ -520,6 +521,59 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	resize(820, 400);
 }
 
+/*
+ * WHICH SHAPE, asked of the WINDOW rather than of the device (sec 10.6).
+ *
+ * `stack_controls` answers "is this a phone", and a phone does not stop
+ * being one when it is turned sideways or unfolded. Asking it alone left
+ * the two-column stack in place on a 800dp landscape phone and on an
+ * unfolded foldable's 674dp inner screen, which is where this layout has
+ * the least height to spend and the most width going unused.
+ *
+ * 600dp is Android's compact/medium boundary, and it is the number
+ * beerssh's layout manager already uses for the same decision in this
+ * workspace -- one convention for "is this window narrow", rather than
+ * two that can disagree. It is a WIDTH rather than an aspect ratio on
+ * purpose: unfolding gives width whichever way the device is held, and
+ * a 674x841 inner screen is portrait and still wide enough for the row.
+ *
+ * The desktop shape is unaffected: it is never stacked, so this returns
+ * true for it at every size, exactly as before.
+ */
+bool bbq_main_window::wants_wide_controls() const {
+	return !m_metrics.stack_controls || width() >= 600;
+}
+
+/*
+ * A window that changed shape re-asks for the layout it already has.
+ *
+ * Rotation and unfolding do not reach the app any other way: the
+ * manifest's configChanges list means Android resizes the window
+ * instead of recreating the activity, so without this the controls kept
+ * whichever shape they were given at startup for the life of the run.
+ *
+ * NOTHING HERE IS ALLOWED TO COST STATE, and the reason it does not is
+ * that set_layout deletes the controls' LAYOUT and never the controls:
+ * they are held in m_control_items precisely so a reshape can re-parent
+ * them instead of rebuilding them. test_window's
+ * turning_and_unfolding_the_device_keeps_what_was_on_screen asserts the
+ * widget pointers themselves across four shapes for that reason -- the
+ * values would survive a rebuild that restored them, and the pointers
+ * would not.
+ *
+ * Re-run only when the shape would DIFFER. A window dragged across a
+ * desktop delivers these continuously, and tearing a layout down per
+ * pixel is visible.
+ */
+void bbq_main_window::resizeEvent(QResizeEvent *event) {
+	QWidget::resizeEvent(event);
+
+	if (m_controls == nullptr) return;
+	if (wants_wide_controls() == m_wide_controls) return;
+
+	set_layout(m_layout);
+}
+
 void bbq_main_window::set_layout(bbq_layout layout) {
 	m_graph->set_layout(layout);
 
@@ -532,6 +586,8 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 	 * rather than duplicated here.
 	 */
 	m_metrics = metrics;
+	m_layout = layout;
+	m_wide_controls = wants_wide_controls();
 	apply_safe_area();
 
 	/*
@@ -551,7 +607,7 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 		item->setMinimumHeight(metrics.control_height);
 	}
 
-	if (metrics.stack_controls) {
+	if (!m_wide_controls) {
 		/*
 		 * Two columns. A phone is tall and narrow, so the row that
 		 * suits a desktop becomes ten things a couple of millimetres
