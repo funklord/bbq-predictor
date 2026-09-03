@@ -4530,6 +4530,27 @@ cannot say WHICH band arrived -- and recording the hourly band twice
 would have satisfied a bare count while measuring the thing that was
 already measured.
 
+**Confirmed on the device rather than assumed.** After one round on the
+Fold the queue holds
+
+    nowcast    154
+    extended   772
+    hourly     749
+    CORRECTED  354
+
+so the correction is being archived for the first time. A correct
+function is not a working feature, and this is the half that says
+something consumes it.
+
+**The obvious worry is already guarded.** Once band 5 carries
+verification rows of its own, the question is whether the correction
+starts correcting itself -- a feedback loop where each round subtracts
+the residual bias of the last. It cannot: `is_forecast()` in
+`correction.cpp` returns false for `corrected`, so it is never a band
+the correction reads a curve for. The switch is exhaustive over the
+enum, so a band added later fails to compile rather than quietly
+joining the loop.
+
 **The test was written after the code, which is the wrong order, so it
 was sabotaged before it was believed.** Returning 0 from the archiving
 step -- computing the correction and discarding it, which is precisely
