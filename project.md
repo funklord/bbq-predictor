@@ -4670,10 +4670,16 @@ was added. It reads
 
 as a tolerance rather than a signed bias: the score runs 0 to 1 and its
 sign says which way a recommendation erred, which is a second question.
-The hour marks were also strengthened at the holder's word -- 9 pixels
-and alpha 175, from 7 and 110. Fading them was right in direction and
-too far in degree: a mark nobody can see is not a quieter cue, it is an
-absent one, which is the opposite failure from the banding it replaced.
+The hour marks took three passes to get right, and the first two moved
+the wrong dial. 7 pixels at alpha 110, then 9 at 175, then 12 in a
+different colour entirely -- because they were drawn in `grid`, which on
+the dark palette is #33373b against a #16181a ground. Luminance 52
+against 24 is invisible at any alpha and at any length, so fading and
+lengthening were both adjusting something that could not have worked.
+They use `axis_text` now, the colour of the labels they stand under,
+with the hourly ones at 140 alpha to sit behind the labelled ones. A
+mark nobody can see is not a quieter cue, it is an absent one -- the
+opposite failure from the banding it replaced.
 What a reader wants first is how far off the answer has been.
 
 Tested by seeding a grill row and reading the line, because the weather

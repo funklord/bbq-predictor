@@ -73,12 +73,14 @@ const double rain_full_scale_mm_h = 10.0;
 /*
  * How far the hour marks reach in from the top and bottom (sec 3.20).
  *
- * 7 was the first answer and 9 is the second: at real size on a phone
- * the marks were almost invisible, which is the opposite failure from
- * the banding they replaced. A mark nobody can see is not a quieter cue,
- * it is an absent one.
+ * 7, then 9, then 12 -- and the length was never the real problem. The
+ * marks were drawn in `grid`, which on the dark palette is #33373b
+ * against a #16181a ground: luminance 52 against 24, invisible at any
+ * alpha and at any length. They are drawn in `axis_text` now, the
+ * colour of the labels they stand under, which is what a mark
+ * accompanying a label should share.
  */
-const double edge_tick_px = 9.0;
+const double edge_tick_px = 12.0;
 
 /*
  * One pixel column's worth of the composite.
