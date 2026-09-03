@@ -2738,7 +2738,10 @@ anything.
   the Note 9. The `compileSdk 35` floor sec 11.2 describes was real and
   is cleared; the entry is struck rather than deleted because the floor
   is Qt's and will move again
-- **Whether the steadiness slider comes back on Android.** It is a
+- **Whether the steadiness slider comes back on Android**, which sec
+  11.9 sharpens: the fault is an SDK 29 one and the Fold is SDK 35, so
+  conditioning the workaround on the runtime SDK gives the slider back
+  where it cannot crash while keeping it on the Note 9. It is a
   drop-down there because a slider aborted the process (sec 11.6), and
   the accessibility factory that should make a slider safe is written,
   tested as a mechanism, and UNVERIFIED on a device -- the phone no
@@ -3607,12 +3610,24 @@ questions.
 Written down because it is the kind of thing only a session knows, and
 sessions end.
 
-**The phone's archive was destroyed by an uninstall** between 28 and 29
-August -- `firstInstallTime` equal to `lastUpdateTime` and the uid moved
-from `u0_a714` to `u0_a1077`, which only happens on a first install. It
-took 542 observations, 797 queued forecasts and the station setting.
-`adb install -r` preserves data, so the installs from this tree were not
-the cause; who or what removed it is not known.
+**A claimed data loss, withdrawn 2026-09-03.** It was reported here that
+the phone's archive had been destroyed by an uninstall between 28 and 29
+August: `firstInstallTime` equal to `lastUpdateTime`, and the uid moved
+from `u0_a714` to `u0_a1077`, which only happens on a first install.
+
+Both observations were true and the conclusion was wrong. **The device
+changed.** What is attached now is `SM-F926B`, a Galaxy Z Fold 3 on
+Android 15, SDK 35 -- not the `SM-N960F` Note 9 on Android 10, SDK 29,
+that everything before the 29th was measured against. A first install
+with a fresh uid is exactly what installing onto a phone that never had
+the app looks like. Nothing was destroyed; the Note 9 has not been seen
+since and most likely still holds its own archive.
+
+**The lesson is the cheap one and it was skipped.** `adb` was addressed
+for days without once asking which device answered, and every
+conclusion inherited that. `getprop ro.product.model` costs one command
+and would have caught it at the first install. A serial in `adb devices`
+was visible the whole time and read as scenery.
 
 **It was restored** from a copy taken on the 28th, and the restore is
 worth recording because two things about it were not obvious:
@@ -3630,11 +3645,23 @@ worth recording because two things about it were not obvious:
 After restore and one launch: 542 observations, 713 pending (expire()
 dropped 84 it could no longer score), 13 stations, verification still 0.
 
-**The launcher icon is built and committed but NOT installed.** The
-phone disconnected before `make android-install` could run, so the
-device is still on the build from the 29th -- no icon, and without the
-graph rework. Reinstalling is the first thing to do when it is next
-plugged in.
+**Installed and verified 2026-09-03 on the Fold.** The icon is
+registered (`icon='res/mipmap-anydpi-v26/ic_launcher.xml'`), the upgrade
+preserved the archive, the dark palette resolves correctly on Android,
+and the record line draws real numbers for the first time:
+
+    record: hourly @4d  bias +0.0 C, MAE 1.1, rain skill 0.00 (n=54)
+
+which agrees with the store exactly.
+
+**One consequence needs a decision.** The drop-down that replaced the
+steadiness slider exists because Qt built an `AccessibilityNodeInfo`
+`RangeInfo` with an API-33 constructor on API 29 (sec 11.6). This device
+is SDK 35, where that constructor exists and the fault cannot occur --
+so the slider is safe HERE and the workaround is buying nothing. It is
+still needed on the Note 9. Conditioning it on the runtime SDK rather
+than on "Android" would give the slider back where it is safe, and is a
+change to make deliberately rather than in passing.
 
 ## 12. The history is permanent, the forecasts are not
 
