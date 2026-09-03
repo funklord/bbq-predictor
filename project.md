@@ -5130,3 +5130,55 @@ the holder's decision because it is theirs and nobody else's.
 - **Whether clients keep their own archive at all** once the server has
   one, or become readers. That decides whether sec 12's store stays the
   centre of the program or becomes a cache.
+
+## 16. Three gates that can report success having checked nothing
+
+Reported from claude-guidelines 2026-09-03, from a sweep of all seventeen
+trees for that one shape. Recorded rather than fixed; each is this
+project's call.
+
+**`src/wu/fetch_once.cpp:421` prints "every band answered" over bands that
+were never requested.** The guard above it at 417 is `if (failures > 0 ||
+timed_out)`, and `failures` is incremented in exactly one place -- `++failures;`
+at line 292, inside the `band_failed` handler. So it counts bands asked and
+refused, and never bands that were not asked.
+
+`bbq_wu_feed::refresh()` at `src/wu/feed.cpp:864-882` starts the four
+forecast bands only under `if (m_have_geocode)`. With a station and no
+geocode it issues `observed` and `current_station` alone. The geocode is
+normally back-filled from the observed reply at `feed.cpp:331-343`, but that
+path sits inside `if (!rows.isEmpty())` and `if (first.contains("lat"))` --
+so an HTTP-200 observed reply with an empty or lat-less `observations` array
+falls through it and emits no `band_failed`. The tool settles on two
+requests, prints the green line and returns 0, having never requested
+nowcast, hourly, extended or radar. The `missing` line above discloses part
+of it, but `missing_bands()` deliberately omits radar and extended
+(`fetch_once.cpp:345-353`), and the summary line and the exit code -- the two
+things a script reads -- are both wrong.
+
+**`tool/android.mk:464`: an absent apksigner exits 0 where the branch ten
+lines below says an unknown signer must not.** That file states it itself at
+472-475: *"so the signer is UNKNOWN. That must not read as a pass: it is how
+a debug-signed release ships."* Both branches end in the same state and exit
+with opposite codes, so `make check-apk` continues with the signature never
+verified. This is not really this project's bug: `tool/android.mk` is
+byte-identical (md5 68476c1b) in bbq-predictor, beerssh, hydra and
+fuzzypickles, and the source in claude-guidelines differs only by sync's
+provenance header and carries the same `exit 0`. One defect, five copies,
+and the fix belongs in the source -- which makes it a change to four
+projects' release paths and the copyright holder's call rather than a
+passing session's.
+
+**`Makefile:404`: `style-signals` is missing from `.PHONY`.** Its two
+siblings are declared; this one is not. Verified in a scratch copy: with an
+ordinary file named `style-signals` in the tree root, `make -n style` emits
+only the two `style_gate.py` lines and exits 0, `tool/signal_listeners.py`
+never runs, and `make check` reports success having inspected nothing on
+that axis. Low likelihood, and it matters because of what this project wrote
+at `Makefile:311-314`: *"A signal nobody connected is not a compile error,
+not a warning and not a failing test -- the emit runs and nothing happens.
+Twice now that has been how a feature was missing rather than broken."*
+
+About 43 candidates were read here. The rest were sound, and the negative is
+worth as much as the hits: the Qt test targets, the Android build guards and
+the style gates all refuse rather than pass.
