@@ -5110,6 +5110,37 @@ Read every figure above as provisional. Several buckets hold one or two
 pairings, the leads do not order sensibly yet, and one night of one
 station in one season is not a finding about either provider.
 
+#### 12.20.4 The correction engaged, one round later than it should have
+
+Two buckets crossed the twenty-pairing minimum and no corrected rows
+appeared. The lookup was not at fault -- it clamps flat at both ends, so
+a single qualifying bucket is enough to correct every lead. The order
+was.
+
+`record_corrected` ran BEFORE `verify_all` in the same round, so it read
+the statistics as they stood before that round's scoring. A bucket that
+crosses the minimum during `verify_all` therefore produced nothing until
+the round after. Predicted from reading the code and confirmed by
+running a second round: 353 corrected rows queued immediately.
+
+**The comment justifying that order was wrong, which is how it
+survived.** It said the correction was queued first so that the raw
+bands and the correction would wait on the same observations. They do
+either way -- the raw bands are recorded when their responses arrive,
+earlier in the round, and nothing about this ordering changes what any
+of them is scored against. A reason that sounds like one is worse than
+none: it answers the question a reader would otherwise ask.
+
+Scoring now runs first and the correction is built from what it
+produced. The one-round lag is gone, and the comment says what the order
+actually buys.
+
+**The threshold is doing real work and should be left alone.** Twenty
+pairings per bucket is why the correction stayed silent through a week
+of thin data rather than confidently subtracting a bias measured from
+two samples. It engaged the moment it had evidence, which is the
+behaviour sec 12.5 asked for.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to

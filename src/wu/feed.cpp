@@ -764,14 +764,23 @@ void bbq_wu_feed::finish_one() {
 		 * own: a round is exactly when new observations have arrived,
 		 * so it is the only moment anything new can be verifiable.
 		 */
+		const int checked = verify_all();
+
 		/*
-		 * The correction is queued BEFORE the scoring, so a round that
-		 * settles has both the raw bands and the corrected one waiting
-		 * on the same observations.
+		 * The correction is queued AFTER the scoring, so it is built
+		 * from the statistics this round produced rather than the
+		 * previous one's (sec 12.20.4).
+		 *
+		 * This ran first, on the stated reasoning that the raw bands
+		 * and the correction should wait on the same observations. They
+		 * do either way -- the raw bands were recorded when their
+		 * responses arrived, earlier in the round, and nothing about
+		 * this order changes what any of them is scored against. The
+		 * reason was wrong and the order it justified cost a round: a
+		 * bucket crossing the twenty-pairing minimum during verify_all
+		 * produced no correction until the round after.
 		 */
 		record_corrected(QDateTime::currentSecsSinceEpoch());
-
-		const int checked = verify_all();
 		if (checked > 0) {
 			emit verified(checked);
 		}
