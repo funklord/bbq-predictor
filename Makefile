@@ -307,7 +307,7 @@ test: tests-build $(ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs style-signals
+style: style-source style-docs style-signals style-man
 
 style-source:
 	python3 tool/style_gate.py check
@@ -317,6 +317,13 @@ style-source:
 # the answer.
 style-docs:
 	python3 tool/style_gate.py docs
+
+# The manual page is a page of countable claims about the program, and
+# options accrete faster than anybody re-reads it. Checked both ways: an
+# option missing from the page cannot be discovered, and one documented
+# but not accepted sends a reader to type something that fails.
+style-man:
+	python3 tool/man_options.py
 
 # A signal nobody connected is not a compile error, not a warning and not
 # a failing test -- the emit runs and nothing happens. Twice now that has

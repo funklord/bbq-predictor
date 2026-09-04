@@ -6860,7 +6860,8 @@ different fault:
 `--wind` to `--windy` in the page reported it missing from the
 documentation AND invented in the page -- one edit, both directions,
 which is what shows the two halves are really separate questions rather
-than one asked twice.
+than one asked twice. It is a gate now, not a thing somebody did once:
+sec 15.10.2.
 
 The page also states the `--fetch-once` exit codes, which nothing else
 user-facing does: 0 every band, 3 partial but now is covered, 1 nothing
@@ -6924,3 +6925,59 @@ privileged container, and that is not a thing to start unasked for a
 diagnostic. **The honest state is that every part is checked and the
 whole has not run**, which is better than the previous state and is not
 the same as installed and working on a real machine.
+
+### 15.10.2 The comparison is a gate, because doing it once is doing it never
+
+`tool/man_options.py`, run by `make style`. A comparison performed by
+hand while writing the page is one that goes stale the next time
+somebody adds a flag, and the page's whole failure mode is drifting
+quietly from the program.
+
+**It matches only literals actually TESTED as arguments** --
+`option_value(arguments, ...)` and `arguments.contains(...)` -- rather
+than every `"--x"` string in the file. A gate that fired on anything
+shaped like a flag in a message would need an ignore list for its own
+false findings, and a gate carrying one has been switched off by
+instalments.
+
+**The positive control lives inside the tool and runs on every
+invocation.** It compares a synthetic source declaring `--real` against
+a synthetic page documenting `--invented`, and requires BOTH directions
+to be reported before it will look at the real files. A gate whose
+failure mode is silence has to demonstrate it can speak, or its silence
+means only that it ran; and provoking one direction would not do,
+because a check that catches one and not the other reads exactly like
+one that catches both.
+
+Watched failing, three ways, each with its own exit:
+
+    an option accepted but not in the page   ->  exit 1, names it
+    an option documented but not accepted    ->  exit 1, names it
+    the comparison itself broken             ->  exit 2, "the control
+                                                 failed, so no result
+                                                 below means anything"
+
+**A fourth guard, for the failure this class actually dies of:** if the
+source pattern matches nothing at all the tool exits 2 rather than
+reporting a clean sweep. A regex that has stopped matching is not the
+same thing as a program with no options, and the two are identical in
+the output.
+
+### 15.10.3 The retab proof refused a write, correctly
+
+The new tool was written with four-space indentation and the style gate
+wanted tabs. Converting leading whitespace is exactly the mechanical
+change that *carries a proof*: `ast.dump` without attributes is
+position-free and carries every string constant, so an identical dump
+means neither the block structure nor any literal moved.
+
+**It refused the first attempt.** The naive conversion rewrote leading
+spaces on every line -- including the lines INSIDE the docstrings, which
+are string content. That is a silent corruption of the tool's own
+explanation of itself, and reading the diff would have shown a file that
+looked entirely reasonable.
+
+The conversion that passed uses `tokenize` to find the lines inside
+multi-line strings and leaves them alone. **The proof is what made the
+difference, not the care**: the first version was written with the same
+attention and was wrong.
