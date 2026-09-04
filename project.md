@@ -370,6 +370,50 @@ read immediately, because the attempts are spaced and a test that looked
 straight away would see one and call it three. Sabotaged by giving up on
 the first refusal.
 
+#### 2.6.1.2 The refusal is a 404 aimed at our client, not at this network
+
+Sec 2.6.1.1 recorded the scrape failing about half the time and called
+the empty reason phrase a transfer failure. It is not. The app's own
+status line says what it is:
+
+    last error: nearby: no API key: Error transferring
+    https://www.wunderground.com/forecast - server replied with
+    status code 404
+
+**A 404 is a decision, not a hiccup.** Measured either side of it:
+
+    curl, desktop, app's user agent, 5 runs      200 every time
+    curl, desktop, no Accept / Qt encodings      200
+    curl, desktop, HTTP/1.1 and HTTP/2 forced    200
+    curl ON THE PHONE, same network, same UA     200
+    our app on the phone                         404, repeatedly
+    our app on the desktop                       succeeds 5 of 6
+
+So it is not the URL, not the user agent, not the headers, not the
+phone's network and not its address -- the phone's own `curl` reaches
+the page from the same wifi seconds before the app fails on it. What is
+left is the client: Qt's request, and on Android the TLS stack this
+project SHIPS ITSELF (sec 11.3's bundled OpenSSL) rather than the
+platform's. A handshake is fingerprintable and CDNs fingerprint them.
+
+**It is temporal as well as client-specific**, which is what stops this
+being a clean conclusion: the phone collected 1721 observations happily
+until about 00:09 local and has been refused since, while the desktop --
+different TLS, same code -- still mostly succeeds. Rate limiting keyed
+on address and client would look the same from here.
+
+**The status line is what diagnosed it**, after logcat had been read
+twice without finding it. Sec 2.4 exists so that a band that stops
+arriving says so somewhere a person can see; this is that paying for
+itself, and it is the reason the message carries the band name and the
+server's own words rather than a tidied summary.
+
+The obvious mitigation is to acquire the key through Android's own HTTP
+client over JNI, which would use the platform's TLS and look like every
+other app on the phone. That is a real piece of work and a design
+decision -- it puts a second HTTP path in the program -- so it is
+recorded here rather than started.
+
 ### 2.6.2 The three traps
 
 Each of these was found by inspecting real responses, and each would
@@ -2913,6 +2957,12 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
+- **Whether to fetch the key through Android's own HTTP client**
+  (sec 2.6.1.2). WU answers our client with 404 while the phone's own
+  curl gets 200 from the same wifi, which points at the TLS stack this
+  project bundles. Going through the platform over JNI would look like
+  every other app on the phone, and puts a second HTTP path in the
+  program -- a design decision rather than a fix
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and
