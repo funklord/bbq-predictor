@@ -408,11 +408,45 @@ arriving says so somewhere a person can see; this is that paying for
 itself, and it is the reason the message carries the band name and the
 server's own words rather than a tidied summary.
 
-The obvious mitigation is to acquire the key through Android's own HTTP
-client over JNI, which would use the platform's TLS and look like every
-other app on the phone. That is a real piece of work and a design
-decision -- it puts a second HTTP path in the program -- so it is
-recorded here rather than started.
+**Done, and it worked.** The key page is fetched through Android's
+`HttpURLConnection` -- the platform's TLS rather than the OpenSSL this
+project bundles -- and the status line went from
+
+    missing: observed current nowcast hourly
+    last error: nearby: no API key: ... status code 404
+
+to `Oldest band fetched 03:04:29` with nothing missing and no error. The
+pinned station's backfill ran for the first time in the same round: 288
+observations for ISUNDB5, which had none, because a pinned fetch needs a
+key like everything else.
+
+Three things about the shape of it, since a second HTTP path is a cost
+and should stay small:
+
+- **It is one GET, for one URL, used by one caller.** Everything else
+  this program fetches still goes through Qt. `PageFetch.java` returns
+  the body or null and makes no decisions: the caller cannot act on the
+  difference between a refusal and a timeout, and a null keeps the retry
+  in one place rather than two.
+- **On a worker thread**, because Android throws
+  `NetworkOnMainThreadException` for exactly this, and a synchronous
+  fetch on the UI thread would freeze the window for as long as the page
+  takes. The answer is posted back through the event loop and guarded by
+  a `QPointer`: the source can be destroyed mid-flight, and a reply to a
+  deleted object is a crash rather than a wasted fetch.
+- **The retry and the parsing did not move.** `send()` branches on
+  platform and both branches end in `page_arrived()`, so the three
+  attempts of sec 2.6.1.1, the distinction between a page that will not
+  arrive and one that arrives without a key, and `extract_key` itself
+  are shared. Only the transport differs, which is the only thing that
+  was wrong.
+
+**A probe of mine was wrong twice on the way**, in the same way both
+times. The Java class was reported absent because `classes.dex` was
+searched and this is a multidex build -- it is in `classes4.dex`. And
+the cause was hunted in logcat twice before the app's own status line
+was read, where it had been all along. A probe pointed at the wrong file
+says what that file holds, not what was asked.
 
 ### 2.6.2 The three traps
 
@@ -2957,12 +2991,6 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
-- **Whether to fetch the key through Android's own HTTP client**
-  (sec 2.6.1.2). WU answers our client with 404 while the phone's own
-  curl gets 200 from the same wifi, which points at the TLS stack this
-  project bundles. Going through the platform over JNI would look like
-  every other app on the phone, and puts a second HTTP path in the
-  program -- a design decision rather than a fix
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and

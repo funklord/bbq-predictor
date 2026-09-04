@@ -55,6 +55,13 @@ private:
 	void send();
 
 	/*
+	 * What arrived, from whichever transport fetched it (sec 2.6.1.2).
+	 * Empty means the page did not arrive, which is the retryable case;
+	 * a page that arrives without a key is not.
+	 */
+	void page_arrived(const QString &page);
+
+	/*
 	 * Pull a key out of page HTML.
 	 *
 	 * Static and free of any network so it can be exercised against a
@@ -80,6 +87,9 @@ private:
 	 * round because nothing else in it can run without a key.
 	 */
 	int m_attempts = 0;
+
+	/* Qt's word for the last refusal, where Qt did the fetching. */
+	QString m_transfer_error;
 
 	friend class bbq_wu_key_source_test;
 

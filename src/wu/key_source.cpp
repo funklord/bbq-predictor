@@ -2,7 +2,14 @@
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#ifdef Q_OS_ANDROID
+#include <QJniObject>
+#include <thread>
+#endif
+
 #include <QNetworkRequest>
+#include <QPointer>
+#include <QCoreApplication>
 #include <QTimer>
 #include <QRegularExpression>
 #include <QUrl>
@@ -21,6 +28,7 @@ namespace {
  */
 const int key_attempts = 3;
 const int key_retry_pause_ms = 900;
+const int key_timeout_ms = 15000;
 
 const char *const key_page_url = "https://www.wunderground.com/forecast";
 
@@ -65,6 +73,48 @@ void bbq_wu_key_source::send() {
 	m_in_flight = true;
 	++m_attempts;
 
+#ifdef Q_OS_ANDROID
+	/*
+	 * THROUGH THE PLATFORM ON ANDROID (sec 2.6.1.2).
+	 *
+	 * WU answers this program's Qt requests with 404 while the phone's
+	 * own curl gets 200 from the same wifi seconds apart. The client is
+	 * what differs, and the largest difference on Android is that this
+	 * project ships its own OpenSSL rather than using the platform's.
+	 * HttpURLConnection uses the platform stack.
+	 *
+	 * ON A WORKER THREAD, because Android throws
+	 * NetworkOnMainThreadException for exactly this, and because a
+	 * synchronous fetch on the UI thread would freeze the window for as
+	 * long as the page takes. The answer is posted back to this
+	 * object's thread, and guarded by a QPointer: the source can be
+	 * destroyed while a page is in flight, and a reply to a deleted
+	 * object is a crash rather than a wasted fetch.
+	 */
+	QPointer<bbq_wu_key_source> alive(this);
+
+	std::thread([alive]() {
+		const QJniObject page = QJniObject::callStaticObjectMethod(
+		        "se/vibes/bbq_predictor/PageFetch", "get",
+		        "(Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/String;",
+		        QJniObject::fromString(QString::fromLatin1(key_page_url))
+		                .object<jstring>(),
+		        QJniObject::fromString(QString::fromLatin1(browser_agent))
+		                .object<jstring>(),
+		        jint(key_timeout_ms));
+
+		const QString body = page.isValid() ? page.toString() : QString();
+
+		QMetaObject::invokeMethod(
+		        qApp,
+		        [alive, body]() {
+			if (alive) {
+				alive->page_arrived(body);
+			}
+		},
+		        Qt::QueuedConnection);
+	}).detach();
+#else
 	QNetworkRequest request((QUrl(QString::fromLatin1(key_page_url))));
 	request.setHeader(QNetworkRequest::UserAgentHeader,
 	                  QString::fromLatin1(browser_agent));
@@ -75,56 +125,71 @@ void bbq_wu_key_source::send() {
 
 	connect(reply, &QNetworkReply::finished, this, [this, reply]() {
 		reply->deleteLater();
-		m_in_flight = false;
 
-		if (reply->error() != QNetworkReply::NoError) {
-			/*
-			 * RETRIED, because the page refuses intermittently
-			 * (sec 2.6.1.1). Measured: three of six consecutive
-			 * attempts failed against a working network, while curl
-			 * fetched the same page every time -- so a single refusal
-			 * says nothing about whether the next one will succeed.
-			 *
-			 * Only a TRANSFER failure is retried. A page that arrives
-			 * and carries no key is the failure sec 2.2 predicted, and
-			 * asking for the same page again would return the same page
-			 * -- retrying that would turn a clear diagnosis into three
-			 * of them.
-			 */
-			if (m_attempts < key_attempts) {
-				/*
-				 * A pause between tries rather than a burst. This is
-				 * somebody else's quota (sec 2.5), and three requests
-				 * in the same millisecond is the shape of thing that
-				 * gets an address blocked rather than served.
-				 */
-				QTimer::singleShot(key_retry_pause_ms, this,
-				                   [this]() { send(); });
-				return;
-			}
+		const QString body = reply->error() == QNetworkReply::NoError
+		                             ? QString::fromUtf8(reply->readAll())
+		                             : QString();
 
-			emit failed(reply->errorString());
-			return;
-		}
+		m_transfer_error = reply->error() == QNetworkReply::NoError
+		                           ? QString()
+		                           : reply->errorString();
 
-		const QString page = QString::fromUtf8(reply->readAll());
-		const QString key = extract_key(page);
-
-		if (key.isEmpty()) {
-			/*
-			 * Said as what it is. This is the failure sec 2.2
-			 * predicted -- the page reorganised, or the key moved --
-			 * and it is a different thing from the network being
-			 * down, so it must not share a message with it.
-			 */
-			emit failed(tr("no API key found in the page; the "
-			               "extraction pattern has stopped matching"));
-			return;
-		}
-
-		m_key = key;
-		emit acquired(m_key);
+		page_arrived(body);
 	});
+#endif
+}
+
+void bbq_wu_key_source::page_arrived(const QString &page) {
+	m_in_flight = false;
+
+	if (page.isEmpty()) {
+		/*
+		 * RETRIED, because the page refuses intermittently
+		 * (sec 2.6.1.1). Measured: three of six consecutive attempts
+		 * failed against a working network, while curl fetched the same
+		 * page every time -- so a single refusal says nothing about
+		 * whether the next one will succeed.
+		 *
+		 * Only a TRANSFER failure is retried. A page that arrives and
+		 * carries no key is the failure sec 2.2 predicted, and asking
+		 * for the same page again would return the same page --
+		 * retrying that would turn a clear diagnosis into three of
+		 * them.
+		 */
+		if (m_attempts < key_attempts) {
+			/*
+			 * A pause between tries rather than a burst. This is
+			 * somebody else's quota (sec 2.5), and three requests in
+			 * the same millisecond is the shape of thing that gets an
+			 * address blocked rather than served.
+			 */
+			QTimer::singleShot(key_retry_pause_ms, this,
+			                   [this]() { send(); });
+			return;
+		}
+
+		emit failed(m_transfer_error.isEmpty()
+		                    ? tr("the key page could not be fetched")
+		                    : m_transfer_error);
+		return;
+	}
+
+	const QString key = extract_key(page);
+
+	if (key.isEmpty()) {
+		/*
+		 * Said as what it is. This is the failure sec 2.2 predicted --
+		 * the page reorganised, or the key moved -- and it is a
+		 * different thing from the network being down, so it must not
+		 * share a message with it.
+		 */
+		emit failed(tr("no API key found in the page; the extraction "
+		               "pattern has stopped matching"));
+		return;
+	}
+
+	m_key = key;
+	emit acquired(m_key);
 }
 
 QString bbq_wu_key_source::extract_key(const QString &page) {
