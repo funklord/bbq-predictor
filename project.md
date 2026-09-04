@@ -6673,3 +6673,62 @@ already had. These tests assert on a request GOING OUT as well as on one
 being declined, and a suite that fired at Weather Underground on every
 run would be wrong whatever it was measuring -- this project scrapes a
 key it is not licensed to have.
+
+### 15.8 A cliff in the rain field that was weather, not a seam
+
+**An empty result, recorded because an empty result is a measurement only
+if its method is written down.** A steep edge in the rain field was
+suspected of being the `nowcast`-to-`hourly` handover showing through.
+It is not: the bands agree across the seam, and the edge is a front.
+
+**The method, which answers any render-or-data question here.**
+`forecast_pending` keeps `precip_chance` per band per `valid_utc`, so
+the bands can be compared AT THE SAME INSTANTS -- which is the one
+comparison that separates a seam from weather, since a seam is by
+definition two bands disagreeing where they meet:
+
+    select datetime(valid_utc,'unixepoch'),
+           max(case when band=3 then precip_chance end) as nowcast,
+           max(case when band=6 then precip_chance end) as hourly,
+           max(case when band=4 then precip_chance end) as extended
+    from forecast_pending group by valid_utc order by valid_utc;
+
+Measured 2026-09-04, `nowcast` covering 11:15Z..18:15Z:
+
+    valid_utc   nowcast  hourly  extended
+    16:45          24
+    17:00          38      70       31
+    17:30          68
+    18:00          70      70       31     <- nowcast ends 18:15Z
+    19:00                  43       30
+
+**Both bands read 70 at the handover.** Nothing steps. The edge is
+chance climbing 24 to 71 in one hour, seen at fifteen-minute resolution
+because that is what the fine band is for.
+
+**And the render is faithful, checked as geometry rather than by eye.**
+The plot gives about 760 px to its vertical range, so a 47-point rise
+covers some 358 px of height across the 61 px an hour occupies. A
+near-vertical edge is the correct drawing of that data, not an artifact.
+
+**Why the guess was weak, which is the part worth keeping.** Two faults,
+and neither was about rain:
+
+- **It reasoned from pixel positions in a screenshot before getting a
+  single number.** Estimating a time from an x-coordinate put the edge
+  at 18:00 when the handover is at 18:15Z and the front is at 17:00Z --
+  three different times, none of which the estimate could tell apart.
+- **The corroboration was not corroboration.** "The temperature curve
+  crosses smoothly, so if the rain edge were real both would show it"
+  requires the two quantities to respond to the same thing. A rain front
+  and an afternoon temperature do not, so the smooth temperature was
+  never evidence about the rain -- it was one witness being asked about
+  something it does not see.
+
+**The disagreement that IS real, and is not a defect.** At 17:00Z
+`nowcast` says 38 and `hourly` says 70, from the same provider about the
+same instant, while they agree at 16:00Z and 18:00Z either side. That is
+the hourly product calling the front an hour early, which is ordinary
+forecast disagreement; the composite prefers the finer band there
+anyway. Recorded so the next reader who notices it does not chase it
+twice.
