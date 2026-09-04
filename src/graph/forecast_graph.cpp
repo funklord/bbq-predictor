@@ -83,6 +83,34 @@ const double rain_full_scale_mm_h = 10.0;
 const double edge_tick_px = 12.0;
 
 /*
+ * Scale a font by whichever unit it is actually defined in (sec 3.21).
+ *
+ * `setPointSizeF(pointSizeF() * k)` is the obvious spelling and it is
+ * wrong on Android, where the UI font is sized in PIXELS: `pointSizeF()`
+ * returns -1 there, so the product is negative, Qt refuses it with
+ *
+ *     QFont::setPointSizeF: Point size <= 0 (-1.000000)
+ *
+ * and the font keeps whatever size it had. The scaling silently did
+ * nothing on the one platform whose labels most needed it, and said so
+ * on every paint to a log nobody reads.
+ */
+QFont scaled_font(const QFont &base, double factor) {
+	QFont out = base;
+
+	if (out.pointSizeF() > 0.0) {
+		out.setPointSizeF(out.pointSizeF() * factor);
+		return out;
+	}
+
+	if (out.pixelSize() > 0) {
+		out.setPixelSize(qMax(1, qRound(out.pixelSize() * factor)));
+	}
+
+	return out;
+}
+
+/*
  * One pixel column's worth of the composite.
  *
  * Everything the painter needs about a column is decided once, here,
@@ -1084,8 +1112,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * carrying information. The layout supplies a floor; the text
 	 * decides the rest, the same way the tray icon's digits do.
 	 */
-	QFont gutter_font = font();
-	gutter_font.setPointSizeF(gutter_font.pointSizeF() * m_metrics.label_scale);
+	const QFont gutter_font = scaled_font(font(), m_metrics.label_scale);
 	const QFontMetrics gutter(gutter_font);
 	const int widest = qMax(gutter.horizontalAdvance(QStringLiteral("0.0 mm/h")),
 	                        gutter.horizontalAdvance(tr("rain %")));
@@ -1404,8 +1431,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	/* --- grid and time axis ------------------------------------------- */
 	painter.setPen(QPen(m_palette.grid, 1, Qt::DotLine));
 
-	QFont label_font = font();
-	label_font.setPointSizeF(label_font.pointSizeF() * m_metrics.label_scale);
+	const QFont label_font = scaled_font(font(), m_metrics.label_scale);
 	painter.setFont(label_font);
 
 	/*

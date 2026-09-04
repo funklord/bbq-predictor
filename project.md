@@ -2174,6 +2174,39 @@ a white ground is nothing at all -- so the light palette uses amber and
 a dark grey. The rule this follows is already the project's: furniture
 follows the desktop, measured data colours do not (sec 3.8.4).
 
+### 3.21 The label scaling never worked on the phone
+
+`bbq_metrics` carries a `label_scale`, and the graph applied it as
+
+    font.setPointSizeF(font.pointSizeF() * m_metrics.label_scale);
+
+which is the obvious spelling and is wrong wherever a font is sized in
+PIXELS. On Android the UI font is, so `pointSizeF()` returns -1, the
+product is negative, and Qt refuses it:
+
+    QFont::setPointSizeF: Point size <= 0 (-1.000000)
+
+The font then keeps whatever size it already had. **So the scaling
+silently did nothing on the one platform whose labels most needed it**,
+at both sites -- the gutter font and the time-axis font -- and said so on
+every paint, to a log nobody reads.
+
+Found by reading logcat while chasing something else entirely: the
+archive had stopped advancing, the app reported no fetch failure, and
+this was sitting in the same output. A warning that repeats on every
+frame is invisible for the same reason a constant hum is.
+
+`scaled_font()` now scales by whichever unit the font actually declares,
+and leaves a font that declares neither alone rather than guessing.
+
+**The test counts the COMPLAINT rather than measuring a font.** What
+went wrong is that Qt was asked for something impossible, so the refusal
+is the evidence -- and a message handler counting it is a sharper probe
+than reading a size back, which would pass on a desktop whatever the
+code did. The fixture asserts up front that its font really does report
+a negative point size, so it cannot quietly stop asking the question.
+Sabotaged by restoring the points-only spelling.
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it

@@ -81,6 +81,7 @@ private slots:
 	void a_slider_reports_no_value_to_accessibility();
 	void the_temperature_line_survives_a_certain_downpour();
 	void showing_the_wind_does_not_touch_the_temperature_line();
+	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
 	static void paint_once(probe &graph);
@@ -584,6 +585,63 @@ void test_view::showing_the_wind_does_not_touch_the_temperature_line() {
 	         qPrintable(QStringLiteral("showing the wind erased %1 pixels of "
 	                                   "the temperature line")
 	                            .arg(lost.size())));
+}
+
+namespace {
+
+/* Set while the next test paints, so the handler knows to watch. */
+bool g_watching_fonts = false;
+int g_font_complaints = 0;
+QtMessageHandler g_previous_handler = nullptr;
+
+void count_font_complaints(QtMsgType type, const QMessageLogContext &context,
+                           const QString &text) {
+	if (g_watching_fonts && text.contains(QStringLiteral("Point size"))) {
+		++g_font_complaints;
+	}
+
+	if (g_previous_handler != nullptr) {
+		g_previous_handler(type, context, text);
+	}
+}
+
+} // namespace
+
+void test_view::a_pixel_sized_font_is_scaled_rather_than_refused() {
+	/*
+	 * The gutter labels are scaled by a metric, and the scaling was
+	 * written as setPointSizeF(pointSizeF() * k) (project.md sec 3.21).
+	 *
+	 * On Android the UI font is sized in PIXELS, so pointSizeF() is -1,
+	 * the product is negative, Qt refuses it, and the label keeps the
+	 * size it already had. The scaling did nothing on the one platform
+	 * whose labels most needed it, and complained to a log nobody
+	 * reads -- which is how it survived.
+	 *
+	 * Asserted by COUNTING the complaint rather than by measuring a
+	 * font: what went wrong is that Qt was asked for something
+	 * impossible, and the refusal is the evidence.
+	 */
+	probe graph;
+
+	QFont pixel_sized = graph.font();
+	pixel_sized.setPixelSize(16);
+	QVERIFY2(pixel_sized.pointSizeF() < 0.0,
+	         "a pixel-sized font still reports a point size, so this "
+	         "fixture cannot ask its question");
+	graph.setFont(pixel_sized);
+
+	g_font_complaints = 0;
+	g_previous_handler = qInstallMessageHandler(count_font_complaints);
+	g_watching_fonts = true;
+
+	graph.resize(900, 400);
+	graph.grab();
+
+	g_watching_fonts = false;
+	qInstallMessageHandler(g_previous_handler);
+
+	QCOMPARE(g_font_complaints, 0);
 }
 
 int main(int argc, char *argv[]) {
