@@ -847,7 +847,40 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 			++row;
 		}
 
-		grid->addWidget(m_freshness_label, row, 0, 1, 2);
+		/*
+		 * NOT IN THE SCROLL AREA ON MOBILE (project.md sec 16.9).
+		 *
+		 * This line is where a band failure is said, and sec 2.4 will
+		 * not have a failed band fail invisibly. As the last row of a
+		 * scrolled pane it was the least reachable thing on the
+		 * smallest screen: a station quiet for twenty-one hours was
+		 * reported behind seven controls nobody had a reason to scroll
+		 * past, while the graph above it showed an observed band
+		 * quietly ending the previous night.
+		 *
+		 * It costs a line of plot. That is the right trade: a graph
+		 * with a hole in it and no explanation is worse than a graph
+		 * one line shorter.
+		 */
+		/*
+		 * Removed first, because set_layout runs again on every
+		 * rotation and unfold -- this is a fold -- and inserting a
+		 * widget already in the layout is how a second slot appears.
+		 * Index 2 is under the graph and above the controls: verdict,
+		 * graph, this, scroll area.
+		 */
+		m_root_layout->removeWidget(m_freshness_label);
+		m_root_layout->insertWidget(2, m_freshness_label, 0);
+
+		/*
+		 * And it needs the margin the controls got, for the same
+		 * reason: the root layout runs edge to edge because the PLOT
+		 * wants every pixel, and this is a label. Moving it here
+		 * reintroduced the clip that sec 16.7 had just removed --
+		 * "Oldest" arrived on the device reading "ldest".
+		 */
+		m_freshness_label->setContentsMargins(m_metrics.control_margin, 0,
+		                                      m_metrics.control_margin, 0);
 	} else {
 		QHBoxLayout *row = new QHBoxLayout(m_controls);
 		row->setContentsMargins(m_metrics.control_margin, 0,
@@ -859,6 +892,14 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 		}
 
 		row->addStretch(1);
+		/*
+		 * Back out of the root layout, if the mobile shape put it
+		 * there. setParent through addWidget is what actually moves it;
+		 * removing it from the old layout first is what stops the root
+		 * keeping an empty slot.
+		 */
+		m_root_layout->removeWidget(m_freshness_label);
+		m_freshness_label->setContentsMargins(0, 0, 0, 0);
 		row->addWidget(m_freshness_label, 0);
 	}
 

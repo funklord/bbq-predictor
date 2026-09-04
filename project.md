@@ -7224,3 +7224,50 @@ itself, no log beside it:
     pending forecasts 1861
 
 Before this it would have been an empty 4 KB file.
+
+### 16.9 The line that explains a wrong graph was the hardest to reach
+
+`ISTOCK877` stopped reporting at 02:04 and stayed quiet for twenty
+hours. The graph went on drawing an observed band that ended the
+previous night, and the applet said so -- on the last row of a scrolled
+pane, behind seven controls nobody had a reason to scroll past.
+
+**Sec 2.4 says a band that fails must not fail invisibly**, and
+below-the-fold-in-a-scroll-area is as close to invisible as makes no
+difference. On the phone, where the screen is smallest and the graph
+hardest to read, the one line that would explain it was the least
+reachable thing on screen.
+
+**The freshness line was the right home and stayed there.** There is
+already a decision about where messages go: the locator's
+"no position" is deliberately NOT put on this line, because that label
+is rewritten on every fetch and because the message is about the device
+rather than about the data. A failed band is about the data, so the
+line is correct. What was wrong was where the line sat.
+
+So on mobile it leaves the scroll area and joins the root layout,
+directly under the graph -- verdict, graph, this, controls. Removed
+before inserting, because `set_layout` runs again on every rotation and
+unfold and this is a fold.
+
+**It costs a line of plot, and that is the right trade**: a graph with a
+hole in it and no explanation is worse than a graph one line shorter.
+
+Seen on the device afterwards, which is the only way this was ever going
+to be checked:
+
+    Oldest band fetched 23:58:58   last error: observed: ISTOCK877 has
+    not reported for 1194 minutes
+
+**And moving it reintroduced sec 16.7's bug at the new address.** The
+root layout runs edge to edge because the PLOT wants every pixel; the
+freshness line is a label, and it arrived on the device reading
+"ldest". The same `control_margin` fixes it, which is the earlier
+finding's principle rather than its patch: **a margin decision belongs
+to what is being drawn, not to which layout something happens to sit
+in.** Set back to zero on the desktop, where the row supplies it.
+
+That is twice in one evening that a label moved into the edge-to-edge
+region and lost a glyph. The first was inherited by accident; the second
+was written by somebody who had just fixed the first, which is the
+better argument for stating the principle in the metric's own comment.
