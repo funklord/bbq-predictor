@@ -7245,10 +7245,24 @@ is rewritten on every fetch and because the message is about the device
 rather than about the data. A failed band is about the data, so the
 line is correct. What was wrong was where the line sat.
 
-So on mobile it leaves the scroll area and joins the root layout,
-directly under the graph -- verdict, graph, this, controls. Removed
-before inserting, because `set_layout` runs again on every rotation and
-unfold and this is a fold.
+So it leaves the control pane for the root layout, directly under the
+graph -- verdict, graph, this, controls. Removed before inserting,
+because `set_layout` runs again on every rotation and unfold and this is
+a fold.
+
+**In BOTH shapes, and the desktop was the worse of the two.** The first
+version of this fix changed mobile only, on the reasoning that the
+desktop row had room. It does not: at the default 820 pixels the row
+overflows and the label, sitting after a stretch at the far right, was
+clipped off the edge entirely. **The shape most likely to be run was the
+one that never showed the line at all** -- and it was found only by
+rendering the desktop layout and looking at it, an hour after the mobile
+half had been committed as done.
+
+That is this section's own lesson arriving twice: a fix aimed at the
+platform where a fault was NOTICED is not the same as a fix aimed at
+where it exists. One home for the line, both shapes, and the special
+case is gone rather than doubled.
 
 **It costs a line of plot, and that is the right trade**: a graph with a
 hole in it and no explanation is worse than a graph one line shorter.
