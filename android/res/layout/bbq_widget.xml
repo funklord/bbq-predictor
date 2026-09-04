@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One image, and two messages that appear only when they are true.
+
+    The graph carries its own background because the application paints
+    it, dark or light, so the picture is legible on any wallpaper
+    without the widget knowing which scheme is in use. The two text
+    views do NOT have that luxury, being drawn by Android over
+    whatever is behind them, so each carries an opaque strip of its own
+    rather than trusting the ground it lands on.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/bbq_widget_graph"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true"
+        android:contentDescription="@string/bbq_widget_graph_description" />
+
+    <TextView
+        android:id="@+id/bbq_widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:padding="8dp"
+        android:background="#e6101214"
+        android:textColor="#ffe8eaed"
+        android:textSize="13sp"
+        android:visibility="gone"
+        android:text="@string/bbq_widget_empty" />
+
+    <TextView
+        android:id="@+id/bbq_widget_age"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center"
+        android:padding="3dp"
+        android:background="#e6101214"
+        android:textColor="#ffffd400"
+        android:textSize="11sp"
+        android:visibility="gone" />
+</FrameLayout>

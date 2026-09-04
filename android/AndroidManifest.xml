@@ -62,6 +62,26 @@
                 android:value="-- %%INSERT_APP_ARGUMENTS%% --" />
         </activity>
 
+        <!--
+            The home-screen widget (project.md sec 16).
+
+            exported=true is required: the widget host is the launcher,
+            a different application, and it is what sends the update
+            broadcast. There is nothing to protect here: the receiver reads
+            a picture this package wrote and displays it.
+        -->
+        <receiver
+            android:name=".GraphWidget"
+            android:label="@string/bbq_widget_label"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bbq_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.qtprovider"

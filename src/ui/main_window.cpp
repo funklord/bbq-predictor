@@ -1,5 +1,7 @@
 #include "ui/main_window.h"
 
+#include "ui/widget_picture.h"
+
 #ifdef Q_OS_ANDROID
 #include <QJniObject>
 #endif
@@ -454,6 +456,17 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		m_graph->set_composite(m_feed->composite());
 		refresh_corrected();
 		refresh_status();
+
+		/*
+		 * The home-screen widget draws whatever this last wrote (sec
+		 * 16). Here rather than on the fetch, because what the widget
+		 * shows is the GRAPH, and the graph is only correct once the
+		 * composite and the corrected band have both been applied to
+		 * it -- two lines above.
+		 *
+		 * A no-op off Android.
+		 */
+		bbq_write_widget_picture(m_graph);
 	});
 
 	/*

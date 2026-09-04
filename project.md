@@ -6981,3 +6981,119 @@ The conversion that passed uses `tokenize` to find the lines inside
 multi-line strings and leaves them alone. **The proof is what made the
 difference, not the care**: the first version was written with the same
 attention and was wrong.
+
+## 16. The home-screen widget
+
+A resizable Android app widget showing the forecast graph. Asked for by
+the copyright holder 2026-09-04.
+
+### 16.1 It draws a picture the application rendered
+
+**The widget does not render anything.** The graph is Qt drawing a
+composite of four bands with this project's palette, interpolation,
+smoothing, grill windows and corrected series; reimplementing any of
+that in Java would be a second renderer to keep in step, and the two
+would disagree the first time either changed.
+
+So the contract is a file. The application writes `widget.png` beside
+its archive whenever the composite changes, and tells the widget it has.
+`GraphWidget.java` reads it and nothing else.
+
+**Written through a temporary and renamed**, because the host can decode
+the file at any moment and a half-written PNG decodes to nothing. The
+widget treats an undecodable file as "no picture yet" rather than as an
+error, which is the right way for that race to land.
+
+**The GRAPH is rendered, not the window.** A widget is a glance at the
+weather; the station picker and the interpolation drop-down are neither
+glanceable nor wanted at that size.
+
+### 16.2 A stale picture must not look current
+
+This is the whole of what the widget has to get right. **A forecast that
+looks current and is six hours old is worse than no widget, because
+somebody lights a fire on it.**
+
+So the age is read from the file's own modification time when the widget
+is drawn -- not from a timestamp rendered into the image, which would
+freeze at render time and go on claiming to be fresh for ever -- and
+past twenty minutes it is stated in words over the picture. Twenty
+because a station reports about every five and the application refreshes
+on that cadence, so three missed rounds is the first point at which the
+picture is describing a sky that has moved on.
+
+**The empty state is said too.** No file, or one that will not decode,
+shows "open bbq-predictor once" rather than an empty frame -- which
+reads as a broken widget instead of one waiting for its first run.
+
+### 16.3 A widget shape is not the on-screen shape
+
+The graph is as tall as whatever it sits in: 840 by 1047 on a folded
+Fold 3, which is portrait. A home-screen slot is wide and short, so
+fitting that picture into one leaves most of the widget empty and the
+graph too small to read.
+
+**Rendered at 1000 by 440 by resizing for the grab and putting the size
+straight back.** `grab()` paints into an offscreen pixmap rather than
+onto the screen and the layout restores the geometry on its next pass,
+so none of it reaches the display. On a device with a 2.625 pixel ratio
+that lands as 2625 by 1155, sharp enough for a launcher to scale.
+
+**The alternative was a second graph object configured to match the
+first, and it was rejected on a count: twelve setters.** A thirteenth
+added later would be missed silently, and the widget would quietly stop
+agreeing with the window it claims to show -- the same shape as a second
+renderer, arrived at from a different direction.
+
+### 16.4 What owns the ground
+
+`harmonization.md` settles that a surface drawn onto somebody else's
+chrome must be legible either way, because it has no ground of its own
+to fall back on. A widget is exactly that case, and it splits in two
+here:
+
+- **The graph carries its own background**, because the application
+  paints it dark or light. That picture is legible on any wallpaper
+  without the widget knowing which scheme is in use.
+- **The two text views do not have that luxury** -- Android draws them
+  over whatever is behind them -- so each carries an opaque strip of its
+  own rather than trusting the ground it lands on.
+
+### 16.5 What was verified, and what is left to a person
+
+Verified on the device rather than argued:
+
+    receiver in the packaged manifest   aapt2 dump xmltree
+    resources packaged                  res/layout, res/xml present
+    GraphWidget in the dex              classes4.dex
+    provider registered by Android      dumpsys appwidget
+    picture written on refresh          118959 bytes, 2625x1155 PNG
+    no half-written leftover            only widget.png in files/
+
+**Two probes were wrong before they were right, both caught by
+controls.** The dex search reported the class missing, and a control
+looking for `PageFetch` -- known to be present -- found neither, which
+said the probe was at fault rather than the build: multidex, and the
+answer was in `classes4.dex`. And `dumpsys appwidget` reported no
+provider when it was run three seconds before the install finished
+registering it -- a measurement taken before the state existed.
+
+**Adding the widget to a home screen is the one step left to a person.**
+There is no reliable way to place one from adb: binding is the
+launcher's to do, and it is done from its widget picker. Everything up
+to that point is confirmed.
+
+### 16.6 What it does not do
+
+**The picture only changes while the application runs.** There is no
+background render: doing one means Qt in an Android service, which is a
+considerably larger piece of work than the widget itself, and the
+honest version of not having it is the age being stated rather than the
+staleness being hidden.
+
+So the widget is current if the applet has been open recently and says
+how old it is otherwise. Whether that is enough, or whether the fetching
+should move into a service, is a decision rather than an oversight --
+and it is the same question sec 15.5 asks about the server, from the
+other end: if a machine somewhere is fetching around the clock, the
+phone's widget wants ITS picture rather than one of its own.

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The home-screen widget (project.md sec 16).
+
+    Resizable in both directions because the thing shown is a wide plot:
+    the useful shapes are a full-width strip and a large block, and a
+    fixed size would suit neither.
+
+    updatePeriodMillis is 0 on purpose. Android clamps it to thirty
+    minutes anyway, and a periodic wake buys nothing here: the picture
+    changes only when the application renders a new one, and it tells
+    the widget when it has. What the widget must do without any wake at
+    all is say how old its picture is, which it does from the file's own
+    timestamp when it is drawn.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="70dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:initialLayout="@layout/bbq_widget" />

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bbq_widget_label">BBQ forecast</string>
+    <string name="bbq_widget_empty">Open bbq-predictor once to draw the
+        forecast here.</string>
+    <string name="bbq_widget_graph_description">Temperature and rain
+        forecast graph</string>
+</resources>

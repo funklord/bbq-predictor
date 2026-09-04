@@ -131,6 +131,7 @@ SOURCES += \
 	src/ui/layout.cpp \
 	src/ui/locator.cpp \
 	src/ui/theme.cpp \
+	src/ui/widget_picture.cpp \
 	src/ui/main_window.cpp \
 	src/ui/tray_icon.cpp \
 	src/wu/client.cpp \
@@ -157,6 +158,7 @@ HEADERS += \
 	src/ui/layout.h \
 	src/ui/locator.h \
 	src/ui/theme.h \
+	src/ui/widget_picture.h \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \
 	src/wu/client.h \
