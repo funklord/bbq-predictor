@@ -5072,6 +5072,44 @@ was a real defect found and fixed on the way, which made the silence
 look explained twice over. The actual cause was two layers below, in
 what the fetch was being handed.
 
+#### 12.20.3 Both archives score now, and what they say so far
+
+The desktop store still carried the damage from the stale-cache period
+-- 622 observations with a 17.6-hour hole. One fetch with the fixed
+client repaired it: 879 observations, continuous, current to two minutes
+ago, and verification from 6 rows to 44. Nothing had to be reconstructed
+by hand, because `history/all` returns a whole day and the store upserts
+by timestamp; the hole filled itself.
+
+The first cross-band verdict figures, from the desktop, mean absolute
+error on a 0..1 score:
+
+      lead    extended (Open-Meteo)   hourly (WU)    n
+      1h            0.242                0.050       2
+      3h            0.232                0.033       3
+      6h            0.210                0.000       1
+      1w            0.191                0.087      17
+
+**The verdict tracks provider quality and amplifies it.** WU's
+temperature advantage in sec 12.18 was roughly a factor of two; on the
+verdict it is four to seven at short leads. That is what a product of
+ramps does to an error, and it is the argument sec 12.20 made in
+advance -- being right about the ingredients and being right about the
+recommendation are different claims, and the second is the harsher test.
+
+**The corrected band has no rows in either archive**, and that is the
+design working rather than a fault. `bbq_correction_minimum` is 20: a
+bucket with fewer verified pairings produces no correction at all, so
+there is nothing to queue and nothing to score. These buckets hold 1 to
+23. Until a bucket clears 20 and stays there, the question this whole
+chapter exists for -- does removing a measured bias beat the raw
+forecast -- cannot be asked, and the absence of a row is the honest
+answer rather than a missing one.
+
+Read every figure above as provisional. Several buckets hold one or two
+pairings, the leads do not order sensibly yet, and one night of one
+station in one season is not a finding about either provider.
+
 ## 13. Navigating the graph
 
 **Drag to pan, wheel to zoom about the cursor, double-click to return to
