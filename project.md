@@ -6564,3 +6564,60 @@ one-off under sabotage and is not what the committed suite does.
 public API. An earlier pass here made three members public to be
 testable, which was a seam invented for a test beside a seam that was
 already there; they are private again.
+
+### 15.7.3 The same lens, pointed at every other request
+
+*Derive the next lens from the last bug.* The backfill defect was **a
+request spent without asking whether it was needed, where the answer was
+already in hand**, so every other request site was read with that
+question.
+
+**Five of the six are correct, and the reason is the same for all of
+them.** `observed` (today), `current`, `nowcast`, `hourly`, `radar` and
+`extended` all go through `due()`, whose per-band freshness is also an
+in-memory stamp -- so a launch re-fetches every one. That is right rather
+than wrong: **their data CHANGES**, and a reader opening the app wants
+what is true now. The backfill was different in kind, not in degree, and
+this is the property that separates them: yesterday, once whole, cannot
+change again. `fetch_places` is typed by the reader and
+`discover_stations` follows a place they picked; both are asked for.
+
+**One site does not check, and the document says it should.** Sec 14's
+account of discovery states that *discovery runs again whenever the
+coordinate moves*. The code does not compare anything: `begin()` calls
+`locate_once()` on every launch, and every fix that arrives goes straight
+to `discover_stations_at()`. The comparison is available at exactly the
+moment the decision is made -- the new fix is in hand, and the store
+holds every station's coordinates -- so "have I moved since the last
+discovery?" is answerable without spending anything, which is the
+backfill's shape precisely.
+
+**Measured before it was reported, and the measurement shrank it.** The
+first reading was "a discovery request per launch", which the device
+refutes:
+
+    run                  stations
+    2026-08-27 20:47:09  3
+    2026-09-03 14:01:49  10
+    2026-09-04 09:46:53  10
+
+**Three runs in eight days**, against an app launched far more often than
+that -- three times on 2026-09-04 alone, of which one produced a run and
+two did not. The reason is that a fix usually never arrives: the locator
+is asked once, nothing waits for it, and indoors it times out. So the
+per-launch cost is real only where fixes arrive reliably, and the live
+cost on this device is negligible.
+
+**Flagged rather than fixed**, per *where the document and the code
+contradict each other, flag it -- do not silently resolve it in either
+direction*. Which is wrong is a real question: the document may be
+describing an intent the code never had, or the code may be missing a
+guard the document assumed. And a third answer is available that neither
+branch states -- **the trigger could be the fix ARRIVING and differing
+from the last discovery's coordinate by more than the station spacing**,
+which is neither "every fix" nor "whenever the coordinate moves" as
+either is currently written.
+
+The measurement is the part worth keeping either way: **whatever is
+decided, it is not urgent**, and a report claiming a request per launch
+would have made it sound so.
