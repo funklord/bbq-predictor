@@ -3,6 +3,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimer>
 #include <QRegularExpression>
 #include <QUrl>
 
@@ -13,6 +14,14 @@ namespace {
  * server-rendered payload this needs; the location in it is irrelevant,
  * since only the embedded request URLs are read.
  */
+/*
+ * How many transfers one acquisition may spend, and how long it waits
+ * between them (sec 2.6.1.1). Three by the copyright holder's
+ * instruction, after the page was measured refusing half the time.
+ */
+const int key_attempts = 3;
+const int key_retry_pause_ms = 900;
+
 const char *const key_page_url = "https://www.wunderground.com/forecast";
 
 /*
@@ -48,7 +57,13 @@ void bbq_wu_key_source::acquire() {
 		return;
 	}
 
+	m_attempts = 0;
+	send();
+}
+
+void bbq_wu_key_source::send() {
 	m_in_flight = true;
+	++m_attempts;
 
 	QNetworkRequest request((QUrl(QString::fromLatin1(key_page_url))));
 	request.setHeader(QNetworkRequest::UserAgentHeader,
@@ -63,6 +78,31 @@ void bbq_wu_key_source::acquire() {
 		m_in_flight = false;
 
 		if (reply->error() != QNetworkReply::NoError) {
+			/*
+			 * RETRIED, because the page refuses intermittently
+			 * (sec 2.6.1.1). Measured: three of six consecutive
+			 * attempts failed against a working network, while curl
+			 * fetched the same page every time -- so a single refusal
+			 * says nothing about whether the next one will succeed.
+			 *
+			 * Only a TRANSFER failure is retried. A page that arrives
+			 * and carries no key is the failure sec 2.2 predicted, and
+			 * asking for the same page again would return the same page
+			 * -- retrying that would turn a clear diagnosis into three
+			 * of them.
+			 */
+			if (m_attempts < key_attempts) {
+				/*
+				 * A pause between tries rather than a burst. This is
+				 * somebody else's quota (sec 2.5), and three requests
+				 * in the same millisecond is the shape of thing that
+				 * gets an address blocked rather than served.
+				 */
+				QTimer::singleShot(key_retry_pause_ms, this,
+				                   [this]() { send(); });
+				return;
+			}
+
 			emit failed(reply->errorString());
 			return;
 		}

@@ -51,6 +51,9 @@ signals:
 	void failed(const QString &reason);
 
 private:
+	/* One transfer of the key page; acquire() may spend several. */
+	void send();
+
 	/*
 	 * Pull a key out of page HTML.
 	 *
@@ -71,7 +74,17 @@ private:
 	QString m_key;
 	bool m_in_flight = false;
 
+	/*
+	 * Transfers spent on the CURRENT acquisition (sec 2.6.1.1). The
+	 * page refuses about half the time, and a refusal costs a whole
+	 * round because nothing else in it can run without a key.
+	 */
+	int m_attempts = 0;
+
 	friend class bbq_wu_key_source_test;
+
+	/* Counts the attempts of sec 2.6.1.1, which nothing else exposes. */
+	friend class test_client;
 };
 
 #endif

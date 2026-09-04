@@ -33,6 +33,7 @@ class test_client : public QObject {
 private slots:
 	void requests_wait_when_there_is_no_key();
 	void the_queue_is_drained_once_by_whichever_signal_arrives();
+	void a_refused_key_page_is_tried_three_times();
 };
 
 void test_client::requests_wait_when_there_is_no_key() {
@@ -100,6 +101,42 @@ void test_client::the_queue_is_drained_once_by_whichever_signal_arrives() {
 
 	QCOMPARE(failures.count(), 2);
 	QCOMPARE(client.waiting(), 0);
+}
+
+void test_client::a_refused_key_page_is_tried_three_times() {
+	/*
+	 * The page refuses about half the time (project.md sec 2.6.1.1),
+	 * and a refusal used to cost a whole round: nothing in one can run
+	 * without a key. Three attempts by the copyright holder's
+	 * instruction.
+	 *
+	 * A proxy pointing at a closed port on loopback makes every
+	 * transfer fail at once and without leaving the machine, which is
+	 * what lets the retry be exercised at all -- the real failure is
+	 * intermittent and cannot be asked for.
+	 */
+	QNetworkAccessManager net;
+	net.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy,
+	                           QStringLiteral("127.0.0.1"), 1));
+	bbq_wu_key_source keys(&net);
+
+	QSignalSpy failures(&keys, &bbq_wu_key_source::failed);
+	keys.acquire();
+
+	/*
+	 * Waited for rather than assumed: the attempts are spaced, so a
+	 * test that looked immediately would see one and call it three.
+	 */
+	QVERIFY2(failures.wait(15000), "the key source never gave up");
+
+	QCOMPARE(failures.count(), 1);
+	QCOMPARE(keys.m_attempts, 3);
+
+	/*
+	 * And it gives up rather than trying for ever. A retry that never
+	 * stops is a slower way of hanging.
+	 */
+	QVERIFY2(!keys.has_key(), "a refused page must not leave a key behind");
 }
 
 QTEST_GUILESS_MAIN(test_client)

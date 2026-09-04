@@ -351,9 +351,24 @@ ordinary case.
 
 This is sec 2.2's prediction arriving in a smaller form than expected:
 not the pattern breaking, but the page refusing often enough to matter.
-A retry inside the round is the obvious answer and is not written,
-because the right number of retries against somebody else's rate limit
-is a judgement rather than an obvious constant.
+
+**Three attempts, by the copyright holder's instruction**, spaced 900 ms
+apart. The pause is not politeness for its own sake: this is somebody
+else's quota (sec 2.5), and three requests in the same millisecond is
+the shape of thing that gets an address blocked rather than served.
+
+**Only a TRANSFER failure is retried.** A page that arrives and carries
+no key is the failure sec 2.2 predicted, and asking for the same page
+again returns the same page -- retrying that would turn one clear
+diagnosis into three of them.
+
+Tested against a proxy pointing at a closed port on loopback, which
+makes every transfer fail at once and without leaving the machine. That
+is what lets the retry be exercised at all: the real failure is
+intermittent and cannot be asked for. The spy is WAITED on rather than
+read immediately, because the attempts are spaced and a test that looked
+straight away would see one and call it three. Sabotaged by giving up on
+the first refusal.
 
 ### 2.6.2 The three traps
 
@@ -2865,10 +2880,6 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
-- **Whether the key scrape should retry within a round** (sec 2.6.1.1).
-  It failed three times in six tonight, and a failed scrape costs the
-  whole round. The right number of attempts against somebody else's
-  rate limit is a judgement rather than a constant
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and
