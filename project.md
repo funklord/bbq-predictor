@@ -6732,3 +6732,91 @@ the hourly product calling the front an hour early, which is ordinary
 forecast disagreement; the composite prefers the finer band there
 anyway. Recorded so the next reader who notices it does not chase it
 twice.
+
+## 15.9 The test build was not parallel-safe, and the package build found it
+
+**Found by running lintian for the first time**, which was itself a gap:
+a package had been built and called correct on the strength of listing
+its contents. The lint fix required a rebuild, the rebuild failed, and
+the failure was not in the packaging at all.
+
+### 15.9.1 One directory, twelve subprojects, and the same object names
+
+`tests.pro` is `TEMPLATE = subdirs` whose members all live in `test/`,
+so qmake writes every `Makefile.test_*` into ONE build tree -- and each
+subproject compiled to the same object filenames in it. Measured in a
+single build:
+
+    moc_forecast.o   written 9 times
+    series.o         written 4 times
+
+by different targets, with different `-D` flags, into one directory.
+Serially that is merely wasteful. Under `-j` it is a race, and
+`dh_auto_test` runs `make -j`, so **the package build failed at random
+with undefined moc symbols in whichever target lost.**
+
+**The tell was that the target changed between runs** -- `test_layout`
+and `test_interpolate` on one attempt, `test_providers` on the next --
+which is what a race looks like and what a genuine missing dependency
+does not.
+
+**Controlled properly, and the first attempt at the control did not
+count.** A serial build was run from clean and reported no errors after
+five of twelve binaries, having been cut short when its parent was
+killed; five of twelve with no failure is not a pass, it is an
+unfinished measurement that reads exactly like one. Re-run detached to
+completion:
+
+    make -j12 tests-build   from clean  ->  12 link errors, target varies
+    make -j1  tests-build   from clean  ->  12 of 12, no errors
+
+**The fix is per-target object directories**, in `test_common.pri`, so
+nothing is shared to race over. The name comes from the `.pro` file
+rather than from `TARGET`, because every subproject includes the shared
+file BEFORE setting `TARGET`, and they go under `obj/` rather than a
+`test_*` name because `make test` globs `test_*` for binaries to run.
+
+`moc_forecast.o` now exists twelve times in twelve directories rather
+than once, written nine times. That is more compilation, and it is the
+price of a build that does not fail at random.
+
+### 15.9.2 What lintian found, and what it cost to fix
+
+Five errors and a warning, all real:
+
+- **`aliased-location` on all four systemd paths.** `dh_installsystemd`
+  under compat 13 writes to `/lib/systemd/system`, which on a merged-/usr
+  system is an aliased path -- the file lands somewhere dpkg does not
+  consider the package to own.
+- **`debian-changelog-has-wrong-day-of-week`: 2026-09-04 was a Friday**
+  and the trailer said Thursday. **An identifier completed from memory
+  rather than read** -- the same fault as citing a section number without
+  opening the file, and the same remedy: `date -R`, in the command that
+  writes it.
+
+**Two attempts at the aliased path, and the first was wrong.** Compat 14
+is the documented fix and is not available: the debhelper here provides
+up to 13, so `dpkg-buildpackage` refused the build outright.
+
+**That refusal was nearly read as a result.** lintian was run again
+afterwards and reported the same five errors -- against the seven-hour-old
+artifact still sitting in `build/deb`, because the build that would have
+replaced it had aborted. The reading was going to be "the fix did not
+work". What caught it was checking the artifact's timestamp. **A build
+that fails leaves the previous package exactly where a successful one
+puts it**, so the deb directory is cleared before a verifying rebuild
+now.
+
+The second attempt, `dh-sequence-movetousr`, is the mechanism that
+exists for this transition and it fails rootless: `dh_movetousr` calls
+`chown --reference`, and this package is `Rules-Requires-Root: no`.
+
+**What works is not moving them at all.** This debhelper's
+`dh_installsystemd` already knows `/usr/lib/systemd/system`, so the
+units are installed there directly by `debian/bbq-predictor.install` and
+found where they lie. Verified rather than assumed: the postinst still
+enables and starts the timer, and `libqt6sql6-sqlite` is still declared.
+
+**Remaining, and left alone:** `initial-upload-closes-no-bugs`, which
+wants a bug tracker this project has not got, and `no-manual-page`. The
+second is a real gap and writing one is its own piece of work.
