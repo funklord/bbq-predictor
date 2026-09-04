@@ -3033,6 +3033,11 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
+- **Whether the Pin control should offer a per-station pin**
+  (sec 12.18.1). It applies to the watched station, so pinning a second
+  one means watching it, pinning, and switching back -- which works and
+  is clumsy enough that the second station was pinned by editing the
+  store instead
 - **CI, which is free for this repository and unused.** There is no
   `.github/workflows` here and the repo is public, so GitHub Actions
   costs nothing -- unlike the sibling trees that are private and
@@ -4717,6 +4722,27 @@ first table produced had Open-Meteo's figures under WU's name. Any
 query against `verification` should take the labels from
 `bbq_band_name` rather than from memory.
 
+#### 12.18.1 A second station, pinned
+
+`ISUNDB5` is pinned as of 2026-09-04, at the copyright holder's
+instruction: 0.35 km away against `ISTOCK877`'s 2.06, reporting, and
+with its history endpoint current. Chosen on evidence rather than
+distance -- the current reading and the history of every nearby
+candidate were checked first, and `ISUNDB6` was rejected for publishing
+no temperature at all.
+
+The reason is redundancy rather than accuracy. An archive fed by one
+garden is one station away from nothing, and sec 12.16 already recorded
+what a dead station costs: `ISTOCK822`'s queue was orphaned for weeks
+and could only ever expire.
+
+It was pinned by editing the store directly with the app stopped --
+pulled, checkpointed, updated, pushed back, byte-verified -- because the
+Pin control applies to the WATCHED station, so pinning a second one
+through the interface means watching it, pinning, and switching back.
+That works and is clumsy; whether the control should offer a per-station
+pin is an open question rather than a defect.
+
 ### 12.19 The correction was the one claim nothing checked
 
 Sec 12.18 scores three bands -- the nowcast, Open-Meteo's extended and
@@ -4788,7 +4814,7 @@ step -- computing the correction and discarding it, which is precisely
 the old behaviour -- makes it report that the correction was not queued
 at all.
 
-### 12.20 The verdict itself is still unmeasured
+### 12.20 The verdict itself was unmeasured
 
 Sec 12.19 closed the gap for the corrected band. The same question asked
 once more finds a larger one, and this is as far as this lens goes:
@@ -4914,6 +4940,54 @@ Found by looking for the row rather than waiting for it. The feature was
 built, tested, sabotaged, shipped and installed, and every one of those
 steps passed -- the fixtures all had rain in them. Nothing but the
 device's own dry week would have shown it, and only then as an absence.
+
+#### 12.20.2 The first verdict scores, and what unblocked them
+
+Measured on the phone 2026-09-04, minutes after the encoding fix of sec
+2.6.5.1 reached it:
+
+    ISTOCK877   1721 -> 1978 observations, newest 22:09 -> 02:04
+    temperature   14 -> 25 rows
+    wind_kph      14 -> 25 rows
+    grill          0 -> 23 rows
+
+    verdict, mean absolute error on a 0..1 score
+
+      band        lead    n    MAE
+      extended     1h     10   0.120
+      extended     3h     11   0.111
+      extended     6h     11   0.123
+      extended    12h     12   0.150
+      extended     1d     10   0.176
+      extended     4d     18   0.066
+      extended     1w     22   0.167
+      corrected    1h      1   0.065
+
+and the record line on the device now reads
+
+    record: hourly @4d  bias -0.1 C, MAE 1.0, rain skill 0.00,
+            verdict +-0.06 (n=72)
+
+**Read them as provisional.** Single figures per bucket, one station,
+one night, and the buckets do not order sensibly yet -- four days scores
+better than one hour, which is noise rather than a finding. The
+`corrected` band has ONE pairing, so the question this was all built to
+answer -- does removing a measured bias beat the raw forecast -- is not
+answerable yet. It is being asked, which it was not that morning.
+
+**What unblocked it was not the scoring work.** The verdict quantity,
+the dry-spell fix and the display were all in place and producing
+nothing, because the archive had stopped advancing: the store sat at one
+observation from 00:09 local for five hours while every band answered
+and every status was 200. Fixing the stale gzip variant filled 257
+observations in a single round and the pairings followed immediately.
+
+That is worth keeping as a shape. **A measurement that reports nothing
+is not evidence that the measurement is broken.** Three separate things
+were suspected and one of them -- the dry-spell veto of sec 12.20.1 --
+was a real defect found and fixed on the way, which made the silence
+look explained twice over. The actual cause was two layers below, in
+what the fetch was being handed.
 
 ## 13. Navigating the graph
 
