@@ -1,4 +1,5 @@
 #include <QTemporaryDir>
+#include <QSignalSpy>
 #include <QTest>
 
 #include <algorithm>
@@ -28,6 +29,7 @@ private slots:
 	void a_new_station_has_never_been_asked();
 	void no_band_describing_the_old_place_survives_the_change();
 	void the_correction_is_queued_for_scoring_like_any_forecast();
+	void a_finished_day_that_comes_back_short_says_so();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -500,6 +502,71 @@ void test_feed::the_correction_is_queued_for_scoring_like_any_forecast() {
 	 */
 	QCOMPARE(feed.history().pending_count(station, bbq_band::hourly), 0);
 	QCOMPARE(feed.history().pending_count(station), queued);
+}
+
+void test_feed::a_finished_day_that_comes_back_short_says_so() {
+	/*
+	 * A SHORT ANSWER IS NOT AN ERROR, which is why this exists
+	 * (project.md sec 12.13.1).
+	 *
+	 * A stale cache variant returned 78 observations where the day held
+	 * 288, and nothing could tell: every band answered, every status was
+	 * 200, and 78 rows parse exactly as well as 288. The only evidence
+	 * was a store that quietly stopped growing.
+	 *
+	 * Checked on TIME rather than count, because a station reporting
+	 * every fifteen minutes is as normal as one reporting every five,
+	 * and a threshold on rows would have to know which. Whatever the
+	 * cadence, a day that has ENDED should be answered with observations
+	 * reaching its end.
+	 */
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("ITEST1"));
+
+	QSignalSpy complaints(&feed, &bbq_wu_feed::band_failed);
+
+	const QDate day(2026, 9, 3);
+	const qint64 begins = QDateTime(day, QTime(0, 0)).toSecsSinceEpoch();
+
+	/* A whole day: five-minute rows to within a few minutes of midnight. */
+	std::vector<bbq_sample> whole;
+	for (int i = 0; i < 288; ++i) {
+		bbq_sample sample;
+		sample.start_utc = begins + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 15.0;
+		whole.push_back(sample);
+	}
+
+	bbq_series full(bbq_band::observed, QStringLiteral("wunderground"));
+	full.set_samples(whole);
+
+	feed.m_backfill_day = day;
+	feed.check_day_is_whole(full);
+	QCOMPARE(complaints.count(), 0);
+
+	/*
+	 * The same day truncated where the real one was -- a little over six
+	 * hours in, seventeen short of its end.
+	 */
+	std::vector<bbq_sample> cut(whole.begin(), whole.begin() + 78);
+	bbq_series stale(bbq_band::observed, QStringLiteral("wunderground"));
+	stale.set_samples(cut);
+
+	feed.m_backfill_day = day;
+	feed.check_day_is_whole(stale);
+
+	QCOMPARE(complaints.count(), 1);
+	QVERIFY2(complaints.at(0).at(1).toString().contains(QStringLiteral("hole")),
+	         "the complaint does not say what is wrong");
+
+	/*
+	 * And it fires once. The day is cleared when it is checked, so a
+	 * second response for the same request cannot complain twice about
+	 * a day nobody asked for again.
+	 */
+	feed.check_day_is_whole(stale);
+	QCOMPARE(complaints.count(), 1);
 }
 
 QTEST_GUILESS_MAIN(test_feed)

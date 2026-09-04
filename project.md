@@ -4475,6 +4475,35 @@ one line that could have said otherwise -- `record: none yet` -- reads
 exactly like a feature waiting for enough data. A pipeline starved at
 its source looks identical to one that is merely young.
 
+#### 12.13.1 A finished day that comes back short now says so
+
+Sec 2.6.5.1 cost an archive and several hours, and what made it
+expensive was not the cache: it was that **a short answer is not an
+error**. 78 observations arrived where the day held 288, every band
+answered, every status was 200, and 78 rows parse exactly as well as
+288. The only evidence was a store that quietly stopped growing, which
+is the least legible symptom this project has.
+
+The backfill asks for a day that has ENDED, so its answer can be checked
+against the question. Whatever the station's cadence, a finished day
+should be answered with observations reaching its end; three hours short
+is called a hole and said out loud.
+
+**On time rather than on count**, which is the part worth keeping. A
+station reporting every fifteen minutes gives 96 rows a day and one
+reporting every five gives 288 -- both normal, so a threshold on rows
+would have to know which station it was looking at, and would be wrong
+for the next one. The clock needs no such knowledge.
+
+It reports through `band_failed`, which puts it on the status line --
+the instrument that finally diagnosed sec 2.6.5.1 after logcat had been
+read twice. The day is cleared when it is checked, so one request cannot
+complain twice.
+
+**Written after the fact, which is the honest order to record.** The
+defect it guards was found by hand, and this only ensures the next one
+announces itself rather than waiting to be noticed.
+
 ### 12.14 A sensor that never moves is not a measurement
 
 With observations finally arriving (sec 12.13), the first real

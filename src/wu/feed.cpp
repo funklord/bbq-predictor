@@ -95,6 +95,14 @@ const int extended_freshness_s = 60 * 60;
 const int backfill_freshness_s = 6 * 3600;
 
 /*
+ * How far short of a finished day's end its last observation may fall
+ * before the day is called incomplete (sec 12.13.1). Three hours is
+ * wider than any ordinary reporting cadence and far narrower than the
+ * 17-hour hole that made the check necessary.
+ */
+const int backfill_short_s = 3 * 3600;
+
+/*
  * Never attempted counts as overdue. Shared by every band so that the
  * one thing they all have to agree about is written once.
  */
@@ -308,6 +316,7 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		 * on the next observed fetch, with an honest duration.
 		 */
 		if (was_observed) {
+			check_day_is_whole(series);
 			m_history.record_observations(m_station_id, series);
 			m_observed_fetched_utc = QDateTime::currentSecsSinceEpoch();
 		} else if (product != bbq_wu_product::current_station &&
@@ -838,6 +847,51 @@ void bbq_wu_feed::dispatch_pinned() {
 	m_client->fetch_observed_pinned(m_pinned_in_flight, yesterday);
 }
 
+void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
+	/*
+	 * A SHORT ANSWER IS NOT AN ERROR, and that is the problem
+	 * (sec 12.13.1).
+	 *
+	 * Sec 2.6.5.1 cost an archive and several hours: a stale cache
+	 * variant returned 78 observations where the day held 288, and
+	 * nothing could tell. Every band answered, every status was 200, and
+	 * 78 rows parse exactly as well as 288 -- so the only evidence was a
+	 * store that quietly stopped growing.
+	 *
+	 * The check is on TIME rather than on count, because stations report
+	 * at whatever cadence they like: 96 rows a day is a normal station
+	 * and 288 is another, and a threshold on rows would have to know
+	 * which. A day that has ended is different -- whatever the cadence,
+	 * its last observation should be near its end.
+	 *
+	 * Reported through band_failed, which is what puts it on the status
+	 * line. That line is what finally diagnosed sec 2.6.5.1 after logcat
+	 * had been read twice, and a truncated day is exactly the thing it
+	 * exists to say out loud.
+	 */
+	if (!m_backfill_day.isValid() || measured.is_empty()) {
+		return;
+	}
+
+	const QDate asked = m_backfill_day;
+	m_backfill_day = QDate();
+
+	const qint64 last = measured.samples().back().start_utc;
+	const qint64 ends = QDateTime(asked.addDays(1), QTime(0, 0)).toSecsSinceEpoch();
+	const qint64 short_by = ends - last;
+
+	if (short_by <= backfill_short_s) {
+		return;
+	}
+
+	emit band_failed(QStringLiteral("observed"),
+	                 tr("%1 returned only %2 rows, ending %3 hours before the "
+	                    "day did -- the archive has a hole in it")
+	                         .arg(asked.toString(Qt::ISODate))
+	                         .arg(measured.size())
+	                         .arg(short_by / 3600));
+}
+
 void bbq_wu_feed::attempt_backfill(qint64 now_utc) {
 	if (m_station_id.isEmpty()) {
 		return;
@@ -854,8 +908,16 @@ void bbq_wu_feed::attempt_backfill(qint64 now_utc) {
 	 * property that makes this a two-line change rather than a new band.
 	 */
 	const QString stamp = QStringLiteral("yyyyMMdd");
-	const QString yesterday = QDate::currentDate().addDays(-1).toString(stamp);
-	m_client->fetch_observed(m_station_id, yesterday);
+	const QDate day = QDate::currentDate().addDays(-1);
+
+	/*
+	 * Remembered so the answer can be checked against the question
+	 * (sec 12.13.1). A day that has ENDED should be answered with
+	 * observations reaching its end, and nothing else knows which day
+	 * was asked for by the time the reply arrives.
+	 */
+	m_backfill_day = day;
+	m_client->fetch_observed(m_station_id, day.toString(stamp));
 }
 
 void bbq_wu_feed::attempt_radar(qint64 now_utc) {

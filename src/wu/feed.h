@@ -3,6 +3,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QDate>
 #include <QString>
 #include <QStringList>
 
@@ -215,6 +216,12 @@ private:
 	void attempt_backfill(qint64 now_utc);
 
 	/*
+	 * Say so when a finished day comes back truncated (sec 12.13.1).
+	 * Public so a test can hand it a series without the network.
+	 */
+	void check_day_is_whole(const bbq_series &measured);
+
+	/*
 	 * Pinned stations, fetched sparingly and ONE AT A TIME (sec 14.4).
 	 *
 	 * Sequential is not a performance choice. These answers arrive on
@@ -254,6 +261,9 @@ private:
 	qint64 m_loaded_to = 0;
 
 	qint64 m_backfill_attempted = 0;
+
+	/* Which day the outstanding backfill asked for (sec 12.13.1). */
+	QDate m_backfill_day;
 
 	QStringList m_pinned_queue;
 	QString m_pinned_in_flight;
