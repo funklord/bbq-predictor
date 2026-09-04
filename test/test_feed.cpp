@@ -30,6 +30,7 @@ private slots:
 	void no_band_describing_the_old_place_survives_the_change();
 	void the_correction_is_queued_for_scoring_like_any_forecast();
 	void a_finished_day_that_comes_back_short_says_so();
+	void a_store_that_takes_fewer_rows_than_given_says_so();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -567,6 +568,43 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	 */
 	feed.check_day_is_whole(stale);
 	QCOMPARE(complaints.count(), 1);
+}
+
+void test_feed::a_store_that_takes_fewer_rows_than_given_says_so() {
+	/*
+	 * The store returns how many rows it wrote and every caller
+	 * discarded it, while a failed insert set an error nothing read
+	 * after opening (project.md sec 12.13.2). A write that lost half a
+	 * day looked exactly like one that lost nothing.
+	 */
+	QTemporaryDir directory;
+
+	bbq_wu_feed feed;
+	QSignalSpy complaints(&feed, &bbq_wu_feed::band_failed);
+
+	/*
+	 * With no store open there is nothing to be wrong about, and a
+	 * program that has not been given an archive must not complain on
+	 * every fetch -- sec 12 makes the store optional on purpose.
+	 */
+	feed.note_partial_store(288, 0);
+	QCOMPARE(complaints.count(), 0);
+
+	QVERIFY(feed.open_history(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	/* Agreement is silence. */
+	feed.note_partial_store(288, 288);
+	QCOMPARE(complaints.count(), 0);
+
+	/* Disagreement is not. */
+	feed.note_partial_store(288, 140);
+	QCOMPARE(complaints.count(), 1);
+
+	const QString said = complaints.at(0).at(1).toString();
+	QVERIFY2(said.contains(QStringLiteral("140")) &&
+	                 said.contains(QStringLiteral("288")),
+	         qPrintable(QStringLiteral("the complaint does not say how much "
+	                                   "was lost: %1").arg(said)));
 }
 
 QTEST_GUILESS_MAIN(test_feed)

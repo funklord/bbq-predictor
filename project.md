@@ -4514,6 +4514,37 @@ complain twice.
 defect it guards was found by hand, and this only ensures the next one
 announces itself rather than waiting to be noticed.
 
+#### 12.13.2 The store's own failures were invisible
+
+A sweep for the shape sec 2.6.5.1 and sec 3.21 both had -- something
+that answers successfully while doing less than it should -- found two
+in the store layer, and they compound.
+
+**Every caller discarded the count.** `record_observations` returns how
+many rows it wrote, and all five call sites threw it away. **And
+`last_error` is read only at open.** Every failed statement sets it and
+nothing looks again, so a write that lost half a day looked exactly like
+one that lost nothing: the fetch succeeded, the band was drawn, and the
+rows were simply not there. That is the same silence the stale cache
+hid behind, one layer lower and permanently armed.
+
+Observations are the case where the two numbers MUST agree: every sample
+is an upsert keyed on its own timestamp, so nothing legitimately
+collapses. They are compared now, and a disagreement goes to the status
+line carrying the store's own words.
+
+**Forecasts are deliberately excluded**, and that distinction is the
+whole reason this is a guard rather than an assertion. They are kept one
+per band, per valid time, per lead bucket -- so fewer stored than given
+is the ordinary case there, and a check that treated it as a fault would
+cry on every fetch until somebody switched it off.
+
+**An empty store is excluded too.** Sec 12 makes the archive optional --
+a feed whose store will not open still draws -- so a program that has
+not been given one must not complain about it on every response. The
+test asserts that case first, because a guard that fires when nothing is
+wrong gets removed, and then the real one goes with it.
+
 ### 12.14 A sensor that never moves is not a measurement
 
 With observations finally arriving (sec 12.13), the first real

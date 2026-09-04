@@ -287,7 +287,9 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 			if (!whose.isEmpty()) {
 				bbq_series measured = read_for(product, document);
 				if (!measured.is_empty()) {
-					m_history.record_observations(whose, measured);
+					note_partial_store(
+					        int(measured.size()),
+					        m_history.record_observations(whose, measured));
 				}
 			}
 
@@ -317,7 +319,9 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		 */
 		if (was_observed) {
 			check_day_is_whole(series);
-			m_history.record_observations(m_station_id, series);
+			note_partial_store(
+			        int(series.size()),
+			        m_history.record_observations(m_station_id, series));
 			m_observed_fetched_utc = QDateTime::currentSecsSinceEpoch();
 		} else if (product != bbq_wu_product::current_station &&
 		           product != bbq_wu_product::current_point) {
@@ -845,6 +849,34 @@ void bbq_wu_feed::dispatch_pinned() {
 	const QString stamp = QStringLiteral("yyyyMMdd");
 	const QString yesterday = QDate::currentDate().addDays(-1).toString(stamp);
 	m_client->fetch_observed_pinned(m_pinned_in_flight, yesterday);
+}
+
+void bbq_wu_feed::note_partial_store(int given, int stored) {
+	/*
+	 * THE STORE'S OWN FAILURES WERE INVISIBLE (sec 12.13.2).
+	 *
+	 * `record_observations` returns how many rows it wrote and every
+	 * caller discarded it, while a failed insert set `last_error` that
+	 * nothing read after the store was opened. So a write that lost
+	 * half a day looked exactly like one that lost nothing: the fetch
+	 * succeeded, the band was drawn, and the rows were simply not
+	 * there.
+	 *
+	 * Observations are the case where the two numbers MUST agree --
+	 * every sample is an upsert keyed on its own timestamp, so nothing
+	 * legitimately collapses. Forecasts are deliberately kept one per
+	 * band and bucket, so fewer stored than given is ordinary there and
+	 * this is not applied to them.
+	 */
+	if (!m_history.is_open() || stored == given) {
+		return;
+	}
+
+	emit band_failed(QStringLiteral("observed"),
+	                 tr("the store took %1 of %2 observations: %3")
+	                         .arg(stored)
+	                         .arg(given)
+	                         .arg(m_history.last_error()));
 }
 
 void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {

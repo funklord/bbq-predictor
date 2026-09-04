@@ -222,6 +222,12 @@ private:
 	void check_day_is_whole(const bbq_series &measured);
 
 	/*
+	 * Say so when the store wrote fewer rows than it was handed
+	 * (sec 12.13.2). Public so a test can pose the mismatch directly.
+	 */
+	void note_partial_store(int given, int stored);
+
+	/*
 	 * Pinned stations, fetched sparingly and ONE AT A TIME (sec 14.4).
 	 *
 	 * Sequential is not a performance choice. These answers arrive on
