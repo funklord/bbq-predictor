@@ -22,6 +22,7 @@ private slots:
 	void mobile_stacks_its_controls_and_makes_them_hittable();
 	void mobile_draws_heavier_for_an_arm_s_length();
 	void desktop_is_the_untouched_default();
+	void the_plot_runs_to_the_edge_and_the_controls_do_not();
 };
 
 void test_layout::a_preference_beats_the_device() {
@@ -113,6 +114,39 @@ void test_layout::desktop_is_the_untouched_default() {
 	QCOMPARE(desktop.tick_step_s, defaults.tick_step_s);
 	QCOMPARE(desktop.window_after_s, defaults.window_after_s);
 	QCOMPARE(desktop.stack_controls, defaults.stack_controls);
+}
+
+void test_layout::the_plot_runs_to_the_edge_and_the_controls_do_not() {
+	/*
+	 * TWO DIFFERENT QUESTIONS THAT LOOKED LIKE ONE (project.md sec 16.7).
+	 *
+	 * On mobile the root layout runs edge to edge, and that is right for
+	 * the plot: a margin either side is lost plot rather than breathing
+	 * room, which sec 10.4 argued and this project has measured. The
+	 * controls inherited it and they are not plot -- a label starting at
+	 * column zero has its first glyph shaved by the screen edge, which
+	 * is how "Station:" came to read as "tation:" on a device.
+	 *
+	 * Asserted as the RELATIONSHIP rather than as either number, so it
+	 * survives both being retuned: what must hold is that the controls
+	 * are inset where the root layout is not.
+	 */
+	const bbq_metrics mobile = bbq_metrics_for(bbq_layout::mobile);
+	const bbq_metrics desktop = bbq_metrics_for(bbq_layout::desktop);
+
+	QVERIFY2(mobile.stack_controls,
+	         "the mobile layout has stopped being the edge-to-edge one");
+	QVERIFY2(mobile.control_margin > 0,
+	         "the controls sit flush against the screen edge again");
+
+	/*
+	 * And the desktop must NOT gain one: there the root layout supplies
+	 * the margin already, so a second would be a double indent nobody
+	 * asked for.
+	 */
+	QVERIFY2(!desktop.stack_controls,
+	         "the desktop layout has become the stacked one");
+	QCOMPARE(desktop.control_margin, 0);
 }
 
 QTEST_APPLESS_MAIN(test_layout)

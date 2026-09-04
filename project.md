@@ -7097,3 +7097,68 @@ should move into a service, is a decision rather than an oversight --
 and it is the same question sec 15.5 asks about the server, from the
 other end: if a machine somewhere is fetching around the clock, the
 phone's widget wants ITS picture rather than one of its own.
+
+### 16.7 The controls were flush against the screen edge
+
+Found in a screenshot taken to show the widget, on the Note 9 rather
+than the Fold: `Station:` read as `tation:` and the `Pin` box was cut.
+
+**The first explanation was mine and was wrong.** The widget render
+resizes the graph to 1000 logical pixels on a screen about 411 wide,
+which is exactly the shape of fault that would clip a window's left
+edge. So it was tested rather than assumed: a build with the resize
+removed, installed, photographed. **The clipping was identical.** The
+resize was restored, having been cleared rather than merely suspected.
+
+**The second reading was wrong too, and in the other direction.** From
+the full-resolution screenshot the content looked shifted left by some
+fourteen pixels. Measured -- first non-background column per row -- it
+was 2. Nothing was off-screen: the label simply started at the edge and
+its first glyph was shaved by a pixel or so. **A downscaled screenshot
+read by eye had produced a fourteen-pixel shift that did not exist.**
+
+**The real fault is two questions that looked like one.**
+`apply_safe_area` zeroes the horizontal margins on mobile, and sec 10.4
+argues that correctly: a margin either side of the plot is lost plot
+rather than breathing room. The CONTROLS sit in the same root layout and
+inherited it, and a label is not plot -- there is nothing to gain by
+running it to the edge and a glyph to lose.
+
+So `bbq_metrics` carries `control_margin`, 8 on mobile and 0 on the
+desktop where the root layout already supplies one. The plot still runs
+to the edge.
+
+**Asserted as a relationship rather than as either number**, so it
+survives both being retuned: the controls must be inset where the root
+layout is not. Watched failing by setting the mobile margin back to 0.
+
+Measured on the device, same rows, same method before and after:
+
+    controls   first ink 2  ->  8      (and the glyph itself 21)
+    graph axis first ink 0  ->  0      (still edge to edge)
+
+**And that scalar was measuring the wrong thing**, which the pictures
+showed and the number did not: 8 is the scroll area's own border, not
+the letter. The text moved to about 21, which is the 8 logical pixels
+this device's 2.625 ratio predicts. **The measurement agreed with the
+fix for the wrong reason**, and only putting the two crops side by side
+said so.
+
+### 16.7.1 The widget commit broke the test build
+
+`aab8b28` added `widget_picture.cpp` to the application's `.pro` and not
+to `test_window.pro`, which links `main_window.cpp` itself. The suite
+did not build, and it was pushed that way.
+
+**It was pushed because the suite was not run.** `make` and `make style`
+both passed and both were run; `make test` was not. The commit before it
+had run the full suite, and the habit lapsed on the change that most
+needed it -- a new source file is exactly the edit that reaches consumers
+nobody is thinking about.
+
+Nothing detected this but the next build. The `.pro` files each name
+their sources, so a file added to one is added to no other, and there is
+no gate that would have said so. Recorded rather than fixed with
+tooling: `fmake` reads a tree and works out what links against what,
+which is the shape of thing that would remove the class, and adopting it
+is a decision rather than a patch.

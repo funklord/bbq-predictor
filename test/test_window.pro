@@ -15,6 +15,7 @@ SOURCES += test_window.cpp \
 	$$PWD/../src/ui/locator.cpp \
 	$$PWD/../src/ui/main_window.cpp \
 	$$PWD/../src/ui/theme.cpp \
+	$$PWD/../src/ui/widget_picture.cpp \
 	$$PWD/../src/wu/client.cpp \
 	$$PWD/../src/wu/feed.cpp \
 	$$PWD/../src/wu/key_source.cpp
@@ -28,6 +29,7 @@ HEADERS += \
 	$$PWD/../src/ui/locator.h \
 	$$PWD/../src/ui/main_window.h \
 	$$PWD/../src/ui/theme.h \
+	$$PWD/../src/ui/widget_picture.h \
 	$$PWD/../src/wu/client.h \
 	$$PWD/../src/wu/feed.h \
 	$$PWD/../src/wu/key_source.h

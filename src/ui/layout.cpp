@@ -83,5 +83,11 @@ bbq_metrics bbq_metrics_for(bbq_layout layout) {
 	metrics.control_height = 44;
 	metrics.stack_controls = true;
 
+	/*
+	 * Enough that a glyph is not shaved, and no more: every pixel here
+	 * is taken from a control on a screen that has none to spare.
+	 */
+	metrics.control_margin = 8;
+
 	return metrics;
 }

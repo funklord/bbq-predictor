@@ -59,6 +59,19 @@ struct bbq_metrics {
 	qint64 window_after_s = 21 * 3600;
 
 	/* Controls. */
+	/*
+	 * Horizontal breathing room for the CONTROLS, which is not the same
+	 * question as the plot's margins above (project.md sec 16.7).
+	 *
+	 * On mobile the root layout runs edge to edge, because a margin
+	 * either side of the graph is lost plot rather than breathing room.
+	 * The controls are not plot: a label starting at column zero has
+	 * its first glyph shaved by the screen edge, which is how "Station:"
+	 * came to read as "tation:". Zero on the desktop, where the root
+	 * layout supplies the margin already.
+	 */
+	int control_margin = 0;
+
 	int control_height = 0;
 	bool stack_controls = false;
 	bool show_station_field = true;

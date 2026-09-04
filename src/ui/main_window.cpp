@@ -767,7 +767,8 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 		 * down the screen instead.
 		 */
 		QGridLayout *grid = new QGridLayout(m_controls);
-		grid->setContentsMargins(0, 0, 0, 0);
+		grid->setContentsMargins(m_metrics.control_margin, 0,
+		                         m_metrics.control_margin, 0);
 		grid->setSpacing(8);
 
 		/*
@@ -825,7 +826,8 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 		grid->addWidget(m_freshness_label, row, 0, 1, 2);
 	} else {
 		QHBoxLayout *row = new QHBoxLayout(m_controls);
-		row->setContentsMargins(0, 0, 0, 0);
+		row->setContentsMargins(m_metrics.control_margin, 0,
+		                        m_metrics.control_margin, 0);
 		row->setSpacing(6);
 
 		for (QWidget *item : m_control_items) {
