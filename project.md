@@ -7162,3 +7162,65 @@ no gate that would have said so. Recorded rather than fixed with
 tooling: `fmake` reads a tree and works out what links against what,
 which is the shape of thing that would remove the class, and adopting it
 is a decision rather than a patch.
+
+### 16.8 The database file was not the archive
+
+Found while reading a screenshot for something else. On the Note 9,
+`history.sqlite` was **4096 bytes** -- one page -- and
+`history.sqlite-wal` was **3.9 MB**. Every observation, every pending
+forecast and all the verification lived in the log.
+
+**Nothing was at risk and nothing was wrong.** WAL is doing what it is
+for, SQLite reads the pair as one, and the data is durable. The fault is
+not in the store; it is in what everything ELSE assumes.
+
+**A copy of one file is silently empty rather than obviously broken.** A
+backup, a file manager, a pull off a device, `adb exec-out ... cat
+files/history.sqlite` -- each takes the database and believes it has the
+archive. It opens, the schema is there, the tables are there, and every
+one of them has no rows. That is the worst way for a copy to fail: an
+empty archive and a corrupt file look nothing alike, and only the second
+gets investigated.
+
+It had already happened here. Pulling this archive to diagnose the pin
+question earlier in the session worked only because both files were
+taken deliberately.
+
+**So the log is folded back in when the applet stops being looked at**,
+and the store's destructor does it too. `TRUNCATE` rather than
+`PASSIVE`: passive folds what it can and leaves the log at whatever size
+it had reached, so the database is complete while the file beside it
+still looks like the real archive. Zero length is unambiguous to
+whoever finds it.
+
+**The application-state hook is the one that matters, not the
+destructor.** On a desktop the destructor is the moment it happens. On
+Android a destructor is usually never reached -- the process is killed
+rather than asked to leave -- so a checkpoint only on exit would run
+almost never on the platform where the archive is hardest to get at.
+`Inactive` rather than `Suspended`, because `Suspended` is not
+guaranteed to arrive before the process goes.
+
+**The test asserts the hazard rather than the mechanism.** It writes 200
+observations, checkpoints, copies the database WITHOUT its log -- the
+mistake being guarded against, performed deliberately -- and opens the
+copy expecting 200 rows. Asserting that a pragma was issued would pass
+against a pragma that did nothing.
+
+Watched failing: with the checkpoint stubbed to return true and do
+nothing, the copy opens clean and reports zero.
+
+Measured on the device, one session, sizes in bytes:
+
+    before, old build          4096 db    3930512 wal
+    running, new build       319488 db    4120032 wal
+    after HOME               319488 db          0 wal
+
+And then the thing the whole section is about -- the database pulled by
+itself, no log beside it:
+
+    ISTOCK877   880 observations, newest 2026-09-04 02:04:27
+    verification rows 12
+    pending forecasts 1861
+
+Before this it would have been an empty 4 KB file.

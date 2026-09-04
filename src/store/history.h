@@ -157,6 +157,26 @@ public:
 	 * preferences and this is measurement (sec 12.2).
 	 */
 	bool open(const QString &path = QString());
+
+	/*
+	 * Fold the write-ahead log back into the database file.
+	 *
+	 * WAL means a committed row can live entirely in `history.sqlite-wal`
+	 * with the main file holding almost nothing -- measured on a phone at
+	 * 4096 bytes of database against 3.9 MB of log, every observation in
+	 * the log. SQLite is perfectly happy with that and reads the pair as
+	 * one, so nothing is at risk while both files stay together.
+	 *
+	 * What it costs is that the database file ALONE is not the archive,
+	 * and everything that copies one file thinks it is: a backup, a file
+	 * manager, a pull off a device. Such a copy is silently empty rather
+	 * than obviously broken, which is the worst way for it to fail
+	 * (project.md sec 16.8).
+	 *
+	 * So this runs when the application stops being looked at, leaving
+	 * the file self-contained between sessions.
+	 */
+	bool checkpoint();
 	bool is_open() const { return m_open; }
 	QString location() const { return m_path; }
 	QString last_error() const { return m_last_error; }

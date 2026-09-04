@@ -2,6 +2,8 @@
 
 #include "ui/widget_picture.h"
 
+#include <QGuiApplication>
+
 #ifdef Q_OS_ANDROID
 #include <QJniObject>
 #endif
@@ -451,6 +453,28 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 
 	/* The saved choice, applied before anything is shown. */
 	apply_theme(bbq_theme_resolve(bbq_settings::theme()));
+
+	/*
+	 * FOLD THE LOG BACK IN WHEN THE APPLET STOPS BEING LOOKED AT
+	 * (project.md sec 16.8).
+	 *
+	 * The store's destructor checkpoints too, and on a desktop that is
+	 * the moment it happens. On Android a destructor is usually never
+	 * reached -- the process is killed rather than asked to leave -- so
+	 * a checkpoint that ran only on exit would run almost never on the
+	 * platform where the archive is hardest to get at.
+	 *
+	 * Inactive rather than Suspended, because Suspended is not
+	 * guaranteed to arrive before the process goes: this fires when the
+	 * applet loses focus, which is early enough to have happened.
+	 */
+	connect(qApp, &QGuiApplication::applicationStateChanged, this,
+	        [this](Qt::ApplicationState state) {
+		if (state == Qt::ApplicationInactive ||
+		    state == Qt::ApplicationSuspended) {
+			m_feed->history().checkpoint();
+		}
+	});
 
 	connect(m_feed, &bbq_wu_feed::updated, this, [this]() {
 		m_graph->set_composite(m_feed->composite());

@@ -175,8 +175,36 @@ bbq_history::bbq_history() {
 	m_connection = QStringLiteral("bbq_history_%1").arg(++serial);
 }
 
+bool bbq_history::checkpoint() {
+	if (!m_open) {
+		return false;
+	}
+
+	/*
+	 * TRUNCATE rather than PASSIVE, and the difference is the whole
+	 * point: PASSIVE folds what it can and leaves the log file at
+	 * whatever size it had reached, so a copy of the database alone is
+	 * complete while the log beside it still looks like the real
+	 * archive. TRUNCATE takes it to zero, and a zero-length log is
+	 * unambiguous to whoever finds it.
+	 *
+	 * It can be refused -- a reader holding the file will do it -- and
+	 * that is not an error worth reporting to anybody: the next attempt
+	 * gets it, and nothing has been lost either way.
+	 */
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	return query.exec(QStringLiteral("PRAGMA wal_checkpoint(TRUNCATE)"));
+}
+
 bbq_history::~bbq_history() {
 	if (m_open) {
+		/*
+		 * Before the close, because after it there is no connection to
+		 * ask. A destructor is the last chance on a desktop; on Android
+		 * it is usually not reached at all, which is why the window
+		 * also checkpoints when it stops being looked at.
+		 */
+		checkpoint();
 		QSqlDatabase::database(m_connection).close();
 		m_open = false;
 	}

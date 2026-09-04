@@ -1,4 +1,5 @@
 #include <QDir>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -24,6 +25,7 @@ private slots:
 	void verifying_computes_the_standard_scores_and_empties_the_queue();
 	void bias_can_be_zero_while_the_forecast_is_useless();
 	void an_unverifiable_forecast_is_given_up_on();
+	void the_database_file_alone_carries_the_archive();
 	void a_chance_forecast_is_scored_by_occurrence_not_by_error();
 	void a_brier_score_is_read_against_its_baseline();
 	void a_stuck_sensor_does_not_score_a_forecast();
@@ -734,6 +736,63 @@ void test_history::a_dry_spell_still_scores_the_verdict() {
 	QVERIFY2(verdict_rows > 0,
 	         "a dry day left the verdict unscored, which is the weather it "
 	         "matters most in");
+}
+
+void test_history::the_database_file_alone_carries_the_archive() {
+	/*
+	 * THE HAZARD, NOT THE MECHANISM (project.md sec 16.8).
+	 *
+	 * Under WAL a committed row can live entirely in the -wal file with
+	 * the database holding almost nothing: measured on a phone at 4096
+	 * bytes of database against 3.9 MB of log. SQLite reads the pair as
+	 * one and nothing is at risk while both stay together.
+	 *
+	 * What breaks is everything that copies ONE file and believes it has
+	 * the archive -- a backup, a file manager, a pull off a device. The
+	 * copy is silently EMPTY rather than obviously broken, which is the
+	 * worst way for it to fail and the reason this asserts on a copy
+	 * rather than on a pragma having been issued.
+	 *
+	 * Copying the database without its log is precisely the mistake
+	 * being guarded against, so the test performs it deliberately.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	const QString live = scratch.filePath(QStringLiteral("live.sqlite"));
+
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < 200; ++i) {
+		bbq_sample sample;
+		sample.start_utc = 1756000000 + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 15.0 + i;
+		samples.push_back(sample);
+	}
+
+	bbq_series series(bbq_band::observed, QStringLiteral("test"));
+	series.set_samples(samples);
+
+	{
+		bbq_history store;
+		QVERIFY(store.open(live));
+		QCOMPARE(store.record_observations(QStringLiteral("ITEST1"), series),
+		         200);
+
+		QVERIFY2(store.checkpoint(), "the checkpoint was refused");
+
+		/* Copied while the store is still OPEN, as a backup would be. */
+		QVERIFY(QFile::copy(live, scratch.filePath(QStringLiteral("copy.sqlite"))));
+	}
+
+	/*
+	 * The copy is opened with no -wal beside it. Without the checkpoint
+	 * this finds an empty archive and reports it as one, which is
+	 * exactly how the real mistake presents.
+	 */
+	bbq_history copied;
+	QVERIFY(copied.open(scratch.filePath(QStringLiteral("copy.sqlite"))));
+	QCOMPARE(copied.observation_count(QStringLiteral("ITEST1")), 200);
 }
 
 QTEST_GUILESS_MAIN(test_history)
