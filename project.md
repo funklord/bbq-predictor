@@ -441,6 +441,16 @@ and should stay small:
   are shared. Only the transport differs, which is the only thing that
   was wrong.
 
+**The two Android fixes are for two different faults, and that was
+checked rather than assumed.** Sec 2.6.5.1 found that WU serves a stale
+body to gzip-encoded requests, which raises an obvious doubt about this
+entry: if the 404 was also the compressed variant, the JNI path would be
+a workaround for a fault that no longer exists. It is not. Measured
+three times in a row, the key page answers 200 to identity AND to gzip,
+while the app was refused repeatedly -- so the encoding fix does not
+supersede this one, and removing it would return the phone to no key at
+all.
+
 **A probe of mine was wrong twice on the way**, in the same way both
 times. The Java class was reported absent because `classes.dex` was
 searched and this is a multidex build -- it is in `classes4.dex`. And
