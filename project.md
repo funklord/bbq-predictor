@@ -6331,13 +6331,10 @@ holder's, and a format guessed at now is one somebody has to keep
 answering for. The fetching half is useful without it and is what sec
 15.1 actually complained about.
 
-**The units are unverified by systemd.** This machine has no systemd at
-all -- pid 1 is `init` -- so `systemd-analyze verify` could not be run,
-and saying the units are correct would be saying that a check which never
-ran had passed. What WAS verified is the part most likely to be wrong and
-the part a syntax check would not have caught anyway: the exact command
-line the unit invokes, under the same platform plugin, into a fresh state
-directory. It fetched six bands and wrote the archive.
+**The units are verified, and sec 15.11 says how far.** This machine has
+no systemd -- pid 1 is `init` -- which for a while meant
+`systemd-analyze verify` could not be run at all. It can: the check needs
+the systemd PACKAGE, not systemd running, and a container supplies that.
 
 ### 15.6.2 A quiet station is not a failed run
 
@@ -6870,3 +6867,60 @@ user-facing does: 0 every band, 3 partial but now is covered, 1 nothing
 usable stored, 2 configuration. Those exist because the timer needs to
 tell a quiet station from an outage (sec 15.7.1), and a person reading
 `systemctl status` needs the same distinction.
+
+## 15.11 The package installed, in a container, at last
+
+**The gap this closes was named honestly for a day and then left open:**
+the package built clean and linted clean and had never been installed
+anywhere, so every claim about it rested on reading its contents. What
+finally moved was noticing that `systemd-analyze verify` needs the
+systemd PACKAGE and not systemd running -- and this machine has docker,
+with a `debian:trixie` image already local, even though the account is
+not in the docker group and `sg docker` is the way in.
+
+Measured in a throwaway container, package installed with its real
+dependencies:
+
+    dpkg -s                     Status: install ok installed, 0.1.0-1
+    systemd-analyze verify      exit 0, no complaints
+    timers.target.wants/        bbq-predictor-fetch.timer ->
+                                /usr/lib/systemd/system/...
+    /etc/default/bbq-predictor  present, BBQ_STATION commented out
+    bbq-predictor --version     bbq-predictor 0.1.0, copyright line
+
+Four things that were argued for and are now shown:
+
+- **The dependencies resolve**, `libqt6sql6-sqlite` included -- the one
+  `dpkg-shlibdeps` could not see and that the archive cannot open
+  without.
+- **The units are valid.** `ExecCondition`, `SuccessExitStatus=3`,
+  `DynamicUser`, `StateDirectory`, `RestrictAddressFamilies` and
+  `SystemCallFilter` are all accepted rather than merely plausible.
+- **The timer is enabled and the SERVICE is not**, which is what
+  carrying no `[Install]` section was for. The symlink resolves to
+  `/usr/lib/systemd/system`, so the aliased-location fix holds through
+  installation and not only in the archive listing.
+- **The installed binary runs.**
+
+**The bare-container run first reported one complaint** --
+`/usr/bin/bbq-predictor is not executable: No such file or directory`,
+the units having been mounted without the package. That is the verifier
+working, and it is also the reason the run was repeated with the package
+installed: **an absence of other complaints means nothing while the
+first one is still outstanding**, since a checker that stops early looks
+exactly like a checker that found nothing else.
+
+**The `ExecCondition` was exercised directly**, extracted from the unit
+rather than retyped, so what ran is what ships:
+
+    BBQ_STATION unset  ->  exit 78, and it says which file to set it in
+    BBQ_STATION set    ->  exit 0
+
+**What is still not shown, and will not be from here.** systemd never
+executed the unit: skipping on a non-zero `ExecCondition` is documented
+behaviour and the pieces are each verified, but the two have not been
+seen to meet. Proving it needs systemd as pid 1, which in docker needs a
+privileged container, and that is not a thing to start unasked for a
+diagnostic. **The honest state is that every part is checked and the
+whole has not run**, which is better than the previous state and is not
+the same as installed and working on a real machine.
