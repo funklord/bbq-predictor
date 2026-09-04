@@ -1,0 +1,27 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+# PREFIX is /usr/local by default, which is right for a hand-built copy
+# and wrong for a package.
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/bbq-predictor PREFIX=/usr
+
+# The service is oneshot and triggered by the timer, so it carries no
+# [Install] section and is never started on install -- an install-time
+# start would fetch before anybody had named a station. The timer is what
+# gets enabled and started, and it is what makes the archive advance.
+override_dh_installsystemd:
+	dh_installsystemd --no-start bbq-predictor-fetch.service
+	dh_installsystemd --restart-after-upgrade bbq-predictor-fetch.timer
+
+# Both units carry Documentation=file:///usr/share/doc/bbq-predictor/
+# project.md, and dh_compress would gzip anything over 4k in that
+# directory -- leaving the units citing a path that does not exist. A
+# reference that does not resolve is worse than none, so the design
+# record stays readable at the name the units give.
+override_dh_compress:
+	dh_compress -X.md

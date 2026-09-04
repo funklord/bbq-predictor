@@ -6237,3 +6237,169 @@ Also workspace-wide rather than this project's: `Makefile:328` uses
 `test -d .git` as the "is this a git repository" test, which is false in a
 worktree and in a submodule checkout. Sixteen of seventeen trees carry it;
 recorded in claude-guidelines' decision list.
+
+### 15.6 The fetching half, packaged and on a timer
+
+**Built 2026-09-04 at the copyright holder's request**, and it is the
+first slice of sec 15 rather than the whole of it: the server FETCHES
+and SCORES on its own clock. It does not publish. Sec 15.5's format
+questions are unanswered and a wire contract guessed at now would be one
+somebody has to keep.
+
+That slice is worth having on its own, because it is the one that fixes
+sec 15.1's real complaint. A phone only fetches while somebody is
+looking at it, so the archive advances in bursts and verification cannot
+accumulate for a station nobody opens. A timer on a machine that stays
+up ends that, and everything downstream -- the correction, the verdict,
+the record line -- has been waiting on nothing else.
+
+**It is the existing binary, not a new program.** `--fetch-once` already
+fetches every band, archives what arrives, verifies what can be verified
+and queues the correction, because those live in the feed rather than in
+the window. A `oneshot` service running it under `QT_QPA_PLATFORM=
+offscreen` is the whole of the daemon, and there is no second
+implementation to keep in step.
+
+Details that are decisions rather than mechanics:
+
+- **Five minutes**, matching how often a station reports. Asking more
+  often spends somebody else's quota for nothing (sec 2.5), and
+  `RandomizedDelaySec` spreads machines that run this so they do not all
+  ask at the same second.
+- **It refuses to run without a station.** `BBQ_STATION` is unset in the
+  shipped `/etc/default/bbq-predictor`, and the service exits 78
+  (`EX_CONFIG`) saying so rather than fetching for a station nobody
+  named.
+- **`DynamicUser` and `StateDirectory`**, so the archive lives in
+  `/var/lib/bbq-predictor` owned by an account that exists only while
+  the service runs. It talks to three weather APIs and writes one file;
+  the unit says so in `RestrictAddressFamilies` and `ProtectSystem`.
+- **The licence is stated as UNDECIDED**, following raidcfgd's wording,
+  which is a statement of fact rather than a grant. `debian/copyright`
+  also records that the key is scraped against WU's terms -- a
+  distribution question rather than a licensing one, but one that lands
+  on whoever decides to publish a package, at the same moment.
+
+**Packaging found a defect nothing else could.** `make install` had been
+broken since the Android application id was introduced: it installed
+`packaging/$(APP_ID).desktop`, and `APP_ID` became
+`se.vibes.bbq_predictor` -- a legal Java package name, with an
+underscore -- while the desktop entry and icon have always been
+`se.vibes.bbq-predictor`. The target had looked for a file that never
+existed, and nothing noticed because nothing in the build or the gates
+installs anything. `DESKTOP_ID` is separate now.
+
+### 15.6.1 What the package installs, and what it deliberately does not
+
+`make deb` drives `dpkg-buildpackage` against a `dh` rules file, which is
+what every sibling that packages does. The build runs the whole suite on
+the way through, because `dh_auto_test` calls `make test` -- so a package
+is not produced from a tree whose tests fail. That is why the build takes
+longer than ten minutes and has to be started in the background.
+
+Four defects were found by packaging that nothing else could have found,
+and all four are the same shape: **something that is true of a hand-built
+copy and false of an installed one.**
+
+- **The environment file landed as `/etc/default/bbq-predictor.default`.**
+  `dh_install` copies a basename verbatim; it does not rename. The source
+  is `packaging/default/bbq-predictor` now, named for where it goes.
+- **`libqt6sql6-sqlite` was absent from `Depends`.** `dpkg-shlibdeps`
+  reads ELF headers, and a Qt SQL driver is opened at run time by name --
+  so it appears in no header and was invisible. The archive could not
+  have been opened on a machine that happened not to have it, which is
+  the whole of what the timer does. It is named explicitly now, with the
+  reason beside it, because the next person to read that line will
+  otherwise wonder why one dependency is hand-written.
+- **Both units cited a file the package did not install.**
+  `Documentation=file:///usr/share/doc/bbq-predictor/project.md` pointed
+  at nothing. `debian/bbq-predictor.docs` installs it, and
+  `dh_compress -X.md` keeps it readable at the name the units give --
+  gzipping it would have left the citation dangling by a different route.
+- **`make install` had been broken since the Android application id
+  landed.** It installed `packaging/$(APP_ID).desktop`, and `APP_ID`
+  became `se.vibes.bbq_predictor` -- a legal Java package name, with an
+  underscore -- while the desktop entry and icon have always been
+  `se.vibes.bbq-predictor`. The target looked for a file that never
+  existed, and nothing noticed because nothing in the build or the gates
+  installs anything. `DESKTOP_ID` is separate now.
+
+**What is not installed is the publishing half**, and that is deliberate
+rather than unfinished-by-accident. Sec 15.5's questions -- the wire
+format, the retention, whether clients keep their own archives -- are the
+holder's, and a format guessed at now is one somebody has to keep
+answering for. The fetching half is useful without it and is what sec
+15.1 actually complained about.
+
+**The units are unverified by systemd.** This machine has no systemd at
+all -- pid 1 is `init` -- so `systemd-analyze verify` could not be run,
+and saying the units are correct would be saying that a check which never
+ran had passed. What WAS verified is the part most likely to be wrong and
+the part a syntax check would not have caught anyway: the exact command
+line the unit invokes, under the same platform plugin, into a fresh state
+directory. It fetched six bands and wrote the archive.
+
+### 15.6.2 A quiet station is not a failed run
+
+Running that command line found a defect in the program rather than in
+the packaging, and it is one only a timer could have surfaced.
+
+`--fetch-once` returned 1 for any failed band. A five-minute timer would
+therefore have marked itself failed every time a station went quiet for
+an hour -- which sec 12.13.1 establishes is ordinary, not exceptional --
+while the other six bands answered, their rows landed in the archive, and
+verification accumulated exactly as intended. The exit code called that a
+failure. It is the daemon working.
+
+The tempting fix was `SuccessExitStatus=1` in the unit, and it is the
+wrong one: a total outage also returns 1, so the unit would have
+forgiven the case it exists to report. **A pass that includes the failure
+is worse than no check**, and it would have been quoted afterwards as
+evidence the fetcher was healthy.
+
+So the program says which. **Coverage of now is the test**, rather than a
+count of what failed, because it is the question the archive cares about:
+something described this moment and was written down.
+
+    0  every band answered
+    3  some band failed, but the composite still covers now
+    1  nothing covers now -- this run stored nothing usable
+    2  a configuration error
+
+The unit forgives 3 by name. Both branches were watched rather than
+reasoned about: a quiet `ISUNDB5` returned 3 with the archive advanced,
+and the same command under `unshare -rn` -- no network at all -- returned
+1 saying "nothing covers now". Without the second run, `SuccessExitStatus`
+would have been a line nobody had seen fail.
+
+### 15.6.3 Settled, and what is still the holder's
+
+Settled while building it:
+
+- **Five minutes**, matching how often a station reports. Asking more
+  often spends somebody else's quota for nothing (sec 2.5), and
+  `RandomizedDelaySec` keeps every machine running this from asking at
+  the same second.
+- **It skips rather than fails when unconfigured.** `BBQ_STATION` is
+  unset in the shipped `/etc/default/bbq-predictor`, and the check is an
+  `ExecCondition`, not a test inside `ExecStart`: a non-zero
+  `ExecCondition` SKIPS the run and says why, where the same exit from
+  `ExecStart` marks the unit failed. Somebody who installed the package
+  for the applet alone would otherwise collect a failed unit every five
+  minutes for ever.
+- **The service carries no `[Install]` section.** The timer is what
+  triggers it, and a service that can also be enabled on its own is a
+  second way to run it that nobody asked for.
+- **`DynamicUser` and `StateDirectory`**, so the archive lives in
+  `/var/lib/bbq-predictor` owned by an account that exists only while the
+  service runs.
+
+Open, and not decided here:
+
+- **The archive the timer builds is separate from the applet's.** A
+  desktop user running the applet has one in their home directory and the
+  service has another in `/var/lib`. Whether they should be the same
+  store -- and if so which way the sharing goes -- is sec 15.5's question
+  arriving early, and is the holder's.
+- **`Standards-Version` is 4.6.2** and the current standard is newer.
+  Not raised as a finding; recorded so nobody re-derives it.

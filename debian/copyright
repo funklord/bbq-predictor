@@ -1,0 +1,22 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: bbq-predictor
+
+Files: *
+Copyright: 2026 Nabeel Sowan <nabeel@vibes.se>
+License: UNDECIDED
+ No licence is declared for this source tree, and that is deliberate rather
+ than an oversight: the copyright holder is developing this unlicensed until
+ it is complete, and will settle the terms then. Under copyright law the
+ default in that situation is that no rights are granted, so packages built
+ from this tree are for local use and are not distributable as they stand.
+ .
+ Do not add any licence here to satisfy a lint warning, and do not copy one
+ across from a sibling project. The wording of this paragraph follows
+ raidcfgd, which reached the same position first.
+ .
+ One thing is worth knowing about the eventual choice rather than left to be
+ rediscovered: this program obtains a Weather Underground API key by
+ scraping it out of their own page, which their terms do not permit. That is
+ recorded in project.md sec 2.2 with the reasoning, and it is a distribution
+ question rather than a licensing one -- but it lands on whoever decides to
+ publish a package, at the same moment.

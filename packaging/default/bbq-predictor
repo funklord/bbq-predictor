@@ -1,0 +1,8 @@
+# Configuration for the bbq-predictor fetch timer.
+#
+# BBQ_STATION is required: the service refuses to run without it rather
+# than fetching for a station nobody named. It is a Weather Underground
+# personal weather station id -- the applet's station list shows the
+# ones near you, and its "Find..." button searches elsewhere.
+#
+#BBQ_STATION=ISTOCK877

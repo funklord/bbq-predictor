@@ -1,0 +1,3 @@
+packaging/systemd/bbq-predictor-fetch.service lib/systemd/system
+packaging/systemd/bbq-predictor-fetch.timer   lib/systemd/system
+packaging/default/bbq-predictor               etc/default

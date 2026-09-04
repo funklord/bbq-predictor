@@ -1,0 +1,31 @@
+Source: bbq-predictor
+Section: utils
+Priority: optional
+Maintainer: Nabeel Sowan <nabeel@vibes.se>
+Build-Depends: debhelper-compat (= 13),
+               qt6-base-dev,
+               qt6-positioning-dev,
+               libgl-dev,
+               pkg-config
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: bbq-predictor
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+# The SQLite driver is loaded at run time, so it appears in no ELF
+# header and dpkg-shlibdeps cannot see it. Without this the archive
+# cannot be opened at all, which is the whole of what the timer does.
+         libqt6sql6-sqlite
+Description: weather applet and forecast-verification archive
+ A Qt Widgets applet that draws high-resolution temperature and rain
+ graphs from several providers at once, and answers whether an afternoon
+ is worth lighting a fire for.
+ .
+ It keeps a permanent archive of what was observed and what was
+ forecast, scores each provider against the measurements as they arrive,
+ and corrects later forecasts by the bias it has measured. The package
+ also installs a systemd timer that fetches on its own clock, so the
+ archive advances and verification accumulates without anybody opening
+ the window.

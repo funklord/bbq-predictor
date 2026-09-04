@@ -414,10 +414,38 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 		error << QStringLiteral("fetch-once: %1 band(s) failed\n").arg(failures);
 	}
 
-	if (failures > 0 || timed_out) {
-		return 1;
+	if (failures == 0 && !timed_out) {
+		out << "fetch-once: every band answered\n";
+		return 0;
 	}
 
-	out << "fetch-once: every band answered\n";
-	return 0;
+	/*
+	 * PARTIAL IS NOT FAILURE, AND THE TIMER NEEDS TO KNOW WHICH (sec 15.6).
+	 *
+	 * A station going quiet for an hour is ordinary -- sec 12.13.1 is
+	 * about exactly that -- and when it happens the other bands still
+	 * answer, their rows still land in the archive, and verification
+	 * still accumulates. A run like that is the daemon working, not
+	 * failing.
+	 *
+	 * Returning 1 for it made a five-minute timer mark itself failed
+	 * whenever a station was briefly quiet, which is both wrong and
+	 * loud enough to drown a real fault. So the two are separated: the
+	 * unit forgives 3 by name and still fails on 1, which is what makes
+	 * the distinction worth having rather than a blanket
+	 * SuccessExitStatus that would forgive a total outage too.
+	 *
+	 * Coverage of NOW is the test rather than a count of what failed,
+	 * because it is the question the archive cares about: something
+	 * described this moment and was written down.
+	 */
+	if (composite.at(now).is_valid()) {
+		out << "fetch-once: partial -- some band(s) failed, but the "
+		       "composite still covers now\n";
+		return 3;
+	}
+
+	error << "fetch-once: nothing covers now, so this run stored "
+	         "nothing usable\n";
+	return 1;
 }

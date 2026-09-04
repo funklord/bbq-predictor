@@ -72,6 +72,17 @@ TARGET = bbq-predictor
 # app that installs, runs, and cannot be found by a launcher.
 APP_ID = se.vibes.bbq_predictor
 
+# The desktop entry and icon, which are NOT the Android id.
+#
+# APP_ID must be a legal Java package name, so it carries an underscore;
+# freedesktop ids conventionally use the hyphen the project's own name
+# has. Sharing one variable between them broke `make install` the day
+# the Android id was introduced -- it looked for a file with an
+# underscore that has never existed -- and nothing noticed, because
+# nothing in the build or the gates installs anything. Packaging is what
+# found it.
+DESKTOP_ID = se.vibes.bbq-predictor
+
 # The one place the version is stated (project.md sec 0). Passed into the
 # build rather than repeated in a source file, because a second copy is a
 # second thing to forget.
@@ -338,6 +349,24 @@ check: style test
 #
 # git's absence is reported as its own thing rather than as "not a git
 # repository", which would be a message naming a cause nothing tested.
+# Where finished packages land, per the settled inventory.
+DEB_DIR ?= $(BUILD_DIR)/deb
+
+# A binary package, built the Debian-native way: dpkg-buildpackage
+# driving a dh rules file, which is what every sibling that packages
+# uses. It writes into the parent directory, so the artifacts are
+# collected from there by name rather than by a glob that could sweep
+# somebody else's build.
+deb:
+	dpkg-buildpackage -b -us -uc
+	mkdir -p $(DEB_DIR)
+	for f in bbq-predictor_$(VERSION)-1_$(shell dpkg --print-architecture).deb \
+	         bbq-predictor-dbgsym_$(VERSION)-1_$(shell dpkg --print-architecture).ddeb \
+	         bbq-predictor_$(VERSION)-1_$(shell dpkg --print-architecture).buildinfo \
+	         bbq-predictor_$(VERSION)-1_$(shell dpkg --print-architecture).changes; do \
+		if [ -f ../$$f ]; then mv -f ../$$f $(DEB_DIR)/; echo "deb: $(DEB_DIR)/$$f"; fi; \
+	done
+
 hooks:
 	@if ! command -v git >/dev/null 2>&1; then \
 		echo "hooks: git is not installed, so there is nowhere to install to." >&2; \
@@ -359,19 +388,19 @@ install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	install -m 0755 $(ARTIFACT) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	mkdir -p $(DESTDIR)$(PREFIX)/share/applications
-	install -m 0644 packaging/$(APP_ID).desktop \
-	        $(DESTDIR)$(PREFIX)/share/applications/$(APP_ID).desktop
+	install -m 0644 packaging/$(DESKTOP_ID).desktop \
+	        $(DESTDIR)$(PREFIX)/share/applications/$(DESKTOP_ID).desktop
 
 	# The icon the desktop entry has been naming since the first commit.
 	# Without it the launcher shows a placeholder, which is what it did.
 	mkdir -p $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
-	install -m 0644 packaging/$(APP_ID).svg \
-	        $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(APP_ID).svg
+	install -m 0644 packaging/$(DESKTOP_ID).svg \
+	        $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
-	rm -f $(DESTDIR)$(PREFIX)/share/applications/$(APP_ID).desktop
-	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(APP_ID).svg
+	rm -f $(DESTDIR)$(PREFIX)/share/applications/$(DESKTOP_ID).desktop
+	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
 
 # clean removes intermediates only; $(TARGET) survives, so `make install`
 # stays possible without a rebuild.

@@ -34,3 +34,16 @@ deps/
 # fmake.toml beside it, is rebuilt from source, and is therefore output --
 # but fmake appends the bare line itself, so this says why.
 .fmake/
+
+# debhelper's working state. dpkg-buildpackage builds a whole staging
+# tree under debian/, writes substvars and a build stamp beside it, and
+# leaves all of it behind -- so the packaging SOURCES sit in the same
+# directory as several hundred generated files. Named rather than
+# ignoring debian/ wholesale, because the sources live there too.
+/debian/.debhelper/
+/debian/bbq-predictor/
+/debian/files
+/debian/debhelper-build-stamp
+/debian/*.substvars
+/debian/*.debhelper.log
+/debian/*.debhelper

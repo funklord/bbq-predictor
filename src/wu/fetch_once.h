@@ -21,6 +21,13 @@
  * derives one from the station's own coordinates (sec 2.6.7).
  */
 /*
+ * Exits 0 when every band answered, 3 when some band failed but the
+ * composite still covers now, 1 when the run stored nothing usable, and
+ * 2 for a configuration error. 3 exists because a station going quiet is
+ * ordinary and the other bands still land in the archive -- the systemd
+ * timer forgives it by name (sec 15.6), which it could not do if a quiet
+ * station and a total outage returned the same thing.
+ *
  * `history_path` is the store to archive into. Empty takes the real one,
  * which is deliberate: this fetches genuine measurements, and throwing
  * away real observations because they arrived through a diagnostic

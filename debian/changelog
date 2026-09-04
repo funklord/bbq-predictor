@@ -1,0 +1,7 @@
+bbq-predictor (0.1.0-1) unstable; urgency=low
+
+  * First package.  Installs the applet and a systemd timer that fetches
+    the bands on its own clock, so the archive advances and verification
+    accumulates without the window being open.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Thu, 04 Sep 2026 03:30:00 +0200

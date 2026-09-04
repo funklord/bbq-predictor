@@ -1,0 +1,19 @@
+[Unit]
+Description=Fetch weather bands regularly
+Documentation=file:///usr/share/doc/bbq-predictor/project.md
+
+[Timer]
+# A station reports about every five minutes, so asking more often than
+# that spends somebody else's quota for nothing (project.md sec 2.5).
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+# Spread across the interval, so every machine running this does not ask
+# at the same second.
+RandomizedDelaySec=30s
+
+# A machine that was asleep should catch up once rather than not at all.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

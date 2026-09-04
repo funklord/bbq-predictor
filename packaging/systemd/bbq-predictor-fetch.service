@@ -1,0 +1,58 @@
+[Unit]
+# One fetch of every band into the shared archive (project.md sec 15.1).
+#
+# A phone only fetches while somebody is looking at it, so the archive
+# advances in bursts and verification cannot accumulate for a station
+# nobody opens. This is the fetching half of the server: it collects and
+# scores on its own clock. Publishing is not implemented yet -- sec 15.5
+# has the format questions that must be settled first.
+Description=Fetch weather bands into the bbq-predictor archive
+Documentation=file:///usr/share/doc/bbq-predictor/project.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# 3 is a run where some band failed but the composite still covers
+# now -- a station gone quiet for an hour, which is ordinary. The
+# archive advanced and verification accumulated, so the unit did its
+# job. 1 still fails, and 1 is what a run that stored nothing usable
+# returns, so this forgives the partial case by name rather than
+# forgiving every failure.
+SuccessExitStatus=3
+
+# The program builds a QApplication before it reads its arguments, so a
+# headless run needs a platform plugin that asks for no display.
+Environment=QT_QPA_PLATFORM=offscreen
+
+EnvironmentFile=-/etc/default/bbq-predictor
+
+# DynamicUser gives an unprivileged account and StateDirectory gives it
+# /var/lib/bbq-predictor, both created and owned automatically. The
+# archive is the only thing this service needs to keep.
+DynamicUser=yes
+StateDirectory=bbq-predictor
+
+# ExecCondition rather than a test inside ExecStart, because the two
+# outcomes are different: a non-zero ExecCondition SKIPS the run and says
+# why, while the same exit from ExecStart marks the unit failed. An
+# unconfigured machine would otherwise collect a failure every five
+# minutes for ever, and a package installed for the applet alone would
+# look broken. 78 is EX_CONFIG, so the skip names its own reason.
+ExecCondition=/bin/sh -c 'test -n "$BBQ_STATION" || { echo "BBQ_STATION is unset: set it in /etc/default/bbq-predictor" >&2; exit 78; }'
+
+ExecStart=/usr/bin/bbq-predictor --fetch-once --station ${BBQ_STATION} --history-path ${STATE_DIRECTORY}/history.sqlite
+
+# It talks to three weather APIs and writes one file. Nothing else.
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictRealtime=yes
+SystemCallFilter=@system-service
