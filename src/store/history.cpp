@@ -1165,6 +1165,27 @@ qint64 bbq_history::earliest_observation(const QString &station) const {
 	return query.value(0).toLongLong();
 }
 
+qint64 bbq_history::newest_observation(const QString &station, qint64 from,
+                                       qint64 to) const {
+	if (!m_open) {
+		return 0;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "SELECT MAX(valid_utc) FROM observation "
+	        "WHERE station = ? AND valid_utc >= ? AND valid_utc < ?"));
+	query.addBindValue(station);
+	query.addBindValue(from);
+	query.addBindValue(to);
+
+	if (!query.exec() || !query.next() || query.value(0).isNull()) {
+		return 0;
+	}
+
+	return query.value(0).toLongLong();
+}
+
 int bbq_history::observation_count(const QString &station) const {
 	if (!m_open) {
 		return 0;

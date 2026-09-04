@@ -253,6 +253,19 @@ public:
 	                        qint64 to) const;
 
 	qint64 earliest_observation(const QString &station) const;
+
+	/*
+	 * The newest observation for `station` inside [from, to), or 0 when
+	 * the store holds none in that window.
+	 *
+	 * It exists so a day's completeness can be asked BEFORE a request is
+	 * spent on it (sec 15.7.1). The same question was already being
+	 * answered after the reply arrived, which is too late to decline the
+	 * fetch -- and the archive upserts, so re-fetching a day it already
+	 * holds whole changes no row and leaves no trace that it happened.
+	 */
+	qint64 newest_observation(const QString &station, qint64 from,
+	                          qint64 to) const;
 	int observation_count(const QString &station) const;
 	int pending_count(const QString &station) const;
 

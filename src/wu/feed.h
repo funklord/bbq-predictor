@@ -167,6 +167,7 @@ public:
 	const bbq_composite &composite() const { return m_composite; }
 	bool is_busy() const { return m_outstanding > 0; }
 
+
 signals:
 	/* A band arrived and the composite changed. */
 	void updated();
@@ -213,12 +214,40 @@ private:
 	 */
 	void forget_location_freshness();
 
-	void attempt_backfill(qint64 now_utc);
+
 
 	/*
 	 * Say so when a finished day comes back truncated (sec 12.13.1).
 	 * Public so a test can hand it a series without the network.
 	 */
+	/*
+	 * THE BACKFILL'S DECISION, SEPARATED FROM ITS ACTION (sec 15.7.2).
+	 *
+	 * The day `station`'s backfill would ask for, or an INVALID QDate
+	 * when there is nothing worth asking -- because the store already
+	 * holds that day whole, by the same measure the reply-side
+	 * complaint uses.
+	 *
+	 * Separated so that both call sites consult ONE decision, and so a
+	 * test can watch the decision being made rather than infer it from
+	 * a request going out -- which a headless suite cannot see.
+	 *
+	 * An invalid store or an empty station answers with yesterday --
+	 * fetch -- rather than with nothing. Those cannot be established,
+	 * and declining on the strength of not knowing would turn an
+	 * unopened store into a silent refusal to ever backfill.
+	 */
+	QDate backfill_day_wanted(const QString &station) const;
+
+	/*
+	 * Which pinned stations have something worth asking for, given what
+	 * the store already holds. queue_pinned builds its queue from this,
+	 * so asserting on it asserts the wiring rather than the arithmetic.
+	 */
+	QStringList pinned_worth_fetching() const;
+
+	void attempt_backfill(qint64 now_utc);
+
 	void check_day_is_whole(const bbq_series &measured);
 
 	/*

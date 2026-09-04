@@ -6497,8 +6497,70 @@ fetched once or forty times. A measurement that cannot distinguish the
 two is not evidence the behaviour is fine -- it is the vacuous pass with
 a row count standing in for a green tick.
 
-**Not fixed here.** It is a change to what the program spends somebody
-else's quota on (sec 2.5), the ask was to chase the pin, and the fix
-wants its own watch-it-fail: the honest test is a counter of requests
-issued across two launches with yesterday already whole, which must fall
-to zero and must still fetch when a hole is punched in that day.
+**Fixed, with the watch-it-fail below.** The store is asked first now,
+and a day it already holds whole is declined.
+
+### 15.7.2 The skip, and watching each half of it fail
+
+`backfill_day_wanted(station)` answers with the day to fetch, or an
+**invalid** `QDate` when there is nothing worth asking. Both call sites
+consult it -- `attempt_backfill` for the watched station and
+`pinned_worth_fetching` for the rest -- so the decision exists once.
+
+**The arithmetic is shared with the reply-side complaint rather than
+reimplemented.** `day_short_by()` is the whole of it, used by the skip
+that declines a fetch and by the check that complains a reply left a
+hole. They must not drift: **a skip that declined a day the complaint
+would then call short would be a hole nobody could ever fill.** Sabotage
+3 below proves the sharing is real rather than intended.
+
+**Not knowing answers "ask".** An unopened store or an empty station
+returns yesterday, because neither can be established and declining on
+the strength of not knowing would turn an unopened store into a silent
+refusal to ever backfill. The skip fires only on a positive answer from
+the archive.
+
+**The test had to assert a request NOT going out**, which is why the
+decision was separated from the action at all. The archive upserts, so
+the defect left no trace in any row -- `ISUNDB5` reads 288 rows for
+2026-09-03 whether that day was fetched once or forty times, and any
+assertion on stored data would have passed against the broken code.
+`is_busy()` is the observable instead: `attempt_backfill` raises the
+outstanding count synchronously before it asks, so a fetch is visible
+the instant it is decided on and no reply is needed to see it.
+
+Three sabotages, each watched going red:
+
+    1  attempt_backfill ignores the decision   ->  the watched test fails
+       (the other two stay green)
+    2  pinned_worth_fetching ignores it        ->  the pinned test fails
+       (the other two stay green)
+    3  backfill_short_s widened to 23 hours    ->  the arithmetic test
+       fails, AND so does the pre-existing
+       a_finished_day_that_comes_back_short_says_so
+
+**Sabotage 3 is the one worth keeping.** It was run to ask whether the
+arithmetic test could fail at all, and it answered a second question
+nobody had asked: the pre-existing short-day test went red with it, which
+is the evidence that the skip and the complaint genuinely share one
+measure. Intending to share code and having shared it look identical from
+the outside.
+
+**1 and 2 staying green under each other's sabotage is the other half.**
+Two tests that both went red would have been one witness twice -- the
+pinned path is a separate call site, and a skip that worked for the
+watched station and not for pinned ones would look exactly like a working
+fix from outside.
+
+**What is still not asserted, stated rather than left to be assumed:**
+that a day WITH a hole actually reaches the network. That branch fetches,
+the suite does not touch the network, and the behaviour is unchanged by
+this fix -- so what is asserted is the decision it takes, not the request
+it then makes. Sabotage 1 did issue one real request from the test
+binary, which is how the broken code behaves by definition; that was a
+one-off under sabotage and is not what the committed suite does.
+
+`friend class test_feed` already existed, so none of this needed new
+public API. An earlier pass here made three members public to be
+testable, which was a seam invented for a test beside a seam that was
+already there; they are private again.

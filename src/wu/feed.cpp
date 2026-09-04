@@ -103,6 +103,20 @@ const int backfill_freshness_s = 6 * 3600;
 const int backfill_short_s = 3 * 3600;
 
 /*
+ * How far short of the day's end its newest observation falls.
+ *
+ * Shared by the skip that DECLINES a fetch (sec 15.7.1) and the
+ * complaint that a reply left a hole, so the two cannot drift into
+ * disagreeing about what whole means -- a skip that declined a day the
+ * complaint would then call short would be a hole nobody could fill.
+ */
+qint64 day_short_by(qint64 newest_utc, const QDate &day) {
+	const qint64 ends =
+	        QDateTime(day.addDays(1), QTime(0, 0)).toSecsSinceEpoch();
+	return ends - newest_utc;
+}
+
+/*
  * How far behind the clock a still-running day's newest observation may
  * fall before the station is called quiet (sec 12.13.3). Measured with
  * the encoding fix in place, a healthy station is about three minutes
@@ -822,27 +836,20 @@ void bbq_wu_feed::search_places(const QString &query) {
 }
 
 void bbq_wu_feed::queue_pinned(qint64 now_utc) {
-	if (!m_history.is_open()) {
-		return;
-	}
-
-	for (const bbq_station &one : m_history.pinned_stations()) {
-		/*
-		 * The watched station is fetched properly and far more often;
-		 * queueing it here as well would spend a request to learn what
-		 * it already knows.
-		 */
-		if (one.id == m_station_id || one.id.isEmpty()) {
+	/*
+	 * The decision lives in pinned_worth_fetching, which is public so a
+	 * headless test can watch it (sec 15.7.2). This is the wiring: if
+	 * the queue stopped being built from that list, the skip would be a
+	 * correct function nothing called.
+	 */
+	for (const QString &id : pinned_worth_fetching()) {
+		if (m_pinned_queue.contains(id) || m_pinned_in_flight == id) {
 			continue;
 		}
 
-		if (m_pinned_queue.contains(one.id) || m_pinned_in_flight == one.id) {
-			continue;
-		}
-
-		const qint64 last = m_pinned_attempted.value(one.id, 0);
+		const qint64 last = m_pinned_attempted.value(id, 0);
 		if (overdue(last, backfill_freshness_s, now_utc)) {
-			m_pinned_queue.append(one.id);
+			m_pinned_queue.append(id);
 		}
 	}
 
@@ -954,8 +961,7 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 	m_backfill_day = QDate();
 
 	const qint64 last = measured.samples().back().start_utc;
-	const qint64 ends = QDateTime(asked.addDays(1), QTime(0, 0)).toSecsSinceEpoch();
-	const qint64 short_by = ends - last;
+	const qint64 short_by = day_short_by(last, asked);
 
 	if (short_by <= backfill_short_s) {
 		return;
@@ -969,8 +975,90 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 	                         .arg(short_by / 3600));
 }
 
+QDate bbq_wu_feed::backfill_day_wanted(const QString &station) const {
+	const QDate day = QDate::currentDate().addDays(-1);
+
+	/*
+	 * Neither of these can be established, and declining on the
+	 * strength of not knowing would turn an unopened store into a
+	 * silent refusal to ever backfill. So they answer "ask".
+	 */
+	if (!m_history.is_open() || station.isEmpty()) {
+		return day;
+	}
+
+	const qint64 begins = QDateTime(day, QTime(0, 0)).toSecsSinceEpoch();
+	const qint64 ends =
+	        QDateTime(day.addDays(1), QTime(0, 0)).toSecsSinceEpoch();
+	const qint64 newest = m_history.newest_observation(station, begins, ends);
+
+	/*
+	 * Nothing at all for that day is the case the backfill EXISTS for,
+	 * so it is emphatically worth asking.
+	 */
+	if (newest == 0) {
+		return day;
+	}
+
+	if (day_short_by(newest, day) <= backfill_short_s) {
+		return QDate();
+	}
+
+	return day;
+}
+
+QStringList bbq_wu_feed::pinned_worth_fetching() const {
+	QStringList worth;
+
+	if (!m_history.is_open()) {
+		return worth;
+	}
+
+	for (const bbq_station &one : m_history.pinned_stations()) {
+		/*
+		 * The watched station is fetched properly and far more often;
+		 * queueing it here as well would spend a request to learn what
+		 * it already knows.
+		 */
+		if (one.id == m_station_id || one.id.isEmpty()) {
+			continue;
+		}
+
+		/*
+		 * The same skip as the watched station's, against the same day:
+		 * a pinned station is fetched for yesterday only, so one
+		 * already held whole has nothing to ask for (sec 15.7.1). This
+		 * is where it costs most -- every pinned station was another
+		 * request per launch.
+		 */
+		if (!backfill_day_wanted(one.id).isValid()) {
+			continue;
+		}
+
+		worth.append(one.id);
+	}
+
+	return worth;
+}
+
 void bbq_wu_feed::attempt_backfill(qint64 now_utc) {
 	if (m_station_id.isEmpty()) {
+		return;
+	}
+
+	/*
+	 * DECLINE A DAY THE STORE ALREADY HOLDS WHOLE (sec 15.7.1).
+	 *
+	 * The stamp is still set, so this is not re-asked on every beat.
+	 * Without the skip a launch spent a request on yesterday whatever
+	 * the archive held, and the archive upserts -- so the re-fetch
+	 * changed no row and left no trace that it had happened. The cost
+	 * lands on somebody else's quota (sec 2.5), which is the reason it
+	 * is worth declining rather than merely tidy.
+	 */
+	const QDate wanted = backfill_day_wanted(m_station_id);
+	if (!wanted.isValid()) {
+		m_backfill_attempted = now_utc;
 		return;
 	}
 
@@ -985,7 +1073,7 @@ void bbq_wu_feed::attempt_backfill(qint64 now_utc) {
 	 * property that makes this a two-line change rather than a new band.
 	 */
 	const QString stamp = QStringLiteral("yyyyMMdd");
-	const QDate day = QDate::currentDate().addDays(-1);
+	const QDate day = wanted;
 
 	/*
 	 * Remembered so the answer can be checked against the question

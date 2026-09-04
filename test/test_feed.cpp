@@ -32,6 +32,9 @@ private slots:
 	void a_finished_day_that_comes_back_short_says_so();
 	void a_store_that_takes_fewer_rows_than_given_says_so();
 	void a_station_that_stops_reporting_is_named();
+	void a_day_the_store_already_holds_whole_is_not_asked_for();
+	void a_day_with_a_hole_in_it_is_still_asked_for();
+	void the_pinned_queue_is_built_from_that_decision();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -681,6 +684,159 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 	QCOMPARE(complaints.count(), 2);
 	QVERIFY2(complaints.at(1).at(1).toString().contains(QStringLiteral("hole")),
 	         "a backfill was judged as a quiet station rather than as a day");
+}
+
+/*
+ * Fill `store` with `rows` five-minute observations for `station` on
+ * `day`.
+ *
+ * 288 of them reach 23:55, five minutes short of midnight and well
+ * inside the three-hour tolerance. 78 is the number the real stale cache
+ * returned (sec 12.13.1) and leaves the day seventeen hours short.
+ */
+static void fill_day(bbq_history &store, const QString &station,
+                     const QDate &day, int rows) {
+	const qint64 begins = QDateTime(day, QTime(0, 0)).toSecsSinceEpoch();
+
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < rows; ++i) {
+		bbq_sample sample;
+		sample.start_utc = begins + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 15.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series series(bbq_band::observed, QStringLiteral("wunderground"));
+	series.set_samples(samples);
+	store.record_observations(station, series);
+}
+
+void test_feed::a_day_the_store_already_holds_whole_is_not_asked_for() {
+	/*
+	 * THE WIRING, AND THE ONE THAT MUST GO RED IF THE SKIP IS REMOVED
+	 * (project.md sec 15.7.1).
+	 *
+	 * The defect was not that the arithmetic was wrong -- there was no
+	 * arithmetic. attempt_backfill fetched yesterday unconditionally, so
+	 * every launch spent a request on a day the archive already held
+	 * complete, and the archive UPSERTS: re-fetching changed no row and
+	 * left no trace. A row count cannot tell the two apart, which is why
+	 * this asserts on a request NOT going out instead.
+	 *
+	 * is_busy() is the observable. attempt_backfill increments the
+	 * outstanding count synchronously before it asks, so a fetch is
+	 * visible the instant it is decided on and no reply is needed to see
+	 * it.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("ITEST1"));
+	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
+
+	const QDate yesterday = QDate::currentDate().addDays(-1);
+	fill_day(feed.history(), QStringLiteral("ITEST1"), yesterday, 288);
+
+	QVERIFY2(!feed.is_busy(), "the fixture itself started a fetch");
+
+	feed.attempt_backfill(QDateTime::currentSecsSinceEpoch());
+
+	QVERIFY2(!feed.is_busy(),
+	         "a day the store already holds whole was asked for again");
+}
+
+void test_feed::a_day_with_a_hole_in_it_is_still_asked_for() {
+	/*
+	 * The other half, and the reason the skip cannot be "never backfill
+	 * twice": a day that came back short is exactly what the backfill
+	 * exists to repair, so it must still be asked for.
+	 *
+	 * Asserted on the DECISION rather than on a request going out,
+	 * because this branch fetches and the suite does not touch the
+	 * network. The wiring is covered by the test above and the pinned
+	 * one below; this covers what the decision says.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("ITEST1"));
+	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
+
+	const QDate yesterday = QDate::currentDate().addDays(-1);
+
+	/* Nothing at all: the case the backfill exists for. */
+	QCOMPARE(feed.backfill_day_wanted(QStringLiteral("ITEST1")), yesterday);
+
+	/* Short by seventeen hours, as the real stale cache was. */
+	fill_day(feed.history(), QStringLiteral("ITEST1"), yesterday, 78);
+	QCOMPARE(feed.backfill_day_wanted(QStringLiteral("ITEST1")), yesterday);
+
+	/* Filled in: now there is nothing worth asking for. */
+	fill_day(feed.history(), QStringLiteral("ITEST1"), yesterday, 288);
+	QVERIFY2(!feed.backfill_day_wanted(QStringLiteral("ITEST1")).isValid(),
+	         "a whole day is still being asked for");
+
+	/*
+	 * A store that cannot answer says ASK rather than skip. Declining on
+	 * the strength of not knowing would turn an unopened store into a
+	 * silent refusal to ever backfill.
+	 */
+	bbq_wu_feed unopened;
+	unopened.set_station(QStringLiteral("ITEST1"));
+	QCOMPARE(unopened.backfill_day_wanted(QStringLiteral("ITEST1")), yesterday);
+}
+
+void test_feed::the_pinned_queue_is_built_from_that_decision() {
+	/*
+	 * The pinned path is where the cost was largest -- every pinned
+	 * station was another request per launch -- and it is a separate
+	 * call site, so the watched station's test says nothing about it. A
+	 * skip that worked for the watched station and not for pinned ones
+	 * would look exactly like a working fix from outside.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("IWATCHED"));
+	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 seen = QDateTime::currentSecsSinceEpoch();
+
+	bbq_station pinned;
+	pinned.id = QStringLiteral("IPINNED1");
+	pinned.first_seen_utc = seen;
+	pinned.last_seen_utc = seen;
+	QVERIFY(feed.history().remember_station(pinned));
+	QVERIFY(feed.history().set_station_pinned(pinned.id, true));
+
+	const QDate yesterday = QDate::currentDate().addDays(-1);
+
+	/* Holding nothing for that day, it is worth fetching. */
+	QCOMPARE(feed.pinned_worth_fetching(), QStringList{pinned.id});
+
+	/* Holding yesterday whole, it is not. */
+	fill_day(feed.history(), pinned.id, yesterday, 288);
+	QVERIFY2(feed.pinned_worth_fetching().isEmpty(),
+	         "a pinned station whose day is whole is still queued");
+
+	/*
+	 * And the watched station is never queued here whatever the store
+	 * holds -- it is fetched properly and far more often, so queueing it
+	 * would spend a request to learn what it already knows.
+	 */
+	bbq_station watched;
+	watched.id = QStringLiteral("IWATCHED");
+	watched.first_seen_utc = seen;
+	watched.last_seen_utc = seen;
+	QVERIFY(feed.history().remember_station(watched));
+	QVERIFY(feed.history().set_station_pinned(watched.id, true));
+
+	QVERIFY2(feed.pinned_worth_fetching().isEmpty(),
+	         "the watched station was queued as a pinned one");
 }
 
 QTEST_GUILESS_MAIN(test_feed)
