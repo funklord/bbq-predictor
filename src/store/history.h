@@ -171,6 +171,18 @@ public:
 	 * not.
 	 */
 	bool remember_station(const bbq_station &station);
+
+	/*
+	 * Where discovery last ran, or false when it never has.
+	 *
+	 * Kept beside the station list rather than in the INI because it is
+	 * a record of what was found and not a preference, and because an
+	 * origin that disagreed with the list beside it would decline a
+	 * discovery the list needed (sec 15.7.4).
+	 */
+	bool discovery_origin(double *latitude, double *longitude) const;
+	bool set_discovery_origin(double latitude, double longitude,
+	                          qint64 ran_utc);
 	bool set_station_pinned(const QString &id, bool pinned);
 
 	/*

@@ -157,6 +157,25 @@ public:
 	 * would silently start being shown Gothenburg's weather.
 	 */
 	void discover_stations_at(double latitude, double longitude);
+
+	/*
+	 * DISCOVER ONLY WHEN THE FIX HAS ACTUALLY MOVED (sec 15.7.4).
+	 *
+	 * Returns whether it discovered. A fix that lands within
+	 * discovery_move_km of where discovery last ran cannot change which
+	 * stations are nearby, so asking again spends a request on a scraped
+	 * key to be told what the archive already holds.
+	 *
+	 * Never having discovered counts as moved, so a fresh install still
+	 * discovers on its first fix.
+	 */
+	bool discover_stations_if_moved(double latitude, double longitude);
+
+	/*
+	 * Kilometres from where discovery last ran, or -1 when it never has
+	 * -- which reads as "must discover" rather than as "has not moved".
+	 */
+	double moved_since_discovery(double latitude, double longitude) const;
 	void search_places(const QString &query);
 
 	std::vector<bbq_station> stations() const { return m_history.stations(); }
@@ -296,6 +315,16 @@ private:
 	qint64 m_loaded_to = 0;
 
 	qint64 m_backfill_attempted = 0;
+
+	/*
+	 * Which coordinate the outstanding discovery asked about, so the
+	 * origin can be recorded when the ANSWER arrives (sec 15.7.4).
+	 * Recording it at dispatch would let one failed request suppress
+	 * discovery for good, which is worse than the waste it replaces.
+	 */
+	double m_discovery_latitude = 0.0;
+	double m_discovery_longitude = 0.0;
+	bool m_discovery_outstanding = false;
 
 	/* Which day the outstanding backfill asked for (sec 12.13.1). */
 	QDate m_backfill_day;

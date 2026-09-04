@@ -1,3 +1,4 @@
+#include <QNetworkProxy>
 #include <QTemporaryDir>
 #include <QSignalSpy>
 #include <QTest>
@@ -35,6 +36,10 @@ private slots:
 	void a_day_the_store_already_holds_whole_is_not_asked_for();
 	void a_day_with_a_hole_in_it_is_still_asked_for();
 	void the_pinned_queue_is_built_from_that_decision();
+	void initTestCase();
+	void a_fix_that_has_not_moved_does_not_rediscover();
+	void a_first_fix_and_a_distant_one_both_do();
+	void the_origin_moves_only_when_an_answer_arrives();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -837,6 +842,116 @@ void test_feed::the_pinned_queue_is_built_from_that_decision() {
 
 	QVERIFY2(feed.pinned_worth_fetching().isEmpty(),
 	         "the watched station was queued as a pinned one");
+}
+
+void test_feed::initTestCase() {
+	/*
+	 * A request that escapes cannot leave the machine.
+	 *
+	 * The rest of this file never fetches, but the discovery tests below
+	 * assert on a request GOING OUT as well as on one being declined --
+	 * and a suite that fired at Weather Underground on every run would
+	 * be wrong whatever it was measuring, this project scraping a key it
+	 * is not licensed to have. Same guard, and same reason, as
+	 * test_window's.
+	 */
+	QNetworkProxy blocked(QNetworkProxy::HttpProxy, QStringLiteral("127.0.0.1"),
+	                      1);
+	QNetworkProxy::setApplicationProxy(blocked);
+}
+
+void test_feed::a_fix_that_has_not_moved_does_not_rediscover() {
+	/*
+	 * THE WIRING, AND THE ONE THAT MUST GO RED IF THE GATE IS REMOVED
+	 * (project.md sec 15.7.4).
+	 *
+	 * Every launch asked the device where it was and sent whatever
+	 * arrived straight to discovery, so a launch from the same kitchen
+	 * spent a request to be told the list the archive already held.
+	 *
+	 * is_busy() is the observable, as it is for the backfill: the
+	 * outstanding count rises synchronously before the request, so the
+	 * decision is visible without any reply.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
+
+	/* Where discovery last ran: a real place, to a real precision. */
+	QVERIFY(feed.history().set_discovery_origin(59.3293, 18.0686, 1756900000));
+
+	QVERIFY2(!feed.is_busy(), "the fixture itself started a fetch");
+
+	/* The same spot, and then 300 m away -- inside a coarse fix's own error. */
+	QCOMPARE(feed.discover_stations_if_moved(59.3293, 18.0686), false);
+	QCOMPARE(feed.discover_stations_if_moved(59.3320, 18.0686), false);
+
+	QVERIFY2(!feed.is_busy(),
+	         "a fix that had not moved was sent to discovery anyway");
+}
+
+void test_feed::a_first_fix_and_a_distant_one_both_do() {
+	/*
+	 * The other half, and the reason the gate cannot be "never
+	 * rediscover": a fresh install has no origin and must discover, and
+	 * somebody who has actually travelled must too.
+	 *
+	 * Asserted on is_busy() rather than on the decision alone, so this
+	 * is wiring as well -- a gate that declined everything would pass a
+	 * decision-only test and leave the station list empty for ever.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
+
+	/* Never discovered: -1 reads as "must", not as "has not moved". */
+	QCOMPARE(feed.moved_since_discovery(59.3293, 18.0686), -1.0);
+	QCOMPARE(feed.discover_stations_if_moved(59.3293, 18.0686), true);
+	QVERIFY2(feed.is_busy(), "a first fix did not discover");
+
+	bbq_wu_feed travelled;
+	QVERIFY(travelled.open_history(
+	        scratch.filePath(QStringLiteral("t.sqlite"))));
+	QVERIFY(travelled.history().set_discovery_origin(59.3293, 18.0686,
+	                                                 1756900000));
+
+	/* Uppsala, some 63 km away: the list cannot be the same. */
+	const double moved = travelled.moved_since_discovery(59.8586, 17.6389);
+	QVERIFY2(moved > 50.0 && moved < 80.0,
+	         qPrintable(QStringLiteral("distance is wrong: %1 km").arg(moved)));
+
+	QCOMPARE(travelled.discover_stations_if_moved(59.8586, 17.6389), true);
+	QVERIFY2(travelled.is_busy(), "a fix 63 km away did not discover");
+}
+
+void test_feed::the_origin_moves_only_when_an_answer_arrives() {
+	/*
+	 * Recording the origin at dispatch would let ONE failed request
+	 * suppress discovery for good -- worse than the waste it replaces,
+	 * and silent, since an empty station list looks the same as a place
+	 * with no stations near it.
+	 *
+	 * So a discovery that has gone out but not come back must leave the
+	 * origin where it was. The blocked proxy above guarantees no answer
+	 * can arrive here.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
+
+	feed.discover_stations_at(59.3293, 18.0686);
+	QVERIFY(feed.is_busy());
+
+	double latitude = 0.0;
+	double longitude = 0.0;
+	QVERIFY2(!feed.history().discovery_origin(&latitude, &longitude),
+	         "the origin was recorded before any answer arrived");
 }
 
 QTEST_GUILESS_MAIN(test_feed)

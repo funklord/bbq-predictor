@@ -6608,16 +6608,68 @@ is asked once, nothing waits for it, and indoors it times out. So the
 per-launch cost is real only where fixes arrive reliably, and the live
 cost on this device is negligible.
 
-**Flagged rather than fixed**, per *where the document and the code
-contradict each other, flag it -- do not silently resolve it in either
-direction*. Which is wrong is a real question: the document may be
-describing an intent the code never had, or the code may be missing a
-guard the document assumed. And a third answer is available that neither
-branch states -- **the trigger could be the fix ARRIVING and differing
-from the last discovery's coordinate by more than the station spacing**,
-which is neither "every fix" nor "whenever the coordinate moves" as
-either is currently written.
+**Settled by the copyright holder 2026-09-04: only when the coordinate
+actually moved.** The code was missing a guard the document assumed, so
+sec 14's sentence stands and the code now matches it. Built in sec
+15.7.4.
 
-The measurement is the part worth keeping either way: **whatever is
-decided, it is not urgent**, and a report claiming a request per launch
-would have made it sound so.
+The measurement stays worth keeping: **it was not urgent**, and a report
+claiming a request per launch would have made it sound so.
+
+### 15.7.4 Discovering only when the coordinate moved
+
+**The origin lives in the archive, not the INI.** The station table's own
+comment already draws the line -- a record of what was FOUND rather than
+a preference -- and where discovery ran is the same kind of fact. It also
+has to travel with the list it describes: an origin that disagreed with
+the archive beside it would decline a discovery that list needed. One
+row, pinned to id 0, because there is exactly one last place discovery
+ran.
+
+**One kilometre, and the number comes from the fix rather than from the
+stations.** The locator asks for `NonSatellitePositioningMethods` on
+purpose (sec 14.3), so a cell-tower fix carries error of that order
+itself. A tighter threshold would be tripped by the noise between two
+readings taken without moving at all, which is the failure this exists to
+stop -- and a gate defeated by its own input's error is worse than none,
+because it looks like it is working.
+
+**Never having discovered reads as MUST, not as has-not-moved.**
+`moved_since_discovery` returns -1 for an empty store, and the gate tests
+`moved >= 0.0 && moved < threshold` rather than `moved < threshold`. The
+difference is a fresh install with an empty station list for ever, and
+sabotage B below is that one character.
+
+**The origin moves only when an ANSWER arrives**, never at dispatch.
+Recording it on the way out would let one failed request suppress
+discovery permanently -- worse than the waste it replaces, and silent,
+since an empty station list looks exactly like a place with no stations
+near it. A reply keeping zero stations still records: a coordinate with
+genuinely nothing near it is a real answer, and re-asking it on every fix
+is the waste this removes.
+
+**Nothing needed a distance function before this.** `distance_km` on a
+station is Weather Underground's own number, measured from the point THEY
+were asked about -- a different question -- so `km_between` is the first
+great-circle calculation in the tree rather than a second copy of one.
+
+Four sabotages, each caught by exactly one test:
+
+    A  the gate always discovers          ->  the unmoved test
+    B  `moved < threshold`, so -1 declines ->  the first-fix test
+    C  origin recorded at dispatch         ->  the answer-timing test
+    D  the WINDOW calls the ungated one    ->  the window test only
+
+**D is the one worth the section.** All three of the feed's tests stayed
+GREEN under it. The window is the only caller of the gate, so a revert
+there brings the defect straight back while every test of the gate itself
+keeps passing -- *a correct function is not a working feature*, and
+nothing in test_feed can see it. That test emits the locator's signal
+directly, because what is under test is what the window does with an
+answer and a headless run has no positioning source to give one.
+
+**test_feed gained a blocked loopback proxy** for this, as test_window
+already had. These tests assert on a request GOING OUT as well as on one
+being declined, and a suite that fired at Weather Underground on every
+run would be wrong whatever it was measuring -- this project scrapes a
+key it is not licensed to have.

@@ -2,6 +2,8 @@
 
 #include <QDate>
 #include <QDateTime>
+
+#include <cmath>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -101,6 +103,41 @@ const int backfill_freshness_s = 6 * 3600;
  * 17-hour hole that made the check necessary.
  */
 const int backfill_short_s = 3 * 3600;
+
+/*
+ * How far a fix must land from the last discovery before the station
+ * list can have changed (sec 15.7.4).
+ *
+ * One kilometre, and the number comes from the fix rather than from the
+ * stations: the locator asks for NonSatellitePositioningMethods on
+ * purpose, so a cell-tower fix carries error of this order itself. A
+ * tighter threshold would be tripped by the noise in two readings taken
+ * without moving at all, which is the failure this exists to stop.
+ */
+const double discovery_move_km = 1.0;
+
+/*
+ * Great-circle distance. Written here because nothing else in the tree
+ * computes one -- `distance_km` on a station is Weather Underground's
+ * own number, measured from the point THEY were asked about, which is
+ * the question this is not asking.
+ */
+double km_between(double from_latitude, double from_longitude,
+                  double to_latitude, double to_longitude) {
+	const double radius_km = 6371.0;
+	const double to_radians = M_PI / 180.0;
+
+	const double lat1 = from_latitude * to_radians;
+	const double lat2 = to_latitude * to_radians;
+	const double dlat = (to_latitude - from_latitude) * to_radians;
+	const double dlon = (to_longitude - from_longitude) * to_radians;
+
+	const double a = std::sin(dlat / 2) * std::sin(dlat / 2) +
+	                 std::cos(lat1) * std::cos(lat2) * std::sin(dlon / 2) *
+	                         std::sin(dlon / 2);
+
+	return radius_km * 2 * std::atan2(std::sqrt(a), std::sqrt(1 - a));
+}
 
 /*
  * How far short of the day's end its newest observation falls.
@@ -283,6 +320,18 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 			if (m_history.remember_station(station)) {
 				++kept;
 			}
+		}
+
+		/*
+		 * The origin moves only now, on an answer -- see the members'
+		 * comment. `kept` is not required to be non-zero: a coordinate
+		 * with genuinely no stations near it is a real answer, and
+		 * re-asking it on every fix is the waste this exists to stop.
+		 */
+		if (m_discovery_outstanding) {
+			m_history.set_discovery_origin(m_discovery_latitude,
+			                               m_discovery_longitude, now);
+			m_discovery_outstanding = false;
 		}
 
 		emit stations_discovered(kept);
@@ -817,13 +866,50 @@ void bbq_wu_feed::discover_stations() {
 		return;
 	}
 
+	m_discovery_latitude = m_latitude;
+	m_discovery_longitude = m_longitude;
+	m_discovery_outstanding = true;
+
 	++m_outstanding;
 	m_client->fetch_nearby(m_latitude, m_longitude);
 }
 
 void bbq_wu_feed::discover_stations_at(double latitude, double longitude) {
+	m_discovery_latitude = latitude;
+	m_discovery_longitude = longitude;
+	m_discovery_outstanding = true;
+
 	++m_outstanding;
 	m_client->fetch_nearby(latitude, longitude);
+}
+
+double bbq_wu_feed::moved_since_discovery(double latitude,
+                                          double longitude) const {
+	double was_latitude = 0.0;
+	double was_longitude = 0.0;
+
+	/*
+	 * Never discovered, or a store that cannot say. Both read as "must
+	 * discover": declining on the strength of not knowing would leave a
+	 * fresh install with an empty station list for ever.
+	 */
+	if (!m_history.discovery_origin(&was_latitude, &was_longitude)) {
+		return -1.0;
+	}
+
+	return km_between(was_latitude, was_longitude, latitude, longitude);
+}
+
+bool bbq_wu_feed::discover_stations_if_moved(double latitude,
+                                            double longitude) {
+	const double moved = moved_since_discovery(latitude, longitude);
+
+	if (moved >= 0.0 && moved < discovery_move_km) {
+		return false;
+	}
+
+	discover_stations_at(latitude, longitude);
+	return true;
 }
 
 void bbq_wu_feed::search_places(const QString &query) {

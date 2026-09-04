@@ -336,7 +336,65 @@ bool bbq_history::create_schema() {
 	        "distance_km REAL,"
 	        "pinned INTEGER NOT NULL DEFAULT 0,"
 	        "first_seen_utc INTEGER NOT NULL,"
-	        "last_seen_utc INTEGER NOT NULL)"));
+	        "last_seen_utc INTEGER NOT NULL)")) &&
+	       /*
+	        * WHERE discovery last ran, so a later fix can be asked
+	        * whether it has moved far enough to change the answer
+	        * (sec 15.7.4).
+	        *
+	        * Beside the station list rather than in the INI, by the
+	        * division the comment above draws: this is a record of what
+	        * was found -- of where we were when we found it -- and not a
+	        * preference. It also has to travel with the list it
+	        * describes, since an origin that disagreed with the archive
+	        * beside it would decline a discovery the list needed.
+	        *
+	        * One row, pinned to id 0 by the check, because there is
+	        * exactly one last place discovery ran.
+	        */
+	       exec(QStringLiteral("CREATE TABLE IF NOT EXISTS discovery ("
+	                           "id INTEGER PRIMARY KEY CHECK (id = 0),"
+	                           "latitude REAL NOT NULL,"
+	                           "longitude REAL NOT NULL,"
+	                           "ran_utc INTEGER NOT NULL)"));
+}
+
+bool bbq_history::discovery_origin(double *latitude, double *longitude) const {
+	if (!m_open || latitude == nullptr || longitude == nullptr) {
+		return false;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	if (!query.exec(QStringLiteral(
+	            "SELECT latitude, longitude FROM discovery WHERE id = 0")) ||
+	    !query.next()) {
+		return false;
+	}
+
+	*latitude = query.value(0).toDouble();
+	*longitude = query.value(1).toDouble();
+	return true;
+}
+
+bool bbq_history::set_discovery_origin(double latitude, double longitude,
+                                       qint64 ran_utc) {
+	if (!m_open) {
+		return false;
+	}
+
+	QSqlQuery keep(QSqlDatabase::database(m_connection));
+	keep.prepare(QStringLiteral(
+	        "INSERT INTO discovery (id, latitude, longitude, ran_utc) "
+	        "VALUES (0, ?, ?, ?) "
+	        "ON CONFLICT(id) DO UPDATE SET "
+	        "latitude = excluded.latitude, "
+	        "longitude = excluded.longitude, "
+	        "ran_utc = excluded.ran_utc"));
+	keep.addBindValue(latitude);
+	keep.addBindValue(longitude);
+	keep.addBindValue(ran_utc);
+
+	return keep.exec();
 }
 
 bool bbq_history::remember_station(const bbq_station &station) {

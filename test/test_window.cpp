@@ -65,6 +65,7 @@ private slots:
 	void the_list_names_the_station_actually_being_read();
 	void the_view_still_pans_and_zooms_through_the_window();
 	void turning_and_unfolding_the_device_keeps_what_was_on_screen();
+	void a_fix_from_where_discovery_already_ran_is_not_sent_to_it();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -575,6 +576,39 @@ void test_window::the_record_line_reports_the_verdict_too() {
 	QVERIFY2(note.contains(QStringLiteral("0.42")),
 	         qPrintable(QStringLiteral("the verdict's error is not in the "
 	                                   "line: %1").arg(note)));
+}
+
+void test_window::a_fix_from_where_discovery_already_ran_is_not_sent_to_it() {
+	/*
+	 * THE WIRING OF THE GATE, WHICH NOTHING ELSE GUARDS (sec 15.7.4).
+	 *
+	 * The feed's own tests prove discover_stations_if_moved declines a
+	 * fix that has not moved. They say nothing about whether the window
+	 * ASKS it -- and the window is the only caller, so a revert to the
+	 * ungated discover_stations_at would leave every one of them green
+	 * while the defect came straight back. A correct function nothing
+	 * calls is the shape this exists to refuse.
+	 *
+	 * The locator's signal is emitted directly rather than by asking for
+	 * a real fix: what is under test is what the window does with an
+	 * answer, and a headless run has no positioning source to give one.
+	 */
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	QVERIFY(window.feed()->history().set_discovery_origin(59.3293, 18.0686,
+	                                                      1756900000));
+
+	QVERIFY2(!window.feed()->is_busy(),
+	         "the fixture itself left a request outstanding");
+
+	/* The same place discovery already ran from. */
+	emit window.m_locator->located(59.3293, 18.0686);
+
+	QVERIFY2(!window.feed()->is_busy(),
+	         "the window sent an unmoved fix to discovery anyway");
 }
 
 int main(int argc, char *argv[]) {

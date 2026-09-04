@@ -485,7 +485,13 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 
 	connect(m_locator, &bbq_locator::located, this,
 	        [this](double latitude, double longitude) {
-		m_feed->discover_stations_at(latitude, longitude);
+		/*
+		 * Only when the fix has actually moved (sec 15.7.4). A launch
+		 * from the same kitchen cannot have changed which stations are
+		 * nearby, and asking again spends a request on a scraped key to
+		 * be told what the archive already holds.
+		 */
+		m_feed->discover_stations_if_moved(latitude, longitude);
 	});
 
 	connect(m_locator, &bbq_locator::unavailable, this,
