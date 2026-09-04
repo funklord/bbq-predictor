@@ -588,6 +588,19 @@ The test asserts the REQUEST rather than a response. The fault is in
 what is asked for, and a test that fetched would be asking a cache what
 mood it was in.
 
+**The other two providers were checked and are not affected**, which is
+why the header is set on the WU client alone rather than swept across
+the program. Measured the same way, identity against gzip:
+
+    met.no nowcast      23 timesteps both, 02:25Z .. 04:15Z both
+    open-meteo hourly   72 timesteps both, same first and last
+
+Freshness was compared as well as length, because length is exactly what
+the WU variant got right -- 78 rows and 288 rows are both plausible
+documents, and only the timestamps say which one is a week old. A
+provider that answers identically to both is one this does not need to
+cost bandwidth on.
+
 ### 2.6.6 What follows from pinning
 
 - **Discovery is a separate, explicit act.** Finding candidate stations
