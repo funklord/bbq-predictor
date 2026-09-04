@@ -19,8 +19,16 @@
 class bbq_settings {
 public:
 	/*
-	 * The pinned station (sec 2.6.5). User-chosen, never derived, and
+	 * The WATCHED station (sec 2.6.5). User-chosen, never derived, and
 	 * never replaced by a nearest-station lookup.
+	 *
+	 * Not the same idea as bbq_station::pinned, which says a station
+	 * gets the sparing backfill and nothing else. This comment said
+	 * "the pinned station" until sec 13 gave that word to the other
+	 * concept, and the stale wording then cost a real misdiagnosis
+	 * (sec 15.7): a session read an unchecked Pin box beside a watched
+	 * station as the pin having failed to persist, when the flag was
+	 * intact in the store and the two were simply different things.
 	 */
 	static QString station();
 	static void set_station(const QString &station_id);

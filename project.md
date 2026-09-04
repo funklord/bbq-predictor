@@ -6403,3 +6403,102 @@ Open, and not decided here:
   arriving early, and is the holder's.
 - **`Standards-Version` is 4.6.2** and the current standard is newer.
   Not raised as a finding; recorded so nobody re-derives it.
+
+## 15.7 One word, two concepts -- and the misdiagnosis it caused
+
+Chasing a suspected defect that did not exist, 2026-09-04. The value is
+not the answer, which is "nothing was wrong". It is what the wrong
+question turned up on the way, which is the shape *a wrong guess is a
+cheap way to make a tree explain itself* predicts.
+
+**The observation was real and the mechanism named for it was wrong.**
+A screenshot of the phone showed `Station: ISTOCK877` with the `Pin` box
+UNCHECKED, and the settings file held `station=ISTOCK877` with no pin key
+of any kind. Read as one fact that looked like a pin that had failed to
+survive an upgrade, and reported as such.
+
+It had not. Pulling the device's archive -- both files, because the WAL
+held 2 MB the main file had not absorbed and the main file alone would
+have been a stale reading of the same store -- answers it in one query:
+
+    id          pinned  km    last_seen
+    ISUNDB5     1       0.35  2026-09-03 14:01:49
+    ISTOCK877   0       2.06  2026-09-04 09:46:53
+
+`ISUNDB5` is pinned, and stayed pinned across the upgrade. **The
+checkbox was right, the settings file was right, and the reader was
+wrong**, because two different things in this tree are called pinned:
+
+- **`bbq_settings::station`** -- the WATCHED station, the one being
+  looked at, fetched at the ordinary cadence. This is what the `station=`
+  key holds.
+- **`bbq_station::pinned`** -- a per-station flag in the store, meaning
+  that station gets the sparing backfill and nothing else.
+
+The `Pin` box drives the second and displays it *for the watched
+station*. So a watched station that is not pinned shows exactly what was
+seen, and it is correct.
+
+**`history.h` says outright that they are separate ideas**, and it is
+the file that is right:
+
+    The watched station -- the one being looked at -- is fetched at the
+    ordinary cadence and is a separate idea from this flag.
+
+**`settings.h` called the watched station "the pinned station"**, and
+that is the sentence the misdiagnosis was built on. It has been
+corrected, and it names this section so the next reader gets the history
+rather than a bare assertion.
+
+**The collision originates here, in this document.** Before sec 13 there
+was one station and "the pinned station" meant it -- secs 2.6.5, 2.6.7.2,
+4.3 and others still use the word that way, correctly for when they were
+written. Sec 13 then gave the same word to a new and deliberately
+different concept, and nothing reconciled the older text.
+
+**Not resolved by rewriting the older sections.** Those are a record of
+what was decided when, and a sweep that rewrote them would be editing
+history to tidy vocabulary. What is fixed is the one place the two
+meanings actually contradicted each other in code. The rule to read this
+document by: **before sec 13, "pinned station" means the watched
+station; after it, the word means the backfill flag and the watched
+station is called watched.**
+
+`code-style.md` asks for one word per concept, in the type name, the file
+path, the subcommand and the documentation. This is the inverse and is
+worse than the synonym it warns about: a synonym reads as two concepts
+and makes a reader look twice, while one word for two concepts reads as
+one and makes them not look at all.
+
+### 15.7.1 What the wrong guess actually turned up
+
+**The backfill re-asks for a day it already holds whole.**
+
+`attempt_backfill` fetches yesterday unconditionally. It never consults
+the store, so a launch spends one request for the watched station and one
+for each pinned station, every time, whether or not that day is already
+complete in the archive. Within a run it repeats on the six-hour
+interval; across runs there is no memory at all, because
+`m_backfill_attempted` and `m_pinned_attempted` are plain members and are
+persisted nowhere.
+
+**The startup fetch itself is deliberate and is not the finding.** Sec
+12.13 settled that: the heartbeat refuses to run while anything is
+outstanding, a launch has everything outstanding, and a phone that is
+opened and backgrounded may never reach an idle beat. What is missing is
+only the short-circuit -- **the store already knows the answer, and is
+asked only after the request has been spent.** `check_day_is_whole`
+computes exactly "is this day complete" and runs on the REPLY.
+
+**The row count cannot show this, which is why it survived.** The archive
+writes through an upsert, so re-fetching a day it already holds changes
+nothing: `ISUNDB5` reads 288 rows for 2026-09-03 whether that day was
+fetched once or forty times. A measurement that cannot distinguish the
+two is not evidence the behaviour is fine -- it is the vacuous pass with
+a row count standing in for a green tick.
+
+**Not fixed here.** It is a change to what the program spends somebody
+else's quota on (sec 2.5), the ask was to chase the pin, and the fix
+wants its own watch-it-fail: the honest test is a counter of requests
+issued across two launches with yesterday already whole, which must fall
+to zero and must still fetch when a hole is punched in that day.
