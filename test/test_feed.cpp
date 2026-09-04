@@ -31,6 +31,7 @@ private slots:
 	void the_correction_is_queued_for_scoring_like_any_forecast();
 	void a_finished_day_that_comes_back_short_says_so();
 	void a_store_that_takes_fewer_rows_than_given_says_so();
+	void a_station_that_stops_reporting_is_named();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -562,12 +563,25 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	         "the complaint does not say what is wrong");
 
 	/*
-	 * And it fires once. The day is cleared when it is checked, so a
-	 * second response for the same request cannot complain twice about
-	 * a day nobody asked for again.
+	 * And the DAY complaint fires once: the day is cleared when it is
+	 * checked, so one request cannot complain twice about it.
+	 *
+	 * A second call is judged as today's fetch instead, and this
+	 * fixture's rows are long past, so it draws the quiet-station
+	 * complaint of sec 12.13.3. That is the correct reading of a
+	 * response carrying nothing recent, and it is why the count alone
+	 * is not asserted here.
 	 */
 	feed.check_day_is_whole(stale);
-	QCOMPARE(complaints.count(), 1);
+
+	int holes = 0;
+	for (const QList<QVariant> &said : complaints) {
+		if (said.at(1).toString().contains(QStringLiteral("hole"))) {
+			++holes;
+		}
+	}
+
+	QCOMPARE(holes, 1);
 }
 
 void test_feed::a_store_that_takes_fewer_rows_than_given_says_so() {
@@ -605,6 +619,68 @@ void test_feed::a_store_that_takes_fewer_rows_than_given_says_so() {
 	                 said.contains(QStringLiteral("288")),
 	         qPrintable(QStringLiteral("the complaint does not say how much "
 	                                   "was lost: %1").arg(said)));
+}
+
+void test_feed::a_station_that_stops_reporting_is_named() {
+	/*
+	 * A QUIET STATION READS AS HEALTHY (project.md sec 12.13.3).
+	 *
+	 * Measured on the night this was written: the watched station's
+	 * newest observation sat at 02:04 while a neighbour was current to
+	 * 03:19. Every fetch succeeded and returned the same rows, so the
+	 * staleness check -- which answers "when did we last fetch" --
+	 * stayed green throughout.
+	 */
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("ITESTQUIET"));
+
+	QSignalSpy complaints(&feed, &bbq_wu_feed::band_failed);
+
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	const auto reporting_until = [](qint64 last) {
+		std::vector<bbq_sample> rows;
+		for (int i = 0; i < 12; ++i) {
+			bbq_sample sample;
+			sample.start_utc = last - (11 - i) * 300;
+			sample.duration_s = 300;
+			sample.temperature = 12.0;
+			rows.push_back(sample);
+		}
+
+		bbq_series made(bbq_band::observed, QStringLiteral("wunderground"));
+		made.set_samples(std::move(rows));
+		return made;
+	};
+
+	/* Current: five minutes behind the clock is an ordinary station. */
+	feed.check_day_is_whole(reporting_until(now - 300));
+	QCOMPARE(complaints.count(), 0);
+
+	/* Quiet: the gap that went unremarked. */
+	feed.check_day_is_whole(reporting_until(now - 78 * 60));
+	QCOMPARE(complaints.count(), 1);
+
+	const QString said = complaints.at(0).at(1).toString();
+	QVERIFY2(said.contains(QStringLiteral("ITESTQUIET")),
+	         qPrintable(QStringLiteral("the complaint does not name the "
+	                                   "station: %1").arg(said)));
+
+	/*
+	 * And a BACKFILL is not judged this way. Yesterday's newest
+	 * observation is a day old by definition, so the same series would
+	 * be called quiet on every single backfill if the two checks were
+	 * confused.
+	 */
+	const QDate yesterday = QDate::currentDate().addDays(-1);
+	const qint64 midday =
+	        QDateTime(yesterday, QTime(12, 0)).toSecsSinceEpoch();
+
+	feed.m_backfill_day = yesterday;
+	feed.check_day_is_whole(reporting_until(midday));
+	QCOMPARE(complaints.count(), 2);
+	QVERIFY2(complaints.at(1).at(1).toString().contains(QStringLiteral("hole")),
+	         "a backfill was judged as a quiet station rather than as a day");
 }
 
 QTEST_GUILESS_MAIN(test_feed)

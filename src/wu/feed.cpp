@@ -103,6 +103,15 @@ const int backfill_freshness_s = 6 * 3600;
 const int backfill_short_s = 3 * 3600;
 
 /*
+ * How far behind the clock a still-running day's newest observation may
+ * fall before the station is called quiet (sec 12.13.3). Measured with
+ * the encoding fix in place, a healthy station is about three minutes
+ * behind; forty-five is well clear of that and well inside the
+ * seventy-eight minutes that went unremarked.
+ */
+const int station_quiet_s = 45 * 60;
+
+/*
  * Never attempted counts as overdue. Shared by every band so that the
  * one thing they all have to agree about is written once.
  */
@@ -910,7 +919,34 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 	 * had been read twice, and a truncated day is exactly the thing it
 	 * exists to say out loud.
 	 */
-	if (!m_backfill_day.isValid() || measured.is_empty()) {
+	if (measured.is_empty()) {
+		return;
+	}
+
+	if (!m_backfill_day.isValid()) {
+		/*
+		 * TODAY'S fetch, where the question is different (sec 12.13.3).
+		 *
+		 * A day still in progress cannot be short -- it has not
+		 * finished -- so what matters is whether the station is still
+		 * reporting. Measured on the night this was written:
+		 * ISTOCK877's newest observation sat at 02:04 while a
+		 * neighbouring station was current to 03:19, and nothing said
+		 * so. sec 2.4's staleness check answers "when did we last
+		 * FETCH", which stays healthy while a quiet station is fetched
+		 * faithfully and returns the same rows every time.
+		 */
+		const qint64 newest = measured.samples().back().start_utc;
+		const qint64 behind = QDateTime::currentSecsSinceEpoch() - newest;
+
+		if (behind > station_quiet_s) {
+			emit band_failed(
+			        QStringLiteral("observed"),
+			        tr("%1 has not reported for %2 minutes")
+			                .arg(m_station_id)
+			                .arg(behind / 60));
+		}
+
 		return;
 	}
 

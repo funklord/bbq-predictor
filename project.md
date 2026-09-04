@@ -4545,6 +4545,50 @@ not been given one must not complain about it on every response. The
 test asserts that case first, because a guard that fires when nothing is
 wrong gets removed, and then the real one goes with it.
 
+#### 12.13.3 A quiet station reads as healthy
+
+Measured 2026-09-04, hours after a second station was pinned:
+
+    ISTOCK877   WU holds 49 rows, newest 02:04 UTC
+    ISUNDB5     WU holds 64 rows, newest 03:19 UTC
+    clock                                03:22 UTC
+
+The watched station had stopped publishing 78 minutes earlier and its
+neighbour had not. **Nothing in the program said so.** Sec 2.4's
+staleness check answers "when did we last FETCH", and the fetches were
+succeeding perfectly -- returning the same rows every time, which is
+exactly what a faithfully-fetched dead station looks like.
+
+So the still-running day is checked for a different thing from the
+finished one. A day in progress cannot be short, because it has not
+finished; what it can be is stale, and its newest observation falling
+more than forty-five minutes behind the clock now names the station on
+the status line. Forty-five is well clear of the three minutes a healthy
+station runs behind, and well inside the seventy-eight that went
+unremarked.
+
+**The two checks share a function and must not share a judgement**, and
+the test asserts that directly. Yesterday's newest observation is a day
+old by definition, so a backfill judged as a running day would call
+every station quiet on every backfill; a running day judged as a
+finished one would call every afternoon a hole. One fixture for each,
+and one assertion that the backfill draws the hole message rather than
+the quiet one.
+
+**It also changed an older test, which is worth recording rather than
+patching over.** `check_day_is_whole` clears the day when it uses it, so
+a second call is now read as today's fetch -- and the truncated-day
+fixture's rows are long past, so it draws the quiet complaint. That is
+the correct reading of a response carrying nothing recent. The older
+test counted complaints; it counts HOLE complaints now, because the
+count stopped meaning what it did when the function learned a second
+question.
+
+**This is the second time tonight the pinned station has paid for
+itself.** It filled the archive when the key fetch was refused, and it
+is what makes this finding legible: one station going quiet is
+ambiguous, two disagreeing is not.
+
 ### 12.14 A sensor that never moves is not a measurement
 
 With observations finally arriving (sec 12.13), the first real
