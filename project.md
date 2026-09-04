@@ -546,6 +546,48 @@ gets moved, or reads badly in ways the owner knows about and a nearest
 lookup does not. A user who has chosen theirs has chosen it for reasons
 the program cannot reconstruct.
 
+#### 2.6.5.1 The compressed variant is stale, and that is where the archive went
+
+The archive stopped advancing. Every band answered, every status was
+200, nothing was reported missing, and the store simply stopped gaining
+rows -- the phone sat at one observation from 00:09 local for five
+hours, and a fresh fetch into an empty store produced 80 rows with a
+17.6-hour hole in the middle.
+
+**One header explains it.** The same URL, the same key, a minute apart:
+
+    Accept-Encoding: identity   288 observations
+    Accept-Encoding: gzip        78 observations, ending 17 hours earlier
+    gzip + Cache-Control: no-cache   78, unchanged
+
+A CDN varies its cache on `Accept-Encoding`, and the compressed entry
+for these history URLs is served long after it has gone stale. Qt asks
+for gzip by default, so the program was handed a fraction of each day
+and had no way to know: a short response is not an error, and 78 rows
+parse exactly as well as 288.
+
+Asking for identity restores it -- one fetch into an empty store now
+gives 337 samples with no gaps, running to two minutes ago.
+
+**Every comparison made while chasing this was confounded, and that is
+the lesson worth more than the fix.** `curl` was used all evening as the
+control -- "curl gets 200, the app gets 404", "curl gets 288, the app
+gets 78" -- and curl does not request compression unless asked. So the
+control and the subject differed in the one variable that mattered, and
+each measurement pointed at whatever else was to hand: the network, the
+user agent, the TLS stack, the phone. Sec 2.6.1.2's diagnosis stands on
+its own evidence, but the reasoning that reached it was built on a
+control that was never comparable.
+
+The rule this earns: **when a probe and the thing it probes are
+different programs, list what differs before trusting the difference.**
+Two clients agreeing tells you little; two clients disagreeing tells you
+only that they are two clients.
+
+The test asserts the REQUEST rather than a response. The fault is in
+what is asked for, and a test that fetched would be asking a cache what
+mood it was in.
+
 ### 2.6.6 What follows from pinning
 
 - **Discovery is a separate, explicit act.** Finding candidate stations

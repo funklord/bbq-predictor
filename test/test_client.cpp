@@ -34,6 +34,7 @@ private slots:
 	void requests_wait_when_there_is_no_key();
 	void the_queue_is_drained_once_by_whichever_signal_arrives();
 	void a_refused_key_page_is_tried_three_times();
+	void api_requests_ask_for_identity_encoding();
 };
 
 void test_client::requests_wait_when_there_is_no_key() {
@@ -137,6 +138,41 @@ void test_client::a_refused_key_page_is_tried_three_times() {
 	 * stops is a slower way of hanging.
 	 */
 	QVERIFY2(!keys.has_key(), "a refused page must not leave a key behind");
+}
+
+void test_client::api_requests_ask_for_identity_encoding() {
+	/*
+	 * The compressed variant of a history URL is STALE (sec 2.6.5).
+	 *
+	 * Measured against one URL and one key, a minute apart, differing
+	 * only in Accept-Encoding: identity gave 288 observations and gzip
+	 * gave 78, ending seventeen hours earlier. Qt asks for gzip by
+	 * default, so the archive was handed a fraction of each day while
+	 * every band answered and every status was 200.
+	 *
+	 * Asserted on the REQUEST rather than on a response, because the
+	 * fault is in what we ask for. A test that fetched would be asking
+	 * a CDN's cache what mood it was in.
+	 */
+	QNetworkAccessManager net;
+	net.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy,
+	                           QStringLiteral("127.0.0.1"), 1));
+	bbq_wu_key_source keys(&net);
+	bbq_wu_client client(&net, &keys);
+
+	/* A key, so the request is built rather than queued. */
+	keys.m_key = QStringLiteral("0123456789abcdef0123456789abcdef");
+
+	QSignalSpy sent(&net, &QNetworkAccessManager::finished);
+	client.fetch_observed(QStringLiteral("ITEST1"), QStringLiteral("20260903"));
+
+	QVERIFY2(sent.wait(15000), "the request never completed, even against a "
+	                           "dead proxy");
+
+	const QNetworkRequest asked =
+	        sent.at(0).at(0).value<QNetworkReply *>()->request();
+
+	QCOMPARE(asked.rawHeader("Accept-Encoding"), QByteArray("identity"));
 }
 
 QTEST_GUILESS_MAIN(test_client)

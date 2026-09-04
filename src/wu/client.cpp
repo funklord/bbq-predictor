@@ -203,6 +203,29 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
 	                                                        : common_query)));
 
 	QNetworkRequest request(url);
+
+	/*
+	 * IDENTITY ENCODING, because the gzip variant is stale (sec 2.6.5).
+	 *
+	 * Measured against one URL, one key, one minute apart, differing
+	 * only in this header:
+	 *
+	 *     identity   288 observations
+	 *     gzip        78 observations, ending 17 hours earlier
+	 *
+	 * A CDN varies its cache on Accept-Encoding, and the compressed
+	 * entry for these history URLs is served long after it has gone
+	 * stale -- `Cache-Control: no-cache` does not dislodge it either.
+	 * Qt asks for gzip by default, so the archive was quietly given a
+	 * fraction of each day and nothing failed: every band answered,
+	 * every status was 200, and the rows simply were not there.
+	 *
+	 * The cost is bandwidth on a 200 kB document. The alternative is an
+	 * archive with holes in it, which is the one thing sec 12 cannot
+	 * have.
+	 */
+	request.setRawHeader("Accept-Encoding", "identity");
+
 	QNetworkReply *reply = m_net->get(request);
 
 	connect(reply, &QNetworkReply::finished, this,
