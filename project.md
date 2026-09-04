@@ -6817,6 +6817,56 @@ units are installed there directly by `debian/bbq-predictor.install` and
 found where they lie. Verified rather than assumed: the postinst still
 enables and starts the timer, and `libqt6sql6-sqlite` is still declared.
 
-**Remaining, and left alone:** `initial-upload-closes-no-bugs`, which
-wants a bug tracker this project has not got, and `no-manual-page`. The
-second is a real gap and writing one is its own piece of work.
+**Remaining:** `initial-upload-closes-no-bugs`, which wants a bug
+tracker this project has not got. `no-manual-page` is closed by sec
+15.10.
+
+## 15.10 The manual page, and checking it against the program
+
+`packaging/bbq-predictor.1`, installed by `make install` and by the
+package. It closes lintian's `no-manual-page`, which was the last real
+gap that check found.
+
+**The built-in `--help` documented eight options and the binary accepts
+twenty-one.** That is the ordinary fate of a usage string: it is written
+once, options accrete, and nobody re-reads it. So the page documents all
+twenty-one and `--help` now points at it rather than pretending to be
+complete.
+
+**Two errors in the usage text, found only by reading it against the
+code to write the page:**
+
+- **It called `--station` "the pinned weather station".** The same
+  collision sec 15.7 fixed in `settings.h`, still live in the one place
+  a user would read it. It says WATCHED now.
+- **The interpolation list ended on a stray separator and omitted
+  `catmull`** -- seven modes are accepted and six were listed.
+
+**No version number appears in the page.** `VERSION` is the single place
+this project keeps one, and a second copy in a file nobody rebuilds is a
+copy that goes stale silently -- the census problem from `code-style.md`
+in miniature. The `.TH` third field carries the program name alone.
+
+### 15.10.1 A page of countable claims, checked both ways
+
+A manual page is almost entirely present-tense countable claims about
+the tree, which is the shape most likely to rot. So the options are
+compared against the source in BOTH directions, since each catches a
+different fault:
+
+    options in main.cpp     21
+    options in the page     21
+    in source, undocumented none    <- an option nobody can discover
+    in page, not in source  none    <- an option that does not exist
+
+**And the check was watched failing before it was believed.** Renaming
+`--wind` to `--windy` in the page reported it missing from the
+documentation AND invented in the page -- one edit, both directions,
+which is what shows the two halves are really separate questions rather
+than one asked twice.
+
+The page also states the `--fetch-once` exit codes, which nothing else
+user-facing does: 0 every band, 3 partial but now is covered, 1 nothing
+usable stored, 2 configuration. Those exist because the timer needs to
+tell a quiet station from an outage (sec 15.7.1), and a person reading
+`systemctl status` needs the same distinction.

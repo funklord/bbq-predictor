@@ -54,16 +54,19 @@ void print_usage(QTextStream &out) {
 	out << "  --help         print this and exit\n";
 	out << "  --fetch-once   fetch every band once, report what arrived,\n";
 	out << "                 and exit. A diagnostic, not a feature.\n";
-	out << "  --station ID   the pinned weather station, e.g. ISTOCK822\n";
+	out << "  --station ID   the watched weather station, e.g. ISTOCK822\n";
 	out << "  --geocode      LAT,LON for the forecast bands; derived from\n";
 	out << "                 the station when omitted\n";
 	out << "  --interp M     step|linear|monotone|akima|makima|natural|\n";
+	out << "                 catmull\n";
 	out << "  --layout L     auto|desktop|mobile, for --shot\n";
 	out << "  --cursor N     park the readout on column N, for --shot\n";
 	out << "  --tray-icon F  also save the tray icon, for --shot\n";
 	out << "  --shot FILE    fetch, render the window to a PNG, and exit.\n";
 	out << "                 A diagnostic: looking at the picture is how\n";
 	out << "                 layout defects actually get found.\n";
+	out << "\n";
+	out << "See bbq-predictor(1) for the diagnostics this omits.\n";
 }
 
 /* The value after `name`, or empty when absent or last. */

@@ -397,10 +397,18 @@ install: all
 	install -m 0644 packaging/$(DESKTOP_ID).svg \
 	        $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
 
+	# The manual page. Named for the PROGRAM rather than the desktop
+	# entry: what a person types is $(TARGET), and `man` looks the name
+	# up by what was typed.
+	mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1
+	install -m 0644 packaging/$(TARGET).1 \
+	        $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
+
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/$(DESKTOP_ID).desktop
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
+	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
 
 # clean removes intermediates only; $(TARGET) survives, so `make install`
 # stays possible without a rebuild.

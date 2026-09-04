@@ -1,0 +1,215 @@
+.\" Manual page for bbq-predictor.
+.\"
+.\" No version number appears here on purpose: VERSION is the single
+.\" place this project keeps one, and a second copy in a file nobody
+.\" rebuilds is a copy that goes stale silently.
+.TH BBQ-PREDICTOR 1 "2026-09-04" "bbq-predictor" "User Commands"
+.SH NAME
+bbq\-predictor \- weather applet and forecast\-verification archive
+.SH SYNOPSIS
+.B bbq\-predictor
+.RI [ options ]
+.br
+.B bbq\-predictor \-\-fetch\-once
+.RB [ \-\-station
+.IR ID ]
+.RB [ \-\-geocode
+.IR LAT , LON ]
+.RB [ \-\-history\-path
+.IR FILE ]
+.br
+.B bbq\-predictor \-\-shot
+.I FILE
+.RI [ render
+.IR options ]
+.SH DESCRIPTION
+.B bbq\-predictor
+draws high\-resolution temperature and rain graphs from several
+providers at once and answers whether an afternoon is worth lighting a
+fire for.
+.PP
+It keeps a permanent archive of what was observed and what was forecast,
+scores each provider against the measurements as they arrive, and
+corrects later forecasts by the bias it has measured. The archive is the
+point: a forecast is only worth what its record says it is worth, and
+that record cannot be borrowed from anybody else.
+.PP
+With no options it runs as a tray applet where a system tray exists, and
+as a plain window where none does. Closing the window puts the applet
+away when there is a tray to put it in, and quits when there is not.
+.PP
+Everything else documented here is a diagnostic rather than a feature.
+They exist because layout and data questions in this project are settled
+by looking at real output, not by reasoning about it.
+.SH OPTIONS
+.SS General
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.B \-\-help
+Print a usage summary and exit.
+.TP
+.BI \-\-station " ID"
+The watched station, for example
+.BR ISTOCK822 .
+This is the station being looked at, which is a different idea from a
+.I pinned
+station: pinning is a per\-station flag in the archive that buys a
+station the sparing backfill and nothing else.
+.TP
+.BI \-\-geocode " LAT,LON"
+Where the forecast bands are aimed. Derived from the watched station
+when omitted.
+.TP
+.BI \-\-history\-path " FILE"
+Use this archive instead of the default one. For tests, for reading an
+archive without opening it in the applet, and for
+.B \-\-seed\-verification,
+which refuses to run without it.
+.SH DIAGNOSTICS
+.SS Fetching and reporting
+.TP
+.B \-\-fetch\-once
+Fetch every band once, archive what arrives, verify what can be
+verified, report what happened, and exit. This is what the systemd timer
+runs.
+.TP
+.B \-\-probe
+Report what this machine can reach and what its TLS resolved to, then
+exit. Runs before any widget is built, so it works headless. On Android,
+where there is no command line, touching
+.I files/run\-probe
+in the application's data directory asks for the same thing; the marker
+is removed as it is read, so a diagnostic cannot become a mode nobody
+remembers turning on.
+.TP
+.B \-\-history
+Report what the archive holds for the watched station and exit, without
+fetching. The only way to see whether the archive is growing without
+waiting a month to discover that it is not.
+.TP
+.B \-\-stations
+List the stations the archive knows, marking the pinned ones.
+.TP
+.B \-\-discover
+Look up the stations near the geocode and report them.
+.TP
+.BI \-\-search " QUERY"
+Look up places matching
+.I QUERY
+and report their coordinates.
+.SS Rendering
+.TP
+.BI \-\-shot " FILE"
+Fetch, render the window to a PNG, and exit. Looking at the picture is
+how layout defects in this project actually get found.
+.TP
+.BI \-\-layout " L"
+.BR auto ,
+.BR desktop ,
+or
+.BR mobile .
+.TP
+.BI \-\-size " WxH"
+Render at a given size, for reproducing a defect seen on a device.
+.TP
+.BI \-\-view " SPAN[,FROM]"
+Set the visible time span in seconds, optionally placing the left edge
+at an absolute moment. Interaction is the one thing a screenshot cannot
+exercise by itself, so this is how a zoomed or panned graph gets checked
+the same way every other layout question is.
+.TP
+.BI \-\-cursor " N"
+Park the readout on column
+.IR N .
+.TP
+.BI \-\-interp " M"
+Interpolation:
+.BR step ,
+.BR linear ,
+.BR monotone ,
+.BR akima ,
+.BR makima ,
+.BR natural ,
+or
+.BR catmull .
+.TP
+.BI \-\-smooth " SECONDS"
+Round sample times to this many seconds.
+.TP
+.B \-\-wind
+Show the wind series.
+.TP
+.BI \-\-tray\-icon " FILE"
+Also save the tray icon.
+.SS Seeding
+.TP
+.BI \-\-seed\-verification " SPEC"
+Write synthetic verification statistics, so the corrected band can be
+exercised before a month of real weather has gone by.
+.IP
+It
+.B refuses
+to run without
+.BR \-\-history\-path .
+The whole value of the archive is that everything in it was measured,
+and a diagnostic that could quietly put invented numbers there would
+destroy that for the sake of a screenshot.
+.SH EXIT STATUS
+.B \-\-fetch\-once
+distinguishes a partial fetch from a failed one, because a station going
+quiet for an hour is ordinary and the other bands still land in the
+archive:
+.TP
+.B 0
+Every band answered.
+.TP
+.B 3
+Some band failed, but the composite still covers now. The archive
+advanced. The systemd timer forgives this by name.
+.TP
+.B 1
+Nothing covers now: the run stored nothing usable.
+.TP
+.B 2
+A configuration error.
+.PP
+Other modes exit 0 on success and non\-zero otherwise.
+.SH FILES
+.TP
+.I ~/.config/bbq-predictor/bbq-predictor.ini
+Settings, including the watched station. Preferences only.
+.TP
+.I ~/.local/share/bbq-predictor/history.sqlite
+The archive: observations, pending forecasts, verification sums and the
+station list. Records of what was measured, kept apart from preferences
+on purpose.
+.TP
+.I /etc/default/bbq-predictor
+Read by the systemd service.
+.B BBQ_STATION
+must be set there; unset, the service skips its run and says why rather
+than fetching for a station nobody named.
+.TP
+.I /usr/lib/systemd/system/bbq-predictor-fetch.timer
+Runs
+.B \-\-fetch\-once
+every five minutes, so the archive advances and verification accumulates
+without the window being open. The service it triggers carries no
+.B [Install]
+section: the timer is what starts it.
+.SH NOTES
+The Weather Underground key is scraped from that site rather than
+licensed. Asking more often than a station reports spends somebody
+else's quota for nothing, which is why the timer runs at the station's
+own cadence and why a day the archive already holds whole is not fetched
+again.
+.SH SEE ALSO
+.BR systemctl (1),
+.BR journalctl (1)
+.PP
+.I /usr/share/doc/bbq-predictor/project.md
+is the project's design record and is authoritative over this page.
+.SH AUTHOR
+Nabeel Sowan <nabeel@vibes.se>
