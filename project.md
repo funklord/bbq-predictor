@@ -7453,3 +7453,49 @@ in the same table.
 The record line still reads `none yet`, and that is the paragraph above
 rather than a fix that failed: nothing has been scored at the lead the
 displayed window needs.
+
+### 16.13 The palette holds, and the naive way of asking says it does not
+
+Swept every graph colour against its background in both schemes, and the
+first sweep reported **eleven** violations in a palette that has none.
+
+**The wrong population, again.** Gridlines are meant to be faint --
+that is what a gridline is. Band shading, the rain wash and the grill
+window are FILLS rather than ink. And the readout's text is drawn on the
+readout's own box, not on the plot, so measuring it against the plot
+background asks about two colours that never meet. Every one of those
+came back as a finding.
+
+**Which pairs actually meet is the whole of the knowledge**, and with
+the right pairs the palette is clean:
+
+    pair                              light   dark
+    axis text on the plot              8.86  10.36
+    temperature on the plot            5.16   3.45
+    corrected on the plot              4.34   4.10
+    day divider on the plot            6.88  17.80
+    stale warning on the plot          5.16   3.45
+    readout text on its own box       12.42  11.83
+
+Two sit just under the 3:1 floor and both are deliberate: the now marker
+at 2.96 on light, where amber was chosen ON PURPOSE because the dark
+theme's brighter yellow is wrong on white, and the readout's border at
+2.94 on dark, which is the edge of a box whose own text clears the floor
+at 11.83.
+
+**It is a gate rather than this paragraph**, because the pair list is
+the part worth keeping and a paragraph does not run: `make style`
+now carries `tool/palette_contrast.py`, with the pairs named, the two
+exceptions allowed by name with their measured values and reasons, a
+control that refuses if the arithmetic stops working, and a refusal if
+the pattern stops matching any colours at all.
+
+Watched failing both ways: a data colour dimmed until it fails on dark
+is named with its ratio and the scheme, and breaking the contrast
+arithmetic makes the control refuse rather than report a clean palette.
+
+**Three sweeps tonight came back empty and this is the third**, which is
+worth saying plainly: the light theme, the missing lead buckets and the
+palette. Each looked like a finding first, and in each case the
+instrument was wrong rather than the code. The instruments are recorded
+so the next person spends the time on the code instead.

@@ -307,7 +307,7 @@ test: tests-build $(ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs style-signals style-man
+style: style-source style-docs style-signals style-man style-palette
 
 style-source:
 	python3 tool/style_gate.py check
@@ -317,6 +317,14 @@ style-source:
 # the answer.
 style-docs:
 	python3 tool/style_gate.py docs
+
+# Every colour drawn on another must stay legible on it, in both
+# schemes. The knowledge is WHICH pairs are drawn together: a naive sweep
+# of every colour against the plot background reports eleven violations
+# in a palette that has none, because gridlines are meant to be faint and
+# the readout's text sits on the readout's own box.
+style-palette:
+	python3 tool/palette_contrast.py
 
 # The manual page is a page of countable claims about the program, and
 # options accrete faster than anybody re-reads it. Checked both ways: an
