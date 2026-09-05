@@ -43,6 +43,34 @@ void bbq_write_widget_picture(QWidget *source) {
 		return;
 	}
 
+	/*
+	 * NOTHING TO DRAW FOR (sec 16.21).
+	 *
+	 * Rendering the graph at twice widget size and writing 120 kB is
+	 * not free, and it happened on every fetch whether or not anybody
+	 * had put a widget on a home screen. The Java side has always
+	 * declined to broadcast in that case, which saved the broadcast and
+	 * none of the work.
+	 *
+	 * Asked first now. A reader who adds the widget later gets its
+	 * empty state until the next fetch, which is a few minutes and is
+	 * what the empty state is for.
+	 */
+	QJniObject placed_context =
+	        QNativeInterface::QAndroidApplication::context();
+
+	/*
+	 * An invalid context is the question failing rather than a "no", so
+	 * it draws. Only a definite answer of false skips, for the reason
+	 * anyPlaced states on its own side.
+	 */
+	if (placed_context.isValid() &&
+	    !QJniObject::callStaticMethod<jboolean>(
+	            "se/vibes/bbq_predictor/GraphWidget", "anyPlaced",
+	            "(Landroid/content/Context;)Z", placed_context.object())) {
+		return;
+	}
+
 	const QString directory =
 	        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 	if (directory.isEmpty()) {

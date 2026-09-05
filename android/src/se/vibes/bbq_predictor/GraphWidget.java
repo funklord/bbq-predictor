@@ -59,6 +59,48 @@ public class GraphWidget extends AppWidgetProvider {
 	}
 
 	/*
+	 * Whether anybody has actually put one of these on a home screen.
+	 *
+	 * Asked BEFORE the picture is drawn (project.md sec 16.21). Drawing
+	 * it costs a full render of the graph at twice widget size and a
+	 * file of some 120 kB, on every fetch, for the life of the applet
+	 * -- and until this was asked, all of that happened whether or not
+	 * a widget existed to read it. refresh() below has always checked,
+	 * and checking after the work is done saves only the broadcast.
+	 */
+	public static boolean anyPlaced(Context context) {
+		/*
+		 * NOT KNOWING ANSWERS YES.
+		 *
+		 * The only case that may skip the drawing is a definite "no
+		 * widgets": a null context or manager means the question could
+		 * not be put, and declining on that would leave somebody who
+		 * had added the widget looking at its empty state for ever,
+		 * with nothing to say why.
+		 *
+		 * The costs are not equal. Guessing yes wastes a render every
+		 * five minutes while the applet is open; guessing no breaks the
+		 * feature silently, and silently is the half that matters.
+		 * Same asymmetry, and the same answer, as the backfill's
+		 * "not knowing means ask" in sec 15.7.1.
+		 */
+		if (context == null) {
+			return true;
+		}
+
+		AppWidgetManager manager = AppWidgetManager.getInstance(context);
+		if (manager == null) {
+			return true;
+		}
+
+		int[] ids = manager.getAppWidgetIds(
+		        new ComponentName(context, GraphWidget.class));
+
+		/* A null array is the question failing, not an answer. */
+		return ids == null || ids.length > 0;
+	}
+
+	/*
 	 * Called from C++ when a fresh picture has been written. Without
 	 * this the widget would only change when Android felt like asking,
 	 * which it does at most every thirty minutes and not at all while

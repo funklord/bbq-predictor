@@ -8065,3 +8065,47 @@ that function would be invisible -- which is the reason the unit and
 the manual are both checked against the CODE rather than against each
 other, since two documents agreeing while the program does something
 else is the failure sec 15.10.2 exists for.
+
+### 16.21 The widget picture was drawn whether or not anybody wanted it
+
+`bbq_write_widget_picture` ran on every composite change: a full render
+of the graph at twice widget size, a PNG of some 120 kB, written and
+renamed. Every five minutes, for the life of the applet.
+
+**`GraphWidget.refresh()` has always checked whether a widget is
+placed** and declines to broadcast when none is -- which saved the
+broadcast and none of the work. The check was in the right place for
+what it was for and the wrong place for this.
+
+Asked first now, through the same `getAppWidgetIds` the broadcast uses.
+Measured on a phone with the provider registered and no widget on any
+home screen: after a full launch and fetch, `files/widget.png` does not
+exist. Before, it did.
+
+**A reader who adds the widget later sees its empty state until the next
+fetch.** That is a few minutes and is exactly what the empty state says:
+"open bbq-predictor once".
+
+### 16.21.1 The first version declined on not knowing, which is the fault this project keeps finding
+
+`anyPlaced` returned false for a null context or a null manager -- and
+false means "do not draw". A question that could not be put was being
+read as the answer no.
+
+**The costs are not equal, which is what decides it.** Guessing yes
+wastes a render every five minutes while the applet is open. Guessing no
+breaks the widget silently: somebody who had added it would watch the
+empty state for ever with nothing to say why. Silent is the half that
+matters.
+
+So not knowing answers yes, on both sides of the JNI call, and a null id
+array is treated as the question failing rather than as an empty answer.
+It is the same asymmetry and the same answer as the backfill's "not
+knowing means ask" in sec 15.7.1, and the third time this session that
+an early return has had to be turned round.
+
+**What is not verified is the positive path**, and it is worth saying
+rather than implying: no widget has been placed on either phone all
+evening, so "it still draws when one exists" rests on `anyPlaced` using
+the same call `refresh()` does, not on having seen it. Placing one is
+the test.
