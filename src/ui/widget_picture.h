@@ -20,4 +20,14 @@ class QWidget;
  */
 void bbq_write_widget_picture(QWidget *source);
 
+/*
+ * Ask Android to fetch periodically even when nothing is on screen
+ * (project.md sec 17).
+ *
+ * A no-op off Android, and idempotent on it: scheduling the same job id
+ * replaces rather than stacks, so calling it on every launch is both
+ * harmless and the only thing that puts the job back after a reboot.
+ */
+void bbq_schedule_background_fetch();
+
 #endif

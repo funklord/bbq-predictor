@@ -102,3 +102,16 @@ void bbq_write_widget_picture(QWidget *source) {
 	Q_UNUSED(source);
 #endif
 }
+
+void bbq_schedule_background_fetch() {
+#ifdef Q_OS_ANDROID
+	QJniObject context = QNativeInterface::QAndroidApplication::context();
+	if (!context.isValid()) {
+		return;
+	}
+
+	QJniObject::callStaticMethod<void>(
+	        "se/vibes/bbq_predictor/FetchJobService", "schedule",
+	        "(Landroid/content/Context;)V", context.object());
+#endif
+}

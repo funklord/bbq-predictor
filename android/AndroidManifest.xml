@@ -63,6 +63,50 @@
         </activity>
 
         <!--
+            The background fetch (project.md sec 17).
+
+            Runs the same native library as the activity, so it is the
+            same fetch: argument android.app.arguments makes main() take
+            the headless path. background_running tells Qt's loader that
+            there is no activity behind this and it must not wait for
+            one.
+
+            ITS OWN PROCESS, and that is not tidiness. Qt permits one
+            QCoreApplication per process and the activity's process
+            already has one, so a service sharing it is started and
+            never created. Measured: startService returned without
+            error while onCreate never ran.
+
+            exported=false: nothing outside this package has any reason
+            to start it, and a fetch is not an interface.
+        -->
+        <service
+            android:name=".FetchService"
+            android:process=":fetch"
+            android:exported="false">
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="-- %%INSERT_APP_LIB_NAME%% --" />
+            <meta-data
+                android:name="android.app.arguments"
+                android:value="--android-service" />
+            <meta-data
+                android:name="android.app.background_running"
+                android:value="true" />
+        </service>
+
+        <!--
+            The thing Android is willing to start (sec 17.1). It holds
+            the BIND_JOB_SERVICE permission because the platform refuses
+            to bind a job service without it, and does nothing but hand
+            over to the service above.
+        -->
+        <service
+            android:name=".FetchJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+
+        <!--
             The home-screen widget (project.md sec 16).
 
             exported=true is required: the widget host is the launcher,

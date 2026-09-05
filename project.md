@@ -7855,3 +7855,79 @@ found something**, and the only one where the answer was a gap rather
 than a false alarm: the exit-code contract had no guard, the corrector
 turned out to be right for an unwritten reason, and this one was a
 capability quietly removed by a fix that was otherwise correct.
+
+## 17. The Android background fetch: built, measured, not enabled
+
+Asked for by the copyright holder 2026-09-05. It is written and it does
+not work, and the reason is a platform limit rather than a bug in it.
+
+**The design was right and is worth keeping.** A Qt service runs the
+same native library the activity does, with `--android-service` in its
+arguments, so `main()` builds a `QCoreApplication` and fetches instead of
+a window. That sameness is the whole point: the fetch archives, verifies
+and queues the correction because those live in the feed rather than in
+the window, so a service running it gets all three. The alternative was
+a Java fetcher, which is what `GraphWidget` refused for the drawing and
+would be worse here -- the parsing, the band precedence and the store
+schema would all need keeping in step.
+
+### 17.1 What Android allows, measured rather than assumed
+
+**A background service cannot be started from the background.**
+Measured directly:
+
+    Background start not allowed: service Intent { ... FetchService }
+    ... startFg?=false
+
+The two ways round it are a foreground service, which costs a
+notification, and a scheduled job -- the system starts the job, and a
+job that is running may start a service. `FetchJobService` exists to be
+that thing and does nothing else. It works: the job schedules
+(`PERIODIC: interval=+15m0s0ms`), dispatches, and `startService` returns
+without an exception.
+
+### 17.2 Two faults found on the way, both real
+
+**The service must have its own process.** Qt permits one
+`QCoreApplication` per process and the activity's already has one, so a
+service sharing it is started and never created -- `startService`
+returning cleanly while `onCreate` never ran. `android:process=":fetch"`
+fixes that, and the process then appears within four seconds.
+
+**And it must reach its event loop before doing any work.** Qt's Android
+loader waits for the application to reach `exec()` before letting the
+service's `onCreate` return. The first version fetched and returned
+without ever reaching one, so `onCreate` blocked for the length of a
+fetch. A zero-delay timer inside `exec()` satisfies the loader
+immediately and does the work in the loop it was waiting for.
+
+### 17.3 And then the limit that is not ours to fix
+
+With both faults fixed the service still dies:
+
+    E ActivityManager: ANR in se.vibes.bbq_predictor:fetch
+    I ActivityManager: Killing 25383:...:fetch (adj 0): bg anr
+
+Some thirty seconds after the job starts it. **Loading Qt Core, Network
+and Sql into a cold process is more than a background service is
+given**, and reaching `exec()` promptly does not help because the
+startup itself is the cost.
+
+**What would work is a foreground service**, which gets a far longer
+allowance and costs a notification every fifteen minutes for a weather
+applet nobody asked to be notified by. That is a decision about what the
+program shows its reader rather than a fix, so it is the holder's.
+
+**So nothing is scheduled.** The plumbing is committed and inert: the
+services are declared, `bbq_schedule_background_fetch()` exists, and
+nothing calls it. Shipping the schedule meanwhile would spawn a process
+that ANRs every quarter of an hour -- worse than the gap it was meant to
+close. The job scheduled during testing was cancelled on the device, and
+a launch of the shipped build registers none.
+
+**The gap it was meant to close is still there**, and sec 15 already
+closes it on any machine that stays up: the systemd timer fetches every
+five minutes into an archive that is now readable. A phone that wants a
+current widget without a notification wants that server's picture rather
+than one of its own, which is sec 15.5's question arriving from the
+third direction tonight.

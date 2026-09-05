@@ -81,7 +81,76 @@ QString option_value(const QStringList &arguments, const QString &name) {
 
 } // namespace
 
+/*
+ * THE ANDROID SERVICE ENTRY, WHICH RUNS BEFORE ANY QApplication EXISTS
+ * (project.md sec 17).
+ *
+ * A background fetch has no screen and must not build one. QApplication
+ * wants a platform plugin and a display connection; a service has
+ * neither, and asking for them is how a service that should have
+ * fetched quietly instead fails to start at all.
+ *
+ * So the flag is read from argv directly, before anything is
+ * constructed. It cannot use option_value(), which wants the QStringList
+ * that only exists once an application object does -- and constructing
+ * one is the very thing being decided.
+ */
+bool wants_service(int argc, char *argv[]) {
+	for (int i = 1; i < argc; ++i) {
+		if (qstrcmp(argv[i], "--android-service") == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int main(int argc, char *argv[]) {
+	if (wants_service(argc, argv)) {
+		/*
+		 * QCoreApplication: the fetch needs the event loop, the network
+		 * and the store, and nothing that draws.
+		 */
+		QCoreApplication service(argc, argv);
+		QCoreApplication::setApplicationName(QStringLiteral("bbq-predictor"));
+		QCoreApplication::setApplicationVersion(
+		        QStringLiteral(BBQ_VERSION_STRING));
+
+		bbq_ensure_tls_backend();
+
+		/*
+		 * REACH THE EVENT LOOP FIRST, AND FETCH FROM INSIDE IT
+		 * (sec 17.2).
+		 *
+		 * Qt's Android loader waits for the application to reach
+		 * exec() before it lets the service's onCreate return. Doing
+		 * the fetch here and returning never reaches one, so onCreate
+		 * blocked for the length of a fetch and Android killed the
+		 * service: measured as an ANR against
+		 * se.vibes.bbq_predictor:fetch with executeNesting=3 and
+		 * thirty seconds on the clock.
+		 *
+		 * A zero-delay timer fires once exec() is running, so the
+		 * loader is satisfied immediately and the work happens inside
+		 * the loop it was waiting for.
+		 *
+		 * The station is the one the applet is watching. A service that
+		 * took its own would be a second setting to keep in step, and
+		 * the first time they disagreed the archive would gain a
+		 * station nobody had chosen.
+		 */
+		int outcome = 0;
+		QTimer::singleShot(0, &service, [&outcome]() {
+			outcome = bbq_wu_fetch_once(bbq_settings::station(),
+			                            bbq_settings::geocode_override(), 30,
+			                            QString());
+			QCoreApplication::quit();
+		});
+
+		service.exec();
+		return outcome;
+	}
+
 	QApplication app(argc, argv);
 	QApplication::setApplicationName(QStringLiteral("bbq-predictor"));
 
