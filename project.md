@@ -7499,3 +7499,34 @@ worth saying plainly: the light theme, the missing lead buckets and the
 palette. Each looked like a finding first, and in each case the
 instrument was wrong rather than the code. The instruments are recorded
 so the next person spends the time on the code instead.
+
+## 16.14 "none yet" was claiming something the archive contradicted
+
+The record line said `record: none yet` on a phone holding some 500
+scored samples. Not a display bug in the ordinary sense: the record
+describes the band and lead of the WINDOW being shown, and there was
+genuinely nothing at that lead. Sec 16.12 establishes that.
+
+**What was wrong is the sentence.** Its own comment justifies it as
+"nothing has been checked yet, which is a different thing and the normal
+state of a fresh install" -- and that reading was false. A reader
+wondering whether the archive was doing anything was told, in as many
+words, that it was not.
+
+**A fresh install and a lead that has not come round yet are opposite
+answers to that question**, and they shared a sentence. One means give it
+a week; the other means it is working, just not for tomorrow afternoon.
+
+So the store is asked whether it has scored anything at all for this
+station, and the lead is named when it has:
+
+    nothing anywhere      record: none yet
+    nothing at this lead  record: none at 1d yet
+
+**Found by walking past it twice.** It was read as correct in sec 16.12
+-- and it IS correct about the lead, which is what made the second
+reading stop there. The third look was at the comment rather than the
+condition, and the comment is where the claim lives.
+
+Watched failing with the store's count stubbed out, where the line
+reverts to `none yet` beside 500 banked samples.

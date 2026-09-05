@@ -69,6 +69,7 @@ private slots:
 	void turning_and_unfolding_the_device_keeps_what_was_on_screen();
 	void a_fix_from_where_discovery_already_ran_is_not_sent_to_it();
 	void a_wrapping_row_asks_its_height_at_its_own_preferred_width();
+	void an_unscored_lead_does_not_claim_the_archive_is_empty();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -655,6 +656,62 @@ void test_window::a_wrapping_row_asks_its_height_at_its_own_preferred_width() {
 	const int narrow = row->heightForWidth(preferred.width() / 2);
 	QVERIFY2(narrow > 24 + 2, "the row did not wrap when halved");
 	QVERIFY2(narrow < 8 * (24 + 6), "the row wrapped every item onto its own line");
+}
+
+void test_window::an_unscored_lead_does_not_claim_the_archive_is_empty() {
+	/*
+	 * TWO DIFFERENT STATES THAT READ THE SAME (project.md sec 16.14).
+	 *
+	 * The record describes the band and lead of the WINDOW being shown,
+	 * so an empty answer means empty at that lead. It said "none yet",
+	 * whose own comment justified it as "nothing has been checked yet"
+	 * -- and on a phone with 500 samples banked at other leads that was
+	 * simply false. A reader wondering whether the archive was doing
+	 * anything was told it was not.
+	 *
+	 * A fresh install and a lead that has not come round yet are
+	 * opposite answers to that question and must not share a sentence.
+	 */
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const QString station = QStringLiteral("ITESTLEAD");
+	window.watch_station(station);
+
+	const qint64 now = 1700000000;
+	const qint64 when = now + 3600;
+
+	bbq_composite composite;
+	composite.set_series(bandful(bbq_band::hourly, now, 6));
+
+	/* Nothing scored at all: the fresh install, and it says so. */
+	const QString fresh = window.verification_note(composite, when, now);
+	QVERIFY2(fresh.contains(QStringLiteral("none yet")),
+	         qPrintable(QStringLiteral("a fresh store should say none yet: "
+	                                   "%1").arg(fresh)));
+
+	/*
+	 * Now score something at a DIFFERENT lead. The window still asks
+	 * about the hour bucket and still finds nothing there, but the
+	 * archive is plainly working and the line must not deny it.
+	 */
+	bbq_history &store = window.feed()->history();
+	QVERIFY(store.set_verification(station, bbq_band::hourly,
+	                               QStringLiteral("temperature"),
+	                               bbq_lead_bucket::four_days,
+	                               40, -0.2, 0.9, 1.1));
+
+	const QString elsewhere = window.verification_note(composite, when, now);
+
+	QVERIFY2(!elsewhere.contains(QStringLiteral("none yet")),
+	         qPrintable(QStringLiteral("500 samples banked and the line "
+	                                   "still claims none yet: %1")
+	                            .arg(elsewhere)));
+	QVERIFY2(elsewhere.contains(QStringLiteral("1h")),
+	         qPrintable(QStringLiteral("the line does not name the lead it "
+	                                   "has nothing for: %1").arg(elsewhere)));
 }
 
 int main(int argc, char *argv[]) {

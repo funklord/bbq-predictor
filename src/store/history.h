@@ -299,6 +299,18 @@ public:
 	qint64 newest_observation(const QString &station, qint64 from,
 	                          qint64 to) const;
 	int observation_count(const QString &station) const;
+
+	/*
+	 * How many scored samples this station has, across every band, lead
+	 * and quantity.
+	 *
+	 * Asked so the record line can tell "nothing has been checked yet"
+	 * apart from "nothing has been checked AT THIS LEAD yet"
+	 * (sec 16.14). The two look identical from the window's own bucket
+	 * and are opposite answers to somebody wondering whether the
+	 * archive is doing anything.
+	 */
+	int verified_count(const QString &station) const;
 	int pending_count(const QString &station) const;
 
 	/*

@@ -1296,6 +1296,23 @@ qint64 bbq_history::newest_observation(const QString &station, qint64 from,
 	return query.value(0).toLongLong();
 }
 
+int bbq_history::verified_count(const QString &station) const {
+	if (!m_open) {
+		return 0;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "SELECT SUM(count) FROM verification WHERE station = ?"));
+	query.addBindValue(station);
+
+	if (!query.exec() || !query.next() || query.value(0).isNull()) {
+		return 0;
+	}
+
+	return query.value(0).toInt();
+}
+
 int bbq_history::observation_count(const QString &station) const {
 	if (!m_open) {
 		return 0;

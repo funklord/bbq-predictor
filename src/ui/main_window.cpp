@@ -1221,7 +1221,26 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 		 * which is a different thing and the normal state of a fresh
 		 * install (sec 12.6 -- a forecast is only scored once the hour
 		 * it predicted has been observed).
+		 *
+		 * EXCEPT WHEN IT IS NOT THE TRUTH (sec 16.14).
+		 *
+		 * The record describes the band and lead of the window being
+		 * shown, so an empty answer here means empty AT THAT LEAD. A
+		 * store with hundreds of scored samples at other leads said
+		 * "none yet" and meant "none for tomorrow afternoon" -- and
+		 * "nothing has been checked yet" is exactly the reading the
+		 * comment above asks for, which was false.
+		 *
+		 * Measured on a phone: 500 samples banked and the line claiming
+		 * the archive had done nothing. The lead is named when there is
+		 * something elsewhere, so the difference between a fresh
+		 * install and a lead that has not come round yet is visible.
 		 */
+		if (store.verified_count(m_feed->station()) > 0) {
+			return tr("   record: none at %1 yet")
+			        .arg(QString::fromLatin1(bbq_lead_bucket_name(bucket)));
+		}
+
 		return tr("   record: none yet");
 	}
 
