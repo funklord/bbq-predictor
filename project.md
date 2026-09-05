@@ -7336,3 +7336,44 @@ and fewer than all. Watched failing with `sizeHint` put back to
 Rendered at 820 and 1900 rather than reasoned about. At 820 the controls
 wrap to two lines with everything reachable and the graph keeps the
 majority of the height; at 1900 they sit on one line as before.
+
+### 16.11 The light theme, swept after a night of layout changes
+
+Six layout commits landed in one session and every one was looked at in
+the dark theme, because that is what this machine's desktop reports.
+Rendered in light, both shapes, with `XDG_CONFIG_HOME` pointed at a
+scratch directory holding `theme=light` -- which forces the answer
+without opening the real configuration, and is worth knowing as the way
+to check the other scheme at all.
+
+**Nothing was wrong.** The freshness line sits under the graph in both
+shapes, the controls carry their margin, the row wraps at 900 pixels,
+the grill window draws in the light palette's orange and the now marker
+in amber rather than the dark theme's yellow.
+
+**One thing looked wrong and was not, which is why it is written down.**
+The `bias-corrected` caption reads faintly against white, and the
+obvious conclusion is that a colour chosen for a dark ground is being
+reused on a light one -- there IS only one `corrected` value for both
+themes, where nearly every other element has two, so the story fitted.
+Measured, it does not:
+
+    corrected #8b6bb1 on #16181a (dark)  4.10:1
+    corrected #8b6bb1 on #ffffff (light) 4.34:1
+
+**It is better on light than on dark.** What the eye was reacting to is
+the caption crossing the red curve, which happens in both themes and is
+already mitigated: the text is drawn eight times in the background
+colour before it is drawn in its own, for exactly this reason.
+
+So the single shared colour is not an oversight to fix, and the next
+reader who notices the faintness can stop here rather than repeating the
+measurement.
+
+**And the night's own countable claims were checked against the code**
+rather than left to be believed: `control_margin` 8 and 0, the widget
+picture at 1000 by 440, its twenty-minute staleness, the kilometre of
+discovery movement, the three-hour backfill tolerance and six-hour
+interval, the timer's five minutes, `SuccessExitStatus=3`, and the
+tray's two hours. Ten for ten. That is the cheapest sweep in this file
+and the one most worth doing while the prose is still warm.
