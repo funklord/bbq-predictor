@@ -7380,10 +7380,31 @@ and the one most worth doing while the prose is still warm.
 
 ### 16.12 The dry-spell allowance was applied to one of the two places
 
-`record: none yet` on a phone that had been running a week, with 24
-pairings banked in one lead bucket. Not a fault in the record line: the
-bucket held temperature and wind and no rain, and the line reports all
-four quantities together, so one that never scores holds the whole line.
+**The fix below is right and the reason first given for it was wrong.
+The wrong reason is kept here because it is the more useful half.**
+
+It was found by asking why a phone said `record: none yet` after a week,
+and the answer offered was that the bucket held temperature and wind and
+no rain, the line reporting all four quantities together so one that
+never scores holds the whole line. **The line does no such thing:**
+
+    if (temperature.count == 0 && rain.count == 0 && verdict.count == 0)
+
+Any ONE of the three suffices, so a missing rain quantity could not have
+held it. The real cause is that the record describes the band and lead
+bucket of the WINDOW BEING SHOWN -- `Sun 16:04`, some 27 hours out --
+and the archive holds buckets 0, 1, 2, 3, 7 and 8 with nothing at that
+lead. `none yet` was correct, and would have been correct with rain
+scored perfectly.
+
+**The condition was three lines from the claim and was not read.** The
+bucket table was read, the quantity that was missing was noticed, and a
+mechanism was supplied that fitted it -- the frame arriving before the
+evidence, for the fourth time in this session. What settled it was
+reading the `if`.
+
+**What survives is the defect itself**, which is real and was found by
+the wrong question:
 
 **Rain was never scored on a dry day.** The stuck guard refuses a
 quantity whose observations never move, which for temperature or wind is
@@ -7411,8 +7432,24 @@ number the refusal was throwing away.
 
 **What it does not do is repair the past.** Verifying consumes the
 pending forecast, so pairings already scored without rain cannot be
-scored again -- the allowance applies to what verifies from here. On a
-station that has stopped reporting nothing verifies at all, so the phone
-showing `none yet` today will go on showing it until ISTOCK877 returns
-or the watched station changes. **The fix is real and its effect is not
-immediate, and those are different sentences.**
+scored again -- the allowance applies to what verifies from here.
+
+**Measured on the device the same evening, and the archive shows it.**
+ISTOCK877 resumed and the backfill filled in the whole of 2026-09-04,
+taking the store from 880 observations to 1120 and putting 240 new
+pairings through verification under the new code:
+
+    before   precip_rate in 2 buckets, 8 samples
+             temperature in 4 buckets, 62 samples
+    after    buckets scoring all four quantities in lockstep --
+             band 3 bucket 0: grill 26, precip_rate 26,
+             temperature 26, wind 26
+
+**Bucket 7 is the control nobody arranged.** It was scored before the
+fix and still holds two quantities across 48 samples; bucket 8, scored
+after, holds four across 102. The old shape and the new one are sitting
+in the same table.
+
+The record line still reads `none yet`, and that is the paragraph above
+rather than a fix that failed: nothing has been scored at the lead the
+displayed window needs.
