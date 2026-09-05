@@ -163,11 +163,56 @@ scratch work. All of them run headless.
     ./bbq-predictor --history-path /tmp/x.sqlite  # against a scratch archive
     ./bbq-predictor --seed-verification 0.6 --history-path /tmp/x.sqlite
 
+## Installing it
+
+    make install                  # binary, desktop entry, icon, manual page
+    man bbq-predictor             # every option, not the eight --help lists
+
+Or as a Debian package, which is what a machine that should keep
+fetching wants:
+
+    make deb                      # lands in build/deb, runs the suite first
+    sudo apt-get install -y ./build/deb/bbq-predictor_*.deb
+
+The package brings a systemd timer that runs `--fetch-once` every five
+minutes, so the archive advances and verification accumulates without
+the window being open. It needs a station before it will do anything:
+
+    # /etc/default/bbq-predictor
+    BBQ_STATION=ISTOCK877
+
+Unset, the service **skips** its run and says why rather than fetching
+for a station nobody named. It runs as its own `bbq-predictor` system
+account, and its archive is deliberately readable:
+
+    bbq-predictor --history --history-path /var/lib/bbq-predictor/history.sqlite
+
+That archive is **not** the applet's. The applet keeps its own under
+`~/.local/share`; whether the two should ever be reconciled is an open
+question in `project.md` sec 15.5.
+
+## On a phone
+
+`make android` builds an APK and `make android-install` puts it on an
+attached device -- `make android-check` says what is missing first, by
+name, rather than failing halfway through Gradle.
+
+There is a home-screen widget. Add it from the launcher's widget picker;
+it draws the graph the applet last rendered and **says how old that
+picture is** once it is more than twenty minutes stale, because a
+forecast that looks current and is six hours old is worse than no widget
+at all. It only changes while the applet runs: there is no background
+fetch, and the age is stated rather than the staleness hidden.
+
 ## Contributing
 
 `code-style.md` at the repo root has the rules: `snake_case`, tabs to
-indent and spaces to align, lowercase filenames. `make style` checks
-what can be checked mechanically, and `make check` adds the tests.
+indent and spaces to align, lowercase filenames. `make style` runs six
+gates -- indentation, `project.md` against the tree, every signal having
+a listener, the manual page against the options the program accepts,
+palette contrast in both schemes, and the fetch exit codes against the
+systemd unit that forgives one of them -- and `make check` adds the
+tests.
 
     make hooks      # install the commit-msg hook
 

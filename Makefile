@@ -19,9 +19,17 @@
 #                        which is paid for by never judging a test from a
 #                        binary this target did not rebuild.
 #   make check        -- everything that must pass before a commit
-#   make style        -- indentation gate, plus project.md against the tree
+#   make style        -- six gates: indentation, project.md against the
+#                        tree, every signal has a listener, the manual
+#                        page against the options, palette contrast,
+#                        and the fetch exit codes against the unit
 #   make hooks        -- install the commit-msg hook from tool/hooks/
-#   make install      -- install the binary and its desktop entry
+#   make install      -- install the binary, desktop entry, icon and
+#                        manual page under PREFIX
+#   make deb          -- a Debian package: the applet, a systemd timer
+#                        that fetches on its own clock, and the
+#                        bbq-predictor account it runs as. Lands in
+#                        $(DEB_DIR). Runs the suite on the way through
 #   make uninstall    -- remove what install put there
 #   make clean        -- remove compilation intermediates only; the built
 #                        binary is left in place, so `make install` stays
