@@ -39,7 +39,16 @@ ALLOWED_UNDOCUMENTED = {}
 # list for its own false findings has been switched off by instalments.
 IN_SOURCE = re.compile(
 		r'(?:option_value\s*\(\s*arguments\s*,\s*QStringLiteral\(\s*'
-		r'|arguments\.contains\s*\(\s*QStringLiteral\(\s*)'
+		r'|arguments\.contains\s*\(\s*QStringLiteral\(\s*'
+		# And the raw argv form. Added because a flag read before any
+		# QStringList exists -- the Android service entry has to be,
+		# since deciding it is what decides whether an application
+		# object is built at all -- used neither form above and was
+		# invisible here. The gate reported twenty-one options while
+		# the program accepted twenty-two, which is the exact failure
+		# it exists to prevent, arriving through a shape nobody had
+		# thought of.
+		r'|qstrcmp\s*\(\s*argv\[[a-z]\]\s*,\s*)'
 		r'"(--[a-z][a-z-]*)"')
 
 # roff spells a literal hyphen \- so it is not confused with a line break.

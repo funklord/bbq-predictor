@@ -75,6 +75,18 @@ Fetch every band once, archive what arrives, verify what can be
 verified, report what happened, and exit. This is what the systemd timer
 runs.
 .TP
+.B \-\-android\-service
+Fetch once and exit, building no window and no
+.BR QApplication .
+Passed by the Android service's own manifest rather than by a person:
+it is read straight from
+.I argv
+before any application object exists, because whether to build one is
+the thing it decides. It works anywhere and there is no reason to type
+it \-\-
+.B \-\-fetch\-once
+is the same fetch with a report.
+.TP
 .B \-\-probe
 Report what this machine can reach and what its TLS resolved to, then
 exit. Runs before any widget is built, so it works headless. On Android,

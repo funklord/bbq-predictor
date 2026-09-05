@@ -7994,3 +7994,36 @@ The activity carries nothing the service is missing. Whatever stops the
 service is not a metadata gap, and Qt logs nothing on the way -- not
 even a `dlopen` failure -- while Android reports only
 `Timeout executing service`.
+
+### 17.5 The option gate had a blind spot, and my own change walked into it
+
+`--android-service` is an option the program accepts. The manual page
+did not mention it and `tool/man_options.py` said twenty-one options
+were documented both ways, which was true of the twenty-one it could
+see.
+
+**It could not see this one by construction.** The gate matches flags
+read through `option_value(arguments, ...)` or `arguments.contains(...)`
+-- deliberately, so that any string shaped like a flag in a message does
+not become a finding (sec 15.10.2). The service entry is read straight
+from `argv` with `qstrcmp`, and it has to be: deciding it is what
+decides whether an application object is built at all, and the
+`QStringList` the other two forms need does not exist yet.
+
+So the gate reported a clean sweep while the program had grown an option
+it had never heard of. **That is the exact failure it exists to prevent,
+arriving through a shape nobody had thought of** -- and it arrived two
+commits after the gate was written, from the same hands.
+
+The pattern knows the `argv` form now, and the option is documented as
+what it is: passed by the Android manifest rather than by a person,
+working anywhere, with `--fetch-once` named as the thing to type
+instead.
+
+**The general lesson is about scope rather than regex.** A gate that
+matches how something is *written* is exact and narrow, and its
+narrowness is invisible from a green result: it reports on the shapes it
+knows and says nothing about the ones it does not. The remedy that
+worked here was not a looser pattern but a second known shape, added the
+moment one appeared -- and the way it appeared was somebody writing
+code, not somebody auditing the gate.
