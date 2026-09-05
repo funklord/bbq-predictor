@@ -1,5 +1,6 @@
 #include "ui/main_window.h"
 
+#include "ui/flow_layout.h"
 #include "ui/widget_picture.h"
 
 #include <QGuiApplication>
@@ -849,16 +850,26 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 
 
 	} else {
-		QHBoxLayout *row = new QHBoxLayout(m_controls);
+		/*
+		 * WRAPPING, NOT ONE LINE (project.md sec 16.10).
+		 *
+		 * A QHBoxLayout squeezes to minimums and then clips, and the
+		 * pane's horizontal scrolling is off, so a clipped control is
+		 * simply unreachable. At the default 820 pixels that was Wind,
+		 * Steady scale, Layout and Theme -- four controls gone, with
+		 * nothing said, until somebody widened the window.
+		 *
+		 * The cap on the pane's height is lifted in this shape, so
+		 * wrapping costs plot rather than reachability, and only at
+		 * widths where the alternative was losing controls entirely.
+		 */
+		bbq_flow_layout *row = new bbq_flow_layout(m_controls, 6);
 		row->setContentsMargins(m_metrics.control_margin, 0,
 		                        m_metrics.control_margin, 0);
-		row->setSpacing(6);
 
 		for (QWidget *item : m_control_items) {
-			row->addWidget(item, 0);
+			row->addWidget(item);
 		}
-
-		row->addStretch(1);
 
 	}
 
@@ -928,7 +939,18 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 	 * least important element.
 	 */
 	m_verdict->setWordWrap(metrics.stack_controls);
-	m_freshness_label->setWordWrap(metrics.stack_controls);
+	/*
+	 * WRAPPED IN BOTH SHAPES, now that it has a row of its own.
+	 *
+	 * Unwrapped, a QLabel demands the width of its longest line, and
+	 * this label's longest line is an error message. Sitting in the
+	 * root layout that made the WINDOW's minimum width depend on
+	 * whatever had just gone wrong -- measured at 1025 pixels against a
+	 * default of 820, so a station going quiet would have shoved the
+	 * window wider. It was harmless while the label lived inside the
+	 * scrolled pane, where it was merely clipped.
+	 */
+	m_freshness_label->setWordWrap(true);
 
 	/*
 	 * Word wrap alone was not enough: a wrapped QLabel still reports a

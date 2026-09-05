@@ -7285,3 +7285,54 @@ That is twice in one evening that a label moved into the edge-to-edge
 region and lost a glyph. The first was inherited by accident; the second
 was written by somebody who had just fixed the first, which is the
 better argument for stating the principle in the metric's own comment.
+
+### 16.10 The desktop control row could not wrap, so it lost controls
+
+At the default 820 pixels the desktop row overflowed and `Wind`,
+`Steady scale`, `Layout` and `Theme` were past the right edge. The
+pane's horizontal scrolling is off -- deliberately, sec 10.6 -- so there
+was nothing to scroll to them with: four controls simply gone until
+somebody widened the window, with nothing saying so.
+
+`bbq_flow_layout` wraps instead. Qt has no wrapping layout; a
+`QHBoxLayout` squeezes to minimums and then clips. The pane's height cap
+is lifted in this shape, so wrapping costs plot rather than
+reachability, and only at widths where the alternative was losing
+controls entirely.
+
+### 16.10.1 Two defects in the layout that wrote it, both mine
+
+**The pane sat mostly empty with a scrollbar, at every width.**
+`QWidget::sizeHint` defers to `QLayout::totalSizeHint`, and for a
+height-for-width layout that asks `heightForWidth(sizeHint().width())`.
+The first version returned `minimumSize()` as its `sizeHint` -- the
+width of the widest single item, about 150 pixels -- so the height came
+back as all thirteen controls on lines of their own, some 390 pixels,
+and `setMinimumHeight` made the pane demand that whatever the window
+was. **The preferred size of a wrapping row is the row unwrapped; the
+minimum is the widest item, which is what lets it wrap at all.**
+
+**And I blamed the wrong thing first.** Seeing the pane equally empty at
+1900 pixels, where nothing needs to wrap, I concluded the flow layout
+was not the cause. Wrong: wrapping was not the cause, and the layout
+was -- through its size REPORTING, which is width-independent. What
+settled it was reverting only the flow layout and rendering the same
+width again: compact without it, empty with it. **"Not the mechanism I
+was thinking of" is not "not this change".**
+
+**Then the fix was one pixel short.** A default-constructed `QSize` is
+`(-1, -1)`, not `(0, 0)`, so accumulating the row width from it gave 761
+where the row needs 762 -- and the last item wrapped at the layout's own
+preferred width, the one width it exists to fit. Caught by the test,
+which asserts exactly that and failed on the corrected code before the
+correction was correct.
+
+The test asserts relationships rather than pixels: at its preferred
+width the row is one row, its minimum width is smaller than that or it
+could never wrap, and halving the width wraps it to more than one row
+and fewer than all. Watched failing with `sizeHint` put back to
+`minimumSize`.
+
+Rendered at 820 and 1900 rather than reasoned about. At 820 the controls
+wrap to two lines with everything reachable and the graph keeps the
+majority of the height; at 1900 they sit on one line as before.

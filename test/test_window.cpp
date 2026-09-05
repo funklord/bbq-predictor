@@ -7,6 +7,7 @@
 #include <QMouseEvent>
 #include <QNetworkProxy>
 #include <QStandardPaths>
+#include <QLabel>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QWheelEvent>
@@ -16,6 +17,7 @@
 #include "model/composite.h"
 #include "store/history.h"
 #include "ui/layout.h"
+#include "ui/flow_layout.h"
 #include "ui/main_window.h"
 #include "wu/feed.h"
 
@@ -66,6 +68,7 @@ private slots:
 	void the_view_still_pans_and_zooms_through_the_window();
 	void turning_and_unfolding_the_device_keeps_what_was_on_screen();
 	void a_fix_from_where_discovery_already_ran_is_not_sent_to_it();
+	void a_wrapping_row_asks_its_height_at_its_own_preferred_width();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -609,6 +612,49 @@ void test_window::a_fix_from_where_discovery_already_ran_is_not_sent_to_it() {
 
 	QVERIFY2(!window.feed()->is_busy(),
 	         "the window sent an unmoved fix to discovery anyway");
+}
+
+void test_window::a_wrapping_row_asks_its_height_at_its_own_preferred_width() {
+	/*
+	 * THE DEFECT THIS LAYOUT SHIPPED WITH, FOR ABOUT AN HOUR
+	 * (project.md sec 16.10).
+	 *
+	 * QWidget::sizeHint defers to QLayout::totalSizeHint, and for a
+	 * height-for-width layout that asks heightForWidth(sizeHint().
+	 * width()). The first version returned minimumSize() as its
+	 * sizeHint -- the width of the widest single item -- so the height
+	 * came back as every item on a line of its own, and the pane
+	 * demanded that at EVERY width. It sat mostly empty with a
+	 * scrollbar while the row inside it fitted comfortably on one line.
+	 *
+	 * Asserted as the relationship rather than as pixel counts: at its
+	 * own preferred width a wrapping row is one row, and its minimum
+	 * width is smaller than that or it could never wrap at all.
+	 */
+	QWidget host;
+	bbq_flow_layout *row = new bbq_flow_layout(&host, 6);
+
+	for (int i = 0; i < 8; ++i) {
+		QLabel *item = new QLabel(QStringLiteral("control %1").arg(i), &host);
+		item->setFixedSize(90, 24);
+		row->addWidget(item);
+	}
+
+	const QSize preferred = row->sizeHint();
+
+	QVERIFY2(row->heightForWidth(preferred.width()) <= 24 + 2,
+	         "at its preferred width the row is taller than one row");
+
+	QVERIFY2(row->minimumSize().width() < preferred.width(),
+	         "the row cannot shrink, so it can never wrap");
+
+	/*
+	 * And it must actually wrap, or the whole exercise buys nothing:
+	 * half the width is more than one row and less than eight.
+	 */
+	const int narrow = row->heightForWidth(preferred.width() / 2);
+	QVERIFY2(narrow > 24 + 2, "the row did not wrap when halved");
+	QVERIFY2(narrow < 8 * (24 + 6), "the row wrapped every item onto its own line");
 }
 
 int main(int argc, char *argv[]) {
