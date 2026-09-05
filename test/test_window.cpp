@@ -19,6 +19,7 @@
 #include "ui/layout.h"
 #include "ui/flow_layout.h"
 #include "ui/main_window.h"
+#include "ui/tray_icon.h"
 #include "wu/feed.h"
 
 /*
@@ -70,6 +71,8 @@ private slots:
 	void a_fix_from_where_discovery_already_ran_is_not_sent_to_it();
 	void a_wrapping_row_asks_its_height_at_its_own_preferred_width();
 	void an_unscored_lead_does_not_claim_the_archive_is_empty();
+	void the_tray_says_how_old_its_reading_is();
+	void the_tray_reads_the_owner_of_now_not_the_finest_band();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -712,6 +715,153 @@ void test_window::an_unscored_lead_does_not_claim_the_archive_is_empty() {
 	QVERIFY2(elsewhere.contains(QStringLiteral("1h")),
 	         qPrintable(QStringLiteral("the line does not name the lead it "
 	                                   "has nothing for: %1").arg(elsewhere)));
+}
+
+void test_window::the_tray_says_how_old_its_reading_is() {
+	/*
+	 * THE TRAY HAD NO TEST AT ALL (project.md sec 16.17).
+	 *
+	 * It is glanced at rather than read, which its own comment gives as
+	 * the reason it is the likelier place for a stale number to be
+	 * believed. Colour alone is a claim only somebody who already knows
+	 * the convention can read, so staleness is said in words too -- and
+	 * nothing checked that it was.
+	 *
+	 * Asserted on the tooltip rather than the icon: the words are what
+	 * carry the meaning, and a rendered glyph would be pinned to a font.
+	 */
+	bbq_tray_icon tray;
+
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	/* Never fetched: not old, unknown, and they must not read the same. */
+	bbq_composite empty;
+	tray.show_state(empty, QString());
+	QVERIFY2(tray.toolTip().contains(QStringLiteral("Never updated")),
+	         qPrintable(QStringLiteral("a tray that has never fetched should "
+	                                   "say so: %1").arg(tray.toolTip())));
+
+	/* Fetched a moment ago: an age, and no claim of staleness. */
+	bbq_series fresh = bandful(bbq_band::observed, now - 3600, 4);
+	fresh.set_fetched_utc(now - 300);
+
+	bbq_composite recent;
+	recent.set_series(fresh);
+	tray.show_state(recent, QString());
+
+	QVERIFY2(!tray.toolTip().contains(QStringLiteral("STALE")),
+	         qPrintable(QStringLiteral("five minutes old is not stale: %1")
+	                            .arg(tray.toolTip())));
+	QVERIFY2(tray.toolTip().contains(QStringLiteral("min old")),
+	         qPrintable(QStringLiteral("the tray does not say how old its "
+	                                   "reading is: %1").arg(tray.toolTip())));
+
+	/*
+	 * And past the threshold it is said in words. Three hours against a
+	 * two-hour floor: comfortably over, so the test is not measuring
+	 * the boundary by accident.
+	 */
+	bbq_series old = bandful(bbq_band::observed, now - 3600, 4);
+	old.set_fetched_utc(now - 3 * 3600);
+
+	bbq_composite stale;
+	stale.set_series(old);
+	tray.show_state(stale, QString());
+
+	QVERIFY2(tray.toolTip().contains(QStringLiteral("STALE")),
+	         qPrintable(QStringLiteral("three hours old and the tray does not "
+	                                   "say stale: %1").arg(tray.toolTip())));
+}
+
+void test_window::the_tray_reads_the_owner_of_now_not_the_finest_band() {
+	/*
+	 * WHICH BAND THE TRAY CREDITS (sec 3.18.1, sec 16.17).
+	 *
+	 * Radar carries no temperature after its first step. It outranks
+	 * every FORECAST band at 250 but not the observed band at 300, so it
+	 * wins `now` only once the observed band's last measurement has
+	 * ended -- which depends on how long ago the station reported, and
+	 * is why the original fault could not be reproduced on demand.
+	 *
+	 * WHAT IT COSTS TODAY IS THE ATTRIBUTION, not the reading. The
+	 * temperature comes from resolved_at, which is band-agnostic, so it
+	 * appears either way; what changes is the band named beside it. With
+	 * radar owning the instant the tray says the reading came from a
+	 * band that has no temperature in it, which is a false statement
+	 * about where a number came from.
+	 *
+	 * TWO EARLIER FIXTURES DID NOT REACH THIS, and both passed against
+	 * the broken code. The first gave observed samples covering now, so
+	 * observed won at 300 either way. The second reached the right
+	 * branch and asserted on the reading rather than the attribution,
+	 * which is the half that does not change. Sabotage said so both
+	 * times; reading owner_at and the priorities is what fixed it.
+	 *
+	 * So: observed STOPS half an hour ago, radar covers now with rain
+	 * and no temperature, and an hourly band covers now with one.
+	 */
+	bbq_tray_icon tray;
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	/* Observed, ended: the station reported and then stopped. */
+	std::vector<bbq_sample> past;
+	for (int i = 0; i < 4; ++i) {
+		bbq_sample sample;
+		sample.start_utc = now - 3600 + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 14.0;
+		past.push_back(sample);
+	}
+
+	bbq_series measured(bbq_band::observed, QStringLiteral("wunderground"));
+	measured.set_samples(past);
+	measured.set_fetched_utc(now - 120);
+
+	/* Radar over now, rain only, as the real band is past its first step. */
+	std::vector<bbq_sample> drops;
+	for (int i = 0; i < 6; ++i) {
+		bbq_sample sample;
+		sample.start_utc = now - 600 + i * 300;
+		sample.duration_s = 300;
+		sample.precip_rate = 0.4;
+		drops.push_back(sample);
+	}
+
+	bbq_series radar(bbq_band::nowcast_fine, QStringLiteral("met.no"));
+	radar.set_samples(drops);
+	radar.set_fetched_utc(now - 120);
+
+	/* And a forecast band over now that does have a temperature. */
+	bbq_series hourly = bandful(bbq_band::hourly, now - 1800, 6);
+	hourly.set_fetched_utc(now - 120);
+
+	bbq_composite all;
+	all.set_series(measured);
+	all.set_series(radar);
+	all.set_series(hourly);
+
+	tray.show_state(all, QString());
+
+	const QString tip = tray.toolTip();
+
+	QVERIFY2(tip.contains(QStringLiteral(" C from ")),
+	         qPrintable(QStringLiteral("the tray does not name the band its "
+	                                   "reading came from: %1").arg(tip)));
+
+	/*
+	 * The discriminating assertion, and the only one here that separates
+	 * the fixed code from the broken: radar has no temperature at this
+	 * instant, so crediting it is a false statement about where the
+	 * number came from.
+	 */
+	QVERIFY2(!tip.contains(QStringLiteral("from radar")),
+	         qPrintable(QStringLiteral("the tray credits radar, which "
+	                                   "carries no temperature here: %1")
+	                            .arg(tip)));
+	QVERIFY2(tip.contains(QStringLiteral("from hourly")),
+	         qPrintable(QStringLiteral("the tray does not credit the band "
+	                                   "that supplied the reading: %1")
+	                            .arg(tip)));
 }
 
 int main(int argc, char *argv[]) {

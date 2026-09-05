@@ -7656,3 +7656,56 @@ refuses rather than agreeing with everything.
 agreeing says nothing about whether 3 is returned in the right
 circumstances. That is still one person, once, by hand. The gate guards
 the contract, not the behaviour, and those are different claims.
+
+## 16.17 Testing the tray took three fixtures, and two of them passed
+
+`tray_icon.cpp` had no test. It is glanced at rather than read, which
+its own comment gives as the reason it is the likelier place for a stale
+number to be believed -- and nothing checked that staleness was said at
+all.
+
+**The staleness test was straightforward** and caught its sabotage
+first time: never fetched says so, five minutes old says an age and no
+more, three hours old says STALE in words as well as colour. Widening
+the two-hour threshold to nine fails it.
+
+### 16.17.1 The second test named the hazard and did not reach it
+
+The interesting case is sec 3.18.1's: radar carries no temperature after
+its first step, and when it owns `now` the tray must not read from it.
+Three fixtures were needed and the first two **passed against the broken
+code**.
+
+**The first gave the observed band samples covering now.** Observed is
+priority 300 and radar 250, so observed won either way and radar never
+owned the instant. The fixture asserted something true of both versions.
+
+**The second ended the observed band, which reached the right branch,
+and then asserted on the reading.** That does not change: the
+temperature comes from `resolved_at`, which is band-agnostic, so it
+appears whichever band owns the instant. The assertion was on the half
+that is identical.
+
+**What changes is the attribution**, and only printing the tooltip under
+both versions showed it:
+
+    owner_at   15.0 C from hourly
+    at()       15.0 C from radar
+
+So the fault today is the tray stating that a reading came from a band
+which has no temperature in it. The third fixture asserts that, and it
+fails under the sabotage that defeated both earlier ones.
+
+**Two lessons, and the second is the one worth carrying.** A fixture has
+to reach the branch -- the priorities decide that, and they had to be
+read rather than assumed. And having reached it, the assertion has to be
+on the thing that DIFFERS: sec 12.3's *choose a fixture so the plausible
+wrong answer and the right one differ* is usually read as being about
+the fixture, and half of it is about the assertion.
+
+**The original defect is not what this guards, and the entry says so
+rather than implying otherwise.** The comment in `tray_icon.cpp`
+describes the tray falling to "--" and "No reading for now", which the
+current shape cannot do, because the temperature no longer comes from
+the owning band. What remains reachable is the wrong attribution, and
+that is what is now pinned.
