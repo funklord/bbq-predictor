@@ -7781,3 +7781,35 @@ printed as though it had been.
 
 Watched failing by printing the undefined skill as before, where the
 test reports the exact line a reader would have seen.
+
+### 16.19.1 And what it made possible in the corrector, which is nothing
+
+The same question, asked one layer down and with a worse answer
+available: rain is now scored through a dry spell, so an all-dry bucket
+reaches the verification table, and the corrector reads its rain bias
+from there. Does a week of fine weather teach it to subtract rain from
+the forecast, so that the graph stops showing rain when rain is coming?
+
+**No, and the reason is arithmetic rather than a guard.** A band that
+said nought and was right forty times has a bias of nought, and
+subtracting nought changes nothing. The harmful case needs a band that
+KEPT forecasting rain while none fell -- and correcting that band is the
+whole point of the corrector. Sec 12.10 had already settled that rain is
+corrected independently and floored at zero; what it had not considered
+is which buckets contribute, because before sec 16.12 the dry ones did
+not exist.
+
+**Pinned as a test rather than left as this paragraph**, because the
+reasoning is not visible from either file and a later change that made
+dry buckets contribute a spurious bias would be silent: the graph would
+simply stop drawing rain, which looks like a dry forecast. Watched
+failing by making the corrector subtract a fixed rate, where the test
+reports "a dry spell has corrected real rain away: 0".
+
+**Two layers, two answers, and only the first was a defect.** The
+display was saying something false and is fixed; the corrector was doing
+the right thing for a reason nobody had written down and is now pinned.
+Asking the same question of both is what separated them -- and the
+answer being "nothing" at the second layer is worth as much as the fix
+at the first, because it is the layer where being wrong would be
+invisible.

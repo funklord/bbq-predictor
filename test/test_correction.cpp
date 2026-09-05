@@ -23,6 +23,7 @@ private slots:
 	void rain_is_corrected_and_never_goes_negative();
 	void one_quantity_can_be_known_while_another_is_not();
 	void wind_is_corrected_and_never_goes_negative();
+	void a_dry_spell_teaches_the_correction_nothing_about_rain();
 
 private:
 	static bbq_composite forecast_at(qint64 start, int hours, double temperature);
@@ -391,6 +392,77 @@ void test_correction::wind_is_corrected_and_never_goes_negative() {
 
 	QVERIFY2(saw_reduced, "20 km/h with a 6 km/h bias did not become 14");
 	QVERIFY2(saw_floor, "2 km/h with a 6 km/h bias did not stop at zero");
+}
+
+void test_correction::a_dry_spell_teaches_the_correction_nothing_about_rain() {
+	/*
+	 * WHAT SEC 16.12 MADE POSSIBLE, PINNED (project.md sec 16.19.1).
+	 *
+	 * Rain is now scored through a dry spell, so an all-dry bucket
+	 * reaches the verification table and the correction can read a rain
+	 * bias out of one. The question that raises is whether a dry spell
+	 * teaches the corrector to subtract rain from future forecasts.
+	 *
+	 * It does not, and the reason is arithmetic rather than a guard: a
+	 * forecaster who said nought and was right forty times has a bias of
+	 * nought, and subtracting nought changes nothing. The harmful case
+	 * needs a band that KEPT forecasting rain while none fell, and
+	 * correcting that band is the whole point of the correction.
+	 *
+	 * Pinned because the reasoning is not obvious from either file, and
+	 * because a later change that made dry buckets contribute a spurious
+	 * bias would be silent: the graph would simply stop showing rain.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 now = 1000000;
+
+	/* A forecast carrying real rain, which the correction may touch. */
+	std::vector<bbq_sample> wet;
+	for (int i = 0; i < 12; ++i) {
+		bbq_sample sample;
+		sample.start_utc = now + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 18.0;
+		sample.precip_rate = 3.0;
+		wet.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("wunderground"));
+	band.set_samples(wet);
+
+	bbq_composite composite;
+	composite.set_series(band);
+
+	/*
+	 * The dry spell as it is actually scored: plenty of pairings, well
+	 * over the twenty the corrector needs, and a bias of nought because
+	 * the band said nought and nought fell.
+	 */
+	QVERIFY(store.set_verification(QStringLiteral("ITEST1"),
+	                               bbq_band::hourly,
+	                               QStringLiteral("precip_rate"),
+	                               bbq_lead_bucket::hour, 40, 0.0, 0.0, 0.0));
+
+	const bbq_series corrected = bbq_corrected_forecast(
+	        composite, store, QStringLiteral("ITEST1"), now, now + 12 * 3600,
+	        now);
+
+	QVERIFY2(!corrected.is_empty(),
+	         "a known rain bias of nought drew nothing at all");
+
+	for (const bbq_sample &sample : corrected.samples()) {
+		if (!sample.precip_rate.has_value()) {
+			continue;
+		}
+
+		QVERIFY2(*sample.precip_rate > 2.9,
+		         qPrintable(QStringLiteral("a dry spell has corrected real "
+		                                   "rain away: %1")
+		                            .arg(*sample.precip_rate)));
+	}
 }
 
 QTEST_GUILESS_MAIN(test_correction)
