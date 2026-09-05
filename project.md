@@ -7980,3 +7980,17 @@ archive's mtime -- and the one thing never obtained was a word from Qt
 in that process. `qWarning` reaches logcat and was added for exactly
 that and printed nothing, which is itself the finding: the loader stops
 before any Qt code of ours runs.
+
+**And one hypothesis is already eliminated, which is the first anybody
+would try.** The obvious suspicion is that `androiddeployqt` injects
+metadata into the ACTIVITY that the loader needs and the service lacks.
+It does not. Read out of the packaged manifest rather than assumed:
+
+    android.app.lib_name          activity and service
+    android.app.arguments         activity and service
+    android.app.background_running  service only
+
+The activity carries nothing the service is missing. Whatever stops the
+service is not a metadata gap, and Qt logs nothing on the way -- not
+even a `dlopen` failure -- while Android reports only
+`Timeout executing service`.
