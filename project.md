@@ -7377,3 +7377,42 @@ discovery movement, the three-hour backfill tolerance and six-hour
 interval, the timer's five minutes, `SuccessExitStatus=3`, and the
 tray's two hours. Ten for ten. That is the cheapest sweep in this file
 and the one most worth doing while the prose is still warm.
+
+### 16.12 The dry-spell allowance was applied to one of the two places
+
+`record: none yet` on a phone that had been running a week, with 24
+pairings banked in one lead bucket. Not a fault in the record line: the
+bucket held temperature and wind and no rain, and the line reports all
+four quantities together, so one that never scores holds the whole line.
+
+**Rain was never scored on a dry day.** The stuck guard refuses a
+quantity whose observations never move, which for temperature or wind is
+a broken sensor. Sec 12.20.1 already established that for rain a flat
+zero is the ordinary state of good weather and gave the VERDICT an
+exception -- and the same argument, in the same paragraph, was not
+applied to scoring the rain quantity itself. One `if` got the allowance
+and the other did not.
+
+**The discarded case is the informative one.** A forecast that promised
+rain on a day that stayed dry is exactly the error worth recording, and
+it is only visible against observations that are all zero. The refusal
+threw away the over-forecast and kept nothing.
+
+**Two call sites, and the existing test could not see the second.** The
+verdict's dry-spell test passes with the new allowance removed, because
+the verdict's own exception was never the missing one. Only a test
+asserting that `precip_rate` itself is scored catches it -- watched
+failing with the allowance stubbed to false, where it reports "rain went
+unscored because the sky was dry".
+
+The new test also pins what the score should SAY: 2 mm/h promised
+against a dry day is a mean absolute error of exactly 2, which is the
+number the refusal was throwing away.
+
+**What it does not do is repair the past.** Verifying consumes the
+pending forecast, so pairings already scored without rain cannot be
+scored again -- the allowance applies to what verifies from here. On a
+station that has stopped reporting nothing verifies at all, so the phone
+showing `none yet` today will go on showing it until ISTOCK877 returns
+or the watched station changes. **The fix is real and its effect is not
+immediate, and those are different sentences.**

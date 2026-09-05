@@ -26,6 +26,7 @@ private slots:
 	void bias_can_be_zero_while_the_forecast_is_useless();
 	void an_unverifiable_forecast_is_given_up_on();
 	void the_database_file_alone_carries_the_archive();
+	void rain_is_still_scored_through_a_dry_spell();
 	void a_chance_forecast_is_scored_by_occurrence_not_by_error();
 	void a_brier_score_is_read_against_its_baseline();
 	void a_stuck_sensor_does_not_score_a_forecast();
@@ -793,6 +794,89 @@ void test_history::the_database_file_alone_carries_the_archive() {
 	bbq_history copied;
 	QVERIFY(copied.open(scratch.filePath(QStringLiteral("copy.sqlite"))));
 	QCOMPARE(copied.observation_count(QStringLiteral("ITEST1")), 200);
+}
+
+void test_history::rain_is_still_scored_through_a_dry_spell() {
+	/*
+	 * A DRY SPELL IS NOT A DEAD GAUGE, AND THE QUANTITY NEEDS THAT TOO
+	 * (project.md sec 12.20.1).
+	 *
+	 * The stuck guard refuses to score a quantity whose observations
+	 * never move, which for temperature or wind is a broken sensor. For
+	 * rain a flat zero is the ordinary state of good weather. The
+	 * verdict was given an exception for it; scoring the rain quantity
+	 * itself was not, so rain went unscored on every dry day.
+	 *
+	 * That held the whole record line at "none yet", since it reports
+	 * four quantities together -- and it threw away the informative
+	 * case, which is a forecast that promised rain on a day that stayed
+	 * dry. That error is only visible against observations that are all
+	 * zero.
+	 *
+	 * Enough samples across enough hours to trip the guard: the point
+	 * is that it trips and rain is scored anyway.
+	 */
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	const qint64 first = issued + 1800;
+
+	/* A forecast that keeps promising rain. */
+	std::vector<bbq_sample> promised;
+	for (int i = 0; i < 30; ++i) {
+		bbq_sample sample;
+		sample.start_utc = first + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 15.0 + i;
+		sample.precip_rate = 2.0;
+		promised.push_back(sample);
+	}
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples(promised);
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+
+	/* And a day that stayed dry: rain flat at zero throughout. */
+	std::vector<bbq_sample> truth;
+	for (int i = 0; i < 30; ++i) {
+		bbq_sample sample;
+		sample.start_utc = first + i * 3600;
+		sample.duration_s = 300;
+		sample.temperature = 15.0 + i;
+		sample.precip_rate = 0.0;
+		truth.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(truth);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QVERIFY(store.verify(QStringLiteral("ITEST1")) > 0);
+
+	const bbq_verification rain = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("precip_rate"), bbq_lead_bucket::hour);
+
+	QVERIFY2(rain.count > 0,
+	         "rain went unscored because the sky was dry");
+
+	/*
+	 * And the score says the right thing: promised 2 mm/h against a dry
+	 * day is an over-forecast of exactly that, which is the error the
+	 * refusal was discarding.
+	 */
+	QCOMPARE(rain.mean_absolute_error, 2.0);
+
+	/*
+	 * Temperature moved, so it is scored either way -- present here to
+	 * show the fixture is not simply scoring everything.
+	 */
+	const bbq_verification warmth = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+	QVERIFY(warmth.count > 0);
 }
 
 QTEST_GUILESS_MAIN(test_history)

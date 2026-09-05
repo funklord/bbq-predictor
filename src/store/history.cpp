@@ -928,7 +928,31 @@ int bbq_history::verify(const QString &station) {
 				error = bbq_grill_weather_score(predicted, policy) -
 				        bbq_grill_weather_score(measured, policy);
 			} else {
-				if (stuck[q]) {
+				/*
+				 * THE SAME ALLOWANCE THE VERDICT GETS (sec 12.20.1).
+				 *
+				 * The argument above is about rain and not about the
+				 * verdict, and it was applied in only one of the two
+				 * places that needed it: a gauge stuck at zero is
+				 * indistinguishable from dry and far more often dry,
+				 * so refusing to score rain in dry weather made the
+				 * quantity inert in the common case.
+				 *
+				 * The cost was visible and took days to notice. The
+				 * record line reports all four quantities together, so
+				 * one that never scores holds the whole line at "none
+				 * yet" -- measured on a phone running for a week with
+				 * 24 pairings banked and nothing to show for them.
+				 *
+				 * And the case being discarded is the informative one:
+				 * a forecast that promised rain on a day that stayed
+				 * dry is exactly the error worth recording, and it is
+				 * only visible against observations that are all zero.
+				 */
+				const bool rain_is_dry =
+				        q == 1 && stuck[1] && stuck_at[1] == 0.0;
+
+				if (stuck[q] && !rain_is_dry) {
 					continue;
 				}
 
