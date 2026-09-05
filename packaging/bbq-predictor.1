@@ -192,6 +192,21 @@ Read by the systemd service.
 must be set there; unset, the service skips its run and says why rather
 than fetching for a station nobody named.
 .TP
+.I /var/lib/bbq-predictor/history.sqlite
+The archive the systemd timer builds, which is
+.B not
+the applet's. The service runs under
+.BR DynamicUser ,
+so this path is a symbolic link into
+.IR /var/lib/private/ ,
+which systemd keeps inaccessible to unprivileged users so that a
+recycled dynamic uid cannot reach it. Reading it therefore needs root:
+.IP
+.nf
+sudo bbq\-predictor \-\-history \e
+        \-\-history\-path /var/lib/bbq\-predictor/history.sqlite
+.fi
+.TP
 .I /usr/lib/systemd/system/bbq-predictor-fetch.timer
 Runs
 .B \-\-fetch\-once

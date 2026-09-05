@@ -7530,3 +7530,46 @@ condition, and the comment is where the claim lives.
 
 Watched failing with the store's count stubbed out, where the line
 reverts to `none yet` beside 500 banked samples.
+
+## 16.15 The daemon's archive cannot be read by the machine's owner
+
+`DynamicUser=yes` was chosen so the fetching service runs as an account
+that exists only while it runs. It has a consequence that was not stated
+when it was chosen, and it is not a small one. From systemd's own
+manual, read rather than recalled:
+
+    /var/cache/private, /var/log/private and /var/lib/private ... are
+    host directories made inaccessible to unprivileged users, which
+    ensures that access to these directories cannot be gained through
+    dynamic user ID recycling. Symbolic links are created to hide this
+    difference in behaviour.
+
+So `StateDirectory=bbq-predictor` is really `/var/lib/private/
+bbq-predictor`, mode 0700, with `/var/lib/bbq-predictor` a symlink into
+it. **The archive is root-only.**
+
+**That is a worse trade here than it looks in general**, and the reason
+is this project rather than security. The archive IS the product: sec 15
+exists so verification accumulates on a machine that stays up, and every
+diagnosis in this session -- the pin question, the dry-spell gap, the
+lead buckets, the WAL -- was made by opening an archive and querying it.
+An archive the owner cannot read without `sudo` is one they will not
+read.
+
+**Recorded and not changed.** Which way it should go is a real decision
+with two defensible answers -- keep the dynamic account and reach the
+archive with `sudo`, or take a fixed system user and a readable
+directory, trading a little isolation for an archive that can be
+inspected the way every other one here has been. It is the copyright
+holder's, and the sort of thing that should not be switched quietly
+while documenting it.
+
+**The manual page said the wrong thing meanwhile**, listing
+`/var/lib/bbq-predictor/history.sqlite` as the timer's archive without
+saying it cannot be opened. It now names the `DynamicUser` consequence
+and gives the `sudo` invocation that works.
+
+**And the general shape is worth keeping**: a hardening option was
+chosen for what it prevents and adopted without asking what it costs.
+The cost was one manual page away and was not looked up until somebody
+asked how the daemon works.
