@@ -7611,3 +7611,48 @@ and gives the `sudo` invocation that works.
 chosen for what it prevents and adopted without asking what it costs.
 The cost was one manual page away and was not looked up until somebody
 asked how the daemon works.
+
+## 16.16 The exit codes are a contract, and four files state them
+
+Asked which source files no test links, and the answer was five:
+`main.cpp`, the two `net/` diagnostics, `tray_icon.cpp` and
+`fetch_once.cpp`. The last is the one that mattered, because sec 15.7.1
+made its return values load-bearing this same evening.
+
+    src/wu/fetch_once.cpp      the codes the program returns
+    src/wu/fetch_once.h        what callers are told they mean
+    packaging/systemd/...      SuccessExitStatus, forgiving one
+    packaging/bbq-predictor.1  the EXIT STATUS a reader is given
+
+**Drift fails silently and in the worse direction, either way it goes.**
+If the partial code is renumbered and the unit is not, the timer marks
+itself failed every time a station is briefly quiet -- noise that buries
+a real fault. If the unit is widened instead, it forgives the outage it
+exists to report. Neither shows up in a test run, a package build or a
+lint.
+
+**The only thing that had ever checked them was one person, once, by
+hand** -- running `--fetch-once` against a quiet station for 3 and under
+`unshare -rn` for 1. That is evidence and it is not a guard.
+
+`tool/exit_codes.py` runs from `make style`. Watched failing three ways,
+each naming the file to fix:
+
+    unit widened to "1 3"        the unit forgives ['1 3'], not ['3']
+    program renumbers 3 to 4     the program no longer returns 3 ...
+                                 4 is returned but not in the manual ...
+                                 4 is returned but not named in the header
+    a code dropped from the man  2 is returned but not in EXIT STATUS
+
+**The header check is deliberately the weaker question** -- does the
+number appear -- because the alternative is parsing prose, and a checker
+that parses prose breaks when somebody rewords a sentence correctly.
+
+The control is inside and runs first: a stand-in function returning 0
+and 7 must parse as exactly that, so a pattern that has stopped matching
+refuses rather than agreeing with everything.
+
+**What this does not do is test the program**, and the four files
+agreeing says nothing about whether 3 is returned in the right
+circumstances. That is still one person, once, by hand. The gate guards
+the contract, not the behaviour, and those are different claims.

@@ -307,7 +307,7 @@ test: tests-build $(ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs style-signals style-man style-palette
+style: style-source style-docs style-signals style-man style-palette style-exits
 
 style-source:
 	python3 tool/style_gate.py check
@@ -317,6 +317,14 @@ style-source:
 # the answer.
 style-docs:
 	python3 tool/style_gate.py docs
+
+# The fetch exit codes are a contract between the program, its header,
+# the systemd unit that forgives one of them, and the manual page. Drift
+# fails silently in the worst direction: a timer that marks itself failed
+# on every quiet station, or one that forgives the outage it exists to
+# report.
+style-exits:
+	python3 tool/exit_codes.py
 
 # Every colour drawn on another must stay legible on it, in both
 # schemes. The knowledge is WHICH pairs are drawn together: a naive sweep
