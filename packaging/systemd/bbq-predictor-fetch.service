@@ -28,11 +28,27 @@ Environment=QT_QPA_PLATFORM=offscreen
 
 EnvironmentFile=-/etc/default/bbq-predictor
 
-# DynamicUser gives an unprivileged account and StateDirectory gives it
-# /var/lib/bbq-predictor, both created and owned automatically. The
-# archive is the only thing this service needs to keep.
-DynamicUser=yes
+# A FIXED SYSTEM USER, NOT DynamicUser (project.md sec 16.15).
+#
+# DynamicUser is the better default and is wrong here. It puts
+# StateDirectory under /var/lib/private, which systemd keeps
+# inaccessible to unprivileged users so that a recycled dynamic uid
+# cannot reach it -- and that made the archive root-only. The archive is
+# what this whole service exists to build, and every question anybody
+# has asked of this program has been answered by opening one and
+# querying it. One the owner cannot read is one they will not read.
+#
+# The account is created by sysusers.d at install time. What is given up
+# is uid-recycling isolation, which a fixed system account does not have
+# to worry about in the first place.
+User=bbq-predictor
+Group=bbq-predictor
+
+# 0755 rather than the default it happens to share: the readability is
+# the point of the two lines above, so it is stated rather than
+# inherited. The archive inside lands 0644 under the default umask.
 StateDirectory=bbq-predictor
+StateDirectoryMode=0755
 
 # ExecCondition rather than a test inside ExecStart, because the two
 # outcomes are different: a non-zero ExecCondition SKIPS the run and says
@@ -46,6 +62,13 @@ ExecStart=/usr/bin/bbq-predictor --fetch-once --station ${BBQ_STATION} --history
 
 # It talks to three weather APIs and writes one file. Nothing else.
 NoNewPrivileges=yes
+
+# Stated because DynamicUser implied it and cannot be turned off there,
+# so dropping DynamicUser dropped this silently. PrivateTmp was implied
+# by it too and was already stated below. The account is this unit's
+# alone, so removing its IPC on stop takes nothing else with it.
+RemoveIPC=yes
+
 PrivateDevices=yes
 PrivateTmp=yes
 ProtectControlGroups=yes

@@ -7556,13 +7556,51 @@ lead buckets, the WAL -- was made by opening an archive and querying it.
 An archive the owner cannot read without `sudo` is one they will not
 read.
 
-**Recorded and not changed.** Which way it should go is a real decision
-with two defensible answers -- keep the dynamic account and reach the
-archive with `sudo`, or take a fixed system user and a readable
-directory, trading a little isolation for an archive that can be
-inspected the way every other one here has been. It is the copyright
-holder's, and the sort of thing that should not be switched quietly
-while documenting it.
+**Settled by the copyright holder 2026-09-05: a fixed system user, so
+the archive is readable.** The trade was a little uid-recycling
+isolation against an archive that can be inspected the way every other
+one here has been, and the archive won because it is the product.
+
+### 16.15.1 What that took, and what it proved
+
+`User=bbq-predictor` with `Group=`, and the account created at install
+time from a `sysusers.d` snippet -- the Debian-native route, wired by
+`dh-sequence-installsysusers`, rather than hand-written `adduser` in a
+maintainer script.
+
+**`StateDirectoryMode=0755` is stated rather than inherited.** It
+happens to be the default, and the readability is the entire point of
+the change, so it is written down where somebody changing it will see
+what they are changing.
+
+**Dropping `DynamicUser` drops what it implied, silently.** From the
+manual: *"If DynamicUser= is enabled, RemoveIPC= is implied (and cannot
+be turned off)."* `PrivateTmp` was implied too and was already stated.
+`RemoveIPC=yes` is stated now, so the change gives up the isolation it
+meant to give up and nothing else.
+
+**And the /var/lib/private rule really is conditional**, which is the
+claim the whole change rests on -- checked in the manual rather than
+recalled: *"If DynamicUser= is used in conjunction with ... and
+StateDirectory= is slightly altered: the directories are created below
+... /var/lib/private."* With a fixed user there is no alteration.
+
+Measured in a container, package installed with its real dependencies:
+
+    account   bbq-predictor:x:995:995:...:/var/lib/bbq-predictor:
+              /usr/sbin/nologin
+    verify    systemd-analyze verify, exit 0
+    directory drwxr-xr-x bbq-predictor bbq-predictor
+    archive   -rw-r--r-- bbq-predictor bbq-predictor
+    read      as `nobody`: "SQLite format 3\0"
+
+**One link was not executed by systemd**, and it is worth naming: there
+is no systemd running in that container, so the state directory was
+created by hand exactly as the unit specifies rather than by the unit.
+What is proved is the account, the unit's validity, the mode, and that
+an unprivileged reader can open an archive written by that account in
+that directory. What is inferred, from the manual, is that systemd
+creates it that way.
 
 **The manual page said the wrong thing meanwhile**, listing
 `/var/lib/bbq-predictor/history.sqlite` as the timer's archive without

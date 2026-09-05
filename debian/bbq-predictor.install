@@ -1,3 +1,4 @@
 packaging/systemd/bbq-predictor-fetch.service usr/lib/systemd/system
 packaging/systemd/bbq-predictor-fetch.timer   usr/lib/systemd/system
 packaging/default/bbq-predictor               etc/default
+packaging/sysusers/bbq-predictor.conf        usr/lib/sysusers.d

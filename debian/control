@@ -3,6 +3,9 @@ Section: utils
 Priority: optional
 Maintainer: Nabeel Sowan <nabeel@vibes.se>
 Build-Depends: debhelper-compat (= 13),
+# Creates the bbq-predictor system account from the sysusers.d snippet
+# at install time, so the unit has a fixed user to run as.
+               dh-sequence-installsysusers,
                qt6-base-dev,
                qt6-positioning-dev,
                libgl-dev,
