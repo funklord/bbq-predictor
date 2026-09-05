@@ -7709,3 +7709,41 @@ describes the tray falling to "--" and "No reading for now", which the
 current shape cannot do, because the temperature no longer comes from
 the owning band. What remains reachable is the wrong attribution, and
 that is what is now pinned.
+
+## 16.18 Attribution had no test, and main.cpp was never untested
+
+Sec 16.16 listed `main.cpp` among the files no test links, which was
+true and misleading. **`test_seed` drives the real binary as a
+subprocess**, so the seed guard -- refusing to write invented statistics
+into the real archive -- has been covered all along. Not being named in
+a `.pro` is not the same as not being exercised, and the earlier list
+implied it was.
+
+That harness is the right tool for a gap it had not been pointed at.
+`harmonization.md` asks every private project to name the copyright
+holder in `--version`, and nothing checked that it was there.
+
+**The way that line goes is not somebody deleting it.** It is a version
+string being reworked and the second line going with it, silently, in a
+commit about something else. So the test asserts the name and the
+address -- not the year, which is the project's own and moves.
+
+**And it asserts the SHAPE of the first line**, which is the part that
+would have been lost by a well-meaning tidy: apt-emerge's note, quoted
+in `harmonization.md`, is that the first line is what scripts parse, so
+the attribution goes on a line of its own rather than being appended.
+Watched failing both ways -- attribution removed, and attribution
+appended to the parsable line.
+
+A second case covers `--help` pointing at `bbq-predictor(1)`.
+`tool/man_options.py` keeps the page honest about the program; nothing
+kept the usage honest about the page. `--help` documents eight options
+of twenty-one, which is fine only while it says where the rest are.
+
+**One error worth recording, because it was mine and instant.** The
+first version called `waitForFinished` after `run()`, which already
+waits -- asking a finished process to finish answers false, and both
+tests failed on a program that had worked perfectly. Reading the
+helper's body took ten seconds and would have saved the round trip. It
+is the same shape as the rest of this session: a contract assumed rather
+than read.

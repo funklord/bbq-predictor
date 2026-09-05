@@ -28,6 +28,8 @@ private slots:
 	void initTestCase();
 	void seeding_the_real_archive_is_refused();
 	void seeding_a_scratch_file_works();
+	void the_version_names_the_copyright_holder();
+	void the_usage_points_at_the_manual_page();
 
 private:
 	QString m_binary;
@@ -135,6 +137,86 @@ void test_seed::seeding_a_scratch_file_works() {
 	QVERIFY2(process.exitCode() == 0, qPrintable(told));
 	QVERIFY2(QFile::exists(scratch), "the scratch archive was not written");
 	QVERIFY(QFileInfo(scratch).size() > 0);
+}
+
+void test_seed::the_version_names_the_copyright_holder() {
+	/*
+	 * ATTRIBUTION IS A REQUIREMENT, AND NOTHING CHECKED IT
+	 * (project.md sec 16.18).
+	 *
+	 * harmonization.md asks every private project to name the copyright
+	 * holder in three places, one of which is --version. It is a
+	 * statement of fact about who wrote this, and the way it goes is not
+	 * somebody deleting it on purpose: it is a version string being
+	 * reworked and the second line going with it, silently, in a commit
+	 * about something else.
+	 *
+	 * Driven as a subprocess for the same reason the seed guard is:
+	 * what is being checked is what the PROGRAM prints, and a unit test
+	 * of a constant would pass while main.cpp printed something else.
+	 *
+	 * The name and address are asserted, not the year, which is that
+	 * project's own and moves.
+	 */
+	QTemporaryDir home;
+	QVERIFY(home.isValid());
+
+	QProcess process;
+	/* run() waits; waiting again would ask a finished process to
+	 * finish, which answers false. */
+	run(process, home, {QStringLiteral("--version")});
+	QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+
+	const QString said = QString::fromLocal8Bit(process.readAll());
+
+	QCOMPARE(process.exitCode(), 0);
+	QVERIFY2(said.contains(QStringLiteral("Nabeel Sowan")),
+	         qPrintable(QStringLiteral("--version does not name the "
+	                                   "copyright holder: %1").arg(said)));
+	QVERIFY2(said.contains(QStringLiteral("nabeel@vibes.se")),
+	         qPrintable(QStringLiteral("--version has no address for the "
+	                                   "holder: %1").arg(said)));
+
+	/*
+	 * And the first line keeps its shape, because a version string with
+	 * a stable format is an interface: apt-emerge's own note says the
+	 * first line is what scripts parse, so the attribution goes on a
+	 * line of its own rather than being appended to it.
+	 */
+	const QStringList lines = said.split(QLatin1Char('\n'));
+	QVERIFY2(lines.value(0).startsWith(QStringLiteral("bbq-predictor ")),
+	         qPrintable(QStringLiteral("the first line is not the parsable "
+	                                   "version: %1").arg(lines.value(0))));
+	QVERIFY2(!lines.value(0).contains(QStringLiteral("Copyright")),
+	         qPrintable(QStringLiteral("the attribution has been appended to "
+	                                   "the line scripts parse: %1")
+	                            .arg(lines.value(0))));
+}
+
+void test_seed::the_usage_points_at_the_manual_page() {
+	/*
+	 * --help documents eight options and the program accepts
+	 * twenty-one, which is fine only while it says where the rest are
+	 * (sec 15.10). tool/man_options.py keeps the PAGE honest against the
+	 * program; nothing kept the usage honest about the page's
+	 * existence.
+	 */
+	QTemporaryDir home;
+	QVERIFY(home.isValid());
+
+	QProcess process;
+	/* run() waits; waiting again would ask a finished process to
+	 * finish, which answers false. */
+	run(process, home, {QStringLiteral("--help")});
+	QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+
+	const QString said = QString::fromLocal8Bit(process.readAll());
+
+	QCOMPARE(process.exitCode(), 0);
+	QVERIFY2(said.contains(QStringLiteral("bbq-predictor(1)")),
+	         qPrintable(QStringLiteral("--help does not point at the manual "
+	                                   "page it is a summary of: %1")
+	                            .arg(said)));
 }
 
 QTEST_GUILESS_MAIN(test_seed)
