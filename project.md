@@ -7747,3 +7747,37 @@ tests failed on a program that had worked perfectly. Reading the
 helper's body took ten seconds and would have saved the round trip. It
 is the same shape as the rest of this session: a contract assumed rather
 than read.
+
+## 16.19 A defect the same evening's fix created
+
+Sec 16.12 began scoring rain through dry spells, which was right. It
+made a second thing routine that had been nearly impossible before.
+
+**Brier skill is measured against always predicting the observed base
+rate.** With no rain observed at all, that baseline scores a perfect
+zero -- there is nothing to be better than, and the quantity is
+undefined rather than bad. `skill()` answers `0.0` rather than dividing
+by it, which is correct as arithmetic and prints as
+
+    record: hourly @1h, rain skill 0.00 (n=40)
+
+**That is the sentence for a forecast no better than knowing nothing,
+and a band that correctly said it would stay dry every time earns it.**
+
+Before sec 16.12 the case barely arose: a dry bucket was not scored at
+all, so there was nothing to print. Afterwards it is the common case in
+good weather -- which is the weather somebody is reading this line in.
+
+So the record says the dry spell instead of scoring it:
+
+    rain observed      rain skill 0.31
+    none observed      no rain in 40
+
+**Found by asking what my own change had made possible**, which is a
+question worth asking after any fix that widens what gets computed. The
+guard against dividing by zero was already there and correct; what was
+missing was that a number which cannot be computed should not be
+printed as though it had been.
+
+Watched failing by printing the undefined skill as before, where the
+test reports the exact line a reader would have seen.

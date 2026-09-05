@@ -1280,8 +1280,27 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 		 * dry climate and poor in a changeable one, and only the
 		 * comparison against always-predicting-the-base-rate says which
 		 * this is (sec 12.3).
+		 *
+		 * EXCEPT WHEN IT NEVER RAINED (sec 16.19).
+		 *
+		 * Skill is measured against always predicting the observed base
+		 * rate, and with no rain at all that baseline scores a perfect
+		 * zero -- there is nothing to be better than, and the quantity
+		 * is undefined rather than bad. skill() answers 0.0 to avoid
+		 * dividing by it, which prints as "rain skill 0.00" and reads
+		 * as a forecast that is no better than knowing nothing. A band
+		 * that correctly said it would stay dry every time earns that
+		 * sentence.
+		 *
+		 * Rare until sec 16.12 started scoring rain through dry spells,
+		 * and routine after it, so the case is said instead of scored.
 		 */
-		note += QStringLiteral(", rain skill %1").arg(rain.skill(), 0, 'f', 2);
+		if (rain.baseline > 0.0) {
+			note += QStringLiteral(", rain skill %1")
+			                .arg(rain.skill(), 0, 'f', 2);
+		} else {
+			note += tr(", no rain in %1").arg(rain.count);
+		}
 	}
 
 	if (verdict.count > 0) {

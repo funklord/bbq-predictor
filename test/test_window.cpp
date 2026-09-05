@@ -73,6 +73,7 @@ private slots:
 	void an_unscored_lead_does_not_claim_the_archive_is_empty();
 	void the_tray_says_how_old_its_reading_is();
 	void the_tray_reads_the_owner_of_now_not_the_finest_band();
+	void a_dry_spell_is_not_a_rain_forecast_with_no_skill();
 
 private:
 	static bbq_series bandful(bbq_band band, qint64 start, int count);
@@ -862,6 +863,69 @@ void test_window::the_tray_reads_the_owner_of_now_not_the_finest_band() {
 	         qPrintable(QStringLiteral("the tray does not credit the band "
 	                                   "that supplied the reading: %1")
 	                            .arg(tip)));
+}
+
+void test_window::a_dry_spell_is_not_a_rain_forecast_with_no_skill() {
+	/*
+	 * A NUMBER THAT IS UNDEFINED MUST NOT PRINT AS A VERDICT
+	 * (project.md sec 16.19).
+	 *
+	 * Brier skill is measured against always predicting the observed
+	 * base rate. With no rain observed at all that baseline scores a
+	 * perfect zero: there is nothing to be better than, and the
+	 * quantity is undefined rather than bad. skill() answers 0.0 to
+	 * avoid dividing by it, which printed as "rain skill 0.00" -- the
+	 * sentence for a forecast no better than knowing nothing, earned by
+	 * a band that correctly said it would stay dry every time.
+	 *
+	 * Rare until sec 16.12 began scoring rain through dry spells, and
+	 * routine after it. This is a defect that the same evening's fix
+	 * created, which is the reason it is tested rather than reasoned
+	 * about.
+	 */
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const QString station = QStringLiteral("ITESTDRY");
+	window.watch_station(station);
+
+	const qint64 now = 1700000000;
+	const qint64 when = now + 3600;
+
+	bbq_composite composite;
+	composite.set_series(bandful(bbq_band::hourly, now, 6));
+
+	bbq_history &store = window.feed()->history();
+
+	/*
+	 * Forty scored pairings and not a drop: base rate zero, so the
+	 * baseline is zero and the skill is undefined.
+	 */
+	QVERIFY(store.set_reliability(station, bbq_band::hourly,
+	                              bbq_lead_bucket::hour, 0, 40, 0, 1.2));
+
+	const QString dry = window.verification_note(composite, when, now);
+
+	QVERIFY2(!dry.contains(QStringLiteral("rain skill")),
+	         qPrintable(QStringLiteral("an undefined skill is printed as a "
+	                                   "verdict: %1").arg(dry)));
+	QVERIFY2(dry.contains(QStringLiteral("no rain in 40")),
+	         qPrintable(QStringLiteral("the dry spell is not said: %1")
+	                            .arg(dry)));
+
+	/*
+	 * And with rain observed the skill is a real number again, so the
+	 * fix does not simply suppress the quantity.
+	 */
+	QVERIFY(store.set_reliability(station, bbq_band::hourly,
+	                              bbq_lead_bucket::hour, 0, 40, 10, 1.2));
+
+	const QString wet = window.verification_note(composite, when, now);
+	QVERIFY2(wet.contains(QStringLiteral("rain skill")),
+	         qPrintable(QStringLiteral("rain was observed and the skill is "
+	                                   "still not reported: %1").arg(wet)));
 }
 
 int main(int argc, char *argv[]) {
