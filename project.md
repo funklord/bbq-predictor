@@ -8027,3 +8027,41 @@ knows and says nothing about the ones it does not. The remedy that
 worked here was not a looser pattern but a second known shape, added the
 moment one appeared -- and the way it appeared was somebody writing
 code, not somebody auditing the gate.
+
+### 17.6 Asking the other gates the same question
+
+Sec 17.5 was a gate blind to a form nobody had taught it. That is a
+question worth putting to the rest of them rather than waiting for each
+to be caught out, and three of the four came back clean:
+
+    palette contrast   22 colours assigned, 22 parsed -- none invisible
+    signal listeners   the Q_SIGNAL form is not used anywhere here
+    exit codes         a latent fault, below
+
+**The palette and signal answers are worth as much as a find**, because
+both gates could have had the same hole and neither does: every colour
+in the palette is written `QColor(0x..)`, and every signal is declared
+in a `signals:` block. Recorded so the next person does not re-derive
+it.
+
+**The exit-code gate was right by accident.** `returns_of` sliced from
+the function's name to the END OF THE FILE, which gave the correct
+answer only because `bbq_wu_fetch_once` happens to be the last function
+in it. Made real by appending a helper returning 5:
+
+    unbounded parse sees: [0, 1, 2, 3, 5]
+
+It would then have insisted the manual page document an exit code the
+program cannot produce, and the fix would have been to edit the manual.
+**A gate that is right by the accident of where somebody put a function
+is one commit from being wrong without anybody touching it.**
+
+It is bounded to the function now, and the demonstration is the test:
+with the helper present it still reports `[0, 1, 2, 3]`.
+
+**Both remaining limits are written into the tool rather than left to be
+discovered.** It sees integer literals, so a `return outcome;` inside
+that function would be invisible -- which is the reason the unit and
+the manual are both checked against the CODE rather than against each
+other, since two documents agreeing while the program does something
+else is the failure sec 15.10.2 exists for.

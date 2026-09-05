@@ -35,9 +35,29 @@ PARTIAL = 3
 
 
 def returns_of(text, function):
-	"""Integer literals returned by `function`, which must exist."""
+	"""Integer literals returned by `function`, which must exist.
+
+	Bounded to the function rather than to the end of the file. Reading
+	to EOF worked only because this function happens to be last, and
+	would have attributed a later helper's `return 0` to it -- a gate
+	that is right by the accident of where somebody put a function is
+	one commit from being wrong without anybody touching it.
+
+	It sees integer LITERALS. A return of a variable is invisible here,
+	which is a real limit and is the reason the unit and the manual are
+	checked against this set rather than against each other: two
+	documents agreeing while the program does something else is what
+	sec 15.10.2 is about.
+	"""
 	start = text.index(function)
-	return {int(n) for n in re.findall(r'\breturn\s+(\d+)\s*;', text[start:])}
+
+	# The closing brace of a function whose body starts in column 0 is a
+	# brace in column 0. Crude, and exact for this file's style, which
+	# the project's own indentation gate enforces.
+	end = text.find('\n}\n', start)
+	body = text[start:end if end != -1 else len(text)]
+
+	return {int(n) for n in re.findall(r'\breturn\s+(\d+)\s*;', body)}
 
 
 def control_passes():
