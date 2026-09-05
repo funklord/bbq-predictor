@@ -7931,3 +7931,52 @@ five minutes into an archive that is now readable. A phone that wants a
 current widget without a notification wants that server's picture rather
 than one of its own, which is sec 15.5's question arriving from the
 third direction tonight.
+
+### 17.4 The foreground service, which fixed the ANR and not the feature
+
+Instructed by the copyright holder 2026-09-05, having been told what it
+would cost. It was built: a notification channel at IMPORTANCE_LOW so it
+is shown and silent, `startForeground` called at the very top of
+`onCreate` BEFORE Qt loads, `FOREGROUND_SERVICE` and
+`FOREGROUND_SERVICE_DATA_SYNC` declared, and
+`android:foregroundServiceType="dataSync"` on the service.
+
+**The foreground half works, and dumpsys says so rather than the
+absence of a complaint:**
+
+    isForeground=true foregroundId=2
+    foregroundNoti=Notification(channel=bbq-predictor-fetch ...)
+
+So `onCreate` runs, the claim is accepted and the notification posts.
+
+**The ANR is gone, and shortening the fetch is what proved the cause.**
+The background version died with `Reason: executing service` at the
+process's own 0.2% CPU -- waiting, not working. Dropping the service's
+fetch timeout from thirty seconds to ten removed it. Duration was the
+cause, which the CPU figure had already implied and the experiment
+confirmed.
+
+**And the feature still does not work.** `main()` is never reached: the
+service logs nothing, not even the station it was about to fetch for,
+and the archive's mtime does not move across a forced run.
+`executeNesting=3` with the service thirty seconds in says where it is
+stopped -- inside `super.onCreate()`, which is Qt's loader.
+
+**That is below anything in this project.** Qt's Android service
+initialisation does not complete here; every part that is ours -- the
+job, the foreground claim, the separate process, reaching `exec()`
+before working -- has been shown to do what it should.
+
+**So it is still not scheduled**, and the reason has moved rather than
+gone: a notification every fifteen minutes for a service that fetches
+nothing is worse than the gap. The job scheduled for testing was
+cancelled and none is registered.
+
+**What the next attempt should do first**, so nobody repeats this
+evening: get Qt to say anything at all from inside the service. Every
+diagnosis here turned on making something visible -- the job's own log,
+`dumpsys activity services`, the ANR reason, the CPU percentage, the
+archive's mtime -- and the one thing never obtained was a word from Qt
+in that process. `qWarning` reaches logcat and was added for exactly
+that and printed nothing, which is itself the finding: the loader stops
+before any Qt code of ours runs.

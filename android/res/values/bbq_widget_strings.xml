@@ -5,4 +5,7 @@
         forecast here.</string>
     <string name="bbq_widget_graph_description">Temperature and rain
         forecast graph</string>
+    <string name="bbq_fetch_channel">Background fetch</string>
+    <string name="bbq_fetch_title">bbq-predictor</string>
+    <string name="bbq_fetch_text">Fetching the forecast</string>
 </resources>

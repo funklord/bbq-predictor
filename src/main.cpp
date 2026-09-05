@@ -141,9 +141,32 @@ int main(int argc, char *argv[]) {
 		 */
 		int outcome = 0;
 		QTimer::singleShot(0, &service, [&outcome]() {
-			outcome = bbq_wu_fetch_once(bbq_settings::station(),
-			                            bbq_settings::geocode_override(), 30,
+			/*
+			 * TEN SECONDS, NOT THIRTY (sec 17.4).
+			 *
+			 * Android holds a service "executing" for as long as its
+			 * onCreate takes, and ANRs past the window whatever the
+			 * foreground status: measured as "Reason: executing service
+			 * ... FetchService" with the process at 0.2% CPU, waiting
+			 * rather than working. A shorter fetch is the experiment
+			 * that says whether duration is the cause.
+			 */
+			const QString watched = bbq_settings::station();
+
+			/*
+			 * qWarning rather than the report fetch-once prints: that
+			 * goes to stdout, which on Android goes nowhere, so a
+			 * service that failed and one that never ran looked
+			 * identical from outside (sec 17.4).
+			 */
+			qWarning("bbq-predictor: service fetching for station '%s'",
+			         watched.toUtf8().constData());
+
+			outcome = bbq_wu_fetch_once(watched,
+			                            bbq_settings::geocode_override(), 10,
 			                            QString());
+
+			qWarning("bbq-predictor: service fetch returned %d", outcome);
 			QCoreApplication::quit();
 		});
 

@@ -1084,22 +1084,18 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	m_locator->locate_once();
 
 	/*
-	 * NOT SCHEDULED, AND THE REASON IS MEASURED (sec 17.3).
+	 * STILL NOT SCHEDULED, AND THE REASON HAS MOVED (sec 17.4).
 	 *
-	 * The background fetch is built and does not work: a Qt service
-	 * cold-starting in the background exceeds Android's service
-	 * timeout, measured on an SM-N960F as "ANR in
-	 * se.vibes.bbq_predictor:fetch" some thirty seconds after the job
-	 * started it, killed with "bg anr". Loading Qt Core, Network and
-	 * Sql into a fresh process is simply more than a background service
-	 * is given.
+	 * The foreground service works: the notification posts, the claim
+	 * is accepted -- dumpsys shows isForeground=true with the channel
+	 * -- and the ANR that killed the background one is gone. What does
+	 * not happen is Qt: the loader never returns from onCreate and
+	 * main() is never reached, so the fetch never runs.
 	 *
-	 * What would work is a foreground service, which costs a
-	 * notification every fifteen minutes for a weather applet nobody
-	 * asked to be notified by. That is a decision about what the
-	 * program shows its reader rather than a fix, so it is the
-	 * copyright holder's, and scheduling this meanwhile would spawn a
-	 * process that ANRs every quarter of an hour.
+	 * That is below anything here, in Qt's own Android service startup.
+	 * Scheduling meanwhile would post a notification every fifteen
+	 * minutes for a service that fetches nothing, which is worse than
+	 * the gap it was meant to close.
 	 */
 }
 

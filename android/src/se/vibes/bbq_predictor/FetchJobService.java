@@ -47,7 +47,18 @@ public class FetchJobService extends JobService {
 		Log.i("bbq-predictor", "fetch job: starting the service");
 
 		try {
-			startService(new Intent(this, FetchService.class));
+			/*
+			 * startForegroundService: the service claims foreground in
+			 * its own onCreate. A plain startService here would be the
+			 * background start Android refuses, and a background
+			 * service is what sec 17.3 measured being killed.
+			 */
+			Intent fetch = new Intent(this, FetchService.class);
+			if (android.os.Build.VERSION.SDK_INT >= 26) {
+				startForegroundService(fetch);
+			} else {
+				startService(fetch);
+			}
 			Log.i("bbq-predictor", "fetch job: service start requested");
 		} catch (Throwable failed) {
 			Log.e("bbq-predictor", "fetch job: could not start the service",

@@ -32,6 +32,17 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
 
+    <!--
+        The background fetch runs as a foreground service, because a
+        background one is killed before Qt has finished loading (sec
+        17.3). Android 34 and later also require the service to declare
+        what kind of work it is, and to hold the matching permission.
+        dataSync: it fetches data and writes it to the archive.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
 
     <application
         android:name="org.qtproject.qt.android.bindings.QtApplication"
@@ -83,6 +94,7 @@
         <service
             android:name=".FetchService"
             android:process=":fetch"
+            android:foregroundServiceType="dataSync"
             android:exported="false">
             <meta-data
                 android:name="android.app.lib_name"
