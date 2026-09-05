@@ -404,6 +404,21 @@ bool bbq_history::discovery_origin(double *latitude, double *longitude) const {
 	return true;
 }
 
+qint64 bbq_history::discovery_ran_utc() const {
+	if (!m_open) {
+		return 0;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	if (!query.exec(QStringLiteral(
+	            "SELECT ran_utc FROM discovery WHERE id = 0")) ||
+	    !query.next()) {
+		return 0;
+	}
+
+	return query.value(0).toLongLong();
+}
+
 bool bbq_history::set_discovery_origin(double latitude, double longitude,
                                        qint64 ran_utc) {
 	if (!m_open) {

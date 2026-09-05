@@ -40,6 +40,7 @@ private slots:
 	void a_fix_that_has_not_moved_does_not_rediscover();
 	void a_first_fix_and_a_distant_one_both_do();
 	void the_origin_moves_only_when_an_answer_arrives();
+	void a_reader_who_never_moves_still_rediscovers_eventually();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -879,8 +880,17 @@ void test_feed::a_fix_that_has_not_moved_does_not_rediscover() {
 	bbq_wu_feed feed;
 	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
 
-	/* Where discovery last ran: a real place, to a real precision. */
-	QVERIFY(feed.history().set_discovery_origin(59.3293, 18.0686, 1756900000));
+	/*
+	 * Where discovery last ran: a real place, to a real precision, and
+	 * a FRESH stamp.
+	 *
+	 * The stamp matters since sec 16.20: an origin older than a week is
+	 * rediscovered however still the reader has been, so a fixture with
+	 * an ancient one would be asking two questions at once and failing
+	 * for the wrong reason. This case is about movement alone.
+	 */
+	QVERIFY(feed.history().set_discovery_origin(59.3293, 18.0686,
+	                                            QDateTime::currentSecsSinceEpoch()));
 
 	QVERIFY2(!feed.is_busy(), "the fixture itself started a fetch");
 
@@ -917,7 +927,7 @@ void test_feed::a_first_fix_and_a_distant_one_both_do() {
 	QVERIFY(travelled.open_history(
 	        scratch.filePath(QStringLiteral("t.sqlite"))));
 	QVERIFY(travelled.history().set_discovery_origin(59.3293, 18.0686,
-	                                                 1756900000));
+	                                                 QDateTime::currentSecsSinceEpoch()));
 
 	/* Uppsala, some 63 km away: the list cannot be the same. */
 	const double moved = travelled.moved_since_discovery(59.8586, 17.6389);
@@ -952,6 +962,40 @@ void test_feed::the_origin_moves_only_when_an_answer_arrives() {
 	double longitude = 0.0;
 	QVERIFY2(!feed.history().discovery_origin(&latitude, &longitude),
 	         "the origin was recorded before any answer arrived");
+}
+
+void test_feed::a_reader_who_never_moves_still_rediscovers_eventually() {
+	/*
+	 * WHAT THE MOVEMENT GATE MADE POSSIBLE (project.md sec 16.20).
+	 *
+	 * Sec 15.7.4 declines discovery when the fix has not moved a
+	 * kilometre, which is right and answers only one of the two ways
+	 * the list changes. The other is somebody putting up a station: a
+	 * reader who never leaves their garden would never hear of it, and
+	 * the gate made that permanent rather than merely likely.
+	 *
+	 * So the same spot is declined while the origin is fresh and
+	 * accepted once it is a week old. One request in seven days against
+	 * a scraped key, which is unmeasurable beside the ordinary cadence.
+	 */
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	/* Discovered here an hour ago: standing still is not a reason. */
+	QVERIFY(feed.history().set_discovery_origin(59.3293, 18.0686, now - 3600));
+	QCOMPARE(feed.discover_stations_if_moved(59.3293, 18.0686), false);
+	QVERIFY2(!feed.is_busy(), "a fresh origin sent an unmoved fix to discovery");
+
+	/* The same spot, eight days on. */
+	QVERIFY(feed.history().set_discovery_origin(59.3293, 18.0686,
+	                                            now - 8 * 24 * 3600));
+	QCOMPARE(feed.discover_stations_if_moved(59.3293, 18.0686), true);
+	QVERIFY2(feed.is_busy(), "a week-old list is never refreshed standing still");
 }
 
 QTEST_GUILESS_MAIN(test_feed)

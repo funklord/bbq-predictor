@@ -7813,3 +7813,45 @@ Asking the same question of both is what separated them -- and the
 answer being "nothing" at the second layer is worth as much as the fix
 at the first, because it is the layer where being wrong would be
 invisible.
+
+## 16.20 The movement gate answered only one of two questions
+
+Sec 15.7.4 declines discovery when a fix has not moved a kilometre. It
+is right about the question it asks -- can the list have changed because
+I moved -- and that is not the only way a station list changes. Somebody
+puts up a station, and **a reader who never leaves their garden would
+never hear of it.** The gate made that permanent where it had merely
+been likely.
+
+So discovery also runs on the calendar: declined at the same spot while
+the origin is fresh, accepted once it is a week old. One request in
+seven days against a scraped key, unmeasurable beside the ordinary
+cadence, and the list cannot go stale for ever.
+
+**A zero stamp reads as "long ago" rather than "just now"**, which is
+the safe direction for an origin written before the time was recorded:
+one extra discovery, once.
+
+### 16.20.1 It broke two tests, and they deserved it
+
+`a_fix_that_has_not_moved_does_not_rediscover` and the window's wiring
+case both seeded the origin with a hardcoded `1756900000` -- over a year
+old. Under the new rule that is emphatically stale, so both correctly
+began asking for a rediscovery and failing.
+
+**The fixtures were conflating two questions**, which nothing revealed
+until there were two. They are about movement, so they now stamp the
+origin with the current time and say why, and both still fail when the
+movement half is removed.
+
+**Each half is guarded separately**, which is what makes them two
+witnesses rather than one:
+
+    calendar half removed   the weekly case fails, the movement cases pass
+    movement half removed   all three fail
+
+**This is the third time tonight that asking what a change made possible
+found something**, and the only one where the answer was a gap rather
+than a false alarm: the exit-code contract had no guard, the corrector
+turned out to be right for an unwritten reason, and this one was a
+capability quietly removed by a fix that was otherwise correct.

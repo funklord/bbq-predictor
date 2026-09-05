@@ -607,7 +607,7 @@ void test_window::a_fix_from_where_discovery_already_ran_is_not_sent_to_it() {
 	        directory.filePath(QStringLiteral("h.sqlite"))));
 
 	QVERIFY(window.feed()->history().set_discovery_origin(59.3293, 18.0686,
-	                                                      1756900000));
+	                                                      QDateTime::currentSecsSinceEpoch()));
 
 	QVERIFY2(!window.feed()->is_busy(),
 	         "the fixture itself left a request outstanding");

@@ -117,6 +117,19 @@ const int backfill_short_s = 3 * 3600;
 const double discovery_move_km = 1.0;
 
 /*
+ * And discovery runs on the calendar as well, however still the reader
+ * has been (sec 16.20).
+ *
+ * The movement gate answers "can the list have changed because I
+ * moved", and that is not the only way it changes: a neighbour puts up
+ * a station, and somebody who never leaves their garden would never
+ * hear of it. A week is chosen so the cost is one request in seven days
+ * against a scraped key -- unmeasurable beside the ordinary cadence --
+ * while the list cannot go stale for ever.
+ */
+const qint64 discovery_stale_s = 7 * 24 * 3600;
+
+/*
  * Great-circle distance. Written here because nothing else in the tree
  * computes one -- `distance_km` on a station is Weather Underground's
  * own number, measured from the point THEY were asked about, which is
@@ -905,7 +918,18 @@ bool bbq_wu_feed::discover_stations_if_moved(double latitude,
 	const double moved = moved_since_discovery(latitude, longitude);
 
 	if (moved >= 0.0 && moved < discovery_move_km) {
-		return false;
+		/*
+		 * Still here, so ask whether it has simply been long enough.
+		 * A zero stamp is an origin written before this was recorded
+		 * and reads as "long ago" rather than "just now", which is the
+		 * safe direction: one extra discovery, once.
+		 */
+		const qint64 ran = m_history.discovery_ran_utc();
+		const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+		if (ran != 0 && now - ran < discovery_stale_s) {
+			return false;
+		}
 	}
 
 	discover_stations_at(latitude, longitude);

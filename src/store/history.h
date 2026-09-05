@@ -201,6 +201,15 @@ public:
 	 * discovery the list needed (sec 15.7.4).
 	 */
 	bool discovery_origin(double *latitude, double *longitude) const;
+
+	/*
+	 * When discovery last ran, or 0 when it never has.
+	 *
+	 * Asked so a station list can refresh on the calendar as well as on
+	 * movement (sec 16.20). Movement alone means a reader who never
+	 * moves never learns of a station that appeared after they settled.
+	 */
+	qint64 discovery_ran_utc() const;
 	bool set_discovery_origin(double latitude, double longitude,
 	                          qint64 ran_utc);
 	bool set_station_pinned(const QString &id, bool pinned);
