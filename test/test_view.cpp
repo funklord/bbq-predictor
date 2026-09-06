@@ -75,6 +75,7 @@ private slots:
 	void a_readout_too_wide_to_fit_keeps_its_left_edge();
 	void a_column_holding_several_samples_reads_as_a_range();
 	void day_furniture_goes_away_once_the_days_would_crowd();
+	void the_window_scan_is_kept_and_forgotten_with_the_composite();
 
 	/*
 	 * The contrast clamp the home-screen picture draws through
@@ -1679,4 +1680,62 @@ void test_view::day_furniture_goes_away_once_the_days_would_crowd() {
 	 */
 	QVERIFY(bbq_day_furniture_fits(50.0, 40.0));
 	QVERIFY(!bbq_day_furniture_fits(50.0, 60.0));
+}
+
+/*
+ * The grill windows, cached against the composite.
+ *
+ * The scan ran inside paintEvent, so a drag paid for it on every mouse
+ * move -- 2.2 ms for three days of span, 18.8 ms for thirty, 195 ms for
+ * a year, measured over this fixture. It is linear in the composite's
+ * span, and the composite grows as the archive fills, which is what
+ * this program is for.
+ *
+ * ASSERT BOTH HALVES. That the cache agrees with a fresh scan is the
+ * easy one and a cache that never invalidates passes it; the half that
+ * catches that is the second composite, where the answer has to have
+ * changed.
+ */
+void test_view::the_window_scan_is_kept_and_forgotten_with_the_composite() {
+	const auto fresh = [](const bbq_composite &c) {
+		return bbq_grill_windows(c, c.zone(), c.begin_utc(), c.end_utc(),
+		                         bbq_grill_policy());
+	};
+
+	bbq_forecast_graph graph;
+
+	const bbq_composite first = grillable_days(1600000000, 3);
+	graph.set_composite(first);
+
+	const std::vector<bbq_window> wanted_first = fresh(first);
+	QVERIFY2(!wanted_first.empty(), "the fixture produced no windows, so "
+	                                "neither half of this can discriminate");
+	QCOMPARE(graph.grill_windows().size(), wanted_first.size());
+
+	for (std::size_t i = 0; i < wanted_first.size(); ++i) {
+		QCOMPARE(graph.grill_windows()[i].start_utc, wanted_first[i].start_utc);
+		QCOMPARE(graph.grill_windows()[i].end_utc, wanted_first[i].end_utc);
+	}
+
+	/*
+	 * A different composite, far enough away that no window of the
+	 * first could be mistaken for one of the second.
+	 */
+	const bbq_composite second = grillable_days(1600000000 + 40 * 86400, 5);
+	const std::vector<bbq_window> wanted_second = fresh(second);
+	QVERIFY(wanted_second.size() != wanted_first.size());
+
+	graph.set_composite(second);
+
+	QVERIFY2(graph.grill_windows().size() == wanted_second.size(),
+	         qPrintable(QStringLiteral("after replacing the composite the "
+	                                   "graph reports %1 window(s), the new "
+	                                   "data has %2 and the old had %3 -- the "
+	                                   "scan was not forgotten")
+	                            .arg(graph.grill_windows().size())
+	                            .arg(wanted_second.size())
+	                            .arg(wanted_first.size())));
+
+	QCOMPARE(graph.grill_windows().front().start_utc,
+	         wanted_second.front().start_utc);
 }

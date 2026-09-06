@@ -892,7 +892,46 @@ QSize bbq_forecast_graph::sizeHint() const {
 
 void bbq_forecast_graph::set_composite(bbq_composite composite) {
 	m_composite = std::move(composite);
+
+	/*
+	 * The only thing the window scan depends on, so the only place it
+	 * has to be forgotten (sec 16.57). The zone comes out of the
+	 * composite too, which is what makes this one line rather than a
+	 * set of them.
+	 */
+	m_windows_valid = false;
+	m_windows.clear();
+
 	update();
+}
+
+const std::vector<bbq_window> &bbq_forecast_graph::grill_windows() const {
+	if (m_windows_valid) {
+		return m_windows;
+	}
+
+	/*
+	 * SCORED OVER THE DATA, NOT OVER THE VIEWPORT (sec 16.30.1), and
+	 * computed ONCE PER COMPOSITE rather than once per frame
+	 * (sec 16.57).
+	 *
+	 * It ran inside paintEvent, so a drag paid for it on every mouse
+	 * move. Measured over the fixture: 2.2 ms for three days of span,
+	 * 18.8 ms for thirty, 195 ms for a year -- linear in the span, and
+	 * the span is the composite's, which grows as the archive fills.
+	 * That is this program's purpose, so the cost was one that got
+	 * worse the longer it was used.
+	 *
+	 * Nothing about the view enters it, which is what makes caching
+	 * safe: the result is a function of the composite alone, and
+	 * set_composite is the only place that changes.
+	 */
+	m_windows = bbq_grill_windows(m_composite, m_composite.zone(),
+	                              m_composite.begin_utc(),
+	                              m_composite.end_utc(), bbq_grill_policy());
+	m_windows_valid = true;
+
+	return m_windows;
 }
 
 void bbq_forecast_graph::set_corrected(bbq_series corrected) {
@@ -1568,8 +1607,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * seen against, not something covering it up.
 	 */
 	if (m_show_windows) {
-		const bbq_grill_policy policy;
-
 		/*
 		 * SCORED OVER THE DATA, NOT OVER THE VIEWPORT (sec 16.30.1).
 		 *
@@ -1594,10 +1631,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		 * at most a week or so at a ten-minute stride, which is cheap,
 		 * and it is the same question the header asks.
 		 */
-		const std::vector<bbq_window> windows =
-		        bbq_grill_windows(m_composite, zone,
-		                          m_composite.begin_utc(),
-		                          m_composite.end_utc(), policy);
+		const std::vector<bbq_window> &windows = grill_windows();
 
 		QColor shade = m_palette.grill_window;
 

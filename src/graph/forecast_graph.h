@@ -284,6 +284,18 @@ public:
 	 */
 	const bbq_graph_palette &palette_colours() const { return m_palette; }
 
+	/*
+	 * The grill windows over everything the composite covers, computed
+	 * once per composite rather than once per frame (sec 16.57).
+	 *
+	 * Public because the test asks it directly: the scan is a function
+	 * of the composite alone, so the property worth asserting is that
+	 * this agrees with a fresh scan AND that it stops agreeing with the
+	 * old one when the composite is replaced. A cache that never
+	 * invalidates passes the first half.
+	 */
+	const std::vector<bbq_window> &grill_windows() const;
+
 	void set_show_wind(bool show);
 	bool show_wind() const { return m_show_wind; }
 
@@ -352,6 +364,14 @@ private:
 
 	bbq_graph_palette m_palette;
 	bbq_composite m_composite;
+
+	/*
+	 * Filled on demand by grill_windows() and forgotten by
+	 * set_composite. Mutable because painting is the caller and asking
+	 * a graph what its windows are does not change it.
+	 */
+	mutable std::vector<bbq_window> m_windows;
+	mutable bool m_windows_valid = false;
 	bbq_series m_corrected;
 	/*
 	 * The DEFAULT visible window, as offsets from now in seconds --

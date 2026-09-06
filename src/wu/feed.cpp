@@ -1288,7 +1288,7 @@ void bbq_wu_feed::set_view_range(qint64 from_utc, qint64 to_utc) {
 	/*
 	 * Reload only when the view has left what is in memory. This is
 	 * called on every mouse move of a drag, and a database query per
-	 * frame is exactly the kind of thing sec 14.1 is about.
+	 * frame is exactly the kind of thing sec 13.1 is about.
 	 */
 	if (m_loaded_to > m_loaded_from && from_utc >= m_loaded_from &&
 	    to_utc <= m_loaded_to) {

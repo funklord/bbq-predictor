@@ -10587,3 +10587,67 @@ confirmed the manual is the exhaustive list and `man_options` gates it
 both ways. **The finding was already in hand and the wrong document was
 consulted anyway.** It cost nothing because the duplicate was noticed
 while editing the manual, which is the one file that could not omit it.
+
+
+## 16.57 The window scan ran once a frame, and grew with the archive
+
+Same lens as sec 16.55 and sec 16.56 -- a comment justifying itself
+with a quantity another feature can now change -- pointed at the last
+member of the class. The grill windows are drawn per unit of time, and
+the scan that finds them sat inside `paintEvent`.
+
+Its comment said the scan covers "at most a week or so at a ten-minute
+stride, which is cheap". Two things had moved under that.
+
+**What is loaded is three times the view span.** `load_observations`
+takes the view and a margin of one span either side, so the composite's
+extent follows the reader's zoom rather than a week. Sec 13.1 promises
+that "only the visible window is loaded ... however much of it
+accumulates", and that promise is kept in shape -- the bound is the
+view -- but the view stopped being bounded when pan and zoom arrived.
+
+**And "cheap" was never measured.** It is now, over the fixture, ten
+scans each:
+
+    3 days of span         2.2 ms per scan
+    30 days               18.8 ms per scan
+    365 days             195   ms per scan
+
+Linear in the span, at about half a millisecond per day of it. Sec 13.1
+budgets a whole paint at 7.6 ms against a sixteen-millisecond frame, so
+today's composite -- sixteen days of forecast plus whatever history is
+loaded -- already spends more than that budget on this one scan, and a
+drag repaints on every mouse move.
+
+### 16.57.1 The fix is caching, because nothing about the view enters it
+
+Sec 16.30.1 settled that the scan runs over the data rather than the
+viewport, so that scrolling cannot change how good the program says an
+afternoon was. That decision is what makes the cache safe: the result
+is a function of the composite alone, and the zone comes out of the
+composite too, so `set_composite` is the only place it has to be
+forgotten.
+
+`grill_windows()` is public because the test asks it directly. **A
+cache that never invalidates agrees with a fresh scan**, which is the
+half that is easy to assert and proves nothing; what catches it is
+replacing the composite and requiring the answer to have changed.
+Sabotaged by deleting the invalidation:
+
+    'graph.grill_windows().size() == wanted_second.size()' returned
+    FALSE. (after replacing the composite the graph reports 3
+    window(s), the new data has 5 and the old had 3 -- the scan was
+    not forgotten)
+
+### 16.57.2 A citation that pointed at the wrong section
+
+The comment above the reload guard said a database query per frame is
+"exactly the kind of thing sec 14.1 is about". Sec 14.1 is *Two things
+the discovery endpoints lie about*. The section it means is sec 13.1,
+*What "snappy" costs*, which is where the frame budget lives, and it now
+says so.
+
+**A section number is an identifier, and identifiers are the thing this
+workspace has learned not to complete from memory.** Nothing breaks
+when one is wrong -- it costs the next reader a search and a shrug,
+which is why it survives.
