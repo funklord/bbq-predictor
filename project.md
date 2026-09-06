@@ -9887,8 +9887,33 @@ the device it came out **under the record line** -- a sentence about
 forecast accuracy sitting between "+1 more" and the one more. Correct
 and unreadable.
 
-It is written where the count is made now. That is the whole of the
-change and it is only visible on a screenshot.
+It is written where the count is made now.
+
+### 16.44.3 And the fix put the record note in the wrong place
+
+The reorder was right and made a second fault visible in the same
+screenshot. `verification_note` opens with three spaces and no break,
+and had always relied on the label's word wrap to fall onto its own
+line -- which it did while the summary filled the line above it. With
+the extras inserted, the last of them ends mid-line and the note ran
+straight on from it:
+
+    Mon 18:00 to 20:00  (2.0 h, score 0.52)   record: hourly @2d  bias
+
+One sentence made of two, and a reader has no way to know where the
+window stops and the accuracy note starts.
+
+A hard break where the extras are, rather than trusting the wrap again:
+what a wrap does depends on the width, the text and the font, none of
+which this code can see and all of which the next change will alter.
+**It had been correct by coincidence for as long as the line above it
+happened to be full.**
+
+Three device screenshots for one feature -- the tooltip that could not
+be opened, the list under the record line, and the note glued to the
+list -- and every one of the three was invisible to the suite, which
+stayed green throughout. There is no assertion for *reads as two
+sentences*.
 
 ### 16.44.2 An assertion that passed for a reason the program does not have
 

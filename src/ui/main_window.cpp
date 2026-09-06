@@ -1521,7 +1521,31 @@ void bbq_main_window::refresh_status() {
 		 * chosen: a record for some other band at some other lead would
 		 * be a true number about the wrong thing.
 		 */
-		verdict += verification_note(composite, best.start_utc, now);
+		/*
+		 * THE RECORD NOTE ON A LINE OF ITS OWN WHERE THE EXTRAS ARE
+		 * (sec 16.44.3).
+		 *
+		 * It opens with three spaces and no break, and relied on the
+		 * label's word wrap to fall onto the next line -- which it did
+		 * while the summary filled the one above it. With the extra
+		 * windows inserted, the last of them ends mid-line and the note
+		 * ran straight on from it: "Mon 18:00 to 20:00 (2.0 h, score
+		 * 0.52)   record: hourly @2d ...", one sentence made of two.
+		 *
+		 * A hard break rather than trusting the wrap again, because
+		 * what the wrap does depends on the width, the text and the
+		 * font -- none of which this can see, and all of which the next
+		 * change will alter.
+		 */
+		const QString record = verification_note(composite,
+		                                         best.start_utc, now);
+
+		if (m_metrics.detail_must_be_visible && !record.isEmpty()) {
+			verdict += QStringLiteral("\n");
+			verdict += record.trimmed();
+		} else {
+			verdict += record;
+		}
 
 		m_verdict->setText(verdict);
 
