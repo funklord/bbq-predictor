@@ -10651,3 +10651,58 @@ says so.
 workspace has learned not to complete from memory.** Nothing breaks
 when one is wrong -- it costs the next reader a search and a shrug,
 which is why it survives.
+
+
+## 16.58 The command line took the next flag as a value
+
+Which files no test links, counted rather than assumed: **24 of 28**.
+The four left out are `main.cpp`, `net/probe.cpp`, `net/tls_backend.cpp`
+and `wu/fetch_once.cpp` -- and the first is the biggest at 910 lines,
+holding the argument parsing every invocation goes through.
+
+`option_value` returned the argument after the option, unconditionally.
+So `--station --geocode 59.3,18.0` set the station to the literal
+string `--geocode`, and the program answered:
+
+    observed   FAIL  no data (HTTP 204) -- for the observed band this
+    usually means the station is unknown or has reported nothing
+
+Which is TRUE of the string it was handed, and nothing to do with the
+mistake the reader actually made. **Sec 14.1 records this exact shape as
+somebody else's fault** -- a message naming a parameter that is present
+sends the reader to check the thing that is right -- and this program
+had its own.
+
+### 16.58.1 A double dash, because a value may begin with one
+
+`bbq_option_value` now returns nothing when the next argument starts
+with `--`. Not with `-`: `--geocode -33.9,18.4` is Cape Town, and
+`--cursor -1` is how the readout is cleared, so a single-dash test
+would break two cases the program exists to serve. Both are in the
+test.
+
+It cannot tell "given without a value" from "absent", and does not try.
+The callers already handle absence by falling back to the stored
+setting, so what this buys is that a typo stops being read as data;
+saying which of the two happened wants a different return type and
+seventeen call sites agreeing about it. **Recorded as a limit rather
+than left to be rediscovered.**
+
+### 16.58.2 The extraction is what made it testable
+
+Four lines in an anonymous namespace in a file no test links cannot be
+asserted about at all. `src/cli/options.{h,cpp}` and a `test_cli`
+suite -- the thirteenth, since the suite's rule is one binary per area
+so a failure names its subject. Sabotaged by restoring the old return:
+
+    'station.isEmpty()' returned FALSE. (--station took "--geocode" as
+    its value)
+
+### 16.58.3 The other parser was checked, not assumed
+
+`wants_service` reads argv directly before any QApplication exists, so
+there are two argument readers in this program and a fix to one says
+nothing about the other. It only tests for the presence of
+`--android-service` and takes no value, so it cannot carry this fault.
+**Enumerating the population is the whole of that check**, and it cost
+one read.

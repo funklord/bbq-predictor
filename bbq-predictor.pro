@@ -122,6 +122,7 @@ SOURCES += \
 	src/net/probe.cpp \
 	src/net/tls_backend.cpp \
 	src/model/composite.cpp \
+	src/cli/options.cpp \
 	src/model/units.cpp \
 	src/model/correction.cpp \
 	src/openmeteo/forecast.cpp \
@@ -151,6 +152,7 @@ HEADERS += \
 	src/net/probe.h \
 	src/net/tls_backend.h \
 	src/model/composite.h \
+	src/cli/options.h \
 	src/model/units.h \
 	src/model/correction.h \
 	src/openmeteo/forecast.h \

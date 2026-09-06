@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QTextStream>
 
+#include "cli/options.h"
 #include "ui/accessibility.h"
 #include "ui/main_window.h"
 #include "ui/tray_icon.h"
@@ -69,16 +70,6 @@ void print_usage(QTextStream &out) {
 	out << "See bbq-predictor(1) for the diagnostics this omits.\n";
 }
 
-/* The value after `name`, or empty when absent or last. */
-QString option_value(const QStringList &arguments, const QString &name) {
-	const int index = arguments.indexOf(name);
-	if (index < 0 || index + 1 >= arguments.size()) {
-		return QString();
-	}
-
-	return arguments.at(index + 1);
-}
-
 } // namespace
 
 /*
@@ -91,9 +82,9 @@ QString option_value(const QStringList &arguments, const QString &name) {
  * fetched quietly instead fails to start at all.
  *
  * So the flag is read from argv directly, before anything is
- * constructed. It cannot use option_value(), which wants the QStringList
- * that only exists once an application object does -- and constructing
- * one is the very thing being decided.
+ * constructed. It cannot use bbq_option_value(), which wants the
+ * QStringList that only exists once an application object does -- and
+ * constructing one is the very thing being decided.
  */
 bool wants_service(int argc, char *argv[]) {
 	for (int i = 1; i < argc; ++i) {
@@ -262,9 +253,9 @@ int main(int argc, char *argv[]) {
 
 	if (arguments.contains(QStringLiteral("--fetch-once"))) {
 		return bbq_wu_fetch_once(
-		        option_value(arguments, QStringLiteral("--station")),
-		        option_value(arguments, QStringLiteral("--geocode")), 30,
-		        option_value(arguments, QStringLiteral("--history-path")));
+		        bbq_option_value(arguments, QStringLiteral("--station")),
+		        bbq_option_value(arguments, QStringLiteral("--geocode")), 30,
+		        bbq_option_value(arguments, QStringLiteral("--history-path")));
 	}
 
 	/*
@@ -279,8 +270,10 @@ int main(int argc, char *argv[]) {
 	 */
 	QApplication::setQuitOnLastWindowClosed(!bbq_tray_icon::is_available());
 
-	const QString station = option_value(arguments, QStringLiteral("--station"));
-	const QString geocode = option_value(arguments, QStringLiteral("--geocode"));
+	const QString station =
+	        bbq_option_value(arguments, QStringLiteral("--station"));
+	const QString geocode =
+	        bbq_option_value(arguments, QStringLiteral("--geocode"));
 
 	bbq_main_window window;
 	bbq_tray_icon tray;
@@ -322,7 +315,8 @@ int main(int argc, char *argv[]) {
 	 * Pick the curve for a shot, so four renderings can be compared
 	 * side by side. The window's drop-down is the real control.
 	 */
-	const QString interp = option_value(arguments, QStringLiteral("--interp"));
+	const QString interp =
+	        bbq_option_value(arguments, QStringLiteral("--interp"));
 	if (interp == QStringLiteral("step")) {
 		window.set_interpolation(bbq_interpolation::step);
 	} else if (interp == QStringLiteral("linear")) {
@@ -339,12 +333,14 @@ int main(int argc, char *argv[]) {
 		window.set_interpolation(bbq_interpolation::monotone);
 	}
 
-	const QString want_layout = option_value(arguments, QStringLiteral("--layout"));
+	const QString want_layout =
+	        bbq_option_value(arguments, QStringLiteral("--layout"));
 	if (!want_layout.isEmpty()) {
 		window.set_layout(bbq_layout_resolve(want_layout));
 	}
 
-	const QString smooth = option_value(arguments, QStringLiteral("--smooth"));
+	const QString smooth =
+	        bbq_option_value(arguments, QStringLiteral("--smooth"));
 	if (!smooth.isEmpty()) {
 		window.set_smoothing(smooth.toInt());
 	}
@@ -371,7 +367,7 @@ int main(int argc, char *argv[]) {
 	 * seeding below -- which must never be aimed at the real thing.
 	 */
 	const QString history_path =
-	        option_value(arguments, QStringLiteral("--history-path"));
+	        bbq_option_value(arguments, QStringLiteral("--history-path"));
 
 	/*
 	 * Synthetic verification statistics, so the corrected band can be
@@ -383,7 +379,7 @@ int main(int argc, char *argv[]) {
 	 * the sake of a screenshot.
 	 */
 	const QString seed =
-	        option_value(arguments, QStringLiteral("--seed-verification"));
+	        bbq_option_value(arguments, QStringLiteral("--seed-verification"));
 	if (!seed.isEmpty()) {
 		QTextStream report(stdout);
 
@@ -498,7 +494,8 @@ int main(int argc, char *argv[]) {
 	 * Turn a typed place into coordinates (sec 13), so that discovery
 	 * can reach somewhere the reader is not standing.
 	 */
-	const QString search = option_value(arguments, QStringLiteral("--search"));
+	const QString search =
+	        bbq_option_value(arguments, QStringLiteral("--search"));
 	if (!search.isEmpty()) {
 		QTextStream report(stdout);
 
@@ -740,7 +737,7 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	const QString view = option_value(arguments, QStringLiteral("--view"));
+	const QString view = bbq_option_value(arguments, QStringLiteral("--view"));
 	if (!view.isEmpty()) {
 		const QStringList parts = view.split(QLatin1Char(','));
 		const qint64 span = parts.at(0).toLongLong();
@@ -761,9 +758,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	/* Render at a given size, for reproducing a defect seen on a device. */
-	const QString want_size = option_value(arguments, QStringLiteral("--size"));
+	const QString want_size =
+	        bbq_option_value(arguments, QStringLiteral("--size"));
 
-	const QString cursor = option_value(arguments, QStringLiteral("--cursor"));
+	const QString cursor =
+	        bbq_option_value(arguments, QStringLiteral("--cursor"));
 	if (!cursor.isEmpty()) {
 		window.graph()->set_cursor_column(cursor.toInt());
 	}
@@ -776,9 +775,10 @@ int main(int argc, char *argv[]) {
 	 * from here and the icon is now the applet's main surface, so this
 	 * is the only way to look at what it says before shipping it.
 	 */
-	const QString tray_shot = option_value(arguments, QStringLiteral("--tray-icon"));
+	const QString tray_shot =
+	        bbq_option_value(arguments, QStringLiteral("--tray-icon"));
 
-	const QString shot = option_value(arguments, QStringLiteral("--shot"));
+	const QString shot = bbq_option_value(arguments, QStringLiteral("--shot"));
 
 	/*
 	 * Render and exit. Bounded twice over: the shot is taken when the
