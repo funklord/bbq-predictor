@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
@@ -116,44 +117,94 @@ public class GraphWidget extends AppWidgetProvider {
 	 * out at the widget's real pixel size, and the text is drawn at the
 	 * size it was designed at.
 	 *
-	 * THE LARGER OF THE TWO BOUNDS. Android reports a RANGE, not a
-	 * size: MIN_WIDTH and MAX_WIDTH are the lower and upper bounds on
-	 * the current width, because a widget is one shape in portrait and
-	 * another in landscape and the host describes both at once. Reading
-	 * the lower bound draws a picture that can be SMALLER than the box
-	 * it goes in, and the ImageView then scales it up -- blurring the
-	 * text this whole exercise exists to keep sharp.
+	 * THE BOX FOR THE CURRENT ORIENTATION. Android reports a RANGE, not
+	 * a size: a widget is one shape in portrait and another in
+	 * landscape, and the host describes both at once. The convention is
+	 * that portrait is MIN_WIDTH by MAX_HEIGHT and landscape is
+	 * MAX_WIDTH by MIN_HEIGHT -- so picking the pair that matches the
+	 * orientation gives the box exactly, and the picture fills it with
+	 * no letterbox and no magnification.
 	 *
-	 * Taking the upper bound cannot be too small, so the picture is
-	 * never magnified. Where the box is smaller than the bound the
-	 * ImageView shrinks it, which costs nothing.
+	 * ================= WHAT IS NOT VERIFIED HERE =================
 	 *
-	 * WHAT THIS DOES NOT DO is guarantee the picture fills the box
-	 * exactly. The layout is fitCenter, which preserves the aspect
-	 * ratio, so a picture whose shape differs from the box's is
-	 * letterboxed rather than cropped -- and that is the right trade
-	 * for a graph, where centerCrop would cut the axis labels off and
-	 * fitXY would misstate the data by stretching it. The letterbox is
-	 * bounded by the gap between the two bounds, and is nothing at all
-	 * on a host that reports a single size.
+	 * THE MAPPING IS CONVENTION, NOT MEASUREMENT. No host available to
+	 * this project reports a range at all: this launcher answers min
+	 * and max equal at 337 by 208 dp and KEEPS THEM EQUAL THROUGH A
+	 * FORCED ROTATION, because the cover screen's home is pinned to
+	 * portrait. The experiment that would have confirmed which bound
+	 * belongs to which orientation is the one that came back unchanged,
+	 * so the branch below has never been taken with the two bounds
+	 * differing, by anybody, on any device this tree has seen.
 	 *
-	 * Measured on the device: this launcher pins the home screen to
-	 * portrait, reports min and max equal at 337 by 208, and keeps them
-	 * equal through a forced rotation -- so here the two readings agree
-	 * and this change is provably a no-op. It is made for the hosts
-	 * that do report a range, which are hosts this workspace has not
-	 * got.
+	 * THE ORIENTATION IS THIS PROCESS'S, NOT THE HOST'S. It comes from
+	 * the application's own Configuration, and the launcher hosting the
+	 * widget is a different process that can be in a different
+	 * orientation -- on a foldable with the widget on the cover screen
+	 * and the application open on the inner one, they are not even the
+	 * same display. Where they disagree this picks the wrong pair and
+	 * the picture is letterboxed, which is the failure the previous
+	 * version could not have.
+	 *
+	 * WHY IT IS SAFE ANYWAY: where the two bounds are equal -- every
+	 * host this project has met -- both branches and the fallback
+	 * return the same number, so none of the above can bite. And the
+	 * fallback is the previous behaviour, the larger of the two, which
+	 * can be too big and never too small: too small magnifies and loses
+	 * the sharpness sec 16.22 was about, while too large only shrinks.
+	 *
+	 * =============================================================
+	 *
+	 * Kept because the copyright holder asked for it with the
+	 * limitation marked (sec 16.34). Read the block above before
+	 * trusting this on a host that reports a range.
 	 */
 	public static int wantedWidth(Context context) {
-		return Math.max(
-		        option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
-		        option(context, AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH));
+		return forOrientation(
+		        context, AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,
+		        AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH);
 	}
 
 	public static int wantedHeight(Context context) {
-		return Math.max(
-		        option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
-		        option(context, AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT));
+		return forOrientation(
+		        context, AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT,
+		        AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
+	}
+
+	/*
+	 * The bound belonging to the orientation we are in, or the larger
+	 * of the two when that cannot be told.
+	 *
+	 * `portrait` and `landscape` are the option keys, not values: which
+	 * bound is which differs between width and height, so the callers
+	 * name them rather than this function guessing.
+	 */
+	private static int forOrientation(Context context, String portrait,
+	                                  String landscape) {
+		final int wide = option(context, landscape);
+		final int tall = option(context, portrait);
+
+		/*
+		 * Equal bounds are the case every host here produces, and the
+		 * answer is the same whichever way this goes. Returning early
+		 * says so, and keeps the orientation lookup off the path that
+		 * actually runs.
+		 */
+		if (wide == tall) {
+			return tall;
+		}
+
+		final int facing = context.getResources().getConfiguration().orientation;
+
+		if (facing == Configuration.ORIENTATION_PORTRAIT && tall > 0) {
+			return tall;
+		}
+		if (facing == Configuration.ORIENTATION_LANDSCAPE && wide > 0) {
+			return wide;
+		}
+
+		/* Undefined, or a bound the host declined to give. Too large
+		 * only shrinks; too small magnifies. */
+		return Math.max(wide, tall);
 	}
 
 	private static int option(Context context, String key) {

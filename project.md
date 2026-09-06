@@ -9231,14 +9231,13 @@ already in hand gets used, and the direction is decided by which failure
 is possible: too small magnifies, too large shrinks, and only one of
 those loses information.
 
-**What was NOT built for the same reason.** The exact box is derivable
--- portrait is `MIN_WIDTH` by `MAX_HEIGHT`, landscape is `MAX_WIDTH` by
-`MIN_HEIGHT` -- and that would fill precisely with no letterbox at all.
-It needs the current orientation, the mapping is convention rather than
-anything this device can be made to demonstrate, and the rotation
-experiment above is exactly the test that would have verified it and
-could not. A branch that cannot be exercised here is a branch that gets
-written once and read wrong later.
+~~**What was NOT built for the same reason.** The exact box is
+derivable -- portrait is `MIN_WIDTH` by `MAX_HEIGHT`, landscape is
+`MAX_WIDTH` by `MIN_HEIGHT` -- and that would fill precisely with no
+letterbox at all.~~ **Built on the holder's instruction, with the
+limitation marked; see sec 16.34.** The reasoning against it stands and
+is now a comment block in the code rather than a decision not to write
+it.
 
 ### 16.33.2 An assumption corrected on the way
 
@@ -9248,3 +9247,51 @@ picture's real width to the pixel. Nothing depended on the number --
 the render asks Qt for the ratio rather than assuming one -- but the
 arithmetic in those entries was checked against a figure that was
 wrong, and agreed anyway because both sides of the check used it.
+
+
+## 16.34 The exact box, added on instruction with its limits in the file
+
+`forOrientation` picks the bound belonging to the orientation the
+process is in -- portrait takes `MIN_WIDTH` and `MAX_HEIGHT`, landscape
+the other pair -- so the picture is the box exactly, with no letterbox
+and no magnification.
+
+Asked for after sec 16.33 argued against it. The argument was not
+withdrawn; it is a marked block in `GraphWidget.java`, above the code,
+because **the next person to read that function is the one the
+limitation is for.**
+
+Three things it says, and they are the whole of what is not known:
+
+- **The mapping is convention, not measurement.** No host here reports a
+  range at all, so the branch has never been taken with the two bounds
+  differing, on any device this tree has seen.
+- **The orientation is this process's, not the host's.** It comes from
+  the application's own `Configuration`, and the launcher is a different
+  process that can be in a different orientation -- on a foldable with
+  the widget on the cover screen and the application open on the inner
+  one, they are not even the same display. Where they disagree this
+  picks the wrong pair and letterboxes, **which is a failure the version
+  it replaced could not have.**
+- **Equal bounds make all of it moot**, and that is the case on every
+  host this project has met. `forOrientation` returns early on equality,
+  so neither the orientation lookup nor the branch runs.
+
+The fallback is the previous behaviour, the larger of the two, chosen on
+the asymmetry that decides everything here: **too small magnifies and
+loses the sharpness sec 16.22 was about, while too large only shrinks.**
+
+### 16.34.1 The evidence it changes nothing here, and one test that proves nothing
+
+    the device reports min == max            measured twice, and through
+                                             a forced rotation
+    forOrientation returns before the branch  on equality
+    the rendered picture                      885 by 546, unchanged
+
+**Comparing the two renders pixel by pixel was tried and is worthless.**
+290,581 of 483,210 pixels differ -- and that is expected, because the
+view follows `now`, so the time axis, the curve and the temperature all
+move between two renders taken minutes apart. A test that reports a
+large difference for a change that provably did nothing is not a weak
+test, it is a test of the wrong quantity, and quoting its number either
+way would have been noise dressed as measurement.
