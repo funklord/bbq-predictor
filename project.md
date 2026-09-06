@@ -9739,3 +9739,65 @@ The signal gate's control was right the first time only because that
 signal's two listeners were both obvious. **A control has to remove
 every instance of what it removes**, and how many there are is a fact
 about the tree rather than about the gate.
+
+
+## 16.42 "+N more" now says what it is about
+
+The verdict named the best grilling window and counted the rest:
+
+    Best window: Sun 16:00 to 20:30  (4.5 h, score 0.67)   +2 more
+
+**And there was no way to see the rest.** The plot shades every window,
+so they were reachable by panning until a band happened into view --
+which is not an answer, it is a place to start looking. A count with
+nothing behind it is worse than no count: it tells a reader there is
+more and does not say where.
+
+The tooltip lists them all, including the best, so it is a list rather
+than a remainder -- somebody comparing them should not have to hold the
+label in their head to know what the others are being compared against.
+
+A tooltip rather than a row of its own because these are the ANSWERS TO
+A QUESTION SOMEBODY ASKED rather than something the glance needs.
+Sec 3.19.2's rule about the graph applies to the furniture around it: a
+second sentence competing for the same attention makes the first one
+worse.
+
+The list is built by `bbq_grill_window_list`, a free function, because
+the label is filled from a private refresh that runs on a feed signal --
+a string built inline there is a string nothing can assert on.
+
+### 16.42.1 The builder was tested and nothing called it
+
+The first test asserted the RELATIONSHIP rather than the text: the label
+promises `size - 1` more, so the tooltip must carry `size` lines.
+Sabotaged to list only the extras, it fails.
+
+**Sabotaged by deleting the `setToolTip` call entirely, it passed.**
+
+That is this project's own rule -- *a correct function is not a working
+feature* -- met by a test written an hour after quoting it. The builder
+was proved and the wiring was not, which is the half that decides
+whether anybody ever sees the list.
+
+`refreshing_the_status_actually_hands_the_label_that_list` drives the
+private refresh and compares the label's tooltip against what the
+builder produces -- against the BUILDER rather than a literal, so a
+wording change does not break it and a disconnection does. It fails on
+the deletion the other test slept through.
+
+`test_window` is a friend of `bbq_wu_feed` now, which is what lets it
+put a composite where the refresh reads one. That suite exists to check
+wiring (sec 14.10), and the wiring here reads that composite.
+
+### 16.42.2 The fixture described weather the code never looks at
+
+The wiring test failed on correct code first. `refresh_status` searches
+`now .. now + 3 days`, and the fixture was pinned at epoch 1700000000 --
+November 2023 -- so the search found nothing, the label took its "no
+grilling window" branch, and the tooltip was legitimately empty.
+
+**A fixture in the wrong range and a defect are the same red**, and the
+difference is which one you go looking for. It is built from
+`currentSecsSinceEpoch()` now, and says why in a comment, because the
+next person to copy this fixture will copy the epoch with it.

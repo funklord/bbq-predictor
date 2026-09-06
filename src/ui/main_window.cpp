@@ -1340,6 +1340,33 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 	return note;
 }
 
+QString bbq_grill_window_list(const std::vector<bbq_window> &windows,
+                              const QTimeZone &zone) {
+	QStringList lines;
+
+	for (const bbq_window &window : windows) {
+		QDateTime from = QDateTime::fromSecsSinceEpoch(window.start_utc);
+		QDateTime to = QDateTime::fromSecsSinceEpoch(window.end_utc);
+		if (zone.isValid()) {
+			from = QDateTime::fromSecsSinceEpoch(window.start_utc, zone);
+			to = QDateTime::fromSecsSinceEpoch(window.end_utc, zone);
+		}
+
+		QString line = from.toString(QStringLiteral("ddd HH:mm"));
+		line += QStringLiteral(" to ");
+		line += to.toString(QStringLiteral("HH:mm"));
+		line += QStringLiteral("  (");
+		line += QString::number(window.duration_s() / 3600.0, 'f', 1);
+		line += QCoreApplication::translate("bbq_main_window",
+		                                    " h, score ");
+		line += QString::number(window.score, 'f', 2);
+		line += QStringLiteral(")");
+		lines.append(line);
+	}
+
+	return lines.join(QStringLiteral("\n"));
+}
+
 void bbq_main_window::refresh_corrected() {
 	/*
 	 * Recomputed for whatever the graph is looking at, because the view
@@ -1397,6 +1424,10 @@ void bbq_main_window::refresh_status() {
 
 	if (windows.empty()) {
 		m_verdict->setText(tr("No grilling window in the next three days."));
+
+		/* Nothing to list, and a stale tooltip from the last refresh
+		 * would describe windows this one has just said do not exist. */
+		m_verdict->setToolTip(QString());
 	} else {
 		const bbq_window &best = windows.front();
 		QDateTime start = QDateTime::fromSecsSinceEpoch(best.start_utc);
@@ -1437,6 +1468,29 @@ void bbq_main_window::refresh_status() {
 		verdict += verification_note(composite, best.start_utc, now);
 
 		m_verdict->setText(verdict);
+
+		/*
+		 * WHAT "+N MORE" IS ABOUT (project.md sec 16.42).
+		 *
+		 * The label named one window and counted the rest, and the rest
+		 * were reachable only by panning the plot until a shaded band
+		 * happened to come into view -- so the sentence promised
+		 * something the window could not answer. A count with nothing
+		 * behind it is worse than no count: it tells a reader there is
+		 * more and does not say where.
+		 *
+		 * A tooltip rather than a row of its own, because these are the
+		 * ANSWERS TO A QUESTION SOMEBODY ASKED rather than something
+		 * the glance needs. Sec 3.19.2's rule about the graph applies
+		 * to the furniture around it: a second sentence competing for
+		 * the same attention makes the first one worse.
+		 *
+		 * Every window, including the best, so the tooltip is a list
+		 * rather than a remainder -- a reader comparing them should not
+		 * have to hold the label in their head to know what the rest
+		 * are being compared against.
+		 */
+		m_verdict->setToolTip(bbq_grill_window_list(windows, zone));
 	}
 
 	const std::vector<bbq_band> missing = composite.missing_bands();

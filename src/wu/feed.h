@@ -358,6 +358,16 @@ private:
 	 */
 	friend class test_feed;
 
+	/*
+	 * The window's suite exists to check the WIRING between the parts
+	 * (project.md sec 14.10), and some of that wiring reads this
+	 * composite -- the verdict line and its tooltip are built from it.
+	 * Without this a test can assert the string builder and not that
+	 * anything calls it, which is the shape sec 16.42.1 was written
+	 * about.
+	 */
+	friend class test_window;
+
 	QHash<int, qint64> m_attempted;
 };
 

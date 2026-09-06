@@ -10,6 +10,10 @@
 
 #include "graph/interpolate.h"
 #include "ui/layout.h"
+#include "model/grill.h"
+
+#include <QTimeZone>
+#include <vector>
 
 class QCheckBox;
 class QPushButton;
@@ -27,6 +31,19 @@ class bbq_wu_feed;
  * exists to say how old that content is. See m_freshness_label below -- sec
  * 2.4 makes that a requirement rather than a decoration.
  */
+/*
+ * Every grilling window, one per line, for the verdict's tooltip
+ * (project.md sec 16.42).
+ *
+ * A free function so a test can reach it: the label it fills is set by
+ * a private refresh that runs on a feed signal, and a string built
+ * inline there is a string nothing can assert on -- which is how the
+ * count in "+N more" and the list behind it could drift apart with
+ * nothing noticing.
+ */
+QString bbq_grill_window_list(const std::vector<bbq_window> &windows,
+                              const QTimeZone &zone);
+
 class bbq_main_window : public QWidget {
 	Q_OBJECT
 

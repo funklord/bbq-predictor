@@ -74,6 +74,8 @@ private slots:
 	void the_picture_is_posed_at_now_with_no_cursor();
 	void a_following_window_is_still_following_after_a_render();
 	void the_server_default_tries_a_local_host_before_a_remote_one();
+	void the_tooltip_lists_every_window_the_count_promises();
+	void refreshing_the_status_actually_hands_the_label_that_list();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1324,4 +1326,138 @@ void test_window::the_server_default_tries_a_local_host_before_a_remote_one() {
 	 */
 	bbq_settings::set_server_hosts(QStringList());
 	QCOMPARE(bbq_settings::server_hosts(), fresh);
+}
+
+/*
+ * "+N MORE" HAS TO BE ABOUT SOMETHING (sec 16.42).
+ *
+ * The verdict names the best window and counts the rest. Until the
+ * tooltip existed, the rest were reachable only by panning the plot
+ * until a shaded band happened into view -- a count with nothing behind
+ * it, which tells a reader there is more and not where.
+ *
+ * The assertion is the RELATIONSHIP between the two, not either one.
+ * The label says `windows.size() - 1` more; the tooltip must carry
+ * `windows.size()` lines. Pinning the text of either would go stale on
+ * any wording change and would still allow the two to disagree, which
+ * is the only way this can actually be wrong.
+ */
+void test_window::the_tooltip_lists_every_window_the_count_promises() {
+	const QTimeZone utc = QTimeZone::UTC;
+
+	std::vector<bbq_window> windows;
+	for (int at = 0; at < 3; ++at) {
+		bbq_window window;
+		window.start_utc = 1700000000 + at * 86400;
+		window.end_utc = window.start_utc + 2 * 3600;
+		window.score = 0.6 + at * 0.1;
+		windows.push_back(window);
+	}
+
+	const QString listed = bbq_grill_window_list(windows, utc);
+	const QStringList lines = listed.split(QLatin1Char('\n'));
+
+	/* One line per window, INCLUDING the best -- the tooltip is a list
+	 * rather than a remainder, so a reader comparing them is not asked
+	 * to hold the label in their head. */
+	QCOMPARE(lines.size(), int(windows.size()));
+
+	/* And the count the label would print is the rest of them. */
+	const int promised = int(windows.size()) - 1;
+	QCOMPARE(lines.size() - 1, promised);
+
+	/* Each window is really described, not padded with blank lines. */
+	for (const QString &line : lines) {
+		QVERIFY2(line.contains(QStringLiteral("score")),
+		         qPrintable(QStringLiteral("a line with no score: %1")
+		                            .arg(line)));
+	}
+
+	/* One window means no "+N more" and a single line, not an empty
+	 * tooltip: the best one is still worth naming. */
+	const QString alone = bbq_grill_window_list({windows.front()}, utc);
+	QCOMPARE(alone.split(QLatin1Char('\n')).size(), 1);
+
+	/* And no windows is empty rather than a blank line. */
+	QVERIFY(bbq_grill_window_list({}, utc).isEmpty());
+}
+
+/*
+ * AND SOMETHING HAS TO CALL IT (sec 16.42.1).
+ *
+ * The test above proves the list is built correctly. It passed with the
+ * setToolTip line deleted, because a correct function is not a working
+ * feature -- this project's own rule, met by a test written an hour
+ * after quoting it.
+ *
+ * This one drives the private refresh the feed's signal drives, and
+ * asserts the label ends up holding what the builder produces. It is
+ * the only assertion here that fails when the two are disconnected.
+ */
+void test_window::refreshing_the_status_actually_hands_the_label_that_list() {
+	QTemporaryDir directory;
+	QVERIFY(directory.isValid());
+
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	/*
+	 * Warm, dry and still through the usable hours, so the policy finds
+	 * windows at all -- a fixture that scores nothing would take the
+	 * "no grilling window" branch and assert about the empty case while
+	 * looking like it covered the full one.
+	 */
+	/*
+	 * FROM NOW, not from a fixed epoch. refresh_status searches
+	 * `now .. now + 3 days`, so a fixture pinned to 2023 describes
+	 * weather the code never looks at -- the search found nothing, the
+	 * label took its "no window" branch, and the assertion failed
+	 * against perfectly correct code. The first draft did exactly that.
+	 */
+	const qint64 begins = QDateTime::currentSecsSinceEpoch() - 3600;
+
+	std::vector<bbq_sample> samples;
+	for (int at = 0; at < 3 * 24; ++at) {
+		bbq_sample sample;
+		sample.start_utc = begins + at * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 25.0;
+		sample.precip_rate = 0.0;
+		sample.precip_chance = 0.0;
+		sample.wind_kph = 0.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(QTimeZone::UTC);
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	window.feed()->m_composite = composite;
+
+	window.refresh_status();
+
+	const QString shown = window.m_verdict->toolTip();
+
+	QVERIFY2(!shown.isEmpty(),
+	         "the verdict names a window and its tooltip lists none, so "
+	         "nothing hands the label the list");
+
+	const std::vector<bbq_window> windows = bbq_grill_windows(
+	        composite, composite.zone(), QDateTime::currentSecsSinceEpoch(),
+	        QDateTime::currentSecsSinceEpoch() + 3 * 24 * 3600,
+	        bbq_grill_policy());
+
+	/*
+	 * Compared against the builder rather than against a literal: what
+	 * must hold is that the label shows what the builder produces, and
+	 * a pinned string would fail on any wording change while still
+	 * allowing the two to diverge.
+	 */
+	if (!windows.empty()) {
+		QCOMPARE(shown,
+		         bbq_grill_window_list(windows, composite.zone()));
+	}
 }
