@@ -117,6 +117,7 @@ SOURCES += \
 	src/main.cpp \
 	src/graph/forecast_graph.cpp \
 	src/graph/interpolate.cpp \
+	src/graph/ticks.cpp \
 	src/met/nowcast.cpp \
 	src/net/probe.cpp \
 	src/net/tls_backend.cpp \
@@ -145,6 +146,7 @@ SOURCES += \
 HEADERS += \
 	src/graph/forecast_graph.h \
 	src/graph/interpolate.h \
+	src/graph/ticks.h \
 	src/met/nowcast.h \
 	src/net/probe.h \
 	src/net/tls_backend.h \

@@ -1,6 +1,7 @@
 #include <QTest>
 
 #include "ui/layout.h"
+#include "graph/ticks.h"
 
 /*
  * The two shapes (project.md sec 10).
@@ -71,9 +72,90 @@ void test_layout::mobile_shows_less_time_not_smaller_time() {
 }
 
 void test_layout::mobile_spaces_its_ticks_further_apart() {
-	/* Labels collide at that width, and a collided label is worse. */
-	QVERIFY(bbq_metrics_for(bbq_layout::mobile).tick_step_s >
-	        bbq_metrics_for(bbq_layout::desktop).tick_step_s);
+	/*
+	 * THROUGH THE MECHANISM THAT DOES IT (sec 16.52).
+	 *
+	 * This asserted `bbq_metrics::tick_step_s`, a field the graph
+	 * stopped reading when the view became zoomable -- the comment
+	 * above `bbq_ticks_for` says so in as many words. The test was
+	 * named for behaviour that happens and asserted a number nothing
+	 * consulted, so it would have passed for ever while the axis went
+	 * wrong.
+	 *
+	 * What actually makes a phone's axis coarser is the width: the same
+	 * span over fewer pixels asks for fewer labels and lands further up
+	 * the ladder. So that is what is asked here, with the two widths
+	 * the layouts really have.
+	 */
+	const int phone_labels = 420 / 90;
+	const int desk_labels = 820 / 90;
+
+	/*
+	 * NEVER FINER, and coarser where the ladder has a rung between
+	 * them. The old assertion said "further apart" flatly, which is not
+	 * true: at a twelve-hour span both land on three hours, because no
+	 * rung falls between four labels and nine. It was only ever true of
+	 * the dead field, where it was true by construction.
+	 */
+	for (qint64 span : {3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600,
+	                    7 * 24 * 3600, 30 * 24 * 3600}) {
+		const bbq_tick_choice phone = bbq_ticks_for(span, phone_labels);
+		const bbq_tick_choice desk = bbq_ticks_for(span, desk_labels);
+
+		QVERIFY2(phone.step_s >= desk.step_s,
+		         qPrintable(QStringLiteral("at a span of %1 s a phone "
+		                                   "ticks every %2 and a desktop "
+		                                   "every %3, which is finer on "
+		                                   "the smaller screen")
+		                            .arg(span)
+		                            .arg(phone.step_s)
+		                            .arg(desk.step_s)));
+	}
+
+	/*
+	 * And a witness that it is not merely equal everywhere, which an
+	 * inequality alone would allow -- a broken chooser returning one
+	 * constant would satisfy every line above.
+	 */
+	QVERIFY2(bbq_ticks_for(6 * 3600, phone_labels).step_s >
+	                 bbq_ticks_for(6 * 3600, desk_labels).step_s,
+	         "the two layouts never differ, so the width is being "
+	         "ignored");
+
+	/*
+	 * And the label follows the STEP rather than the span, which is the
+	 * other half of that function and was never tested either: a step
+	 * of half a day needs the day named, and one of a quarter of an
+	 * hour must not repeat the same date twice.
+	 */
+	/*
+	 * The rule, stated as the thing that goes wrong without it: a step
+	 * finer than a day must NAME THE TIME, or two ticks inside one day
+	 * print the same words. The comment beside bbq_ticks_for records
+	 * exactly that -- "Tue 11, Tue 11, Wed 12, Wed 12" -- from a
+	 * version that chose the format from the span.
+	 *
+	 * A first draft asserted only that a four-day view contains "ddd",
+	 * and PASSED against that bug: the broken format is "ddd d", which
+	 * contains it too. Checking for the day was checking the half both
+	 * versions agree on.
+	 */
+	for (qint64 span : {3 * 3600, 12 * 3600, 2 * 24 * 3600,
+	                    4 * 24 * 3600, 10 * 24 * 3600}) {
+		for (int wanted : {4, 9}) {
+			const bbq_tick_choice choice = bbq_ticks_for(span, wanted);
+			if (choice.step_s >= 24 * 3600) {
+				continue;
+			}
+
+			QVERIFY2(choice.format.contains(QStringLiteral("HH")),
+			         qPrintable(QStringLiteral("a step of %1 s labels "
+			                                   "with \"%2\", so two ticks "
+			                                   "in one day read alike")
+			                            .arg(choice.step_s)
+			                            .arg(choice.format)));
+		}
+	}
 }
 
 void test_layout::mobile_stacks_its_controls_and_makes_them_hittable() {
@@ -111,7 +193,6 @@ void test_layout::desktop_is_the_untouched_default() {
 	const bbq_metrics desktop = bbq_metrics_for(bbq_layout::desktop);
 
 	QCOMPARE(desktop.margin_left, defaults.margin_left);
-	QCOMPARE(desktop.tick_step_s, defaults.tick_step_s);
 	QCOMPARE(desktop.window_after_s, defaults.window_after_s);
 	QCOMPARE(desktop.stack_controls, defaults.stack_controls);
 }

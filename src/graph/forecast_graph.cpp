@@ -1,5 +1,7 @@
 #include "graph/forecast_graph.h"
 
+#include "graph/ticks.h"
+
 #include "ui/theme.h"
 
 #include <QDateTime>
@@ -622,66 +624,6 @@ QDateTime local_time(qint64 when_utc, const QTimeZone &zone) {
 	return QDateTime::fromSecsSinceEpoch(when_utc);
 }
 
-/*
- * How far apart the ticks go, and what they say (project.md sec 13).
- *
- * The layout's tick_step_s was right while the window was a constant and
- * is wrong the moment it can be zoomed: at a three-hour view a
- * three-hour step draws one label, and at a ten-year view it would draw
- * thirty thousand. So the step is chosen from the span.
- *
- * A ladder of round intervals rather than span/8, because a tick every
- * 47 minutes is arithmetically even and unreadable. These are the
- * divisions a clock and a calendar actually have.
- */
-struct tick_choice {
-	qint64 step_s = 3600;
-	QString format = QStringLiteral("HH:mm");
-};
-
-tick_choice ticks_for(qint64 span_s, int wanted) {
-	const qint64 ladder[] = {
-		60, 5 * 60, 15 * 60, 30 * 60,
-		3600, 3 * 3600, 6 * 3600, 12 * 3600,
-		24 * 3600, 2 * 24 * 3600, 7 * 24 * 3600, 14 * 24 * 3600,
-		30 * 24 * 3600, 91 * 24 * 3600, 365 * 24 * 3600,
-	};
-
-	tick_choice chosen;
-	chosen.step_s = ladder[sizeof(ladder) / sizeof(ladder[0]) - 1];
-
-	for (qint64 candidate : ladder) {
-		if (span_s / candidate <= wanted) {
-			chosen.step_s = candidate;
-			break;
-		}
-	}
-
-	/*
-	 * The label follows the STEP, not the span, and that distinction was
-	 * paid for by looking at the running window.
-	 *
-	 * Choosing it from the span put a date-only format against a
-	 * twelve-hour step at around four days, so the axis read "Tue 11,
-	 * Tue 11, Wed 12, Wed 12" -- every label printed twice, each one
-	 * naming a day but pointing at noon or midnight without saying
-	 * which. A label has to distinguish its tick from the next tick, and
-	 * only the step knows how far away that is.
-	 */
-	if (chosen.step_s < 6 * 3600) {
-		chosen.format = QStringLiteral("HH:mm");
-	} else if (chosen.step_s < 24 * 3600) {
-		chosen.format = QStringLiteral("ddd HH:mm");
-	} else if (chosen.step_s < 30 * 24 * 3600) {
-		chosen.format = QStringLiteral("ddd d");
-	} else if (chosen.step_s < 365 * 24 * 3600) {
-		chosen.format = QStringLiteral("d MMM");
-	} else {
-		chosen.format = QStringLiteral("MMM yy");
-	}
-
-	return chosen;
-}
 
 
 /*
@@ -848,6 +790,8 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 }
 
 } // namespace
+
+
 
 std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
                                        const QTimeZone &zone, int cap) {
@@ -1517,7 +1461,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * bands stay one tick wide at every zoom rather than becoming
 	 * enormous blocks when the view narrows.
 	 */
-	const tick_choice ticks = ticks_for(to - from, plot.width() / 90);
+	const bbq_tick_choice ticks = bbq_ticks_for(to - from, plot.width() / 90);
 	const qint64 band_step = ticks.step_s;
 	const qint64 first_band = (from / band_step) * band_step;
 

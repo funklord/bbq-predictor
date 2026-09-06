@@ -42,6 +42,7 @@ SOURCES += \
 	$$PWD/../src/model/grill.cpp \
 	$$PWD/../src/model/series.cpp \
 	$$PWD/../src/graph/interpolate.cpp \
+	$$PWD/../src/graph/ticks.cpp \
 	$$PWD/../src/ui/layout.cpp \
 	$$PWD/../src/openmeteo/forecast.cpp \
 	$$PWD/../src/wu/reader.cpp
@@ -54,6 +55,7 @@ HEADERS += \
 	$$PWD/../src/model/sample.h \
 	$$PWD/../src/model/series.h \
 	$$PWD/../src/graph/interpolate.h \
+	$$PWD/../src/graph/ticks.h \
 	$$PWD/../src/ui/layout.h \
 	$$PWD/../src/openmeteo/forecast.h \
 	$$PWD/../src/wu/reader.h

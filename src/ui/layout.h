@@ -45,7 +45,6 @@ struct bbq_metrics {
 	int margin_right = 62;
 	int margin_bottom = 34;
 	int ribbon_height = 5;
-	int tick_step_s = 3 * 3600;
 	double sample_radius = 2.0;
 	double line_width = 2.0;
 	double label_scale = 0.85;

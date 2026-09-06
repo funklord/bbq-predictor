@@ -10249,3 +10249,79 @@ The script is not kept. What is kept is the result, the control that
 makes it mean something, and the two blind spots -- so the next person
 sweeping this class starts from a working instrument rather than
 rediscovering both.
+
+
+## 16.52 A test named for behaviour, asserting a field nothing read
+
+Running sec 16.51's search over the two structs it had missed --
+`bbq_graph_palette` and `bbq_metrics` -- found
+**`bbq_metrics::tick_step_s`**: set for both layouts, asserted about by
+two tests, and consulted by no drawing code at all.
+
+The comment above `bbq_ticks_for` says why, and says it about itself:
+*"The layout's tick_step_s was right while the window was a constant and
+is wrong the moment it can be zoomed."* The step comes from the span and
+the plot's width now. The field is a previous generation's, and its
+successor is named ten lines away.
+
+**The test is the interesting half.**
+`mobile_spaces_its_ticks_further_apart` describes behaviour that really
+happens and asserted a number nothing consulted -- so it would have
+passed for ever while the axis went wrong. That is `evidence.md`'s *a
+test can name the hazard exactly and cover only the safe path*, with the
+name doing the covering.
+
+`bbq_ticks_for` has its own header and translation unit now, for the
+reason the fetch verdict and the widget pose did: it was in an anonymous
+namespace, so nothing could reach it, and the dead field was what the
+test could reach.
+
+### 16.52.1 Retargeting the test disproved its own claim
+
+Pointed at the live mechanism, the test **failed**: at a twelve-hour
+span a phone and a desktop both land on a three-hour step, because no
+rung of the ladder falls between four labels and nine.
+
+So "mobile spaces its ticks further apart" is not true as stated. What
+is true is that a phone's step is **never finer**, and is coarser where
+a rung falls between the two -- asserted over six spans, with a witness
+at six hours where they genuinely differ. The witness matters: an
+inequality alone is satisfied by a chooser that returns one constant.
+
+**The old test was not merely testing the wrong thing. It was asserting
+something false, and the dead field made it true by construction.**
+
+### 16.52.2 Two controls that did not control anything
+
+The label rule -- a step finer than a day must name the time, or two
+ticks in one day print alike -- was sabotaged by choosing the format
+from the span, which is the bug the comment records as *"Tue 11, Tue 11,
+Wed 12, Wed 12"*. It took three goes.
+
+- **The first assertion was too loose.** It checked that a four-day view
+  contains `ddd`, and the broken format is `ddd d`, which contains it
+  too. Checking the day was checking the half both versions agree on.
+- **The second sabotage was not applied.** A `sed` whose match was never
+  verified, read as a pass -- the same trap as a `grep -c` returning
+  zero. Every sabotage since asserts its own substitution.
+- **The third was applied and too small**, changing one branch of four,
+  so the remaining three still named the time. A one-line edit standing
+  in for a design mistake reproduced a tenth of it.
+
+Sabotaged properly, the test names the failure precisely:
+
+    a step of 43200 s labels with "ddd d", so two ticks in one day
+    read alike
+
+### 16.52.3 The search's third blind spot
+
+The same run reported `bbq_graph_palette` clean, and it is not:
+`stale_warning` is still painted by nothing (sec 16.32.3). The detector
+counted `&m_palette.stale_warning` in the contrast clamp's list as a
+reader.
+
+It is a read, and it is not a USE: the clamp adjusts a colour that
+nothing then draws. **A value that is only ever processed looks alive to
+any detector that asks who touches it**, which is the third way this
+search can lie and the reason its clean answers are worth less than its
+dirty ones.
