@@ -10053,3 +10053,45 @@ platform** -- and the drawing half is a second away on this machine
 while the platform half needs a phone that is awake, unlocked,
 enumerated and unfrozen. Reaching for the phone first cost several
 rounds of exactly the wrong tool this session.
+
+
+## 16.48 The station this program watches, with its name cut off
+
+First use of `--shot` on a layout nobody had looked at today, and the
+desktop row read:
+
+    Station: [ :K877  50 m ]
+
+The station being watched, with the part that names it clipped away. Two
+minutes after sec 16.47 said the tool finds layout defects, it found
+one.
+
+**The cause is not the width.** `setMinimumWidth(90)` is deliberate --
+sec 10.5.1 lowered it because a desktop-sized floor became a lower bound
+on the whole window and clipped everything to its right on a phone.
+Raising it would break that again.
+
+A combo's default policy is `AdjustToContentsOnFirstShow`, and **this
+box is empty at first show**: the stations arrive from discovery,
+seconds or a fetch later. So its width was decided against a placeholder
+and never revisited. `AdjustToContents` makes it ask again when the list
+arrives; the floor and the 230 ceiling are untouched, so neither the
+phone's lower bound nor the guard against one long name widening the row
+changes.
+
+### 16.48.1 The test has to show the window
+
+The failure keys on the first show having happened while the box was
+empty, which is the running program's order and not a test's default. A
+test that never shows the widget passes with the policy reverted --
+there has been no first show to freeze anything.
+
+Shown, and sabotaged back to the default, it says exactly what went
+wrong:
+
+    the box asked for 72 px empty and still asks for 72 with a
+    station in it
+
+**72 pixels is the whole defect in one number**, and it took showing the
+widget to get it. An assertion about a size hint is worth very little
+until the lifecycle that computes it has actually run.

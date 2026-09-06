@@ -78,6 +78,7 @@ private slots:
 	void refreshing_the_status_actually_hands_the_label_that_list();
 	void a_window_that_dips_says_so_and_a_steady_one_does_not();
 	void a_phone_gets_the_extra_windows_on_the_surface();
+	void the_station_box_asks_for_room_once_it_has_stations();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1595,4 +1596,45 @@ void test_window::a_phone_gets_the_extra_windows_on_the_surface() {
 	 */
 	QCOMPARE(phone.section(QLatin1Char('\n'), 0, 0),
 	         desktop.section(QLatin1Char('\n'), 0, 0));
+}
+
+/*
+ * A BOX SIZED AGAINST WHAT IT HELD BEFORE IT HELD ANYTHING
+ * (sec 16.48).
+ *
+ * A combo's default policy is AdjustToContentsOnFirstShow, and this one
+ * is empty at first show -- the stations arrive from discovery, seconds
+ * or a fetch later. Its width was therefore decided against a
+ * placeholder and never revisited, and on the desktop row it sat at its
+ * floor showing ":K877  50 m": the station being watched, with the part
+ * that names it cut off.
+ *
+ * The widget is SHOWN first, because that is the event the broken
+ * policy keys on. Without the show this passes either way -- the
+ * failure needs the first show to have happened while the box was
+ * empty, which is exactly the running program's order.
+ */
+void test_window::the_station_box_asks_for_room_once_it_has_stations() {
+	bbq_main_window window;
+	window.show();
+	QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+	QVERIFY2(window.m_station_box->count() == 0,
+	         "the box already has stations, so this cannot show a width "
+	         "decided while it was empty");
+
+	const int empty = window.m_station_box->sizeHint().width();
+
+	window.m_station_box->addItem(
+	        QStringLiteral("ISTOCK877  50 m"),
+	        QStringLiteral("ISTOCK877"));
+
+	const int filled = window.m_station_box->sizeHint().width();
+
+	QVERIFY2(filled > empty,
+	         qPrintable(QStringLiteral("the box asked for %1 px empty and "
+	                                   "still asks for %2 with a station "
+	                                   "in it")
+	                            .arg(empty)
+	                            .arg(filled)));
 }

@@ -197,6 +197,23 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	m_station_box->setMinimumWidth(90);
 	m_station_box->setMaximumWidth(230);
 
+	/*
+	 * ASK AGAIN WHEN THE LIST ARRIVES (project.md sec 16.48).
+	 *
+	 * A combo's default policy is AdjustToContentsOnFirstShow, and this
+	 * one is EMPTY at first show -- the stations arrive from discovery,
+	 * seconds or a fetch later. So its width was decided against a
+	 * placeholder and never revisited, and on the desktop row it sat at
+	 * its floor showing ":K877  50 m": the station this program is
+	 * watching, with the part that names it cut off.
+	 *
+	 * The floor stays 90 for the phone (sec 10.5.1), and the ceiling
+	 * stays 230 so one long name cannot push the row wider than the
+	 * window. What changes is only that the box asks for what it holds
+	 * rather than for what it held before it held anything.
+	 */
+	m_station_box->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+
 	connect(m_station_box, &QComboBox::activated, this, [this](int index) {
 		const QString id = m_station_box->itemData(index).toString();
 		watch_station(id.isEmpty() ? m_station_box->itemText(index) : id);
