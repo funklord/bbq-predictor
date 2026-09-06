@@ -9345,14 +9345,27 @@ setup silently did nothing is the same failure one layer along.
     the restore          tested everywhere; sabotaged by dropping the
                          cursor line, and it fails naming 37 and -1
     the clearing         Android-only code, so no test here can reach
-                         it. The defect was reproduced on the device by
-                         screenshot; the fix is one line whose effect is
-                         a screenshot away, and that screenshot has not
-                         been taken.
+                         it. Verified on the device instead, with a
+                         positive control -- see below.
 
-The device would not hold still for it: Samsung's Freecess freezes the
-application whenever the screen dozes -- `FZ : se.vibes.bbq_predictor
-... reason: LEV` in logcat -- and the cover screen kept dozing through
-`svc power stayon usb`. **Recorded as outstanding rather than implied
-done**, because a fix whose evidence is "it must work" is the thing this
-document exists to refuse.
+~~The device would not hold still for it.~~ **Done once the phone was
+held awake**, and the shape of the check is the part worth keeping.
+
+**An absence proves nothing without a control**, so the run establishes
+both halves at one moment: drag the graph to park a readout, screenshot
+the WINDOW to show it is there, and read the picture the same render
+wrote.
+
+    the window   22:15 13.0 C 0.0 mm/h 1% 8 km/h nowcast   parked
+    the picture  no box; the current temperature clear      absent
+
+Without the first line the second says only that no readout happened to
+be parked, which is the state the widget was in for most of this
+project and is exactly why the defect survived so long.
+
+Worth knowing for the next device session: Samsung's Freecess freezes
+the application whenever the screen dozes -- `FZ : se.vibes.bbq_predictor
+... reason: LEV` in logcat -- so a dozing phone renders nothing and the
+picture never appears. `svc power stayon usb` did not hold the cover
+screen; `input keyevent KEYCODE_WAKEUP` did, where `KEYCODE_POWER`
+toggles and turned it off again as often as on.
