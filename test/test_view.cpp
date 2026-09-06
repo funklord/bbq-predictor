@@ -1264,121 +1264,231 @@ void test_view::the_curve_clears_the_floor_against_whatever_it_crosses() {
 	bbq_composite composite;
 	composite.set_series(std::move(band));
 
-	bbq_forecast_graph graph;
-	graph.set_theme(bbq_theme::dark);
-	graph.set_composite(composite);
 	/*
-	 * Samples ON, and it matters. The first draft turned them off to
-	 * keep the measurement clean, and the sample dots turned out to be
-	 * the only thing that failed: the curve is smoothed, so a knot can
-	 * sit well away from the line, and two of them landed on the rain
-	 * wash with nothing under them (sec 16.32.1). Excluding them would
-	 * have measured the easy half.
-	 */
-	graph.set_show_samples(true);
-	graph.resize(900, 400);
-	graph.set_view(1600000000, 12 * 3600);
-
-	const QImage shot = graph.grab().toImage();
-	const QColor ink = graph.palette_colours().temperature;
-
-	/*
-	 * WALK OUT AND SEE WHICH ARRIVES FIRST: the plot's own ground, or
-	 * the wash.
+	 * BOTH LAYOUTS, because a halo is measured in pixels and the two
+	 * disagree about how many a line has. The desktop draws at 2.0 wide
+	 * with 2.0 sample dots, the phone at 2.6 and 3.0 -- and this was
+	 * written, passed and committed against the desktop alone, then
+	 * failed on the first run at the phone's numbers (sec 16.32.5).
 	 *
-	 * That ordering IS the property. A fixed sample distance was tried
-	 * twice and is the wrong instrument, for two reasons the profiles
-	 * showed and no amount of care would have predicted: the ink is
-	 * antialiased, so three rows below the last pure #d5202a are still
-	 * dark red and read 1.56:1 against it; and a sloped column stretches
-	 * both the ink and its halo vertically, so the right distance is
-	 * different in every column.
-	 *
-	 * Walking is immune to both. It does not care how thick the halo is
-	 * or how steep the line -- only that the ink is bordered by a colour
-	 * this program chose rather than by one the weather painted.
+	 * That is this project's own recurring fault: a value calibrated
+	 * against the one configuration that had ever varied. Iterating
+	 * over the pair is the cheapest possible guard against repeating
+	 * it.
 	 */
-	/*
-	 * CONTRAST, not colour identity, and the difference took three
-	 * drafts to find. A 1.5-pixel halo under an antialiased 2.6-pixel
-	 * line does not produce a pixel equal to the ground: the profile on
-	 * the tighter side reads #d5202a, #33191c, #182128, then the wash.
-	 * Nothing there IS the background, and asking for one failed on
-	 * eight of seventeen columns while the halo was working perfectly.
-	 *
-	 * What the curve needs is not a pixel of a particular colour beside
-	 * it. It is a border it can be read against -- so the question is
-	 * whether contrast reaches the floor before the wash arrives.
-	 */
-	const auto legible_against = [&](const QColor &at) {
-		return bbq_contrast_ratio(ink, at) >= 3.0;
-	};
+	for (const bbq_layout shape : {bbq_layout::desktop, bbq_layout::mobile}) {
+		bbq_forecast_graph graph;
+		graph.set_theme(bbq_theme::dark);
+		graph.set_layout(shape);
+		graph.set_composite(composite);
+		/*
+		 * Samples ON, and it matters. The first draft turned them off to
+		 * keep the measurement clean, and the sample dots turned out to be
+		 * the only thing that failed: the curve is smoothed, so a knot can
+		 * sit well away from the line, and two of them landed on the rain
+		 * wash with nothing under them (sec 16.32.1). Excluding them would
+		 * have measured the easy half.
+		 */
+		graph.set_show_samples(true);
+		graph.resize(900, 400);
+		graph.set_view(1600000000, 12 * 3600);
 
-	/*
-	 * Unambiguously the wash rather than a blend on the way to it. The
-	 * washes are blue where the ground is neutral, so the test is
-	 * "clearly bluer than the ink" -- which names no wash's colour and
-	 * so does not go stale when an alpha moves.
-	 */
-	const auto is_wash = [&](const QColor &at) {
-		return at.blue() - at.red() > 25;
-	};
+		const QImage shot = graph.grab().toImage();
+		const QColor ink = graph.palette_colours().temperature;
 
-	int checked = 0;
-	int bare = 0;
-	int bare_x = 0;
+		/*
+		 * WALK OUT AND SEE WHICH ARRIVES FIRST: the plot's own ground, or
+		 * the wash.
+		 *
+		 * That ordering IS the property. A fixed sample distance was tried
+		 * twice and is the wrong instrument, for two reasons the profiles
+		 * showed and no amount of care would have predicted: the ink is
+		 * antialiased, so three rows below the last pure #d5202a are still
+		 * dark red and read 1.56:1 against it; and a sloped column stretches
+		 * both the ink and its halo vertically, so the right distance is
+		 * different in every column.
+		 *
+		 * Walking is immune to both. It does not care how thick the halo is
+		 * or how steep the line -- only that the ink is bordered by a colour
+		 * this program chose rather than by one the weather painted.
+		 */
+		/*
+		 * CONTRAST, not colour identity, and the difference took three
+		 * drafts to find. A 1.5-pixel halo under an antialiased 2.6-pixel
+		 * line does not produce a pixel equal to the ground: the profile on
+		 * the tighter side reads #d5202a, #33191c, #182128, then the wash.
+		 * Nothing there IS the background, and asking for one failed on
+		 * eight of seventeen columns while the halo was working perfectly.
+		 *
+		 * What the curve needs is not a pixel of a particular colour beside
+		 * it. It is a border it can be read against -- so the question is
+		 * whether contrast reaches the floor before the wash arrives.
+		 */
+		const auto legible_against = [&](const QColor &at) {
+			return bbq_contrast_ratio(ink, at) >= 3.0;
+		};
 
-	for (int x = 200; x < 700; x += 25) {
-		int first = -1;
-		int last = -1;
-		for (int y = 1; y < shot.height() - 1; ++y) {
-			if (shot.pixelColor(x, y) != ink) {
-				continue;
-			}
-			if (first < 0) {
-				first = y;
-			}
-			last = y;
-		}
+		/*
+		 * Unambiguously the wash rather than a blend on the way to it. The
+		 * washes are blue where the ground is neutral, so the test is
+		 * "clearly bluer than the ink" -- which names no wash's colour and
+		 * so does not go stale when an alpha moves.
+		 */
+		const auto is_wash = [&](const QColor &at) {
+			return at.blue() - at.red() > 25;
+		};
 
-		if (first < 0 || first < 12 || last + 12 >= shot.height()) {
-			continue;
-		}
+		/*
+		 * The ink or its antialiasing, by hue rather than by equality.
+		 *
+		 * Finding the ink's extent with `== ink` finds only the pixels that
+		 * came out exactly #d5202a, and on a steep segment that can be a
+		 * single pixel with the real run twenty deep around it. The
+		 * steepness filter below then reads span=1, decides the column is
+		 * shallow, and walks ALONG the line -- which is the one direction
+		 * the halo does not cover, and it blamed the drawing.
+		 *
+		 * Red-dominance separates the ink and every blend of it from both
+		 * the ground and the washes, which are neutral and blue.
+		 */
+		const auto ink_like = [](const QColor &at) {
+			return at.red() - at.green() > 20;
+		};
 
-		/* Up from the top of the ink, and down from the bottom. */
-		const std::pair<int, int> walks[] = {{first, -1}, {last, 1}};
+		int checked = 0;
+		int bare = 0;
+		int bare_x = 0;
 
-		for (const std::pair<int, int> &walk : walks) {
-			++checked;
+		/*
+		 * ACROSS THE INK, WHICH IS NOT ALWAYS DOWN THE COLUMN.
+		 *
+		 * A halo is a border, so it is measured across the line -- and a
+		 * near-vertical segment has no across in a column. Walking up from
+		 * the top of one travels ALONG the line and out past its end, where
+		 * a flat cap leaves no halo at all: measured at the phone's line
+		 * width, x=450 spans thirty rows and reads #36191d then the wash,
+		 * and the reading is 2.94:1 for a drawing that is perfectly correct
+		 * to its left and right.
+		 *
+		 * So each axis measures only where it is the across: columns where
+		 * the ink is shallow, rows where it is narrow. Together they cover
+		 * the whole curve, and neither is asked a question it cannot
+		 * answer.
+		 */
+		const auto sweep = [&](bool by_column) {
+			const int outer = by_column ? shot.width() : shot.height();
+			const int inner = by_column ? shot.height() : shot.width();
 
-			for (int step = 1; step <= 10; ++step) {
-				const QColor at =
-				        shot.pixelColor(x, walk.first + walk.second * step);
+			/*
+			 * EVERY line, not every twenty-fifth. A sample dot is about
+			 * seven pixels across, so a coarse step hits one only by luck
+			 * -- and the dots turned out to be the part that failed
+			 * (sec 16.32.1). Stepping by 25 the dot-ring sabotage went
+			 * undetected; stepping by one it does not.
+			 */
+			for (int at = 20; at < outer - 20; ++at) {
+				int first = -1;
+				int last = -1;
 
-				if (legible_against(at)) {
-					break;
+
+				for (int step = 1; step < inner - 1; ++step) {
+					const QColor px = by_column ? shot.pixelColor(at, step)
+					                            : shot.pixelColor(step, at);
+					if (px != ink) {
+						continue;
+					}
+					if (first < 0) {
+						first = step;
+					}
+					last = step;
 				}
 
-				if (is_wash(at)) {
-					++bare;
-					bare_x = x;
-					break;
+				if (first < 0) {
+					continue;
+				}
+
+				const auto pixel = [&](int step) {
+					return by_column ? shot.pixelColor(at, step)
+					                 : shot.pixelColor(step, at);
+				};
+
+				/*
+				 * A coarse filter only. The exact-match extent understates
+				 * a steep run badly -- a near-vertical segment can show one
+				 * pixel of exactly #d5202a with twenty of blend around it
+				 * -- so the real check for "running along this axis" is in
+				 * the walk below, which notices that it is still in ink
+				 * after four steps.
+				 */
+				if (last - first > 4) {
+					continue;
+				}
+
+				if (first < 12 || last + 12 >= inner) {
+					continue;
+				}
+
+				const std::pair<int, int> walks[] = {{first, -1}, {last, 1}};
+
+				for (const std::pair<int, int> &walk : walks) {
+					bool along = true;
+					bool decided = false;
+
+					for (int step = 1; step <= 10 && !decided; ++step) {
+						const QColor px =
+						        pixel(walk.first + walk.second * step);
+
+						/*
+						 * FOUR STEPS STILL IN INK MEANS THIS IS THE LINE'S
+						 * OWN DIRECTION, not its border. Walking that way
+						 * leaves the segment past its flat cap, where there
+						 * is no halo by construction -- and the reading
+						 * blames a drawing that is correct to either side.
+						 */
+						if (ink_like(px)) {
+							if (step >= 4) {
+								break;
+							}
+							continue;
+						}
+
+						along = false;
+
+						if (legible_against(px)) {
+							decided = true;
+						} else if (is_wash(px)) {
+							++bare;
+							bare_x = at;
+							decided = true;
+						}
+					}
+
+					if (!along) {
+						++checked;
+					}
 				}
 			}
-		}
+		};
+
+		sweep(true);
+		sweep(false);
+
+		QVERIFY2(checked >= 16,
+		         qPrintable(QStringLiteral("only %1 side(s) had the curve in "
+		                                   "them, so this measured almost "
+		                                   "nothing")
+		                            .arg(checked)));
+
+		QVERIFY2(bare == 0,
+		         qPrintable(QStringLiteral("%1 of %2 side(s) put the curve "
+		                                   "straight onto the wash with no "
+		                                   "ground of its own, at x=%3, in "
+		                                   "the %4 layout")
+		                            .arg(bare)
+		                            .arg(checked)
+		                            .arg(bare_x)
+		                            .arg(shape == bbq_layout::mobile
+		                                         ? QStringLiteral("mobile")
+		                                         : QStringLiteral("desktop"))));
 	}
-
-	QVERIFY2(checked >= 16,
-	         qPrintable(QStringLiteral("only %1 side(s) had the curve in "
-	                                   "them, so this measured almost "
-	                                   "nothing")
-	                            .arg(checked)));
-
-	QVERIFY2(bare == 0,
-	         qPrintable(QStringLiteral("%1 of %2 side(s) put the curve "
-	                                   "straight onto the wash with no "
-	                                   "ground of its own, at x=%3")
-	                            .arg(bare)
-	                            .arg(checked)
-	                            .arg(bare_x)));
 }

@@ -177,32 +177,37 @@ enum class quantity {
  * crosses, small enough that two lines a couple of pixels apart still
  * read as two lines rather than as one thick one.
  */
-const double halo_grow = 1.5;
+const double halo_grow = 2.0;
+
+/*
+ * And a wider one for a sample dot (sec 16.32.1).
+ *
+ * A straight edge loses about a pixel to antialiasing; a disc loses it
+ * on a curve, in two dimensions at once, at both the inner and the
+ * outer boundary of the ring. At 1.5 the ring had no solid pixel left
+ * in it, and the test found nine bare sides on the two knots that sit
+ * away from the curve -- the only knots whose ring does any work, since
+ * the rest are inside the line's own halo.
+ *
+ * Two pixels, which is what survives being eaten from both sides.
+ */
+const double dot_ring_grow = 2.0;
 
 /*
  * A pen that strokes the plot's own ground under a line, so the line is
  * read against a colour this program chose rather than against whatever
  * the weather happened to shade underneath it (sec 16.32).
  *
- * The dashed case is the fiddly one and is why this is a function. Qt
- * scales a dash pattern by the pen's width, so a wider pen drawn with
- * Qt::DashLine has LONGER dashes -- the halo would run past the ink at
- * one end of every dash and fall short at the other. Restating the
- * pattern in the wider pen's own units puts the two back in step in
- * pixels, which is the unit that matters on screen.
+ * ROUND cap and join, and the cap is not decoration. A flat cap ends the
+ * stroke square with the line, so at the last point of a run the halo
+ * stops exactly where the ink does and the end of the curve sits on the
+ * wash with nothing under it -- one bare side in 1490, found only after
+ * the test was made to sweep both layouts. A round cap carries the
+ * ground half a width past the ink, which is what an end needs.
  */
-QPen halo_pen(const QColor &ground, double line_width, Qt::PenStyle style) {
-	const double wide = line_width + 2.0 * halo_grow;
-
-	QPen pen(ground, wide, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin);
-
-	if (style == Qt::DashLine) {
-		/* Qt's own DashLine is 4 on, 2 off, in units of pen width. */
-		pen.setDashPattern({4.0 * line_width / wide,
-		                    2.0 * line_width / wide});
-	}
-
-	return pen;
+QPen halo_pen(const QColor &ground, double line_width) {
+	return QPen(ground, line_width + 2.0 * halo_grow, Qt::SolidLine,
+	            Qt::RoundCap, Qt::RoundJoin);
 }
 
 QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
@@ -2044,8 +2049,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			const double r = m_metrics.sample_radius;
 
 			painter.setBrush(m_palette.background);
-			painter.drawEllipse(QPointF(px, py), r + halo_grow,
-			                    r + halo_grow);
+			painter.drawEllipse(QPointF(px, py), r + dot_ring_grow,
+			                    r + dot_ring_grow);
 
 			painter.setBrush(m_palette.temperature);
 			painter.drawEllipse(QPointF(px, py), r, r);
@@ -2071,8 +2076,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 */
 	const QPen curve_ink(m_palette.temperature, m_metrics.line_width);
 	const QPen curve_halo =
-	        halo_pen(m_palette.background, m_metrics.line_width,
-	                 Qt::SolidLine);
+	        halo_pen(m_palette.background, m_metrics.line_width);
 
 	const auto stroke_curve = [&](const QPolygonF &line) {
 		painter.setPen(curve_halo);

@@ -9124,3 +9124,59 @@ Walking is immune to both, because it asks the question the drawing
 actually has to answer. Sabotaged by removing the halo it reports 34 of
 34 sides bare; sabotaged by offsetting the halo two pixels so it covers
 one side only, 16 of 17.
+
+
+## 16.32.5 Verified at one configuration, which is this project's own recurring fault
+
+The halo was written, measured, tested and **committed** against the
+desktop layout. The phone draws the same graph with different numbers --
+line 2.6 wide against 2.0, sample dots at radius 3.0 against 2.0 -- and
+the first run at those numbers failed.
+
+That is sec 16.24.2's lesson arriving again in a different costume. A
+proportion taken against the one dimension that had ever varied; a scrim
+chosen against the one theme in front of me; a halo sized against the
+one layout the suite happened to construct. **The rule that keeps
+turning up is not about halos or scrims: a value checked in one
+configuration of something that has several has been checked nowhere in
+particular.**
+
+The test iterates over both layouts now, which is the cheapest possible
+guard and should have been there from the first line.
+
+### 16.32.5.1 What the second configuration found
+
+Three things, none of which the desktop run could have shown:
+
+- **The dot ring was too thin.** A straight edge loses about a pixel to
+  antialiasing; a disc loses it on a curve, in two dimensions, at the
+  ring's inner AND outer boundary. It has its own constant now.
+- **The halo itself was a hair thin.** Its outer blend measured 2.94:1
+  against the ink -- and 2.94 against a floor of 3.00 is exactly the
+  "rounding difference" this project talked itself into once already
+  (sec 16.29.2, where the answer was margin rather than a waiver). 2.0
+  rather than 1.5.
+- **A flat cap left the end of every run bare.** One side in 1490, at
+  the last point of a polyline, where the stroke stops square with the
+  ink and the curve's end sits on the wash. **A round cap carries the
+  ground half a width past the ink**, which is what an end needs, and it
+  is a fix to the drawing rather than a tolerance in the test.
+
+### 16.32.5.2 The instrument was wrong four times, always blaming the drawing
+
+Worth listing, because every one of them looked like a defect in code
+that was correct:
+
+    fixed sampling distance   antialiasing and slope defeat it     1.56:1
+    colour identity           a thin halo never equals the ground  8/17 bare
+    exact-match ink extent    understates a steep run to one pixel  9 bare
+    hue-widened ink extent    swallows the halo's own inner blend  32 bare
+
+**Each one produced a specific, plausible, wrong claim about the
+picture.** The version that holds asks the question the drawing actually
+has to answer -- walking outward and seeing whether a border it can be
+read against arrives before the wash -- and treats "still in ink after
+four steps" as *this is the line's own direction*, not a failure.
+
+`evidence.md` says when a result surprises you the apparatus is where
+the error usually is. Four for four here.
