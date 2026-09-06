@@ -9688,3 +9688,54 @@ asks whether the gate can see a file that should be listed; the second
 asks whether it can see a listing that has stopped being real. A gate
 checked only by adding a file would have shipped believing a commented
 build was a working one.
+
+
+## 16.41 Every gate that reads source counted comments as code
+
+The lens from sec 16.40.1 -- a gate fooled by a commented-out line --
+pointed at the other gates, and **all four that grep source had the same
+fault.** Measured by commenting out the thing each one exists to find
+and watching it report success:
+
+    signal_listeners   both connects for a signal    "0 unheard"
+    palette_contrast   a colour assignment           palette clean
+    exit_codes         a `return 3;`                 3 still returned
+    man_options        every parse site for --station  22 options
+
+Four gates, one fault, and in each the gate went on describing a program
+that had stopped containing what it described.
+
+**The signal gate is the one that shows the shape**, because it had the
+answer already: its declaration half skipped comment lines and its
+search half read the whole file. *The two halves of one gate disagreed
+about whether a comment is code, and the half that mattered said no.*
+
+`tool/cxx_text.py` strips them, shared rather than copied four times --
+four copies of a rule is four things to be wrong, which is the argument
+this project already makes about a number written in two places. Each
+gate calls its `self_check` first and refuses to report if the stripping
+is broken, because a silently-unstripped helper restores the original
+fault in every caller at once.
+
+The `//` inside a string literal is truncated by this, which can only
+make something LOOK absent and never make an absent thing look present.
+That is the safe direction: a false finding prints a line to go and
+read, a false silence prints nothing.
+
+### 16.41.1 A control that does not fire is not a pass
+
+The man gate went on passing after its control, and the gate was right:
+`--station` is parsed at two sites in `main.cpp` and only one had been
+commented. **The control had not removed the option, so it was not
+asking the question it appeared to ask** -- the same mistake as
+`grep -c` returning 0 for a `sed` that matched nothing, and reading the
+zero as a result.
+
+Both sites commented, it fails as it should:
+
+    man-options: --station is documented but not accepted
+
+The signal gate's control was right the first time only because that
+signal's two listeners were both obvious. **A control has to remove
+every instance of what it removes**, and how many there are is a fact
+about the tree rather than about the gate.

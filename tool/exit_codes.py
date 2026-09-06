@@ -24,6 +24,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cxx_text  # noqa: E402  -- needs the path line above
+
 CODE = Path("src/wu/fetch_once.cpp")
 HEADER = Path("src/wu/fetch_once.h")
 UNIT = Path("packaging/systemd/bbq-predictor-fetch.service")
@@ -82,7 +85,13 @@ def main():
 			print(f"exit-codes: {path} is missing", file=sys.stderr)
 			return 2
 
-	code = CODE.read_text(encoding="utf-8")
+	if not cxx_text.self_check():
+		print("exit-codes: the comment stripper is broken, so a "
+		      "commented-out return would count as one the program "
+		      "makes", file=sys.stderr)
+		return 2
+
+	code = cxx_text.without_comments(CODE.read_text(encoding="utf-8"))
 	unit = UNIT.read_text(encoding="utf-8")
 	manual = MANUAL.read_text(encoding="utf-8")
 	header = HEADER.read_text(encoding="utf-8")

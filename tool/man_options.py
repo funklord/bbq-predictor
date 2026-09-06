@@ -25,6 +25,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cxx_text  # noqa: E402  -- needs the path line above
+
 SOURCE = Path("src/main.cpp")
 PAGE = Path("packaging/bbq-predictor.1")
 
@@ -101,7 +104,14 @@ def main():
 			print(f"man-options: {path} is missing", file=sys.stderr)
 			return 2
 
-	source_text = SOURCE.read_text(encoding="utf-8")
+	if not cxx_text.self_check():
+		print("man-options: the comment stripper is broken, so a "
+		      "commented-out option would read as one the program "
+		      "accepts", file=sys.stderr)
+		return 2
+
+	source_text = cxx_text.without_comments(
+	        SOURCE.read_text(encoding="utf-8"))
 	page_text = PAGE.read_text(encoding="utf-8")
 
 	in_source = options_in_source(source_text)

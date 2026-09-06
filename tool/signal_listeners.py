@@ -20,6 +20,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cxx_text  # noqa: E402  -- needs the path line above
+from pathlib import Path
+
 # A signal deliberately left for an outside consumer goes here, with the
 # reason. An empty list is the honest state today: every signal this
 # project declares is connected inside it.
@@ -29,6 +33,7 @@ SIGNAL_BLOCK = re.compile(
         r'^signals:(.*?)(?=^\s*(?:public|private|protected|signals)\b|^\};)',
         re.M | re.S)
 DECLARATION = re.compile(r'^(?:void\s+)?(\w+)\s*\(')
+
 
 
 def declared_signals(root):
@@ -48,6 +53,12 @@ def declared_signals(root):
 
 
 def main():
+	if not cxx_text.self_check():
+		print('signal-gate: the comment stripper is broken, so a '
+		      'commented-out connection would read as a listener',
+		      file=sys.stderr)
+		return 2
+
 	root = Path(__file__).resolve().parent.parent
 	signals = declared_signals(root / 'src')
 	if not signals:
@@ -59,7 +70,8 @@ def main():
 	for where in ('src', 'test'):
 		for path in sorted((root / where).rglob('*')):
 			if path.suffix in ('.cpp', '.h'):
-				body.append(path.read_text(encoding='utf-8'))
+				body.append(
+				        cxx_text.without_comments(path.read_text(encoding='utf-8')))
 	body = '\n'.join(body)
 
 	silent = []

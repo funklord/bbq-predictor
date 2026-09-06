@@ -23,6 +23,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cxx_text  # noqa: E402  -- needs the path line above
+from pathlib import Path
+
 SOURCE = Path("src/graph/forecast_graph.cpp")
 
 FLOOR = 3.0
@@ -165,8 +169,11 @@ def contrast(ink, ground):
 	return (high + 0.05) / (low + 0.05)
 
 
+
+
 def palettes(text):
 	"""The light palette is the base; dark overrides part of it."""
+	text = cxx_text.without_comments(text)
 	start = text.index("bbq_graph_palette palette_for(")
 	split = text.index("if (scheme != Qt::ColorScheme::Dark) {", start)
 	end = text.index("\n}\n", split)
@@ -208,6 +215,12 @@ def control_passes():
 
 
 def main():
+	if not cxx_text.self_check():
+		print("palette: the comment stripper is broken, so a "
+		      "commented-out colour would still be checked",
+		      file=sys.stderr)
+		return 2
+
 	if not control_passes():
 		print("palette: the control failed, so no result below means "
 		      "anything", file=sys.stderr)
@@ -234,6 +247,13 @@ def main():
 		for _name, key, _alpha in WASHES:
 			if key not in palette:
 				print(f"palette: {scheme} has no colour {key!r}",
+				      file=sys.stderr)
+				return 2
+
+		for ink, _why in WASHED_PAIRS:
+			if ink not in palette:
+				print(f"palette: {scheme} sets no {ink!r}, so it is "
+				      f"gone from the program or commented out",
 				      file=sys.stderr)
 				return 2
 
