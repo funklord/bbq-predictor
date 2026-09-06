@@ -10095,3 +10095,55 @@ wrong:
 **72 pixels is the whole defect in one number**, and it took showing the
 widget to get it. An assertion about a size hint is worth very little
 until the lifecycle that computes it has actually run.
+
+
+## 16.49 The same unit fault, two lines below the one that was fixed
+
+`--fetch-once` prints the archive's holes, and printed them in minutes:
+
+    hole    09-04 02:09Z..09-04 22:05Z  (1196 min)
+    holes   2, worst 1196 min
+
+Twenty hours, in the report a person opens **when the archive looks
+wrong** -- which is exactly when a number should not need converting.
+Two lines above it, the band failure already read *"has not reported for
+22 h 12 min"*, because sec 16.45 had fixed that one.
+
+    hole    09-04 02:09Z..09-04 22:05Z  (19 h 56 min)
+    holes   2, worst 19 h 56 min
+
+**A fix applied where the fault was noticed is not a fix applied where
+it lives.** sec 16.45 changed the two messages that had prompted it and
+stopped; the same expression sat in the same file, in the output of the
+same command, and was read past. The lens was right and its sweep was
+one function wide.
+
+### 16.49.1 Three things that were checked and were fine
+
+Recorded because a sweep with nothing to show is a measurement only if
+it says what it looked at.
+
+- **The tray icon at both sizes.** Rendered at 44 and 22 after
+  `reading_label` was extracted from it in sec 16.42. The halo holds at
+  22 without closing the counters of the 5, which is what the comment
+  beside that code worries about.
+- **`rc=3` from a live fetch.** Not a regression from sec 16.39's
+  verdict change: `observed` genuinely failed, the station having been
+  quiet 22 hours, and the composite still covers now. Partial is the
+  right answer and the unit forgives it by name.
+- **A tray reading of 15 against a report of 15.5.** These came from
+  runs minutes apart, so they are not a disagreement and **not an
+  agreement either** -- the value moves. Recorded as unresolved rather
+  than as a check that passed: the two surfaces cannot be compared
+  without one run producing both.
+
+### 16.49.2 And the tool's output was cut by the reader again
+
+The tray shot appeared to write a file it never announced. It announces
+both, and `| tail -2` had eaten the first line -- the third time in one
+session that reducing output before reading it produced a false finding
+about a working program.
+
+It cost nothing this time because the file list was checked before
+anything was written down. **That check is the only reason it did not
+become a section about a defect that does not exist.**

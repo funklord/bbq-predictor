@@ -12,6 +12,8 @@
 #include "wu/feed.h"
 #include "wu/fetch_verdict.h"
 
+#include "model/units.h"
+
 namespace {
 
 QString stamp(qint64 when_utc) {
@@ -124,8 +126,15 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 			worst = width;
 		}
 
+		/*
+		 * The width in units somebody reads (sec 16.45). A hole of
+		 * twenty hours printed as "1196 min", which is the same fault
+		 * the staleness line had and in the report a person opens when
+		 * the archive looks wrong.
+		 */
 		out << "  hole       " << stamp(hole_start) << "Z..";
-		out << stamp(at) << "Z  (" << (width / 60) << " min)\n";
+		out << stamp(at) << "Z  (" << bbq_describe_duration(width)
+		    << ")\n";
 		hole_start = 0;
 	};
 
@@ -158,7 +167,7 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 
 	out << "  holes      " << holes;
 	if (holes > 0) {
-		out << ", worst " << (worst / 60) << " min";
+		out << ", worst " << bbq_describe_duration(worst);
 	}
 	out << "\n";
 
