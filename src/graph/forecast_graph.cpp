@@ -695,8 +695,24 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 * yellow: the same colour that reads against near-black is nearly
 	 * invisible against white, and a marker nobody can see is worse
 	 * than one in the wrong hue.
+	 *
+	 * DEEP amber, and the depth is measured rather than chosen
+	 * (sec 16.28). #c88a00 was picked against this palette's white
+	 * background, where it manages 2.96:1 -- allowed under the floor as
+	 * a rounding difference. It has two other grounds and clears
+	 * neither: 2.28:1 inside the grill window, and 1.61:1 on the
+	 * home-screen widget's scrim over a dark wallpaper, where the
+	 * contrast clamp had to walk it onto a dark olive.
+	 *
+	 * Anything dark enough for the palest of those is in the same
+	 * luminance band as the temperature curve, so the family was chosen
+	 * on hue and the depth on arithmetic: the lightest amber at this
+	 * hue clearing 3.2:1 against the grill window, which is the darkest
+	 * of the three grounds and the one nothing used to check. It clears
+	 * 6.53:1 on white, 5.02:1 in the grill window and 3.55:1 on the
+	 * widget's worst ground, so no clamp has to move it anywhere.
 	 */
-	chosen.now_marker = QColor(0xc8, 0x8a, 0x00);
+	chosen.now_marker = QColor(0x80, 0x55, 0x00);
 	chosen.stale_warning = QColor(0xd5, 0x20, 0x2a);
 	chosen.grill_window = QColor(0xff, 0x8b, 0x33);
 	chosen.readout_back = QColor(0x2b, 0x2b, 0x2b);

@@ -36,17 +36,52 @@ PAIRS = [
 	("readout_text", "readout_back", "the cursor readout, on its own box"),
 ]
 
+# The plot has more than one ground, and for a long time this gate knew
+# about one of them (project.md sec 16.28). Everything above is drawn
+# over the grill window's shading too, wherever a good grilling window
+# falls, and that tint is the DARKEST ground in the light scheme and the
+# warmest in the dark one -- so a colour cleared against `background`
+# has been cleared against the easier case.
+#
+# Named separately rather than folded in, because it is not a palette
+# entry: it is grill_window composited over background at the alpha the
+# graph actually uses.
+OVER_GRILL = "over_grill"
+
+# The cap in forecast_graph.cpp: `shade.setAlpha(std::min(80, alpha))`.
+# The maximum, because the strongest tint is the hardest ground.
+GRILL_ALPHA = 80
+
+GRILL_PAIRS = [
+	("axis_text", "the scale numbers, where a window shades them"),
+	("temperature", "the forecast curve, inside a grilling window"),
+	("corrected", "the bias-corrected overlay, inside one"),
+	("day_divider", "the midnight rule crossing one"),
+	("stale_warning", "said over one"),
+	("now_marker", "the now line crossing one"),
+]
+
 # A pair kept under the floor deliberately, with what it measured at when
 # it was allowed and why. Anything not listed here must clear the floor.
 ALLOWED_UNDER = {
-	("now_marker", "background"): (
-		"2.96 on light. Amber was chosen for the light ground on purpose, "
-		"the dark theme's brighter yellow being wrong there, and a "
-		"two-pixel rule at 2.96 against 3.00 is a rounding difference "
-		"rather than a legibility one."),
 	("readout_edge", "readout_back"): (
 		"2.94 on dark. It is the border of a box, not ink in it, and the "
 		"box's own text clears the floor at 11.83."),
+}
+
+# The same, for the grill-window ground. These are NOT settled choices:
+# they are what was measured the day this ground was added, pinned so
+# they cannot quietly get worse while somebody decides (sec 16.28.1).
+#
+# All three are the dark scheme, where an orange wash at alpha 80 over
+# near-black makes a warm brown that Weather Underground's red nearly
+# disappears into. Fixing it means changing either a measured data
+# colour or the wash, and neither is a decision to take while adding a
+# check.
+GRILL_ALLOWED_UNDER = {
+	("temperature", "dark"): "1.89, measured 2026-09-06. Open.",
+	("stale_warning", "dark"): "1.89, the same colour. Open.",
+	("corrected", "dark"): "2.24, measured 2026-09-06. Open.",
 }
 
 
@@ -58,6 +93,13 @@ def channel(value):
 def luminance(colour):
 	return (0.2126 * channel(colour[0]) + 0.7152 * channel(colour[1]) +
 	        0.0722 * channel(colour[2]))
+
+
+def over(top, alpha, ground):
+	"""`top` at `alpha` composited onto `ground`, as the painter does."""
+	part = alpha / 255.0
+	return tuple(round(part * top[at] + (1.0 - part) * ground[at])
+	             for at in range(3))
 
 
 def contrast(ink, ground):
@@ -117,6 +159,24 @@ def main():
 		return 2
 
 	bad = 0
+
+	for ink, _why in GRILL_PAIRS:
+		for scheme, palette in (("light", light), ("dark", dark)):
+			if ink not in palette or "grill_window" not in palette:
+				print(f"palette: {scheme} has no colour {ink!r} or "
+				      f"'grill_window'", file=sys.stderr)
+				return 2
+
+			ground = over(palette["grill_window"], GRILL_ALPHA,
+			              palette["background"])
+			ratio = contrast(palette[ink], ground)
+			if ratio >= FLOOR or (ink, scheme) in GRILL_ALLOWED_UNDER:
+				continue
+
+			print(f"palette: {ink} on {OVER_GRILL} is {ratio:.2f}:1 in "
+			      f"the {scheme} scheme, under {FLOOR}:1", file=sys.stderr)
+			bad += 1
+
 	for ink, ground, _why in PAIRS + [(a, b, "") for a, b in ALLOWED_UNDER]:
 		for scheme, palette in (("light", light), ("dark", dark)):
 			if ink not in palette or ground not in palette:
@@ -135,8 +195,10 @@ def main():
 	if bad:
 		return 1
 
-	print(f"palette: {len(PAIRS)} pair(s) clear {FLOOR}:1 in both schemes, "
-	      f"{len(ALLOWED_UNDER)} allowed under it by name")
+	print(f"palette: {len(PAIRS)} pair(s) on the plot and "
+	      f"{len(GRILL_PAIRS)} over the grill window clear {FLOOR}:1 in "
+	      f"both schemes, {len(ALLOWED_UNDER) + len(GRILL_ALLOWED_UNDER)} "
+	      f"allowed under it by name")
 	return 0
 
 

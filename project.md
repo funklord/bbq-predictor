@@ -8578,14 +8578,92 @@ marker's 0.122, nearly double. A perceptual reading picked the wrong
 outlier, and the arithmetic picked the right one; this entry was drafted
 around the marker before the table was computed.
 
-### 16.27.2 What is left open, and whose it is
+### 16.27.2 What was left open, and how it was settled
 
-The amber now-marker on light is the one colour the scrim genuinely
-costs. Three things could be done and none is this session's to choose:
-leave it, since a dark olive "now" line is legible and the widget is a
-glance; pick a light-scheme marker that survives a pale ground, which is
-a palette change; or keep the widget's scrim thicker on light than on
-dark, which is two constants where there is one.
+~~The amber now-marker on light is the one colour the scrim genuinely
+costs. Three things could be done and none is this session's to
+choose.~~ **Settled by the copyright holder: pick a light-scheme marker
+that survives a pale ground.** Done in sec 16.28, and looking for one
+found something else.
 
-Recorded rather than decided. It is a look, and the person whose home
-screen it is has not seen the olive yet.
+
+## 16.28 A marker with three grounds, of which one was ever checked
+
+The light scheme's now-marker is `#805500`, a deep amber, in place of
+`#c88a00`.
+
+**Picking it was arithmetic, not taste, because the room turned out to
+be small.** Against the widget's palest ground a marker cannot be lifted
+into the clear -- reaching 3:1 from above would need a luminance of
+1.663 and the scale stops at 1.0 -- so it has to go down. And every
+colour dark enough lands in the temperature curve's own luminance band,
+which is why the family was chosen on hue and the depth on measurement.
+
+The depth is the lightest amber at that hue clearing 3.2:1 against the
+**grill window**, which turned out to be the binding ground:
+
+    ground                              #c88a00   #805500
+    the plot, white                      2.96      6.53
+    inside a grill window, #ffdbbf       2.28      5.02
+    the widget's scrim over dark         1.61      3.55
+
+The hue is the one the light scheme already had, 41 degrees, not the
+dark scheme's 50. Keeping the family matters more than matching the
+number: a marker that is yellow in one scheme and teal in the other
+teaches two conventions for one thing. Teal was measured and is better
+on every ground -- 7.41 on white, 4.03 on the scrim -- and was declined
+for that reason, which is worth recording so it is not re-derived as an
+improvement.
+
+**And the clamp now moves it nowhere**, which is the test: it is drawn
+`#805500` on the device, the palette's own value.
+
+### 16.28.1 The plot has three grounds and the gate knew one
+
+Looking for a ground the marker had to survive is what exposed this.
+`tool/palette_contrast.py` checked every ink against `background` --
+and the grill window shades a strip of that plot at alpha 80 wherever
+grilling is good, so anything drawn there is read against a second
+ground the gate had never seen. **A colour cleared against `background`
+had been cleared against the easier case**, and on the dark scheme it is
+much easier: an orange wash over near-black makes a warm brown.
+
+Adding it found three under the floor, all dark, none of them the widget
+and none of them new:
+
+    temperature     1.89 : 1    the forecast curve inside a window
+    stale_warning   1.89 : 1    the same colour
+    corrected       2.24 : 1    the bias-corrected overlay
+
+That is the WINDOW, not the widget -- the curve inside a good grilling
+window has been hard to read on the dark theme for as long as both have
+existed, and nothing said so because nothing asked. **The gate was not
+wrong; its population was.** It is the shape `evidence.md` calls a
+passing check that inspected the wrong thing: not vacuous, not broken,
+simply answering about one ground where the code has two.
+
+They are pinned in `GRILL_ALLOWED_UNDER` with their measurements and the
+date, **not because they are settled but so they cannot get worse while
+somebody decides.** Fixing any of them means changing either a measured
+Weather Underground colour or the wash's alpha, and neither is a
+decision to take while adding a check. It is a real finding and it is
+the holder's.
+
+### 16.28.2 Two controls, because one would have proved less
+
+The gate's new half was made to fail twice, from different directions.
+Putting `#c88a00` back:
+
+    palette: now_marker on over_grill is 2.28:1 in the light scheme
+
+and removing one waiver:
+
+    palette: corrected on over_grill is 2.24:1 in the dark scheme
+
+**The second is the one that matters.** The first shows the check can
+speak about the colour it was added for, which is close to a
+self-fulfilling test -- the change and its check were written together.
+The second shows it speaks about a pair nobody was looking at, in the
+other scheme, on the ground that was invisible an hour earlier. A gate
+proved only against its own motivating case has been proved against the
+case least likely to be missed.
