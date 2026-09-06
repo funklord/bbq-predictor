@@ -6,6 +6,13 @@
     the useful shapes are a full-width strip and a large block, and a
     fixed size would suit neither.
 
+    Four cells by four rather than four by two (project.md sec 16.24).
+    The strip was what a graph could survive when the picture was drawn
+    at a guessed size and scaled; now that it is rendered at whatever
+    the host reports, height is what the plot gains from. A curve two
+    cells tall spends most of its range on the grill window's shading
+    and leaves the temperature axis three labels to work with.
+
     updatePeriodMillis is 0 on purpose. Android clamps it to thirty
     minutes anyway, and a periodic wake buys nothing here: the picture
     changes only when the application renders a new one, and it tells
@@ -15,11 +22,11 @@
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
-    android:minHeight="110dp"
+    android:minHeight="250dp"
     android:minResizeWidth="180dp"
     android:minResizeHeight="70dp"
     android:targetCellWidth="4"
-    android:targetCellHeight="2"
+    android:targetCellHeight="4"
     android:updatePeriodMillis="0"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"

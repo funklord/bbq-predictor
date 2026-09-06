@@ -184,6 +184,28 @@ public class GraphWidget extends AppWidgetProvider {
 		}
 	}
 
+	/*
+	 * Somebody dragged the widget's handles (project.md sec 16.24).
+	 *
+	 * Redrawn immediately so the host rebinds the views at the new
+	 * shape. The PICTURE is still the old size until the application
+	 * next renders one -- it is the app that draws, and it may not be
+	 * running -- so the launcher scales what is there for a few minutes
+	 * and then gets one made for the new size.
+	 *
+	 * Left deliberately at that rather than starting a fetch here. A
+	 * resize is a gesture somebody can repeat a dozen times while they
+	 * settle on a size, and a network round trip per drag is a poor
+	 * trade for being sharp a few minutes sooner.
+	 */
+	@Override
+	public void onAppWidgetOptionsChanged(Context context,
+	                                      AppWidgetManager manager, int id,
+	                                      Bundle options) {
+		super.onAppWidgetOptionsChanged(context, manager, id, options);
+		draw(context, manager, id);
+	}
+
 	private void draw(Context context, AppWidgetManager manager, int id) {
 		RemoteViews views =
 		        new RemoteViews(context.getPackageName(), R.layout.bbq_widget);

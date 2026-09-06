@@ -8222,3 +8222,110 @@ one are indistinguishable to a test for existence. Deleting it first is
 what makes the wait mean anything -- `evidence.md`'s *a passing check is
 not evidence until you know it checked something*, arriving through a
 one-line shell loop.
+
+
+## 16.24 Bigger, and what that answered on its own
+
+The provider asked for four cells by two. It asks for four by four now,
+and the placed widget was dragged to five columns by four rows -- 337 by
+433 dp, taller than it is wide, which for a wide plot is not the shape
+anybody would have designed for.
+
+**It is better anyway, and not for the reason expected.** The graph
+drops furniture it has no room for, so a one-row strip showed the top
+temperature label and nothing else. At four rows it draws the time axis
+(`CEST`, `Sun 14:00`), the colour scale bar, and *both* ends of the
+temperature range -- `22 C` at the top and `9 C` at the bottom.
+
+That matters because the complaint the resize was meant to answer was
+that the scale was hard to read, and the fix turned out to be height
+rather than anything about labels: the graph already knew how to say
+what its axes meant and had been given nowhere to say it. **A layout
+that degrades gracefully hides the fact that it is degrading**, which is
+the same shape as a gate that skips rather than fails.
+
+`onAppWidgetOptionsChanged` redraws on a resize so the host rebinds at
+the new shape. The picture itself is still the old size until the
+application next renders one -- it is the app that draws, and it may not
+be running -- so the launcher scales what is there for a few minutes.
+Deliberately not a fetch: a resize is a gesture somebody repeats a dozen
+times while settling on a size, and a network round trip per drag is a
+poor trade for being sharp a few minutes sooner.
+
+### 16.24.1 Scrolling and scaling it are not available, and will not be
+
+Asked directly: can the widget be panned and pinched the way the
+in-window graph is. **No, and not by trying harder.**
+
+A widget is `RemoteViews`. The launcher hosts it in its own process and
+accepts a fixed set of view classes -- `FrameLayout`, `LinearLayout`,
+`RelativeLayout`, `GridLayout`, `TextView`, `ImageView`, `Button`,
+`ListView`, `StackView` and a handful more. `ScrollView` is not among
+them, and no drag or pinch is ever delivered to this application.
+
+What *is* possible is discrete: a tap fires a `PendingIntent`, so
+buttons that shift or zoom the rendered range could be drawn into the
+widget. It is recorded as possible and not done, because the picture is
+drawn by the Qt application: a button press would either wake it or find
+it dead, and a control that works or does not depending on whether an
+unrelated process happens to be alive is worse than no control.
+
+**So the widget is a glance and the window is the instrument**, and the
+tap that opens the application is the whole of the interaction it should
+have. Sizing it is the one adjustment available, and sec 16.24 is why
+that turns out to be enough.
+
+### 16.24.2 A share of the only dimension that had ever varied
+
+The number was a quarter of the picture's height. On a strip one cell
+tall that reads from arm's length; dragged to four rows it became a
+numeral 108 dp high lying across the curve.
+
+**The rule was not wrong, it was under-specified, and nothing could have
+shown that while only one dimension moved.** Height was the only thing
+that had ever changed, so a share of height and a share of the picture
+were the same rule -- and they stopped being the same rule the first
+time somebody dragged a corner sideways.
+
+It is the smaller of a quarter of the height and a tenth of the width
+now. On the strip the height rule still decides and nothing changed; on
+a tall block the width rule takes over. Both scale, so a tablet gets a
+bigger number rather than a constant somebody would have to come back
+and revisit.
+
+**The general form is worth more than the fix**: a proportion taken
+against one dimension of a thing that can vary in two is a constant
+waiting to be discovered, and the discovery happens the first time the
+other dimension moves -- long after the code was written and reviewed.
+
+### 16.24.3 The XML comment mistake, gated on the third occurrence
+
+`--` inside an XML comment is illegal, which nothing about writing prose
+suggests. It has been committed three times in this project, and each
+time it arrived as an aapt2 parse error minutes into an Android build,
+naming a *copy* of the file in a generated directory rather than the one
+in the tree.
+
+`tool/xml_gate.py` parses every XML file this project owns and is in
+`make style`, so it costs a fraction of a second and fails in the tree
+where the file is. A parser rather than a pattern, because the double
+hyphen is only the instance that keeps happening -- an unclosed tag, a
+stray ampersand and a mismatched quote cost the same minutes and are
+found by the same call.
+
+It carries its control inside it, per `evidence.md`: a comment with a
+double hyphen is parsed *before* any real file, and a good one after. If
+the library ever stopped rejecting the first, every real file would pass
+and the gate would report a clean sweep -- so it refuses to report at
+all rather than report vacuously. It also refuses an empty file list,
+which is the other way a sweep of this shape reads as a pass.
+
+Sabotaged by putting the hyphens back into
+`android/res/xml/bbq_widget_info.xml`, it names the file, the line and
+the column and exits 1.
+
+**The directories it looks in are listed rather than globbed.** A
+directory added later is invisible to the gate until somebody names it,
+which is a gap that can be found by reading; a wildcard that swept a
+build tree would fail on generated files nobody owns, and would be
+switched off rather than fixed.

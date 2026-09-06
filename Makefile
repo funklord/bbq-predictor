@@ -315,7 +315,7 @@ test: tests-build $(ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs style-signals style-man style-palette style-exits
+style: style-source style-docs style-signals style-man style-palette style-exits style-xml
 
 style-source:
 	python3 tool/style_gate.py check
@@ -331,6 +331,9 @@ style-docs:
 # fails silently in the worst direction: a timer that marks itself failed
 # on every quiet station, or one that forgives the outage it exists to
 # report.
+style-xml:
+	python3 tool/xml_gate.py
+
 style-exits:
 	python3 tool/exit_codes.py
 
@@ -493,5 +496,6 @@ help:
 	@sed -n '/^# TARGETS/,/^#$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
+        style-signals style-man style-palette style-exits style-xml \
         android android-aab \
         install uninstall clean veryclean distclean help

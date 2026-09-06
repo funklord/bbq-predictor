@@ -55,6 +55,16 @@ const int fallback_height = 190;
 const int smallest_dp = 60;
 const int largest_dp = 2000;
 
+#ifdef Q_OS_ANDROID
+
+/*
+ * Everything from here to the end of the namespace draws the number,
+ * and only the Android half of this file calls it. Guarded rather than
+ * left for the linker to drop: an unused static is a warning on the
+ * desktop build, and a warning nobody can act on is one everybody
+ * learns to scroll past.
+ */
+
 /*
  * The number over the graph, and the ink it is drawn in.
  *
@@ -73,13 +83,24 @@ const QColor reading_ink(0x1e, 0x1e, 0x1e);
 const QColor reading_halo(0xf2, 0xf2, 0xf2);
 
 /*
- * How much of the picture's height the number takes. A quarter reads
- * from arm's length on a phone and still leaves the curve the room that
- * makes it a graph rather than a decoration.
+ * How big the number is, as shares of the picture -- WHICHEVER IS
+ * SMALLER (sec 16.24.2).
+ *
+ * A quarter of the height alone was the first rule, tuned on a strip
+ * one cell tall where it reads from arm's length. Dragged to four cells
+ * the same rule gave a numeral 108 dp tall sitting across the curve: it
+ * had been a share of the only dimension that varied, and then the
+ * other one varied.
+ *
+ * A tenth of the width is what holds it. On the strip the height rule
+ * still decides and nothing changes; on a tall block the width rule
+ * takes over and the number stays a glance rather than a poster. Both
+ * scale, so a tablet's widget gets a bigger one rather than a constant
+ * somebody would have to revisit.
  */
-const double reading_share = 0.25;
+const double reading_height_share = 0.25;
+const double reading_width_share = 0.10;
 
-#ifdef Q_OS_ANDROID
 /*
  * How big the placed widget actually is, in dp, or 0 for "Android did
  * not say". GraphWidget.java explains why dp rather than pixels.
@@ -96,7 +117,6 @@ int asked_size(const char *method) {
 
 	return size >= smallest_dp && size <= largest_dp ? size : 0;
 }
-#endif
 
 /*
  * Draw the current temperature across the top of the picture.
@@ -120,7 +140,8 @@ void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
 
 	QFont font = painter.font();
 	font.setBold(true);
-	font.setPixelSize(qMax(10, int(size.height() * reading_share)));
+	font.setPixelSize(qMax(10, int(qMin(size.height() * reading_height_share,
+	                                    size.width() * reading_width_share))));
 
 	/*
 	 * Placed on the INK box rather than the em box, for the reason the
@@ -152,6 +173,8 @@ void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
 
 	painter.fillPath(glyphs, reading_ink);
 }
+
+#endif
 
 } // namespace
 
