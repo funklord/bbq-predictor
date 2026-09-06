@@ -161,6 +161,7 @@ HEADERS += \
 	src/ui/theme.h \
 	src/ui/flow_layout.h \
 	src/ui/widget_picture.h \
+	src/wu/fetch_verdict.h \
 	src/ui/main_window.h \
 	src/ui/tray_icon.h \
 	src/wu/client.h \

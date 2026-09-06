@@ -6146,8 +6146,8 @@ Reported from claude-guidelines 2026-09-03, from a sweep of all seventeen
 trees for that one shape. Recorded rather than fixed; each is this
 project's call.
 
-**`src/wu/fetch_once.cpp:421` prints "every band answered" over bands that
-were never requested.** The guard above it at 417 is `if (failures > 0 ||
+~~**`src/wu/fetch_once.cpp:421` prints "every band answered" over bands
+that were never requested.**~~ **Fixed in sec 16.39.** The guard above it at 417 is `if (failures > 0 ||
 timed_out)`, and `failures` is incremented in exactly one place -- `++failures;`
 at line 292, inside the `band_failed` handler. So it counts bands asked and
 refused, and never bands that were not asked.
@@ -9570,3 +9570,72 @@ worth not writing -- and both the comment and the test's now say which
 half actually holds the property. **A sabotage that passes is not a
 wasted experiment; it is the one that finds a claim nothing was
 checking.**
+
+
+## 16.39 The daemon's exit code, and the band it never asked for
+
+sec 16's first item, reported in 2026-09-03 and recorded rather than
+fixed. It is the exit status the packaged systemd timer reads, so it
+was worth fixing rather than knowing about.
+
+`failures` is incremented in exactly one place -- the `band_failed`
+handler -- so it counts bands that were requested and refused. **A band
+never REQUESTED neither fails nor arrives**, leaving the count at zero
+and `timed_out` false, and the run printed *every band answered* and
+returned 0 having asked for two of six.
+
+**The hole is exactly one condition wide**, which is what makes the fix
+small rather than a survey. `bbq_wu_feed::refresh` starts the forecast
+bands only under `if (m_have_geocode)`, and a band that WAS asked and
+neither answered nor failed would have held the event loop open until
+the timeout. So "everything was asked" is "there was a geocode to ask
+with", and nothing else; `feed.has_geocode()` already existed.
+
+It is not the ordinary path. The geocode is normally back-filled from
+the observed reply, and this is the case where an HTTP 200 carried an
+empty observations array -- which raises no error anywhere and left four
+bands unrequested in silence.
+
+`bbq_fetch_verdict` is a header of its own because `fetch_once.cpp` has
+a `main()` and cannot be linked into the suite. The decision is the part
+worth testing, and putting it where a test can reach it is the same move
+that made the widget's pose testable in sec 16.36.2. The whole truth
+table is asserted rather than the one broken cell, because a fix aimed
+at one cell is how the other three quietly change.
+
+### 16.39.1 The sabotage passed, and the build was why
+
+Reverting the rule to watch the test fail, **the test passed.**
+
+`src/wu/fetch_verdict.h` was named in no `.pro` or `.pri`. qmake tracks
+a header only if something names it, so it appeared nowhere in the
+generated Makefile, `touch` on it rebuilt nothing, and the test had been
+asserting against an object built before the sabotage existed.
+
+That is `build-and-commit.md`'s own rule -- *never conclude that a test
+passes or fails from a binary the build step did not rebuild* -- met in
+code twenty minutes old, by the person who had been quoting it all day.
+Named in both project files, the same sabotage fails:
+
+    Actual   (bbq_fetch_verdict(0, false, false, true)): 0
+    Expected (bbq_fetch_outcome::partial)              : 1
+
+**Swept afterwards: 27 headers under `src/`, and that was the only one
+untracked.** So this was not a standing rot; it was a new file arriving
+without the one line that makes it real. Which is exactly the kind of
+gap that recurs, because reading the `.pro` is not part of adding a
+header.
+
+`tool/header_deps.py` is in `make style` now. It carries its control
+inside it -- a synthetic pair where one header is missing and one is not
+-- and refuses to report at all if the comparison cannot separate them,
+or if either the header list or the named list comes back empty. Two
+controls beyond that: unnaming `fetch_verdict.h` again, and an
+untouched new header nobody has listed. Both fire.
+
+**The general shape is worth more than the gate.** A test binary that
+did not rebuild is the vacuous pass in its most expensive form, because
+every other signal -- the suite, the gates, the exit code -- says the
+same thing it says on a real pass. The only thing that separates them is
+making the code wrong on purpose and watching, and that only works if
+the build agrees to notice.

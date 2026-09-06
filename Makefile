@@ -315,7 +315,7 @@ test: tests-build $(ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs style-signals style-man style-palette style-exits style-xml
+style: style-source style-docs style-signals style-man style-palette style-exits style-xml style-headers
 
 style-source:
 	python3 tool/style_gate.py check
@@ -333,6 +333,9 @@ style-docs:
 # report.
 style-xml:
 	python3 tool/xml_gate.py
+
+style-headers:
+	python3 tool/header_deps.py
 
 style-exits:
 	python3 tool/exit_codes.py
@@ -523,5 +526,6 @@ help:
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
+        style-headers \
         android android-aab \
         install uninstall clean veryclean distclean help

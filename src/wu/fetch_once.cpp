@@ -10,6 +10,7 @@
 #include "model/composite.h"
 #include "model/settings.h"
 #include "wu/feed.h"
+#include "wu/fetch_verdict.h"
 
 namespace {
 
@@ -414,7 +415,39 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 		error << QStringLiteral("fetch-once: %1 band(s) failed\n").arg(failures);
 	}
 
-	if (failures == 0 && !timed_out) {
+	/*
+	 * A BAND THAT WAS NEVER ASKED FOR HAS NOT ANSWERED (sec 16.39).
+	 *
+	 * `failures` counts bands that were requested and refused; it is
+	 * incremented only from the band_failed handler. A band that was
+	 * never REQUESTED neither fails nor arrives, so it left both this
+	 * count and the timeout at zero -- and the run printed "every band
+	 * answered" and returned 0 having asked for two of six.
+	 *
+	 * The hole is exactly one condition wide. bbq_wu_feed::refresh
+	 * starts the forecast bands only under `if (m_have_geocode)`, and a
+	 * band that WAS asked and neither answered nor failed would have
+	 * held the loop open until the timeout. So "everything was asked"
+	 * is "there was a geocode to ask with", and nothing else.
+	 *
+	 * The geocode is normally back-filled from the observed reply, so
+	 * this is not the ordinary path: it is the one where an HTTP 200
+	 * carried an empty observations array, which raises no error
+	 * anywhere and left four bands unrequested in silence.
+	 */
+	const bool forecast_bands_asked = feed.has_geocode();
+
+	if (!forecast_bands_asked) {
+		error << "fetch-once: no geocode, so the forecast bands were "
+		         "never requested -- this run asked for the station "
+		         "bands alone\n";
+	}
+
+	const bbq_fetch_outcome outcome = bbq_fetch_verdict(
+	        failures, timed_out, forecast_bands_asked,
+	        composite.at(now).is_valid());
+
+	if (outcome == bbq_fetch_outcome::complete) {
 		out << "fetch-once: every band answered\n";
 		return 0;
 	}
@@ -439,8 +472,8 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	 * because it is the question the archive cares about: something
 	 * described this moment and was written down.
 	 */
-	if (composite.at(now).is_valid()) {
-		out << "fetch-once: partial -- some band(s) failed, but the "
+	if (outcome == bbq_fetch_outcome::partial) {
+		out << "fetch-once: partial -- something was missing, but the "
 		       "composite still covers now\n";
 		return 3;
 	}

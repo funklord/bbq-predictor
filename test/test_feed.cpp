@@ -7,6 +7,7 @@
 
 #include "store/history.h"
 #include "wu/feed.h"
+#include "wu/fetch_verdict.h"
 
 /*
  * Which coordinate the forecast bands are aimed at (project.md sec
@@ -22,6 +23,7 @@ class test_feed : public QObject {
 
 private slots:
 	void a_derived_coordinate_does_not_survive_the_station_changing();
+	void a_band_never_asked_for_is_not_a_band_that_answered();
 	void a_pinned_coordinate_does();
 	void resetting_the_same_station_changes_nothing();
 	void the_observed_band_is_served_from_the_store();
@@ -1000,3 +1002,52 @@ void test_feed::a_reader_who_never_moves_still_rediscovers_eventually() {
 
 QTEST_GUILESS_MAIN(test_feed)
 #include "test_feed.moc"
+
+/*
+ * THE FETCH VERDICT, AND THE CASE IT USED TO GET WRONG (sec 16.39).
+ *
+ * This is what the systemd timer reads. `failures` counts bands that
+ * were asked and refused, so a band never REQUESTED left it at zero,
+ * left timed_out false, and the run reported "every band answered" and
+ * exited 0 having asked for two of six.
+ *
+ * The whole table is asserted rather than the one broken cell, because
+ * a fix aimed at one cell is how the other three quietly change.
+ */
+void test_feed::a_band_never_asked_for_is_not_a_band_that_answered() {
+	/* Everything asked, everything answered. */
+	QCOMPARE(bbq_fetch_verdict(0, false, true, true),
+	         bbq_fetch_outcome::complete);
+
+	/*
+	 * THE DEFECT. Nothing failed and nothing timed out, because four
+	 * bands were never requested -- and now is still covered by the two
+	 * that were. It used to be `complete`.
+	 */
+	QCOMPARE(bbq_fetch_verdict(0, false, false, true),
+	         bbq_fetch_outcome::partial);
+
+	/* The same, with nothing covering now: worse, not better. */
+	QCOMPARE(bbq_fetch_verdict(0, false, false, false),
+	         bbq_fetch_outcome::useless);
+
+	/* A band asked and refused, with now still covered: the ordinary
+	 * quiet-station case the unit forgives by name. */
+	QCOMPARE(bbq_fetch_verdict(1, false, true, true),
+	         bbq_fetch_outcome::partial);
+
+	/* A band asked and refused, and nothing describes now. */
+	QCOMPARE(bbq_fetch_verdict(1, false, true, false),
+	         bbq_fetch_outcome::useless);
+
+	/*
+	 * A timeout is never complete however much arrived, because a band
+	 * that was asked and neither answered nor failed is what holds the
+	 * loop open -- which is why `timed_out` and "never asked" are two
+	 * conditions rather than one.
+	 */
+	QCOMPARE(bbq_fetch_verdict(0, true, true, true),
+	         bbq_fetch_outcome::partial);
+	QCOMPARE(bbq_fetch_verdict(0, true, true, false),
+	         bbq_fetch_outcome::useless);
+}

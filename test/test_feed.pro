@@ -12,6 +12,7 @@ SOURCES += test_feed.cpp \
 	$$PWD/../src/model/correction.cpp
 
 HEADERS += \
+	$$PWD/../src/wu/fetch_verdict.h \
 	$$PWD/../src/wu/feed.h \
 	$$PWD/../src/wu/client.h \
 	$$PWD/../src/wu/key_source.h \
