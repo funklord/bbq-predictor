@@ -74,6 +74,18 @@ struct bbq_metrics {
 
 	int control_height = 0;
 	bool stack_controls = false;
+
+	/*
+	 * Whether detail has to be ON the surface rather than behind a
+	 * hover (project.md sec 16.44).
+	 *
+	 * A tooltip needs a pointer that can rest somewhere without
+	 * pressing, and a touch screen has no such gesture. Measured on the
+	 * device: a 2.6-second hold on the verdict changes not one pixel
+	 * outside the clock. So anything a desktop puts in a tooltip is, on
+	 * a phone, information the program computed and no one can reach.
+	 */
+	bool detail_must_be_visible = false;
 	bool show_station_field = true;
 };
 

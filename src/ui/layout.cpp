@@ -68,6 +68,12 @@ bbq_metrics bbq_metrics_for(bbq_layout layout) {
 	metrics.margin_bottom = 30;
 	metrics.ribbon_height = 7;
 	metrics.tick_step_s = 6 * 3600;
+	/*
+	 * No hover on a touch screen, so a tooltip is unreachable here
+	 * (sec 16.44).
+	 */
+	metrics.detail_must_be_visible = true;
+
 	metrics.sample_radius = 3.0;
 	metrics.line_width = 2.6;
 	metrics.label_scale = 1.0;

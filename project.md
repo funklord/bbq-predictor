@@ -9845,3 +9845,61 @@ so the two handlers are mutually exclusive within a run. **A defect that
 cannot occur is not a defect**, and fixing it would have added a line
 whose reason was never true. Recorded because the next reader will see
 the same asymmetry and reach for the same fix.
+
+
+## 16.44 A tooltip is not an answer on a touch screen
+
+Sec 16.42 put the other grilling windows in the verdict's tooltip and
+called the promise kept. **On the phone it is not reachable at all.**
+
+Measured on the device rather than reasoned about: a 2.6-second hold on
+the label changed **not one pixel** outside the clock. A tooltip needs a
+pointer that can rest somewhere without pressing, and a touch screen has
+no such gesture -- so the list was available on a desktop and nowhere
+else, which is not where this program mostly runs.
+
+This is `working-practice.md`'s own case arriving here: *an override
+that only one input device can produce is not an override on the
+other*. The terminal's escape was Shift, which a phone has not got;
+this one's was hover.
+
+`bbq_metrics::detail_must_be_visible` says it, so the layout carries the
+fact rather than the verdict guessing at it. Where it is set, the extra
+windows go on the surface:
+
+    Best window: Tue 16:00 to 18:00  (2.0 h, score 0.54)   +1 more
+    Mon 18:00 to 20:00  (2.0 h, score 0.52)
+
+**The extras only, not the whole list.** The tooltip carries every
+window because it covers the label it belongs to; inline, the summary is
+the line above and repeating it would name the best window twice.
+
+Asserted as the DIFFERENCE between the two layouts rather than the text
+of either: the phone must show more than the desktop, whatever either
+happens to say. The test refuses to run at all if the fixture scored one
+window, because then both strings are the summary and the comparison
+would agree however this was wired.
+
+### 16.44.1 Placed beside the count, after being placed anywhere
+
+The first version appended the list at the end of the verdict, and on
+the device it came out **under the record line** -- a sentence about
+forecast accuracy sitting between "+1 more" and the one more. Correct
+and unreadable.
+
+It is written where the count is made now. That is the whole of the
+change and it is only visible on a screenshot.
+
+### 16.44.2 An assertion that passed for a reason the program does not have
+
+The test compared `phone.startsWith(desktop)`. That was true while the
+extras were appended at the end; once they moved beside the count it was
+false in general -- and the test went on passing, **because this fixture
+stores no verification, so the note that would follow them is empty.**
+
+A true assertion about a case the running program does not have. It
+compares the first line of each now, which is what actually holds.
+
+**Reordering code invalidates assertions about its output, and nothing
+says so**: the test kept passing, the sabotages kept failing, and only
+reading the assertion against the new shape found it.

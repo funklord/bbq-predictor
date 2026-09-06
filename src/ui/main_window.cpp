@@ -1477,6 +1477,36 @@ void bbq_main_window::refresh_status() {
 			verdict += QStringLiteral("   +");
 			verdict += QString::number(windows.size() - 1);
 			verdict += tr(" more");
+
+			/*
+			 * AND ON A PHONE, WHERE A TOOLTIP CANNOT BE OPENED
+			 * (sec 16.44).
+			 *
+			 * Measured on the device: a 2.6-second hold on this label
+			 * changes not one pixel outside the clock. A tooltip needs
+			 * a pointer that can rest without pressing, and a touch
+			 * screen has no such gesture -- so the list added in
+			 * sec 16.42 was reachable on a desktop and nowhere else,
+			 * which is not where this program mostly runs.
+			 *
+			 * Written HERE rather than after the verification note,
+			 * beside the count it answers. Appended at the end it came
+			 * out under the record line, with a sentence about
+			 * forecast accuracy between "+1 more" and the one more.
+			 *
+			 * The EXTRAS only. The tooltip carries every window because
+			 * it covers the label it belongs to; here the summary is on
+			 * the line above and repeating it would name the best
+			 * window twice.
+			 */
+			if (m_metrics.detail_must_be_visible) {
+				const QStringList lines =
+				        bbq_grill_window_list(windows, zone)
+				                .split(QLatin1Char('\n'));
+				verdict += QStringLiteral("\n");
+				verdict += QStringList(lines.mid(1))
+				                   .join(QStringLiteral("\n"));
+			}
 		}
 
 		/*

@@ -77,6 +77,7 @@ private slots:
 	void the_tooltip_lists_every_window_the_count_promises();
 	void refreshing_the_status_actually_hands_the_label_that_list();
 	void a_window_that_dips_says_so_and_a_steady_one_does_not();
+	void a_phone_gets_the_extra_windows_on_the_surface();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1512,4 +1513,86 @@ void test_window::a_window_that_dips_says_so_and_a_steady_one_does_not() {
 	QVERIFY2(!bbq_grill_window_list({barely}, utc)
 	                  .contains(QStringLiteral("dips")),
 	         "a dip invisible at the printed precision is still printed");
+}
+
+/*
+ * A TOOLTIP IS NOT AN ANSWER ON A TOUCH SCREEN (sec 16.44).
+ *
+ * Measured on the device: a 2.6-second hold on the verdict changes not
+ * one pixel outside the clock. So the list from sec 16.42 was reachable
+ * on a desktop and nowhere else -- and the phone is where this program
+ * mostly runs.
+ *
+ * Asserted as the DIFFERENCE between the two layouts rather than as the
+ * text of either, because what must hold is that the phone shows more
+ * than the desktop does, whatever either happens to say.
+ */
+void test_window::a_phone_gets_the_extra_windows_on_the_surface() {
+	QTemporaryDir directory;
+	QVERIFY(directory.isValid());
+
+	const qint64 begins = QDateTime::currentSecsSinceEpoch() - 3600;
+
+	std::vector<bbq_sample> samples;
+	for (int at = 0; at < 3 * 24; ++at) {
+		bbq_sample sample;
+		sample.start_utc = begins + at * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 25.0;
+		sample.precip_rate = 0.0;
+		sample.precip_chance = 0.0;
+		sample.wind_kph = 0.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(QTimeZone::UTC);
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+
+	const auto shown_under = [&](bbq_layout shape) {
+		bbq_main_window window;
+		window.feed()->open_history(
+		        directory.filePath(QStringLiteral("h.sqlite")));
+		window.set_layout(shape);
+		window.feed()->m_composite = composite;
+		window.refresh_status();
+		return window.m_verdict->text();
+	};
+
+	const QString desktop = shown_under(bbq_layout::desktop);
+	const QString phone = shown_under(bbq_layout::mobile);
+
+	/*
+	 * The fixture must actually produce more than one window, or both
+	 * strings are the summary and the comparison below is between two
+	 * identical things that would agree however this is wired.
+	 */
+	QVERIFY2(desktop.contains(QStringLiteral("more")),
+	         qPrintable(QStringLiteral("the fixture scored one window at "
+	                                   "most, so this measures nothing: %1")
+	                            .arg(desktop)));
+
+	QCOMPARE(desktop.count(QLatin1Char('\n')), 0);
+	QVERIFY2(phone.count(QLatin1Char('\n')) > 0,
+	         qPrintable(QStringLiteral("the phone shows one line and the "
+	                                   "rest only in a tooltip it cannot "
+	                                   "open: %1").arg(phone)));
+
+	/*
+	 * THE FIRST LINE IS THE SAME SENTENCE, and that is all that can be
+	 * said now.
+	 *
+	 * This asserted `phone.startsWith(desktop)` and passed -- for the
+	 * wrong reason. The extras are inserted beside the count they
+	 * answer, BEFORE the verification note, so once that note is
+	 * present the phone's text is no longer the desktop's with
+	 * something appended. It held only because this fixture stores no
+	 * verification, which makes the note empty: a true assertion about
+	 * a case the running program does not have.
+	 */
+	QCOMPARE(phone.section(QLatin1Char('\n'), 0, 0),
+	         desktop.section(QLatin1Char('\n'), 0, 0));
 }
