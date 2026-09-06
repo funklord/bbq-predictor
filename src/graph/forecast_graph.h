@@ -145,6 +145,27 @@ double bbq_readout_box_x(double centre_px, double box_w,
                          double plot_left, double plot_right);
 
 /*
+ * Whether the day dividers and their names are worth drawing at all.
+ *
+ * Sec 13.2 stops the sample marks once they would merge, because dots
+ * at twenty to a pixel claim a density of measurement nobody made. The
+ * day furniture had no such rule and the span is the reader's to
+ * choose, so at a year it is 365 dividers across the plot: a barcode,
+ * with the names smeared along the top.
+ *
+ * The threshold is not chosen here. The name loop's own comment says a
+ * divider without a name "only says something changed here", so the
+ * two stand or fall together and what decides it is whether a name
+ * still fits between one midnight and the next. Both figures are
+ * measured from what is about to be drawn, so this follows the font
+ * and the display rather than an assumption about either.
+ *
+ * A negative gap means fewer than two midnights are in view, where
+ * nothing can crowd.
+ */
+bool bbq_day_furniture_fits(double closest_days_px, double widest_name_px);
+
+/*
  * What the readout calls the moment it is describing.
  *
  * One sample in the column and it is that sample's own start time. More

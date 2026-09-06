@@ -74,6 +74,7 @@ private slots:
 	void the_curve_clears_the_floor_against_whatever_it_crosses();
 	void a_readout_too_wide_to_fit_keeps_its_left_edge();
 	void a_column_holding_several_samples_reads_as_a_range();
+	void day_furniture_goes_away_once_the_days_would_crowd();
 
 	/*
 	 * The contrast clamp the home-screen picture draws through
@@ -1613,4 +1614,69 @@ void test_view::a_column_holding_several_samples_reads_as_a_range() {
 	QCOMPARE(bbq_readout_time_label(noon, noon + 11 * 86400, 260, false, utc),
 	         QStringLiteral("7 Sep-18 Sep"));
 
+}
+
+/*
+ * The day dividers and their names, at a span nobody designed for.
+ *
+ * Sec 13.2 stops the sample marks once they would merge. The day
+ * furniture had no such rule, and the span became the reader's to
+ * choose: at a year it is 365 dividers across the plot, which draws it
+ * as a barcode and the names as a smear -- structure claiming a
+ * regularity that belongs to the calendar rather than to the data.
+ *
+ * ASKED OF THE FUNCTION, not of the pixels, and the first attempt here
+ * was the other way. A divider is a one-pixel line at a fractional x,
+ * so nearly all its ink is an antialiased blend and a colour-match
+ * counter found none of it even at a three-day span -- the control
+ * caught that, which is what a control is for. Loosening the tolerance
+ * until it passed would have been fitting the instrument to the
+ * answer. The end-to-end half is a screenshot at each span, which is
+ * how this project checks drawing anyway.
+ */
+void test_view::day_furniture_goes_away_once_the_days_would_crowd() {
+	const double name = 40.0;
+
+	/* Fewer than two midnights: nothing to crowd against. */
+	QVERIFY(bbq_day_furniture_fits(-1.0, name));
+
+	/*
+	 * The relationship, over spans that actually occur. A day is
+	 * 86400 s, so the gap in pixels is 86400 / (span / plot width).
+	 */
+	const struct {
+		const char *what;
+		double span_s;
+		double plot_px;
+		bool wanted;
+	} cases[] = {
+		{"a day, on a desktop", 86400, 860, true},
+		{"a day, on the Fold's cover screen", 86400, 300, true},
+		{"the sixteen days of data, desktop", 16 * 86400.0, 860, true},
+		{"a year, desktop", 365 * 86400.0, 860, false},
+		{"a year, cover screen", 365 * 86400.0, 300, false},
+		{"the ten-year ceiling", 3650 * 86400.0, 860, false},
+	};
+
+	for (const auto &c : cases) {
+		const double gap = 86400.0 / (c.span_s / c.plot_px);
+		const bool fits = bbq_day_furniture_fits(gap, name);
+
+		QVERIFY2(fits == c.wanted,
+		         qPrintable(QStringLiteral("%1: midnights %2 px apart with a "
+		                                   "%3 px name -- drawn=%4, wanted=%5")
+		                            .arg(QString::fromLatin1(c.what))
+		                            .arg(gap, 0, 'f', 1)
+		                            .arg(name)
+		                            .arg(fits)
+		                            .arg(c.wanted)));
+	}
+
+	/*
+	 * And it is the NAME that decides, not a constant: the same
+	 * spacing flips as the label grows, which is what makes the rule
+	 * follow the font instead of assuming one.
+	 */
+	QVERIFY(bbq_day_furniture_fits(50.0, 40.0));
+	QVERIFY(!bbq_day_furniture_fits(50.0, 60.0));
 }

@@ -1229,6 +1229,19 @@ QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
 	       last.toString(QStringLiteral("d MMM"));
 }
 
+bool bbq_day_furniture_fits(double closest_days_px, double widest_name_px) {
+	/*
+	 * Fewer than two midnights in view: nothing can crowd, and the
+	 * caller passes a negative gap to say so.
+	 */
+	if (closest_days_px < 0.0) {
+		return true;
+	}
+
+	/* One name, plus the gap the label already leaves beside a divider. */
+	return closest_days_px >= widest_name_px + 6.0;
+}
+
 double bbq_readout_box_x(double centre_px, double box_w,
                          double plot_left, double plot_right) {
 	double box_x = centre_px - box_w / 2.0;
@@ -1842,7 +1855,53 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 */
 	const std::vector<qint64> midnights = bbq_day_boundaries(from, to, zone);
 
-	for (qint64 midnight : midnights) {
+	/*
+	 * AND DROPPED WHOLESALE ONCE THE DAYS CROWD (sec 16.56).
+	 *
+	 * Sec 13.2 already stops the sample marks when they would merge,
+	 * because dots at twenty to a pixel claim a density of measurement
+	 * nobody made. The day furniture had no such rule, and the span
+	 * became the reader's to choose in sec 16.28: at a year it is 365
+	 * dividers across 780 pixels, which draws the plot as a barcode and
+	 * the names as a smear.
+	 *
+	 * The threshold is not a number picked here. The comment on the
+	 * name loop already says a divider without a name "only says
+	 * something changed here" -- so the two stand or fall together, and
+	 * what decides it is whether a name still fits between one midnight
+	 * and the next. Measured from the names actually about to be drawn,
+	 * so it follows the font and the display rather than an assumption
+	 * about either.
+	 *
+	 * The axis ticks keep their own labels at every span, so a wide
+	 * view still says where it is. Nothing is lost but the hatching.
+	 */
+	QFont day_font = label_font;
+	day_font.setBold(true);
+	const QFontMetrics day_measured(day_font);
+
+	double widest_day_name = 0.0;
+	double closest_days = -1.0;
+	for (std::size_t i = 0; i < midnights.size(); ++i) {
+		const QString name =
+		        local_time(midnights[i], zone).toString(QStringLiteral("ddd d"));
+		widest_day_name = std::max(
+		        widest_day_name,
+		        static_cast<double>(day_measured.horizontalAdvance(name)));
+
+		if (i > 0) {
+			const double gap =
+			        (midnights[i] - midnights[i - 1]) / seconds_per_pixel;
+			if (closest_days < 0.0 || gap < closest_days) {
+				closest_days = gap;
+			}
+		}
+	}
+
+	const bool days_would_crowd =
+	        !bbq_day_furniture_fits(closest_days, widest_day_name);
+
+	for (qint64 midnight : days_would_crowd ? std::vector<qint64>() : midnights) {
 		const double x = plot.left() + (midnight - from) / seconds_per_pixel;
 
 		/*
@@ -2391,7 +2450,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * same translucent plate the edge labels use. A divider without a
 	 * name only says "something changed here".
 	 */
-	if (!midnights.empty()) {
+	if (!midnights.empty() && !days_would_crowd) {
 		painter.setFont(label_font);
 
 		for (qint64 midnight : midnights) {
@@ -2409,8 +2468,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 * has to be findable at a glance among the hour labels
 			 * along the bottom, which are deliberately quiet.
 			 */
-			QFont day_font = label_font;
-			day_font.setBold(true);
 			painter.setFont(day_font);
 
 			edge_label(x + 4, plot.top() + 2, 56, Qt::AlignLeft, name);

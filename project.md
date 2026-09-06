@@ -10524,3 +10524,66 @@ Reordered, the durable one fires:
 
 **A test with two assertions has one witness under sabotage**, and it
 is whichever comes first. Ordering is not presentation.
+
+
+## 16.56 The day furniture drew a barcode at a year
+
+Sec 16.55's lens, re-pointed: a comment justifying itself with a
+quantity another feature can now change. The day dividers and the day
+names had no crowd rule, and the span became the reader's to choose in
+sec 16.28.
+
+At a one-year span on a 900-pixel window it is 365 dividers across
+about 780 pixels -- **one every two pixels**. The plot renders as a
+barcode with the names smeared into an unreadable strip along the top,
+and the fifteen days of real data are a thin spike in the middle of it.
+Sec 13.2's sentence about the sample marks describes it exactly:
+structure that claims a regularity nobody measured. The marks
+themselves were correctly absent in the same picture, which is what
+made the omission obvious once it was looked at.
+
+### 16.56.1 The threshold came out of the code's own comment
+
+Not a number chosen here. The name loop already says a divider without
+a name **"only says something changed here"** -- so the two stand or
+fall together, and what decides both is whether a name still fits
+between one midnight and the next.
+
+`bbq_day_furniture_fits` takes the closest gap between midnights in
+pixels and the widest name about to be drawn, both measured from the
+frame in hand, so the rule follows the font and the display rather than
+an assumption about either. The sixteen days of real data keep their
+day names on a desktop and on the Fold's cover screen; a year loses
+them on both. The axis ticks label themselves at every span, so a wide
+view still says where it is -- nothing goes but the hatching.
+
+### 16.56.2 The control refused the first instrument
+
+The test counted pixels matching `day_divider` and asserted none at a
+year, with the three-day span as a positive control. **The control
+failed**: no divider pixels at three days either.
+
+A divider is a one-pixel line at a fractional x, so nearly all its ink
+is an antialiased blend of the line and whatever is under it, and the
+pure colour is almost never written. The counter was measuring
+something that barely exists.
+
+**The available fix was to loosen the tolerance until the control
+passed**, which is fitting the instrument to the answer -- and it would
+have produced a test that passed with the drawing deleted, since the
+crowded assertion is an assertion of absence. The test asks the
+function instead, and the end-to-end half is a screenshot at each span,
+which is how this project checks drawing anyway.
+
+### 16.56.3 A duplicate option, caught by the man page
+
+Shooting a chosen span needed an option, so one was written: `--span
+H`. **`--view SPAN[,FROM]` already existed and does exactly that.**
+
+The cause is worth keeping. `usage()` in `main.cpp` was read, and
+`--view` is one of the seven accepted options deliberately absent from
+it -- a fact established in this same session, by the sweep that
+confirmed the manual is the exhaustive list and `man_options` gates it
+both ways. **The finding was already in hand and the wrong document was
+consulted anyway.** It cost nothing because the duplicate was noticed
+while editing the manual, which is the one file that could not omit it.
