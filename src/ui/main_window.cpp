@@ -1359,7 +1359,33 @@ QString bbq_grill_window_list(const std::vector<bbq_window> &windows,
 		line += QString::number(window.duration_s() / 3600.0, 'f', 1);
 		line += QCoreApplication::translate("bbq_main_window",
 		                                    " h, score ");
-		line += QString::number(window.score, 'f', 2);
+
+		const QString mean = QString::number(window.score, 'f', 2);
+		const QString worst = QString::number(window.worst, 'f', 2);
+
+		line += mean;
+
+		/*
+		 * WHERE IT DIPS, WHEN THE DIP IS A DIFFERENT NUMBER
+		 * (project.md sec 16.43).
+		 *
+		 * `worst` was computed by the scorer from the first and read by
+		 * nothing -- the same shape as the palette colour no painter
+		 * used. It is worth saying rather than deleting, because two
+		 * windows with one mean are not one afternoon: 0.70 steady and
+		 * 0.70 with a shower through the middle are different plans,
+		 * and the mean cannot tell them apart.
+		 *
+		 * Shown only when it prints DIFFERENTLY from the mean, which
+		 * needs no threshold anybody has to justify: a line reading
+		 * "score 0.70, dips to 0.70" says nothing twice.
+		 */
+		if (worst != mean) {
+			line += QCoreApplication::translate("bbq_main_window",
+			                                    ", dips to ");
+			line += worst;
+		}
+
 		line += QStringLiteral(")");
 		lines.append(line);
 	}

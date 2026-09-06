@@ -9801,3 +9801,47 @@ grilling window" branch, and the tooltip was legitimately empty.
 difference is which one you go looking for. It is built from
 `currentSecsSinceEpoch()` now, and says why in a comment, because the
 next person to copy this fixture will copy the epoch with it.
+
+
+## 16.43 A number the scorer computed and nobody read
+
+`bbq_window::worst` -- the lowest score anywhere in a grilling window --
+was computed at two sites in `grill.cpp`, stored on every window, and
+**read by nothing in the tree.** Found by asking the question the dead
+palette colour taught (sec 16.32.3): which computed values have no
+consumer.
+
+It is worth saying rather than deleting, and that is the whole
+judgement. **Two windows with one mean are not one afternoon**: 0.70
+steady and 0.70 with a shower through the middle are different plans,
+and the mean cannot tell them apart. The tooltip added in sec 16.42 is
+exactly the surface for it -- the detail somebody asked for rather than
+the glance.
+
+    Sun 16:00 to 20:30  (4.5 h, score 0.67, dips to 0.31)
+
+**Shown only when it prints differently from the mean**, which needs no
+threshold anybody has to justify. A line reading *score 0.70, dips to
+0.70* says nothing twice, and any numeric threshold would be a constant
+somebody would later have to defend. The rule is "it reads as a
+different number", and the test pins the case that would break if the
+rule were swapped for a tolerance: a worst of 0.7004 against a mean of
+0.70 must stay silent.
+
+Sabotaged both ways -- never printed, and always printed -- and it fails
+in both. A condition like this has two failure directions and a test
+that checks one of them is half a test.
+
+### 16.43.1 The lens, and a thing it correctly declined to find
+
+The same sweep looked at the verdict's other paths for state set on some
+branches and left stale on others. It found one candidate and **rejected
+it**: `bbq_locator::unavailable` writes the failure reason into the Find
+button's tooltip and `located` never clears it.
+
+That cannot happen. `locate_once` is called exactly once, at
+construction, and the locator latches to a single answer per request --
+so the two handlers are mutually exclusive within a run. **A defect that
+cannot occur is not a defect**, and fixing it would have added a line
+whose reason was never true. Recorded because the next reader will see
+the same asymmetry and reach for the same fix.

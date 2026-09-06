@@ -76,6 +76,7 @@ private slots:
 	void the_server_default_tries_a_local_host_before_a_remote_one();
 	void the_tooltip_lists_every_window_the_count_promises();
 	void refreshing_the_status_actually_hands_the_label_that_list();
+	void a_window_that_dips_says_so_and_a_steady_one_does_not();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1460,4 +1461,55 @@ void test_window::refreshing_the_status_actually_hands_the_label_that_list() {
 		QCOMPARE(shown,
 		         bbq_grill_window_list(windows, composite.zone()));
 	}
+}
+
+/*
+ * THE DIP, WHICH WAS COMPUTED AND READ BY NOTHING (sec 16.43).
+ *
+ * `bbq_window::worst` came from the scorer with the mean and had no
+ * consumer anywhere -- the same shape as the palette colour no painter
+ * used. Two windows with one mean are not one afternoon: 0.70 steady
+ * and 0.70 with a shower through it are different plans.
+ *
+ * Asserted in both directions, because a line that always says "dips
+ * to" says nothing, and one that never does hides the thing this
+ * exists to show.
+ */
+void test_window::a_window_that_dips_says_so_and_a_steady_one_does_not() {
+	const QTimeZone utc = QTimeZone::UTC;
+
+	bbq_window steady;
+	steady.start_utc = 1700000000;
+	steady.end_utc = steady.start_utc + 3 * 3600;
+	steady.score = 0.70;
+	steady.worst = 0.70;
+
+	bbq_window dips = steady;
+	dips.worst = 0.31;
+
+	const QString steady_line = bbq_grill_window_list({steady}, utc);
+	const QString dips_line = bbq_grill_window_list({dips}, utc);
+
+	QVERIFY2(!steady_line.contains(QStringLiteral("dips")),
+	         qPrintable(QStringLiteral("a steady window claims a dip: %1")
+	                            .arg(steady_line)));
+
+	QVERIFY2(dips_line.contains(QStringLiteral("dips")),
+	         qPrintable(QStringLiteral("a window that halves mid-way says "
+	                                   "nothing about it: %1")
+	                            .arg(dips_line)));
+	QVERIFY2(dips_line.contains(QStringLiteral("0.31")),
+	         qPrintable(dips_line));
+
+	/*
+	 * A dip too small to print differently is not a dip. The rule is
+	 * "it reads as a different number", which needs no threshold to
+	 * justify -- and this is the case that would break if somebody
+	 * swapped it for one.
+	 */
+	bbq_window barely = steady;
+	barely.worst = 0.7004;
+	QVERIFY2(!bbq_grill_window_list({barely}, utc)
+	                  .contains(QStringLiteral("dips")),
+	         "a dip invisible at the printed precision is still printed");
 }
