@@ -73,6 +73,7 @@ private slots:
 	void the_widget_render_leaves_the_parked_readout_where_it_was();
 	void the_picture_is_posed_at_now_with_no_cursor();
 	void a_following_window_is_still_following_after_a_render();
+	void the_server_default_tries_a_local_host_before_a_remote_one();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1251,4 +1252,76 @@ void test_window::the_picture_is_posed_at_now_with_no_cursor() {
 	/* And a null graph is a no-op rather than a crash: the render calls
 	 * this before it has checked much. */
 	bbq_pose_graph_for_picture(nullptr, ground, 3.0, shape);
+}
+
+/*
+ * THE SERVER PLACEHOLDER (sec 16.38).
+ *
+ * There is no server, no socket and no wire format, so what can be
+ * asserted is the one thing that IS a decision rather than a
+ * placeholder: the order. A machine running the packaged timer has the
+ * archive on disk, so a remote must never be tried before the local
+ * one -- it is slower, needs a network, and tells a third party which
+ * stations somebody watches.
+ *
+ * Pinned by POSITION rather than by value. Asserting the literal list
+ * would fail the day somebody adds a second local candidate, which is a
+ * change this test should welcome; asserting that local comes first
+ * fails only when the property is lost.
+ */
+void test_window::the_server_default_tries_a_local_host_before_a_remote_one() {
+	/*
+	 * The binary's config location is already redirected into a
+	 * temporary directory before QApplication is built -- see the note
+	 * at the top of this file -- so this reads and writes a throwaway
+	 * settings file rather than the one somebody is using.
+	 */
+	bbq_settings::set_server_hosts(QStringList());
+	const QStringList fresh = bbq_settings::server_hosts();
+
+	QVERIFY2(!fresh.isEmpty(), "an empty default leaves a caller nothing "
+	                           "to try and no way to say so");
+
+	const auto is_local = [](const QString &host) {
+		return host.startsWith(QStringLiteral("localhost")) ||
+		       host.startsWith(QStringLiteral("127.")) ||
+		       host.startsWith(QStringLiteral("[::1]"));
+	};
+
+	QVERIFY2(is_local(fresh.first()),
+	         qPrintable(QStringLiteral("the first candidate is %1, which "
+	                                   "is not local")
+	                            .arg(fresh.first())));
+
+	int remote_before_local = 0;
+	bool seen_remote = false;
+	for (const QString &host : fresh) {
+		if (is_local(host)) {
+			if (seen_remote) {
+				++remote_before_local;
+			}
+		} else {
+			seen_remote = true;
+		}
+	}
+
+	QCOMPARE(remote_before_local, 0);
+
+	/* Somebody else's list is kept as given, in their order. */
+	const QStringList mine{QStringLiteral("box.lan:7373"),
+	                       QStringLiteral("elsewhere:7373")};
+	bbq_settings::set_server_hosts(mine);
+	QCOMPARE(bbq_settings::server_hosts(), mine);
+
+	/*
+	 * And clearing it comes back to the default rather than to nothing.
+	 *
+	 * This assertion holds whether or not set_server_hosts removes the
+	 * key, because the READER is what supplies the default -- checked
+	 * by deleting that branch and watching this pass. Recorded so the
+	 * next reader does not mistake it for cover the writer does not
+	 * have.
+	 */
+	bbq_settings::set_server_hosts(QStringList());
+	QCOMPARE(bbq_settings::server_hosts(), fresh);
 }

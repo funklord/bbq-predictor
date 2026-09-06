@@ -2,6 +2,8 @@
 
 #include <QDir>
 #include <QSettings>
+#include <QStringList>
+#include <QVariant>
 #include <QStandardPaths>
 
 namespace {
@@ -31,6 +33,11 @@ const char *const key_interpolation = "graph/interpolation";
 const char *const key_smoothing = "graph/rounding_seconds";
 const char *const key_layout = "layout";
 const char *const key_theme = "theme";
+
+/*
+ * NOT WIRED TO ANYTHING -- see the header, and project.md sec 16.38.
+ */
+const char *const key_server_hosts = "server_hosts";
 const char *const key_steadiness = "graph/scale_steadiness";
 
 } // namespace
@@ -99,6 +106,70 @@ int bbq_settings::scale_steadiness(int fallback) {
 
 void bbq_settings::set_scale_steadiness(int percent) {
 	open().setValue(QString::fromLatin1(key_steadiness), percent);
+}
+
+QStringList bbq_settings::server_hosts() {
+	const QVariant stored =
+	        open().value(QString::fromLatin1(key_server_hosts));
+
+	QStringList hosts;
+	for (const QString &host : stored.toStringList()) {
+		const QString trimmed = host.trimmed();
+		if (!trimmed.isEmpty()) {
+			hosts.append(trimmed);
+		}
+	}
+
+	if (!hosts.isEmpty()) {
+		return hosts;
+	}
+
+	/*
+	 * THE DEFAULT, AND IT CONNECTS TO NOTHING.
+	 *
+	 * Local first: a machine running the packaged timer already has the
+	 * archive on disk, so asking a remote for what is under your own
+	 * hand is slower, needs a network, and tells somebody else which
+	 * stations you watch.
+	 *
+	 * The port is provisional too. 7373 was checked against
+	 * /etc/services and is unassigned there, which is the whole of its
+	 * claim -- it is a placeholder in a placeholder, and belongs to
+	 * sec 15.5's format question rather than being settled here.
+	 */
+	return QStringList{QStringLiteral("localhost:7373"),
+	                   QStringLiteral("vibes.se:7373")};
+}
+
+void bbq_settings::set_server_hosts(const QStringList &hosts) {
+	QStringList kept;
+	for (const QString &host : hosts) {
+		const QString trimmed = host.trimmed();
+		if (!trimmed.isEmpty()) {
+			kept.append(trimmed);
+		}
+	}
+
+	/*
+	 * An empty list removes the key rather than writing an empty one.
+	 *
+	 * COSMETIC, and the comment here first claimed otherwise -- that it
+	 * was what stopped a caller ending up with no candidates. It is
+	 * not: server_hosts() returns the default whenever what it reads is
+	 * empty, so deleting this branch changes no behaviour, which is
+	 * exactly what happened when it was deleted to see the test fail
+	 * and the test passed.
+	 *
+	 * Kept because a dead key in a file people are meant to be able to
+	 * open is worth not writing. The GUARANTEE lives in the reader, and
+	 * belongs in one place.
+	 */
+	if (kept.isEmpty()) {
+		open().remove(QString::fromLatin1(key_server_hosts));
+		return;
+	}
+
+	open().setValue(QString::fromLatin1(key_server_hosts), kept);
 }
 
 QString bbq_settings::theme() {

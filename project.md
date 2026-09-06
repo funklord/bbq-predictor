@@ -9514,3 +9514,59 @@ Three more, all this project's own rules and all in one stretch:
 **The apparatus was wrong four times and the code was wrong once**,
 which is the ratio `evidence.md` predicts and the reason its advice is
 to suspect the instrument first.
+
+
+## 16.38 A server address, marked as connecting to nothing
+
+Asked whether the server could be default-hardcoded to `vibes.se` so
+clients find it. Added on instruction as a placeholder, with the
+limitation in the code rather than only here:
+
+    bbq_settings::server_hosts()  ->  localhost:7373, vibes.se:7373
+
+**Nothing connects to these.** `grep` for `QTcpServer`, `QHttpServer`,
+`listen(` and `bind(` across `src/` finds nothing, and sec 15.5's first
+open question is that the internal series has no wire form at all. So
+the default is an address for a port nobody serves, speaking a protocol
+nobody has written down, and it says so at the declaration.
+
+**The port is a placeholder inside a placeholder.** 7373 was checked
+against `/etc/services` and is unassigned there, which is the whole of
+its claim. Which port to use belongs to sec 15.5's format question.
+
+### 16.38.1 The order is the part that is a decision
+
+Local first, and not for tidiness. A machine running the packaged timer
+already has the archive on disk (sec 15), so asking a remote for what is
+under your own hand is slower, needs a network, and **tells a third
+party which stations you watch.** The remote is a fallback and never a
+first choice.
+
+That is what the test asserts, and it asserts it by POSITION rather than
+by value: pinning the literal list would fail the day somebody adds a
+second local candidate, which is a change the test should welcome.
+Reordered so the remote comes first, it fails naming the host.
+
+**And the default remote is one person's machine.** Shipping it in a
+package points every installation at that host and tells it what each
+reader is watching. That is a hosting and a privacy commitment rather
+than a convenience default; it is the holder's to make, and it is
+written at the declaration so whoever wires this up meets the sentence
+before the address.
+
+### 16.38.2 A sabotage that passed, and the comment it corrected
+
+`set_server_hosts` removes the key for an empty list, and the comment
+said that was what stopped a caller ending up with no candidates.
+Deleting the branch to watch the test fail, **the test passed.**
+
+It is not what stops that: `server_hosts()` returns the default whenever
+what it reads is empty, so the writer's branch changes no behaviour at
+all. The comment was describing a guarantee that lives one function
+away.
+
+The branch is kept -- a dead key in a file people are meant to open is
+worth not writing -- and both the comment and the test's now say which
+half actually holds the property. **A sabotage that passes is not a
+wasted experiment; it is the one that finds a claim nothing was
+checking.**

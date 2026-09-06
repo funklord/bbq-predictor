@@ -2,6 +2,7 @@
 #define BBQ_SETTINGS_H
 
 #include <QString>
+#include <QStringList>
 
 /*
  * What the applet remembers between runs (project.md sec 2.6.6).
@@ -51,6 +52,40 @@ public:
 	 */
 	static QString geocode_override();
 	static void set_geocode_override(const QString &geocode);
+
+	/*
+	 * ============================================================
+	 * NOT WIRED TO ANYTHING. THERE IS NO SERVER AND NO PROTOCOL.
+	 * ============================================================
+	 *
+	 * Where an archive server would be, nearest first (project.md
+	 * sec 16.38). A placeholder, added on the copyright holder's
+	 * instruction so the shape is visible, and deliberately marked
+	 * rather than left to look finished:
+	 *
+	 *   - nothing in this tree opens a socket. `grep` for QTcpServer,
+	 *     QHttpServer, listen( or bind( across src/ finds nothing.
+	 *   - there is no wire format. sec 15.5's first open question is
+	 *     that the internal series has no wire form at all, and
+	 *     build-and-commit.md requires `situ` to be evaluated before
+	 *     any byte-exact one is hand-rolled.
+	 *   - so these names are an address for a port nobody serves,
+	 *     speaking a protocol nobody has written down.
+	 *
+	 * LOCAL FIRST, and that ordering is the part that is a decision
+	 * rather than a placeholder. A machine running the packaged timer
+	 * already has the archive on disk; asking somebody else's host for
+	 * what is under your own hand is slower, needs a network, and tells
+	 * a third party which stations you watch. The remote is the
+	 * fallback, never the first choice.
+	 *
+	 * The default remote is one person's machine. That is a hosting and
+	 * a privacy commitment rather than a convenience, and it is the
+	 * holder's to make; it is recorded here so that whoever wires this
+	 * up meets the sentence before the address.
+	 */
+	static QStringList server_hosts();
+	static void set_server_hosts(const QStringList &hosts);
 
 	/* Presentation, remembered because it is tuned by looking. */
 	static int interpolation(int fallback);
