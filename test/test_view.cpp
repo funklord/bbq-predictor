@@ -64,6 +64,15 @@ private slots:
 	void the_ground_is_painted_unless_it_is_turned_off();
 
 	/*
+	 * The contrast clamp the home-screen picture draws through
+	 * (sec 16.25).
+	 */
+	void the_contrast_ratio_agrees_with_a_published_pair();
+	void an_ink_is_walked_until_it_clears_the_floor();
+	void a_clamped_palette_lifts_the_curve_and_leaves_furniture();
+	void naming_no_ground_leaves_every_colour_where_it_was();
+
+	/*
 	 * Tier 4: the scheme a TDE or KDE 3 desktop writes to kdeglobals,
 	 * which is the only place it says so. The parser takes its sources
 	 * as an argument precisely so this runs without such a desktop.
@@ -886,4 +895,126 @@ void test_view::the_ground_is_painted_unless_it_is_turned_off() {
 	graph.render(&clear, QPoint(), QRegion(), QWidget::DrawChildren);
 
 	QCOMPARE(qAlpha(clear.pixel(corner)), 0);
+}
+
+/*
+ * THE ARITHMETIC, AGAINST SOMETHING THIS TREE DID NOT COMPUTE.
+ *
+ * Black on white is 21:1 and a colour on itself is 1:1 -- both are in
+ * WCAG 2.1 itself rather than being this code's own output, which is
+ * what makes them worth asserting. A ratio that came from running the
+ * function under test would be one witness twice, and a clamp built on
+ * wrong arithmetic walks colours confidently to the wrong place.
+ *
+ * The third is the one that would catch a missing gamma step: #767676
+ * on white is the canonical 4.54:1 boundary colour, and a version of
+ * this using a plain weighted sum instead of the sRGB transfer function
+ * answers about 3.0 for it.
+ */
+void test_view::the_contrast_ratio_agrees_with_a_published_pair() {
+	QVERIFY(qAbs(bbq_contrast_ratio(Qt::black, Qt::white) - 21.0) < 0.01);
+	QVERIFY(qAbs(bbq_contrast_ratio(Qt::white, Qt::white) - 1.0) < 0.01);
+
+	const double grey = bbq_contrast_ratio(QColor(0x76, 0x76, 0x76),
+	                                       Qt::white);
+	QVERIFY2(qAbs(grey - 4.54) < 0.02,
+	         qPrintable(QStringLiteral("#767676 on white is %1:1")
+	                            .arg(grey)));
+}
+
+/*
+ * Walked far enough and no further, with its hue intact.
+ *
+ * The distance matters as much as the direction: a clamp that jumped
+ * straight to white would clear every floor and would have thrown away
+ * the colour somebody chose, which is the failure this is between.
+ */
+void test_view::an_ink_is_walked_until_it_clears_the_floor() {
+	const QColor ground(0x39, 0x3b, 0x3c);
+	const QColor red(0xd5, 0x20, 0x2a);
+
+	QVERIFY(bbq_contrast_ratio(red, ground) < 3.0);
+
+	const QColor lifted = bbq_ensure_contrast(red, ground, 3.0);
+	QVERIFY(bbq_contrast_ratio(lifted, ground) >= 3.0);
+
+	/* Only just: one step back down must fail, or it walked too far. */
+	QVERIFY(bbq_contrast_ratio(lifted, ground) < 3.3);
+
+	/* Still red. Interpolating towards white would have desaturated it. */
+	QVERIFY(lifted.hslSaturation() > 100);
+	QCOMPARE(lifted.hslHue(), red.hslHue());
+
+	/* Already clear means untouched, not walked to a rounder number. */
+	QCOMPARE(bbq_ensure_contrast(Qt::white, Qt::black, 3.0), QColor(Qt::white));
+}
+
+/*
+ * The graph's own palette, before and after naming a foreign ground.
+ *
+ * This is the assertion the widget actually depends on, and it is a
+ * RELATIONSHIP rather than a value: the curve must clear the floor
+ * against the scrim's worst case, whatever colour that takes. Pinning
+ * the lifted red instead would go stale the first time Weather
+ * Underground's measured colour was re-measured, and would say nothing
+ * about whether the clamp had run.
+ *
+ * Furniture is asserted unmoved in the same breath. A clamp that lifted
+ * the grid to a text floor would have made the graph worse while
+ * passing every check aimed at legibility.
+ */
+void test_view::a_clamped_palette_lifts_the_curve_and_leaves_furniture() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+
+	const bbq_graph_palette plain = graph.palette_colours();
+
+	/*
+	 * The dark scrim over a white wallpaper: the palest ground the
+	 * widget's picture can land on, and so the one its inks must clear.
+	 *
+	 * Written out rather than computed here on purpose. Deriving it with
+	 * the same expression the widget uses would be that expression
+	 * agreeing with itself, which is corroboration from one witness --
+	 * and the test does not depend on the exact value in any case. What
+	 * it needs is a ground the unclamped palette demonstrably fails
+	 * against, which the line below asserts before relying on it.
+	 */
+	const QColor worst(0x39, 0x3b, 0x3c);
+	QVERIFY(bbq_contrast_ratio(plain.temperature, worst) < 3.0);
+
+	graph.set_contrast_ground(worst, 3.0);
+	const bbq_graph_palette clamped = graph.palette_colours();
+
+	QVERIFY(bbq_contrast_ratio(clamped.temperature, worst) >= 3.0);
+	QVERIFY(bbq_contrast_ratio(clamped.axis_text, worst) >= 3.0);
+	QVERIFY(bbq_contrast_ratio(clamped.corrected, worst) >= 3.0);
+	QVERIFY(bbq_contrast_ratio(clamped.stale_warning, worst) >= 3.0);
+
+	QCOMPARE(clamped.grid, plain.grid);
+	QCOMPARE(clamped.band_shade, plain.band_shade);
+	QCOMPARE(clamped.background, plain.background);
+}
+
+/*
+ * And the off position, which is what the window on this machine uses.
+ *
+ * Weather Underground's red is a measurement of their chart rather than
+ * a decoration (sec 3.8.2), and the on-screen graph draws it exactly.
+ * A clamp that leaked into the default would change a documented colour
+ * everywhere while looking like a widget change.
+ */
+void test_view::naming_no_ground_leaves_every_colour_where_it_was() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+	const bbq_graph_palette plain = graph.palette_colours();
+
+	graph.set_contrast_ground(QColor(0x39, 0x3b, 0x3c), 3.0);
+	QVERIFY(graph.palette_colours().temperature != plain.temperature);
+
+	/* An invalid ground is the way back, and it must go all the way
+	 * back rather than to wherever the last clamp left things. */
+	graph.set_contrast_ground(QColor(), 3.0);
+	QCOMPARE(graph.palette_colours().temperature, plain.temperature);
+	QCOMPARE(graph.palette_colours().now_marker, plain.now_marker);
 }

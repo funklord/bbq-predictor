@@ -1,6 +1,7 @@
 #ifndef BBQ_UI_THEME_H
 #define BBQ_UI_THEME_H
 
+#include <QColor>
 #include <QString>
 #include <QStringList>
 #include <Qt>
@@ -75,6 +76,42 @@ QStringList bbq_scheme_sources();
  * source rather than the decision.
  */
 Qt::ColorScheme bbq_scheme_from_desktop_files(const QStringList &sources);
+
+/*
+ * WCAG relative luminance and contrast ratio (project.md sec 16.25).
+ *
+ * Gamma-correct, unlike the Rec.709 sum theme.cpp uses to decide whether
+ * a desktop is dark. harmonization.md settles that the two are
+ * interchangeable for a background against its own foreground, because
+ * they disagree only below about 2.8:1 and a readable pair clears 3:1 --
+ * and it says in the same breath that the caveat travels with the rule.
+ * This is the case it names: a ratio measured against a floor, where the
+ * arithmetic is the answer rather than a tie-break, so the constant
+ * matters and the gamma-correct form is the one to use.
+ *
+ * The same expression tool/palette_contrast.py checks the palette with,
+ * so a colour this clamps and a colour that gate passes are answering
+ * one question.
+ */
+double bbq_relative_luminance(const QColor &colour);
+double bbq_contrast_ratio(const QColor &first, const QColor &second);
+
+/*
+ * Move `ink` away from `ground` until it clears `floor`, keeping its
+ * hue.
+ *
+ * For drawing onto something this program does not own. harmonization.md
+ * allows a program to follow a ground it did not choose ONLY if it
+ * clamps against that ground at draw time, which is what this is; the
+ * home-screen widget is the caller (sec 16.25).
+ *
+ * Returns as far as it got when the floor is out of reach, rather than
+ * refusing. An ink walked to white against a white ground is no worse
+ * than the ink it started from, and a caller that got nothing back would
+ * have to invent a fallback -- which is the guess this exists to avoid.
+ */
+QColor bbq_ensure_contrast(const QColor &ink, const QColor &ground,
+                           double floor);
 
 /*
  * Apply to the whole application, so the widgets around the graph agree

@@ -1,5 +1,8 @@
 #include "ui/theme.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
@@ -333,4 +336,86 @@ Qt::ColorScheme bbq_scheme_from_desktop_files(const QStringList &sources) {
 	 * bbq_theme_scheme keeps its own default.
 	 */
 	return Qt::ColorScheme::Unknown;
+}
+
+namespace {
+
+/*
+ * The sRGB transfer function, undone. The 0.03928 knee and the 2.4
+ * exponent are WCAG's, and they are what makes this different from the
+ * plain weighted sum above.
+ */
+double linear(int value) {
+	const double part = value / 255.0;
+	return part <= 0.03928 ? part / 12.92
+	                       : std::pow((part + 0.055) / 1.055, 2.4);
+}
+
+} // namespace
+
+double bbq_relative_luminance(const QColor &colour) {
+	return 0.2126 * linear(colour.red()) + 0.7152 * linear(colour.green()) +
+	       0.0722 * linear(colour.blue());
+}
+
+double bbq_contrast_ratio(const QColor &first, const QColor &second) {
+	const double one = bbq_relative_luminance(first);
+	const double two = bbq_relative_luminance(second);
+
+	return (std::max(one, two) + 0.05) / (std::min(one, two) + 0.05);
+}
+
+QColor bbq_ensure_contrast(const QColor &ink, const QColor &ground,
+                           double floor) {
+	if (!ink.isValid() || !ground.isValid()) {
+		return ink;
+	}
+
+	if (bbq_contrast_ratio(ink, ground) >= floor) {
+		return ink;
+	}
+
+	/*
+	 * Away from the ground, which is the direction that can help. An ink
+	 * already lighter than what it sits on gets lighter; a darker one
+	 * gets darker. Contrast is monotone in that direction, so the first
+	 * step that clears the floor is the smallest change that does --
+	 * this walks rather than jumps so the colour stays as close to the
+	 * one somebody chose as the floor allows.
+	 */
+	const bool lighten =
+	        bbq_relative_luminance(ink) >= bbq_relative_luminance(ground);
+
+	/*
+	 * In HSL, so the hue survives. Interpolating towards white instead
+	 * would desaturate, and a temperature curve that loses its red on
+	 * the way to being legible has been made legible about nothing.
+	 */
+	float hue = 0.0f;
+	float saturation = 0.0f;
+	float lightness = 0.0f;
+	float alpha = 1.0f;
+	ink.getHslF(&hue, &saturation, &lightness, &alpha);
+
+	/* Achromatic reports a hue of -1, which fromHslF will not take. */
+	if (hue < 0.0f) {
+		hue = 0.0f;
+		saturation = 0.0f;
+	}
+
+	QColor reached = ink;
+	for (int step = 1; step <= 255; ++step) {
+		const float moved = lighten ? lightness + step / 255.0f
+		                            : lightness - step / 255.0f;
+		if (moved < 0.0f || moved > 1.0f) {
+			break;
+		}
+
+		reached = QColor::fromHslF(hue, saturation, moved, alpha);
+		if (bbq_contrast_ratio(reached, ground) >= floor) {
+			return reached;
+		}
+	}
+
+	return reached;
 }

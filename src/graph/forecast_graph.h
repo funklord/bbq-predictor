@@ -213,6 +213,33 @@ public:
 	void set_opaque_background(bool opaque);
 	bool opaque_background() const { return m_opaque_background; }
 
+	/*
+	 * Lift every ink that must be legible until it clears `floor`
+	 * against `ground` (project.md sec 16.25).
+	 *
+	 * For a picture drawn onto something this program does not own. An
+	 * invalid ground turns it off, which is the default and is what the
+	 * on-screen graph uses: there the ground IS this palette's own
+	 * background, the colours were chosen against it, and Weather
+	 * Underground's red is a measurement rather than a decoration.
+	 *
+	 * The set lifted is the set tool/palette_contrast.py already gates,
+	 * so "which inks must be legible" is answered in one place. Grid
+	 * lines and band shading are deliberately outside it: they are
+	 * furniture, and furniture that clears a text floor is furniture
+	 * competing with the data.
+	 */
+	void set_contrast_ground(const QColor &ground, double floor);
+	QColor contrast_ground() const { return m_contrast_ground; }
+
+	/*
+	 * The colours in force, for a caller that has to draw on the same
+	 * ground this does -- the home-screen picture's scrim is this
+	 * background made translucent, so the widget is the window's scheme
+	 * seen through a wallpaper rather than a second scheme nobody set.
+	 */
+	const bbq_graph_palette &palette_colours() const { return m_palette; }
+
 	void set_show_wind(bool show);
 	bool show_wind() const { return m_show_wind; }
 
@@ -272,6 +299,12 @@ protected:
 	void leaveEvent(QEvent *event) override;
 
 private:
+	/*
+	 * Rebuild m_palette from the theme, clamped against the foreign
+	 * ground when one has been named. See set_contrast_ground.
+	 */
+	void apply_palette();
+
 	bbq_graph_palette m_palette;
 	bbq_composite m_composite;
 	bbq_series m_corrected;
@@ -310,6 +343,8 @@ private:
 	int m_smoothing_s = 30 * 60;
 	bool m_show_windows = true;
 	bool m_opaque_background = true;
+	QColor m_contrast_ground;
+	double m_contrast_floor = 3.0;
 
 	/*
 	 * Where the readout is pointing, as a column index into the plot,

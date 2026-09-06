@@ -882,8 +882,53 @@ void bbq_forecast_graph::set_scale_steadiness(int percent) {
 
 void bbq_forecast_graph::set_theme(bbq_theme theme) {
 	m_theme = theme;
-	m_palette = palette_for(bbq_theme_scheme(theme));
+	apply_palette();
 	update();
+}
+
+void bbq_forecast_graph::set_contrast_ground(const QColor &ground,
+                                             double floor) {
+	m_contrast_ground = ground;
+	m_contrast_floor = floor;
+	apply_palette();
+	update();
+}
+
+/*
+ * Rebuild the palette from the theme, then lift what has to stay
+ * readable if a foreign ground has been named (sec 16.25).
+ *
+ * Rebuilt from the theme every time rather than clamped in place: a
+ * clamp applied to an already-clamped colour would ratchet, and the
+ * widget renders every five minutes.
+ */
+void bbq_forecast_graph::apply_palette() {
+	m_palette = palette_for(bbq_theme_scheme(m_theme));
+
+	if (!m_contrast_ground.isValid()) {
+		return;
+	}
+
+	/*
+	 * Exactly the inks tool/palette_contrast.py holds to the floor, plus
+	 * the now-marker it lets under by two hundredths on light. That
+	 * exception was allowed as a rounding difference against the
+	 * palette's own background; against a ground this program did not
+	 * choose it is not a rounding difference, so it is lifted here.
+	 */
+	QColor *const must_read[] = {
+		&m_palette.axis_text,
+		&m_palette.temperature,
+		&m_palette.corrected,
+		&m_palette.day_divider,
+		&m_palette.stale_warning,
+		&m_palette.now_marker,
+	};
+
+	for (QColor *ink : must_read) {
+		*ink = bbq_ensure_contrast(*ink, m_contrast_ground,
+		                           m_contrast_floor);
+	}
 }
 
 void bbq_forecast_graph::set_show_wind(bool show) {

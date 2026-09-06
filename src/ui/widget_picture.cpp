@@ -9,6 +9,7 @@
 #include <QString>
 
 #include "graph/forecast_graph.h"
+#include "ui/theme.h"
 
 #ifdef Q_OS_ANDROID
 #include <QCoreApplication>
@@ -100,6 +101,64 @@ const QColor reading_halo(0xf2, 0xf2, 0xf2);
  */
 const double reading_height_share = 0.25;
 const double reading_width_share = 0.10;
+
+/*
+ * HOW MUCH WALLPAPER SHOWS THROUGH, AND WHY IT IS A NUMBER RATHER THAN
+ * NONE (sec 16.25).
+ *
+ * A fully transparent picture reads well on a plain wallpaper and badly
+ * on a photograph: the curve competes with whatever is behind it, and
+ * the middle of the plot was the worst of it. A fully opaque one is a
+ * slab on somebody's home screen.
+ *
+ * A scrim of the theme's own ground at 0.85 is the trade, and it buys
+ * more than a look. It BOUNDS the ground: whatever the wallpaper is, the
+ * composite lies between the scrim over black and the scrim over white,
+ * and the second of those is the worst case for a dark scrim. That is a
+ * ground this program can name, which is the precondition
+ * harmonization.md sets before a program may draw onto one it does not
+ * own.
+ */
+const double scrim_alpha = 0.85;
+
+/*
+ * The floor the clamp holds the inks to, and it is the palette gate's,
+ * deliberately. A second number here would be a second answer to "how
+ * legible is legible".
+ */
+const double contrast_floor = 3.0;
+
+/*
+ * The lightest ground the scrim can produce: itself over white.
+ *
+ * The worst case for a dark scrim, and the whole reason the bound is
+ * worth having. Contrast against a fixed ink rises as the ground moves
+ * away from it, so for a scrim darker than every ink it protects, the
+ * palest composite is the one that fails first -- clear that and every
+ * wallpaper is cleared.
+ *
+ * A light theme inverts it, and the expression follows the scrim rather
+ * than assuming: over black when the scrim is light.
+ */
+QColor worst_ground(const QColor &scrim) {
+	const bool scrim_is_dark = bbq_relative_luminance(scrim) < 0.5;
+	const int wallpaper = scrim_is_dark ? 255 : 0;
+
+	/*
+	 * Rounded, not truncated. Truncation shifts the composite towards
+	 * black by up to one level, which for a dark scrim makes the
+	 * "worst" ground very slightly better than the real worst -- a bound
+	 * that is not quite a bound. It is a fraction of a level and it
+	 * would never be visible; it would also be wrong in the one
+	 * direction a bound must never be wrong in.
+	 */
+	const auto mix = [&](int channel) {
+		return qRound(scrim_alpha * channel +
+		              (1.0 - scrim_alpha) * wallpaper);
+	};
+
+	return QColor(mix(scrim.red()), mix(scrim.green()), mix(scrim.blue()));
+}
 
 /*
  * How big the placed widget actually is, in dp, or 0 for "Android did
@@ -250,14 +309,25 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 	 */
 	const QSize was = source->size();
 	const bool was_opaque = source->opaque_background();
+	const QColor was_clamped = source->contrast_ground();
+
+	/*
+	 * The scrim is the graph's own ground, made translucent, so the
+	 * picture is the window's colours seen through the wallpaper rather
+	 * than a second scheme nobody set.
+	 */
+	QColor scrim = source->palette_colours().background;
+	const QColor ground = worst_ground(scrim);
+	scrim.setAlphaF(scrim_alpha);
 
 	source->set_opaque_background(false);
+	source->set_contrast_ground(ground, contrast_floor);
 	source->resize(shape);
 
 	/*
 	 * Rendered at the device's pixel ratio so the file is at the
-	 * widget's real pixel size, and filled transparent so the ground is
-	 * the wallpaper's rather than the theme's. render() draws what
+	 * widget's real pixel size, and filled with the scrim so the ground
+	 * is bounded rather than unknown. render() draws what
 	 * paintEvent draws, and with the ground turned off paintEvent draws
 	 * no rectangle -- so what is not a curve, a band or a label keeps
 	 * the fill this image was created with.
@@ -265,12 +335,13 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 	const double ratio = source->devicePixelRatioF();
 	QImage picture(shape * ratio, QImage::Format_ARGB32_Premultiplied);
 	picture.setDevicePixelRatio(ratio);
-	picture.fill(Qt::transparent);
+	picture.fill(scrim);
 
 	source->render(&picture, QPoint(), QRegion(), QWidget::DrawChildren);
 
 	source->resize(was);
 	source->set_opaque_background(was_opaque);
+	source->set_contrast_ground(was_clamped, contrast_floor);
 
 	/*
 	 * The number over the top, after the render rather than inside it:

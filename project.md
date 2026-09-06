@@ -8329,3 +8329,121 @@ directory added later is invisible to the gate until somebody names it,
 which is a gap that can be found by reading; a wildcard that swept a
 build tree would fail on generated files nobody owns, and would be
 switched off rather than fixed.
+
+
+## 16.25 A translucent scrim, and the clamp that makes it honest
+
+Fully transparent read well on a plain wallpaper and badly on a
+photograph: the curve competed with whatever was behind it, worst
+through the middle of the plot. Fully opaque is a slab on somebody's
+home screen. The picture is filled with the graph's own ground at alpha
+0.85 now, so the wallpaper shows through and the card still holds
+together.
+
+**The scrim buys more than a look, and that is the point of it.** It
+BOUNDS the ground. Whatever the wallpaper is, the composite lies between
+the scrim over black and the scrim over white, so this program can now
+NAME the ground it is drawing on -- which is the precondition
+`harmonization.md` sets before a program may draw onto a ground it does
+not own. Transparency alone had no such bound: the ground was whatever
+photograph somebody had chosen, and nothing could be said about it.
+
+For a dark scrim the palest composite is the worst case, because
+contrast against a fixed ink rises as the ground moves away from it.
+Measured, with `#16181a` at 0.85:
+
+    worst ground (scrim over white)   #393b3c
+    WU red as designed                #d5202a   2.18:1   fails
+    drawn in the widget               #e55058   3.01:1   clears
+    the same red over black wallpaper           4.93:1
+
+`bbq_ensure_contrast` walks an ink away from the ground in HSL until it
+clears the floor. **HSL rather than a lerp towards white**, because
+interpolating to white desaturates, and a temperature curve that loses
+its red on the way to being legible has been made legible about nothing.
+It walks in steps of one part in 255 rather than jumping, so the colour
+stays as close to the one somebody chose as the floor allows -- 3.01:1
+above, not 4:1.
+
+### 16.25.1 Which inks, and why the answer was already written down
+
+The clamped set is exactly the pairs `tool/palette_contrast.py` holds to
+the floor, plus the now-marker that gate lets under by two hundredths on
+light. That exception was allowed as a rounding difference *against the
+palette's own background*; against a ground this program did not choose
+it is not a rounding difference, so the widget lifts it.
+
+Grid lines and band shading are deliberately outside the set. They are
+furniture, and **furniture that clears a text floor is furniture
+competing with the data** -- a clamp applied to everything would have
+made the graph worse while passing every check aimed at legibility. The
+test asserts they are unmoved in the same breath as asserting the curve
+moved.
+
+### 16.25.2 It is off in the window, and that is the whole doctrine
+
+Weather Underground's red is a measurement of their chart rather than a
+decoration (sec 3.8.2), and sec 10.3 kept the measured colours in both
+schemes on purpose. Clamping them would undo that.
+
+So `set_contrast_ground` takes an invalid colour as "off", which is the
+default and what the on-screen graph uses: there the ground IS the
+palette's own background, and the colours were chosen against it. The
+clamp exists only for the picture drawn onto a wallpaper.
+`harmonization.md` allows exactly this and no more -- a program may
+follow a ground it did not choose ONLY if it clamps against that ground
+at draw time.
+
+The palette is rebuilt from the theme on every change rather than
+clamped in place, because a clamp applied to an already-clamped colour
+would ratchet, and the widget renders every five minutes.
+
+### 16.25.3 The arithmetic is checked against something this tree did not compute
+
+`bbq_contrast_ratio` is the gamma-correct WCAG form, not the Rec.709 sum
+`theme.cpp` uses to decide whether a desktop is dark.
+`harmonization.md` settles that the two are interchangeable for a
+background against its own foreground -- they disagree only below about
+2.8:1, and a readable pair clears 3:1 -- **and it says in the same
+breath that the caveat travels with the rule.** This is the case it
+names: a ratio measured against a floor, where the arithmetic is the
+answer rather than a tie-break.
+
+Three published values check it, none of them this code's own output:
+black on white is 21:1, a colour on itself is 1:1, and `#767676` on
+white is 4.54:1. The third is the one that earns its place -- a version
+using a plain weighted sum instead of the sRGB transfer function answers
+about 3.0 for it, so it separates the two luminances where the first two
+do not.
+
+The palette test asserts a **relationship** rather than the lifted red:
+the curve must clear the floor against the ground, whatever colour that
+takes. Pinning `#e55058` would go stale the first time WU's measured
+colour was re-measured, and would say nothing about whether the clamp
+had run. Sabotaged so the clamp loop does nothing, two tests fail on
+exactly that.
+
+### 16.25.4 A value I derived, corrected, and had been right about
+
+The test's ground is written out as `#393b3c`. Reviewing it I decided
+that was an invented value -- the scrim over white -- recomputed it in
+my head as `#393a3c`, and rewrote the comment to say the first draft had
+typed a value one off the real one.
+
+**It had not. `#393b3c` is correct, and the arithmetic in my head was
+not**: `0.85 x 24 + 0.15 x 255` is 58.65, which rounds to 59 and not 58.
+So a correct value was very nearly replaced by a wrong one, and the
+comment justifying the change would have recorded a mistake that never
+happened -- a false claim about history, which is the kind nothing later
+can catch.
+
+What caught it was running the arithmetic rather than doing it: the
+`python3 -c` beside the edit disagreed with the edit. **The rule about
+reading identifiers rather than completing them applies to values you
+are correcting, not only to values you are writing**, and the moment of
+correcting one is when confidence is highest.
+
+It did leave one real finding. The widget's own composite used `int()`,
+which truncates, so its "worst" ground was up to one level darker than
+the real worst -- a bound that is not quite a bound, wrong in the one
+direction a bound must never be wrong in. It rounds now.
