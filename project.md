@@ -9969,11 +9969,10 @@ the middle of a range is where it cannot be seen.** Sabotaged never to
 leave minutes, and to reach days a day early, it fails at the boundary
 in both.
 
-**Not yet seen on the device.** The phone dropped off USB between the
-build and the install, so the line above has not been read again in its
-new form. The formatter is covered by the suite, including the exact
-1248-minute case; what is unverified is that this message is the one
-that formats it.
+~~**Not yet seen on the device.**~~ **Seen**, and not on the device --
+`--shot` renders the same window from the same C++ (sec 16.47):
+
+    last error: observed: ISTOCK877 has not reported for 22 h 25 min
 
 
 ## 16.46 The same fault at the other end of a range
@@ -10009,3 +10008,48 @@ a table where every row shares it.
 So the two do differ, and that is the decision rather than an oversight.
 **A shared formatter is worth having and is not worth forcing where its
 answer is the wrong shape.**
+
+
+## 16.47 The project had a tool for this and I spent the day on a phone
+
+`--shot FILE --layout mobile` fetches, renders the window to a PNG and
+exits. Its own help says why it exists: *looking at the picture is how
+layout defects actually get found.*
+
+Three claims recorded as unverified in the last few sections were
+settled by two runs of it, with the phone unplugged:
+
+    the duration line     "has not reported for 22 h 25 min"
+    the verdict block     extras beside the count, record on its own
+                          line, "dips to 0.51" present
+    the distance          "ISTOCK877  50 m", where the station table
+                          says 0.1 km for the same station
+
+Both figures are right at their own precision, and the second is the
+more useful -- which is the whole of sec 16.46 demonstrated on real
+data rather than on a fixture.
+
+**The distance needed setting up, and that is worth knowing.** A bare
+`--shot` shows the station with no distance at all, because nothing has
+discovered any: `--discover --geocode LAT,LON` fills the store first,
+and only then does the box have something to format. A shot taken
+without that step would have shown a clean-looking window that never
+exercised the change.
+
+### 16.47.1 What a shot can and cannot answer
+
+**It renders the same C++**, so anything about text, wrapping, ordering,
+colour or layout is as true in the PNG as on the glass. Every fault in
+sec 16.42 to sec 16.46 would have been visible in it.
+
+**It is not the platform.** The tooltip in sec 16.44 could not have been
+tested this way at any resolution: what was wrong there was that a touch
+screen has no hover, and a desktop render has a mouse whatever layout it
+is asked for. The same goes for the widget, Freecess, the fold state and
+the device pixel ratio.
+
+So the division is not desktop-versus-phone, it is **drawing versus
+platform** -- and the drawing half is a second away on this machine
+while the platform half needs a phone that is awake, unlocked,
+enumerated and unfrozen. Reaching for the phone first cost several
+rounds of exactly the wrong tool this session.
