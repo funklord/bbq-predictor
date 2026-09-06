@@ -1506,8 +1506,35 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 */
 	if (m_show_windows) {
 		const bbq_grill_policy policy;
+
+		/*
+		 * SCORED OVER THE DATA, NOT OVER THE VIEWPORT (sec 16.30.1).
+		 *
+		 * This passed `from` and `to` -- the visible range -- and
+		 * bbq_grill_windows only scans what it is given, so a window
+		 * running past the edge of the view was closed AT the edge and
+		 * reported as starting there. Three things followed, and the
+		 * middle one is the one that matters:
+		 *
+		 *   - the edge rules were drawn at the screen boundary, which
+		 *     is the claim the clipping test beside them exists to
+		 *     prevent, made upstream of where that check can see it;
+		 *   - the window's score and rank were computed from the
+		 *     visible part only, so scrolling changed how good the
+		 *     program said an afternoon was;
+		 *   - and the header, which scores over a fixed three days
+		 *     from now, could name a different window from the one the
+		 *     plot was shading.
+		 *
+		 * The answer must not depend on where somebody has scrolled to,
+		 * so it is asked over everything the composite covers. That is
+		 * at most a week or so at a ten-minute stride, which is cheap,
+		 * and it is the same question the header asks.
+		 */
 		const std::vector<bbq_window> windows =
-		        bbq_grill_windows(m_composite, zone, from, to, policy);
+		        bbq_grill_windows(m_composite, zone,
+		                          m_composite.begin_utc(),
+		                          m_composite.end_utc(), policy);
 
 		QColor shade = m_palette.grill_window;
 

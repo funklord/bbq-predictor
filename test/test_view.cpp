@@ -18,6 +18,8 @@
 
 #include "graph/forecast_graph.h"
 #include "model/composite.h"
+#include "model/grill.h"
+#include <QTimeZone>
 #include "ui/accessibility.h"
 #include "ui/theme.h"
 
@@ -62,6 +64,13 @@ private slots:
 	 * The home-screen widget's ground (sec 16.23).
 	 */
 	void the_ground_is_painted_unless_it_is_turned_off();
+
+	/*
+	 * A grilling window's edge rules, and the clipping (sec 16.30.1).
+	 */
+	void a_window_boundary_in_view_is_drawn();
+	void a_window_running_off_the_edge_draws_no_rule_there();
+	void a_window_lands_where_it_lands_whatever_range_was_asked();
 
 	/*
 	 * The contrast clamp the home-screen picture draws through
@@ -1017,4 +1026,208 @@ void test_view::naming_no_ground_leaves_every_colour_where_it_was() {
 	graph.set_contrast_ground(QColor(), 3.0);
 	QCOMPARE(graph.palette_colours().temperature, plain.temperature);
 	QCOMPARE(graph.palette_colours().now_marker, plain.now_marker);
+}
+
+namespace {
+
+/*
+ * Weather that scores a grilling window: warm, dry and still, in UTC so
+ * the policy's local-hour rule lands somewhere the test can predict.
+ *
+ * COLD FOR THE FIRST FIVE HOURS, and that is the load-bearing part. A
+ * fixture warm from its first sample opens a window at the first
+ * instant anybody asks about, so the window's start is the QUESTION'S
+ * boundary rather than the weather's -- and a test asking whether the
+ * start moves with the question then measures clamping and calls it
+ * phase. The first draft did exactly that and reported a failure the
+ * code did not have.
+ */
+bbq_composite grillable_days(qint64 from_utc, int days) {
+	std::vector<bbq_sample> samples;
+
+	for (int at = 0; at < days * 24; ++at) {
+		bbq_sample sample;
+		sample.start_utc = from_utc + at * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = at < 5 ? 0.0 : 25.0;
+		sample.precip_rate = 0.0;
+		sample.precip_chance = 0.0;
+		sample.wind_kph = 0.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(QTimeZone::UTC);
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	return composite;
+}
+
+/*
+ * How many pixels of the window-edge orange are in the shot.
+ *
+ * By colour and not by position, because the position is the thing
+ * under test. #ff8b33 at full alpha is the edge rule; the wash is the
+ * same hue at 22 and composites nowhere near it, the now-marker is
+ * #ffd400 and the curve is #d5202a. The band is loose enough for the
+ * antialiasing on a two-pixel line at a fractional column and tight
+ * enough to admit none of those.
+ */
+int orange_pixels(const QImage &shot) {
+	int seen = 0;
+
+	for (int y = 0; y < shot.height(); ++y) {
+		for (int x = 0; x < shot.width(); ++x) {
+			const QColor at = shot.pixelColor(x, y);
+			if (at.red() > 200 && at.green() > 100 && at.green() < 180 &&
+			    at.blue() < 110) {
+				++seen;
+			}
+		}
+	}
+
+	return seen;
+}
+
+} // namespace
+
+/*
+ * THE CONTROL, and it is not optional.
+ *
+ * The test below asserts an ABSENCE, and an absence proves nothing
+ * until something has been seen to make the same detector speak. A
+ * graph that had stopped drawing edge rules entirely -- or an
+ * orange_pixels that matched nothing -- would pass it perfectly.
+ */
+void test_view::a_window_boundary_in_view_is_drawn() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+	graph.set_composite(grillable_days(1600000000, 3));
+	graph.resize(900, 400);
+
+	const std::vector<bbq_window> windows = bbq_grill_windows(
+	        graph.composite(), QTimeZone::UTC, 1600000000,
+	        1600000000 + 3 * 86400, bbq_grill_policy());
+	QVERIFY2(!windows.empty(), "the fixture scored no grilling window");
+
+	/* A view wider than the first window, so both its ends are in it. */
+	const bbq_window &first = windows.front();
+	const qint64 span = (first.end_utc - first.start_utc) * 3;
+	graph.set_view(first.start_utc - span / 3, span);
+
+	QVERIFY2(orange_pixels(graph.grab().toImage()) > 0,
+	         "no edge rule was drawn for a window wholly in view");
+}
+
+/*
+ * AND THE CLIPPING (sec 16.30.1).
+ *
+ * A window running off the side of the view has been cut by the screen,
+ * not by the weather. A rule drawn at the cut would say the window
+ * starts where the plot does -- a claim about the forecast made by the
+ * scroll position, which is the worst kind of wrong a chart can be.
+ *
+ * The view sits strictly inside the window, so BOTH ends are off-screen
+ * and no rule belongs anywhere in the shot.
+ */
+void test_view::a_window_running_off_the_edge_draws_no_rule_there() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+	graph.set_composite(grillable_days(1600000000, 3));
+	graph.resize(900, 400);
+
+	const std::vector<bbq_window> windows = bbq_grill_windows(
+	        graph.composite(), QTimeZone::UTC, 1600000000,
+	        1600000000 + 3 * 86400, bbq_grill_policy());
+	QVERIFY(!windows.empty());
+
+	const bbq_window &first = windows.front();
+	const qint64 length = first.end_utc - first.start_utc;
+	QVERIFY2(length > 3600, "the window is too short to look inside");
+
+	/*
+	 * Two ways for a boundary to be out of view, and only the second
+	 * tests the guard.
+	 *
+	 * Far outside, the rule would be drawn at a coordinate thousands of
+	 * pixels off the widget and the painter discards it -- so removing
+	 * the guard entirely still passes. Measured: it does.
+	 *
+	 * Just outside is where the guard earns its place. A view starting
+	 * a couple of minutes after the window does puts the boundary a few
+	 * pixels left of the plot, which is IN THE GUTTER, on the widget,
+	 * painted -- an orange rule beside the temperature axis, in the one
+	 * place nothing else is drawn.
+	 */
+	const struct {
+		const char *what;
+		qint64 from;
+		qint64 span;
+	} views[] = {
+		{ "the middle third, both ends far outside",
+		  first.start_utc + length / 3, length / 3 },
+		{ "starting two minutes in, the start just off the plot",
+		  first.start_utc + 120, 3 * 3600 },
+		{ "ending two minutes early, the end just off the plot",
+		  first.end_utc - 3 * 3600, 3 * 3600 - 120 },
+	};
+
+	for (const auto &view : views) {
+		graph.set_view(view.from, view.span);
+
+		const int found = orange_pixels(graph.grab().toImage());
+		QVERIFY2(found == 0,
+		         qPrintable(QStringLiteral("%1 edge pixel(s) with %2")
+		                            .arg(found)
+		                            .arg(QString::fromLatin1(view.what))));
+	}
+}
+
+/*
+ * A WINDOW'S EDGES ARE THE WEATHER'S, NOT THE QUESTION'S (sec 16.30.2).
+ *
+ * Two callers ask this about overlapping ranges -- the header from now,
+ * the plot over everything the composite covers -- and a scan that
+ * began at whatever it was handed sampled different instants for each,
+ * so the same afternoon could be reported ten minutes apart in two
+ * places on one screen.
+ *
+ * Asked three ways here, none of them a multiple of the stride apart,
+ * because a fixture whose offsets all happen to align proves the
+ * property for the one case where it cannot fail.
+ */
+void test_view::a_window_lands_where_it_lands_whatever_range_was_asked() {
+	const bbq_composite composite = grillable_days(1600000000, 3);
+	const bbq_grill_policy policy;
+	const qint64 last = 1600000000 + 3 * 86400;
+
+	const auto first_window = [&](qint64 from) {
+		const std::vector<bbq_window> found = bbq_grill_windows(
+		        composite, QTimeZone::UTC, from, last, policy);
+		QTest::qVerify(!found.empty(), "found a window", "", __FILE__,
+		               __LINE__);
+		return found.front();
+	};
+
+	const bbq_window whole = first_window(1600000000);
+
+	/*
+	 * The window must open on the weather rather than on the range, or
+	 * this measures clamping. Five cold hours are in the fixture for
+	 * exactly that, and this asserts they did their job.
+	 */
+	QVERIFY2(whole.start_utc > 1600000000 + 4 * 3600,
+	         "the window opens at the range start, so nothing below is "
+	         "about the scan grid");
+
+	/* 137 and 431 seconds: prime-ish, and nowhere near 600. */
+	const bbq_window shifted = first_window(1600000000 + 137);
+	const bbq_window shifted_again = first_window(1600000000 + 431);
+
+	QCOMPARE(shifted.start_utc, whole.start_utc);
+	QCOMPARE(shifted.end_utc, whole.end_utc);
+	QCOMPARE(shifted_again.start_utc, whole.start_utc);
+	QCOMPARE(shifted_again.end_utc, whole.end_utc);
 }

@@ -8783,4 +8783,96 @@ colour, and a dash that regressed to solid would pass everything here.
 What makes that acceptable rather than an oversight is that it is
 visible in the first screenshot anybody takes -- unlike the clipping
 rule beside it, which only shows when a window runs off the edge of the
-view and is the thing in this block most likely to break unseen.
+view and is ~~the thing in this block most likely to break unseen~~
+**the thing in this block that was already broken, and was found the
+moment somebody wrote the test (sec 16.30.1).**
+
+
+## 16.30.1 The clipping was right and the thing above it was not
+
+Asked for a test of the clipping. The test failed on its first run, with
+474 orange pixels where none belonged.
+
+**The guard was fine. The windows it was guarding were already wrong.**
+The plot called `bbq_grill_windows(m_composite, zone, from, to, policy)`
+with `from` and `to` being the VIEW -- and that function scans only what
+it is handed, so a grilling window running past the edge of the screen
+was closed AT the edge and reported as starting there. The boundary was
+real by the time the guard saw it; the truncation had happened upstream
+of anything the guard can inspect.
+
+Three consequences, and the middle one is the worst:
+
+- the edge rules were drawn at the screen boundary, which is precisely
+  the claim the clipping exists to prevent;
+- **the window's score and rank were computed from the visible part
+  only, so scrolling changed how good the program said an afternoon
+  was** -- the recommendation this program exists to make, moving with
+  the scroll position;
+- and the header, which scores over a fixed three days from now, could
+  name a different window from the one the plot was shading.
+
+It is scored over everything the composite covers now. On the device the
+header and the shading agreed at *Sun 16:00 to 21:00* afterwards, where
+before the same afternoon read 16:09 in one place.
+
+**The general shape is worth more than the fix.** A view is a question
+about data, and a function that computes over the range it is given will
+answer the question rather than describe the data whenever the caller
+passes a viewport. Nothing about the call site looked wrong: `from` and
+`to` were in scope, correct, and about to be used for the drawing three
+lines later.
+
+### 16.30.1.1 The first sabotage passed, and that was the finding
+
+Removing the clipping guards entirely left the test green.
+
+A window whose start is far off-screen has an x coordinate thousands of
+pixels outside the widget, and the painter discards it -- so the guard
+was doing nothing in the case the test had chosen. **The absence it
+asserted was produced by the painter, not by the code under test.**
+
+The case the guard is for is the NEAR miss: a view starting two minutes
+after the window does puts the boundary a few pixels left of the plot,
+which is in the gutter -- on the widget, painted, beside the temperature
+axis where nothing else is drawn. The test asks three views now, and the
+second sabotage fails on exactly that one:
+
+    467 edge pixel(s) with starting two minutes in, the start just
+    off the plot
+
+**A test that asserts an absence has to be shown the case where the
+absence is hard**, and "far outside" is the case where every
+implementation agrees.
+
+## 16.30.2 A window's edges are the weather's, not the question's
+
+The same defect one layer down, found while fixing the first.
+
+`bbq_grill_windows` began its scan at `from`, so the instants it sampled
+were a function of the question. Two callers ask about overlapping
+ranges -- the header from now, the plot over the composite -- and they
+sampled different tenths of an hour, so the same afternoon could be
+reported up to ten minutes apart in two places on one screen, with which
+way depending on the second the application happened to start.
+
+The scan is snapped to an absolute grid now, rounding up so every
+sampled instant stays inside the range asked about. Unsnapped, the test
+fails by exactly the offset it passed in:
+
+    Actual   (shifted.start_utc): 1600018137
+    Expected (whole.start_utc)  : 1600018000
+
+### 16.30.2.1 The fixture measured clamping and called it phase
+
+The first version of that test used weather that was warm from its first
+sample. So the window opened at the first instant anybody asked about,
+its start was the QUESTION'S boundary rather than the weather's, and
+moving the query start moved the answer -- for a reason that has nothing
+to do with the scan grid.
+
+It reported a failure the code did not have, and the fix was to the
+fixture: five cold hours, so the window opens on a transition. The test
+now asserts that before relying on it, because a fixture that has
+quietly stopped exercising the hazard reads exactly like one that never
+did.

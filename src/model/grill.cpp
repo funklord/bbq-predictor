@@ -192,7 +192,24 @@ std::vector<bbq_window> bbq_grill_windows(const bbq_composite &composite,
 		windows.push_back(window);
 	};
 
-	for (qint64 t = from; t <= to; t += stride) {
+	/*
+	 * SNAPPED TO AN ABSOLUTE GRID, not to wherever the caller started
+	 * (project.md sec 16.30.2).
+	 *
+	 * The scan used to begin at `from`, so the instants sampled were a
+	 * function of the question rather than of the weather -- and two
+	 * callers asking about overlapping ranges could put a window's edge
+	 * up to a stride apart. There are two callers: the window's header,
+	 * which asks from now, and the plot, which asks over everything the
+	 * composite covers. They disagreed by up to ten minutes, and which
+	 * way depended on the second the application happened to start.
+	 *
+	 * Rounding up rather than down keeps every sampled instant inside
+	 * the range asked about.
+	 */
+	const qint64 first = ((from + stride - 1) / stride) * stride;
+
+	for (qint64 t = first; t <= to; t += stride) {
 		const double score = bbq_grill_score(composite, zone, t, policy);
 
 		/*
