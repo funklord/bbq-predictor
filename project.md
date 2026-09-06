@@ -8642,12 +8642,11 @@ wrong; its population was.** It is the shape `evidence.md` calls a
 passing check that inspected the wrong thing: not vacuous, not broken,
 simply answering about one ground where the code has two.
 
-They are pinned in `GRILL_ALLOWED_UNDER` with their measurements and the
-date, **not because they are settled but so they cannot get worse while
-somebody decides.** Fixing any of them means changing either a measured
-Weather Underground colour or the wash's alpha, and neither is a
-decision to take while adding a check. It is a real finding and it is
-the holder's.
+~~They are pinned in `GRILL_ALLOWED_UNDER` with their measurements and
+the date, not because they are settled but so they cannot get worse
+while somebody decides.~~ **Fixed in sec 16.29 and the waivers are
+gone**, on the holder's instruction. The pinning did its job for the
+hour it existed: it is what the fix was measured against.
 
 ### 16.28.2 Two controls, because one would have proved less
 
@@ -8667,3 +8666,90 @@ The second shows it speaks about a pair nobody was looking at, in the
 other scheme, on the ground that was invisible an hour earlier. A gate
 proved only against its own motivating case has been proved against the
 case least likely to be missed.
+
+
+## 16.29 The wash could not both be seen and be drawn under
+
+Three inks failed against the grill-window ground on dark, and the worst
+of them was the temperature curve at 1.89:1 -- **the answer this program
+exists to give, least legible exactly where the answer is.**
+
+**There is no alpha that fixes it.** The squeeze is arithmetic:
+
+    alpha   band ground   red on it   band against the plot
+      80      #5f3c22       1.89            1.83
+      40      #3b2a1e       2.65            1.30
+      25      #2d231c       2.97            1.16
+      22      #2a221c       3.03            1.14
+
+The curve needs 23 or under; at 23 the band is 1.14:1 against the plot,
+which is not a band anybody sees. The reason is the dark ground itself:
+at `#16181a` there is nothing below to move into, so a visible window
+must be *lighter*, and lighter is exactly the direction that swallows a
+mid-luminance red.
+
+**So the wash stops carrying the signal and the edges carry it.** Two
+rules at the window's boundaries, at full strength, drawn where there is
+nothing behind them but the ground -- an edge has no legibility problem
+because nothing is read against it. The fill drops to 22 and becomes
+what it should have been all along: a tint saying "this stretch", not
+the thing announcing it.
+
+Drawn only where the boundary is real. A window running off the side of
+the view has been clipped, and a rule at the clip would claim the window
+starts where the screen does.
+
+Measured on the device afterwards rather than assumed: the band ground
+is `#261f1b` and the curve reads against it at **3.14:1**.
+
+### 16.29.1 A number in two places is one more than can be kept true
+
+The cap was a literal `80` in the painter and a literal `80` in the
+gate. It is `grill_window`'s own alpha now -- `QColor(0xff, 0x8b, 0x33,
+80)` on light, `22` on dark -- and the gate parses it from the same
+line the painter reads.
+
+That also retires a comment this file already had about a different
+constant: *a constant beside the palette is a third opinion nobody set*.
+The wash's strength was exactly that, sitting in a paint routine two
+thousand lines from the colour it modified.
+
+### 16.29.2 The gate refused my first number, and the second has margin
+
+24 was the first value written down, from a sweep whose rows were
+printed to two decimals. The gate refused it at 2.98:1.
+
+23 also clears, at 3.018:1, and 22 was chosen instead. **A value and a
+gate that agree to three decimal places agree about nothing**: one
+rounding change anywhere in the chain turns the tightest legal value
+into the loudest illegal one. 3.028 is not more legible than 3.018, it
+is further from the edge.
+
+### 16.29.3 What the gate's model assumes, and why it holds
+
+The check composites ONE fill at the cap. Two overlapping windows would
+stack, and the real ground would be darker than anything the gate
+models -- so the model is only right if windows are disjoint.
+
+They are, by construction rather than by luck: `close_window` in
+`grill.cpp` runs off a single `open` flag in one scanning pass, so a
+window is a maximal run and the next cannot begin before this one ends.
+Checked rather than assumed, because the alternative is a gate that is
+correct about a picture nobody draws.
+
+### 16.29.4 Two controls, and the second is the one that proved the wiring
+
+Putting alpha 80 back fires all three original findings. That shows the
+check speaks -- and it was written alongside the change, so it is close
+to a self-fulfilling test.
+
+Removing the alpha argument entirely is the better control. The parser
+then defaults to 255, and the LIGHT scheme fails on five pairs at once:
+
+    temperature 2.21, corrected 1.86, day_divider 2.95,
+    stale_warning 2.21, now_marker 2.80
+
+That is the one that proves the gate is reading the alpha out of the
+source rather than carrying its own copy -- which is the entire point of
+sec 16.29.1, and the only control that could have caught the parser
+silently ignoring the fourth argument.

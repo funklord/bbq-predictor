@@ -714,7 +714,17 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 */
 	chosen.now_marker = QColor(0x80, 0x55, 0x00);
 	chosen.stale_warning = QColor(0xd5, 0x20, 0x2a);
-	chosen.grill_window = QColor(0xff, 0x8b, 0x33);
+	/*
+	 * The wash over a good grilling window, and ITS OWN MAXIMUM ALPHA
+	 * (sec 16.29). The cap used to be a literal 80 in the painter,
+	 * which made it a third opinion nobody set and put it out of reach
+	 * of the palette gate; here it is a palette value like any other,
+	 * and the gate reads it from the same place the painter does.
+	 *
+	 * 80 on a white plot: the composite is #ffdbbf, and every ink drawn
+	 * over it clears the floor comfortably.
+	 */
+	chosen.grill_window = QColor(0xff, 0x8b, 0x33, 80);
 	chosen.readout_back = QColor(0x2b, 0x2b, 0x2b);
 	chosen.readout_edge = QColor(0x9a, 0x9a, 0x9a);
 	chosen.readout_text = QColor(0xf0, 0xf0, 0xf0);
@@ -762,6 +772,31 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 */
 	chosen.band_observed = QColor(0x7a, 0xc8, 0x64);
 	chosen.now_marker = QColor(0xff, 0xd4, 0x00);
+
+	/*
+	 * The same orange and a THIRD of the alpha (sec 16.29).
+	 *
+	 * At 80 over near-black the composite is #5f3c22, a warm brown that
+	 * Weather Underground's red reads against at 1.89:1 -- so the curve
+	 * inside a good grilling window, which is the answer this program
+	 * exists to give, was the least legible thing on the plot. No alpha
+	 * both clears the floor and leaves a wash anybody can see: the red
+	 * needs 24 or under, and at 24 the band is 1.14:1 against the plot.
+	 *
+	 * So on dark the wash stops carrying the signal and the EDGES carry
+	 * it, drawn at full strength where nothing is behind them. 22 is
+	 * the most tint the floor allows rather than the least that shows,
+	 * because what it has to do now is tint rather than announce.
+	 *
+	 * 22 and not 23, which also clears at 3.018:1. A gate and a value
+	 * that agree to three decimal places agree about nothing: one
+	 * rounding change anywhere in the chain and the tightest legal
+	 * value becomes the loudest illegal one. 3.028:1 is not more
+	 * legible, it is further from the edge of the cliff. The first
+	 * draft of this line said 24 and the gate refused it at 2.98,
+	 * which is the argument for the margin as much as for the gate.
+	 */
+	chosen.grill_window = QColor(0xff, 0x8b, 0x33, 22);
 
 	/* The readout was already a dark box; on a dark ground it needs an
 	 * edge to stay a box rather than a smudge. */
@@ -1488,15 +1523,45 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 			/*
 			 * Stronger for a better window, so the ranking is visible
-			 * rather than only knowable by hovering. Bounded well below
-			 * opaque -- this is a hint under the data, not a highlight
-			 * over it.
+			 * rather than only knowable by hovering. Scaled to the
+			 * palette's cap rather than to a literal, and running from
+			 * a third of it to all of it -- which on light reproduces
+			 * the 26-to-80 this used to hard-code, and on dark stays
+			 * under what the temperature curve can be read against.
 			 */
-			const int alpha = 26 + static_cast<int>(window.rank * 54.0);
-			shade.setAlpha(std::min(80, alpha));
+			const int cap = m_palette.grill_window.alpha();
+			shade.setAlpha(
+			        qRound(cap * (1.0 + 2.0 * window.rank) / 3.0));
 
 			const double tall = chance_plot.bottom() - plot.top();
 			painter.fillRect(QRectF(left, plot.top(), right - left, tall), shade);
+
+			/*
+			 * THE EDGES, at full strength (sec 16.29).
+			 *
+			 * A wash cannot say "here" on a dark plot: the alpha that
+			 * keeps the curve legible over it is an alpha nobody can
+			 * see. An edge has nothing behind it but the ground, so it
+			 * can be as strong as it likes, and two rules bracketing a
+			 * span say what a fill says.
+			 *
+			 * Only where the boundary is really there. A window running
+			 * off the side of the view has been clipped, and a rule at
+			 * the clip would claim it starts where the screen does.
+			 */
+			QColor edge = m_palette.grill_window;
+			edge.setAlpha(255);
+
+			const double thick = 2.0;
+			if (x0 >= plot.left()) {
+				painter.fillRect(
+				        QRectF(x0, plot.top(), thick, tall), edge);
+			}
+			if (x1 <= plot.right()) {
+				painter.fillRect(
+				        QRectF(x1 - thick, plot.top(), thick, tall),
+				        edge);
+			}
 		}
 	}
 

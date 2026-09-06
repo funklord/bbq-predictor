@@ -48,9 +48,10 @@ PAIRS = [
 # graph actually uses.
 OVER_GRILL = "over_grill"
 
-# The cap in forecast_graph.cpp: `shade.setAlpha(std::min(80, alpha))`.
-# The maximum, because the strongest tint is the hardest ground.
-GRILL_ALPHA = 80
+# The cap is the grill colour's OWN alpha, read from the palette, so
+# this gate and the painter cannot disagree about it. It used to be a
+# literal 80 here copied from a literal 80 there -- two copies of one
+# number, which is one more than can be kept true (sec 16.29).
 
 GRILL_PAIRS = [
 	("axis_text", "the scale numbers, where a window shades them"),
@@ -69,20 +70,13 @@ ALLOWED_UNDER = {
 		"box's own text clears the floor at 11.83."),
 }
 
-# The same, for the grill-window ground. These are NOT settled choices:
-# they are what was measured the day this ground was added, pinned so
-# they cannot quietly get worse while somebody decides (sec 16.28.1).
-#
-# All three are the dark scheme, where an orange wash at alpha 80 over
-# near-black makes a warm brown that Weather Underground's red nearly
-# disappears into. Fixing it means changing either a measured data
-# colour or the wash, and neither is a decision to take while adding a
-# check.
-GRILL_ALLOWED_UNDER = {
-	("temperature", "dark"): "1.89, measured 2026-09-06. Open.",
-	("stale_warning", "dark"): "1.89, the same colour. Open.",
-	("corrected", "dark"): "2.24, measured 2026-09-06. Open.",
-}
+# Nothing is allowed under the floor on the grill ground. The three that
+# were -- temperature and stale_warning at 1.89, corrected at 2.24, all
+# in the dark scheme -- were fixed rather than waived by dropping the
+# dark wash from alpha 80 to 24 and moving the window's signal onto its
+# edges (sec 16.29). An empty table is kept rather than deleted so that
+# adding an entry is a visible act.
+GRILL_ALLOWED_UNDER = {}
 
 
 def channel(value):
@@ -116,16 +110,26 @@ def palettes(text):
 
 	found = re.compile(
 	        r"chosen\.([a-z_]+)\s*=\s*QColor\(\s*0x([0-9a-fA-F]{2})\s*,\s*"
-	        r"0x([0-9a-fA-F]{2})\s*,\s*0x([0-9a-fA-F]{2})")
+	        r"0x([0-9a-fA-F]{2})\s*,\s*0x([0-9a-fA-F]{2})"
+	        r"(?:\s*,\s*(\d{1,3}))?")
 
 	def read(block):
-		return {name: (int(r, 16), int(g, 16), int(b, 16))
-		        for name, r, g, b in found.findall(block)}
+		colours = {}
+		alpha = {}
+		for name, r, g, b, a in found.findall(block):
+			colours[name] = (int(r, 16), int(g, 16), int(b, 16))
+			alpha[name] = int(a) if a else 255
+		return colours, alpha
 
-	light = read(text[start:split])
+	light, light_alpha = read(text[start:split])
+	dark_only, dark_only_alpha = read(text[split:end])
+
 	dark = dict(light)
-	dark.update(read(text[split:end]))
-	return light, dark
+	dark.update(dark_only)
+	dark_alpha = dict(light_alpha)
+	dark_alpha.update(dark_only_alpha)
+
+	return light, dark, {"light": light_alpha, "dark": dark_alpha}
 
 
 def control_passes():
@@ -150,7 +154,7 @@ def main():
 		print(f"palette: {SOURCE} is missing", file=sys.stderr)
 		return 2
 
-	light, dark = palettes(SOURCE.read_text(encoding="utf-8"))
+	light, dark, alphas = palettes(SOURCE.read_text(encoding="utf-8"))
 
 	if not light or "background" not in light:
 		print("palette: no colours parsed -- the pattern has stopped "
@@ -167,7 +171,8 @@ def main():
 				      f"'grill_window'", file=sys.stderr)
 				return 2
 
-			ground = over(palette["grill_window"], GRILL_ALPHA,
+			ground = over(palette["grill_window"],
+			              alphas[scheme]["grill_window"],
 			              palette["background"])
 			ratio = contrast(palette[ink], ground)
 			if ratio >= FLOOR or (ink, scheme) in GRILL_ALLOWED_UNDER:
