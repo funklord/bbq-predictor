@@ -46,6 +46,18 @@ bool is_discovery(bbq_wu_product product) {
 
 } // namespace
 
+QString bbq_wu_query_parameter(const QString &query, const QString &name) {
+	const QString wanted = name + QStringLiteral("=");
+
+	for (const QString &piece : query.split(QLatin1Char('&'))) {
+		if (piece.startsWith(wanted)) {
+			return piece.mid(wanted.size());
+		}
+	}
+
+	return QString();
+}
+
 const char *bbq_wu_product_name(bbq_wu_product product) {
 	switch (product) {
 	case bbq_wu_product::observed:
@@ -266,10 +278,23 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
 		 * chase and the other is a station to re-pick (sec 2.6.6).
 		 */
 		if (body.isEmpty()) {
-			emit failed(product, tr("no data (HTTP %1) -- for the observed "
+			/*
+			 * Named by date where the request had one, because two
+			 * observed requests go out per round and a silent station
+			 * fails both. Printed without it they are two identical
+			 * lines about different days.
+			 */
+			const QString date = bbq_wu_query_parameter(query,
+			                                            QStringLiteral("date"));
+			const QString which = date.isEmpty()
+			                              ? QString()
+			                              : QStringLiteral(" for %1").arg(date);
+
+			emit failed(product, tr("no data (HTTP %1)%2 -- for the observed "
 			                        "band this usually means the station "
 			                        "is unknown or has reported nothing")
-			                             .arg(status));
+			                             .arg(status)
+			                             .arg(which));
 			return;
 		}
 

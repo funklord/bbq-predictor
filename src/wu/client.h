@@ -43,6 +43,27 @@ enum class bbq_wu_product {
 const char *bbq_wu_product_name(bbq_wu_product product);
 
 /*
+ * One parameter out of a request's query string, or empty.
+ *
+ * Exists so a failure can say WHICH request failed. Two observed
+ * requests go out per round -- the day in progress and the backfill
+ * day behind it -- and both carry the same product, so a station that
+ * is silent produces two failures printed identically:
+ *
+ *     observed   FAIL  no data (HTTP 204) -- ...
+ *     observed   FAIL  no data (HTTP 204) -- ...
+ *
+ * Nothing there says they are about different days, and a reader who
+ * assumes a duplicate is right about the text and wrong about the
+ * facts. The date is what separates them.
+ *
+ * A plain string scan rather than QUrlQuery, because that is what the
+ * query is at this point: it is built by concatenation and handed
+ * straight to the request.
+ */
+QString bbq_wu_query_parameter(const QString &query, const QString &name);
+
+/*
  * Fetches raw responses from Weather Underground (project.md sec 2.6).
  *
  * Raw on purpose. This layer obtains what the service actually returns

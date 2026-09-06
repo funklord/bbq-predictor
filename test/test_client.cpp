@@ -35,6 +35,7 @@ private slots:
 	void the_queue_is_drained_once_by_whichever_signal_arrives();
 	void a_refused_key_page_is_tried_three_times();
 	void api_requests_ask_for_identity_encoding();
+	void a_query_parameter_is_read_back_by_name();
 };
 
 void test_client::requests_wait_when_there_is_no_key() {
@@ -177,3 +178,37 @@ void test_client::api_requests_ask_for_identity_encoding() {
 
 QTEST_GUILESS_MAIN(test_client)
 #include "test_client.moc"
+
+/*
+ * Reading one parameter out of a request's query.
+ *
+ * The reason it exists is that two observed requests go out per round,
+ * for the day in progress and the backfill day behind it, and both
+ * carry the same product. A silent station fails both, and without the
+ * date the two lines are identical -- a reader who takes them for a
+ * duplicate is right about the text and wrong about the facts.
+ */
+void test_client::a_query_parameter_is_read_back_by_name() {
+	const QString query = QStringLiteral("stationId=ISTOCK877&date=20260907");
+
+	QCOMPARE(bbq_wu_query_parameter(query, QStringLiteral("date")),
+	         QStringLiteral("20260907"));
+	QCOMPARE(bbq_wu_query_parameter(query, QStringLiteral("stationId")),
+	         QStringLiteral("ISTOCK877"));
+
+	/* Absent is empty, and the caller prints nothing rather than "for". */
+	QVERIFY(bbq_wu_query_parameter(query, QStringLiteral("units")).isEmpty());
+	QVERIFY(bbq_wu_query_parameter(QString(), QStringLiteral("date"))
+	                .isEmpty());
+
+	/*
+	 * A NAME THAT IS A SUFFIX OF ANOTHER must not match it. "date" ends
+	 * "updateDate", and a scan looking for the text anywhere would
+	 * return the wrong day -- which is worse than returning none, since
+	 * the whole point is telling two days apart.
+	 */
+	const QString awkward =
+	        QStringLiteral("updateDate=19990101&date=20260907");
+	QCOMPARE(bbq_wu_query_parameter(awkward, QStringLiteral("date")),
+	         QStringLiteral("20260907"));
+}

@@ -10706,3 +10706,52 @@ nothing about the other. It only tests for the presence of
 `--android-service` and takes no value, so it cannot carry this fault.
 **Enumerating the population is the whole of that check**, and it cost
 one read.
+
+
+## 16.59 Two failures, one line, printed twice
+
+`--fetch-once` against a silent station reported this, run after run,
+all through the session that eventually looked at it:
+
+    observed   FAIL  no data (HTTP 204) -- ...
+    observed   FAIL  no data (HTTP 204) -- ...
+
+**Neither the duplicate-looking pair nor the count was wrong.** Two
+observed requests go out per round -- the day in progress, and the
+backfill day behind it, which `backfill_day_wanted` puts at yesterday
+-- and a station that has reported nothing fails both. Both carry
+`bbq_wu_product::observed`, so both print the same name, and the
+message had nothing else to separate them by.
+
+A reader who takes that for a repeat is right about the text and wrong
+about the facts. It now reads:
+
+    observed   FAIL  no data (HTTP 204) for 20260907 -- ...
+    observed   FAIL  no data (HTTP 204) for 20260906 -- ...
+
+`current` still prints without a date, because its request has none.
+
+### 16.59.1 What was checked before changing anything
+
+- **Whether the verdict double-counted.** `bbq_fetch_verdict` tests
+  `failures == 0`, so two failures for one band cannot move it off
+  `complete` any further than one would. No defect.
+- **Whether the two requests are the same day.** They are not; the
+  backfill asks for yesterday. Had they been, the finding would have
+  been a wasted request rather than an ambiguous message, and the fix
+  somewhere else entirely.
+- **Whether the collapse is deliberate elsewhere.** It is:
+  `current_station` and `current_point` both print `current` on
+  purpose, being two routes to one answer.
+
+### 16.59.2 The suffix case is why it is a parameter reader
+
+`bbq_wu_query_parameter` splits on `&` and matches a whole name. A scan
+for the text anywhere would find `date=` inside `updateDate=19990101`
+and return the wrong day -- **worse than returning none, since telling
+two days apart is the entire purpose.** That case is in the test, and
+sabotaging the match to `contains` fails it.
+
+The query is a plain string built by concatenation at this point, not a
+`QUrlQuery`, so a string scan is reading what is actually there rather
+than reconstructing it.
