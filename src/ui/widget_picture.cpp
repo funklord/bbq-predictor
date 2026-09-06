@@ -222,6 +222,10 @@ bbq_borrowed_graph::bbq_borrowed_graph(bbq_forecast_graph *graph)
 	m_contrast_ground = m_graph->contrast_ground();
 	m_cursor_column = m_graph->cursor_column();
 	m_opaque_background = m_graph->opaque_background();
+
+	m_following_now = m_graph->is_following_now();
+	m_view_from = m_graph->view_from_utc();
+	m_view_span_s = m_graph->view_span_s();
 }
 
 bbq_borrowed_graph::~bbq_borrowed_graph() {
@@ -233,6 +237,59 @@ bbq_borrowed_graph::~bbq_borrowed_graph() {
 	m_graph->set_opaque_background(m_opaque_background);
 	m_graph->set_contrast_ground(m_contrast_ground, contrast_floor);
 	m_graph->set_cursor_column(m_cursor_column);
+
+	/*
+	 * FOLLOWING IS NOT A VIEW, so it cannot be restored as one.
+	 * set_view() pins the range and stops the graph tracking the clock,
+	 * which for a window that was following would silently freeze it at
+	 * whatever second the render happened.
+	 */
+	if (m_following_now) {
+		m_graph->follow_now();
+	} else {
+		m_graph->set_view(m_view_from, m_view_span_s);
+	}
+}
+
+void bbq_pose_graph_for_picture(bbq_forecast_graph *graph,
+                                const QColor &ground, double floor,
+                                const QSize &shape) {
+	if (graph == nullptr) {
+		return;
+	}
+
+	graph->set_opaque_background(false);
+	graph->set_contrast_ground(ground, floor);
+
+	/*
+	 * NO PARKED READOUT (sec 16.35).
+	 *
+	 * The readout follows a cursor, and on a phone a drag leaves it
+	 * parked where the finger stopped -- deliberately, so a touch can
+	 * read a value at all. On the home screen there is no question and
+	 * no cursor, so it is a stale sentence over the number the widget
+	 * exists to show.
+	 */
+	graph->set_cursor_column(-1);
+
+	/*
+	 * AND BACK TO NOW (sec 16.36).
+	 *
+	 * The same fault as the readout, one field along and worse. The
+	 * view belongs to whoever last dragged the graph, and the render
+	 * never touched it -- so a window left panned at last Tuesday put
+	 * last Tuesday on the home screen, under a current temperature
+	 * drawn from the composite at now and beside a now-marker that had
+	 * gone off the edge. Every part of that picture is correct and the
+	 * picture is a lie.
+	 *
+	 * A widget is a glance at the present. The user's view is put back
+	 * by bbq_borrowed_graph the moment the render is done, so the
+	 * window they are looking at does not move under them.
+	 */
+	graph->follow_now();
+
+	graph->resize(shape);
 }
 
 QColor bbq_widget_scrim(const QColor &ground) {
@@ -371,27 +428,7 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 	const QColor scrim = bbq_widget_scrim(source->palette_colours().background);
 	const QColor ground = bbq_widget_worst_ground(scrim);
 
-	source->set_opaque_background(false);
-	source->set_contrast_ground(ground, contrast_floor);
-
-	/*
-	 * NO PARKED READOUT (project.md sec 16.35).
-	 *
-	 * The readout box follows a cursor, and on a phone a drag leaves it
-	 * parked where the finger stopped -- deliberately, so a touch can
-	 * read a value at all. The widget inherited that: a screenshot
-	 * found it lying across the top of the picture, over the current
-	 * temperature and the day label, quoting a reading for whatever
-	 * moment somebody last happened to touch.
-	 *
-	 * On the graph that box is the answer to a question the user just
-	 * asked. On the home screen there is no question and no cursor, so
-	 * it is a stale sentence competing with the number the widget
-	 * exists to show. Cleared for the render and put straight back,
-	 * like the ground and the clamp above.
-	 */
-	source->set_cursor_column(-1);
-	source->resize(shape);
+	bbq_pose_graph_for_picture(source, ground, contrast_floor, shape);
 
 	/*
 	 * Rendered at the device's pixel ratio so the file is at the

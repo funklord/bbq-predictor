@@ -71,6 +71,8 @@ private slots:
 	void a_scrim_light_enough_to_pass_an_ink_is_reported_unbounded();
 	void the_clamp_nudges_a_colour_rather_than_redesigning_it();
 	void the_widget_render_leaves_the_parked_readout_where_it_was();
+	void the_picture_is_posed_at_now_with_no_cursor();
+	void a_following_window_is_still_following_after_a_render();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1144,20 +1146,22 @@ void test_window::the_widget_render_leaves_the_parked_readout_where_it_was() {
 	const QSize was = graph.size();
 	const QColor ink = graph.palette_colours().temperature;
 
+	/* Panned away from now, as a window somebody is reading would be. */
+	graph.set_view(1600000000, 6 * 3600);
+	QVERIFY(!graph.is_following_now());
+
 	{
 		const bbq_borrowed_graph borrowed(&graph);
 
-		/* Everything a render does to it. */
-		graph.set_opaque_background(false);
-		graph.set_contrast_ground(QColor(0x39, 0x3b, 0x3c), 3.0);
-		graph.set_cursor_column(-1);
-		graph.resize(885, 546);
+		bbq_pose_graph_for_picture(&graph, QColor(0x39, 0x3b, 0x3c), 3.0,
+		                           QSize(885, 546));
 
 		/* Really changed, or the restore below proves nothing. */
 		QCOMPARE(graph.cursor_column(), -1);
 		QVERIFY(!graph.opaque_background());
 		QVERIFY(graph.size() != was);
 		QVERIFY(graph.palette_colours().temperature != ink);
+		QVERIFY(graph.is_following_now());
 	}
 
 	QCOMPARE(graph.cursor_column(), 37);
@@ -1165,4 +1169,86 @@ void test_window::the_widget_render_leaves_the_parked_readout_where_it_was() {
 	QVERIFY(graph.opaque_background());
 	QVERIFY(!graph.contrast_ground().isValid());
 	QCOMPARE(graph.palette_colours().temperature, ink);
+
+	/*
+	 * THE VIEW, WHICH IS THE ONE THAT WOULD MOVE UNDER A HAND. A render
+	 * every five minutes that left the graph following now would drag a
+	 * reader back to the present while they were looking at last week.
+	 */
+	QVERIFY(!graph.is_following_now());
+	QCOMPARE(graph.view_from_utc(), Q_INT64_C(1600000000));
+	QCOMPARE(graph.view_span_s(), Q_INT64_C(6 * 3600));
+}
+
+/*
+ * And the other side of it: a graph that WAS following must still be
+ * following afterwards.
+ *
+ * Restoring by set_view() would look right in every assertion above and
+ * pin the window at whatever second the render ran, so it would stop
+ * tracking the clock -- a freeze that shows up minutes later as a graph
+ * that has quietly stopped moving.
+ */
+void test_window::a_following_window_is_still_following_after_a_render() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+	graph.resize(400, 300);
+
+	QVERIFY(graph.is_following_now());
+
+	{
+		const bbq_borrowed_graph borrowed(&graph);
+		bbq_pose_graph_for_picture(&graph, QColor(0x39, 0x3b, 0x3c), 3.0,
+		                           QSize(885, 546));
+	}
+
+	QVERIFY(graph.is_following_now());
+}
+
+/*
+ * THE POSE A PICTURE IS DRAWN FROM (sec 16.36).
+ *
+ * Five differences between what a window is for and what a widget is
+ * for, and until this was extracted only two of them were reachable by
+ * any test: the render itself is Android-only, so the clearing of the
+ * readout could be checked by screenshot and by nothing else.
+ *
+ * The view is the one that matters most and was missed longest. It
+ * belongs to whoever last dragged the graph, and a window left panned
+ * at last Tuesday put last Tuesday on the home screen -- under a
+ * current temperature drawn from the composite at now, beside a
+ * now-marker that had gone off the edge. Every part of that picture is
+ * correct and the picture is a lie.
+ */
+void test_window::the_picture_is_posed_at_now_with_no_cursor() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+	graph.resize(400, 300);
+
+	/* A window somebody has been using: panned away from now, with a
+	 * readout parked where their finger stopped. */
+	graph.set_view(1600000000, 6 * 3600);
+	graph.set_cursor_column(37);
+
+	QVERIFY2(!graph.is_following_now(),
+	         "the fixture is already at now, so it cannot show the view "
+	         "being brought back");
+	QCOMPARE(graph.cursor_column(), 37);
+
+	const QSize shape(885, 546);
+	const QColor ground(0x39, 0x3b, 0x3c);
+
+	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape);
+
+	QVERIFY2(graph.is_following_now(),
+	         "the picture would show whatever range the window was left "
+	         "panned to");
+	QCOMPARE(graph.cursor_column(), -1);
+	QCOMPARE(graph.size(), shape);
+	QVERIFY(!graph.opaque_background());
+	QCOMPARE(graph.contrast_ground(), ground);
+
+	/* And a null graph is a no-op rather than a crash: the render calls
+	 * this before it has checked much. */
+	bbq_pose_graph_for_picture(nullptr, ground, 3.0, shape);
 }

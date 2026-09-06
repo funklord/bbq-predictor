@@ -9369,3 +9369,71 @@ the application whenever the screen dozes -- `FZ : se.vibes.bbq_predictor
 picture never appears. `svc power stayon usb` did not hold the cover
 screen; `input keyevent KEYCODE_WAKEUP` did, where `KEYCODE_POWER`
 toggles and turned it off again as often as on.
+
+
+## 16.36 The same fault one field along, and worse
+
+The lens from sec 16.35 was: **what else does the widget render inherit
+from the live window that belongs to the user's session rather than to
+the weather?** The readout was one. The VIEW is another, and it is
+worse.
+
+The render set four things -- size, ground, clamp, cursor -- and never
+touched the view. The view belongs to whoever last dragged the graph.
+So a window left panned at last Tuesday put **last Tuesday on the home
+screen**, under a current temperature drawn from the composite at now,
+beside a now-marker that had gone off the edge. Every element of that
+picture is individually correct and the picture is a lie.
+
+`bbq_pose_graph_for_picture` calls `follow_now()`, and the user's view
+is put back the moment the render is done.
+
+### 16.36.1 The fix was briefly worse than the defect
+
+`follow_now()` went into the pose while `bbq_borrowed_graph` still
+restored four things. **A render every five minutes would have snapped a
+panned window back to the present under the reader's hand** -- and
+unlike the defect it was fixing, that one moves the thing somebody is
+currently looking at.
+
+Caught by writing the restore test before believing the fix, which is
+the only reason it never ran that way. The borrow takes five things now.
+
+**And "following" is not a view, so it cannot be restored as one.**
+`set_view()` pins a range and stops the graph tracking the clock, so
+restoring a following window that way would freeze it at whatever second
+the render happened -- a graph that has quietly stopped moving, which
+shows up minutes later as a bug about something else entirely. The two
+cases are separate branches with a test each, and each test fails when
+the other branch is used for both.
+
+### 16.36.2 Extracting the pose is what made any of it testable
+
+The render is Android-only, so until now the pose could be checked by
+screenshot and by nothing else -- which is exactly the limitation
+sec 16.35.2 had to record as outstanding, and exactly why a defect in
+the same function survived beside it.
+
+`bbq_pose_graph_for_picture` compiles everywhere. All five differences
+between what a window is for and what a widget is for are now asserted
+in the suite, and each one fails when removed:
+
+    the view      "the picture would show whatever range the window
+                   was left panned to"
+    the readout    Actual 37, Expected -1
+    the restore    both directions, one test each
+
+**The Android-only part is now the JNI and the file write, which is
+where it should have been.** A platform guard is a reason a thing cannot
+be tested; it is not a reason for logic to live inside it.
+
+### 16.36.3 What is not verified
+
+The device demonstration of the original defect was attempted and
+abandoned: the phone dropped off USB mid-run, after Freecess had already
+frozen the application twice. **The defect is certain from the code**
+-- the render set four fields and the view is not among them, and the
+view is user-mutable -- and the fix is asserted by tests that fail
+without it. But no screenshot shows a widget stuck at last Tuesday, and
+none shows the fixed one following. Worth taking when the phone is next
+awake.

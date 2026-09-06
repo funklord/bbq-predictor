@@ -3,6 +3,7 @@
 
 #include <QColor>
 #include <QSize>
+#include <QtGlobal>
 
 class QString;
 class bbq_forecast_graph;
@@ -32,11 +33,17 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
  * The graph settings a widget render borrows, put back when it leaves
  * (project.md sec 16.35).
  *
- * Four things change for the duration of a render: the graph's size,
- * its opaque ground, its contrast clamp, and the readout parked by
- * whatever the user last touched. All four belong to the window the
- * user is looking at, and the render happens on that live graph every
- * five minutes.
+ * FIVE things change for the duration of a render: the graph's size,
+ * its opaque ground, its contrast clamp, the readout parked by whatever
+ * the user last touched, and the view they panned to. All five belong
+ * to the window the user is looking at, and the render happens on that
+ * live graph every five minutes.
+ *
+ * The view was the fifth and arrived late. bbq_pose_graph_for_picture
+ * started calling follow_now() and this restored four things -- so a
+ * render would have snapped a panned window back to the present under
+ * the user's hand, every five minutes, which is a worse fault than the
+ * one that change was fixing.
  *
  * A destructor rather than four lines at the end, so a return added
  * later cannot leave the window resized, unclamped or missing the
@@ -55,9 +62,36 @@ private:
 	bbq_forecast_graph *m_graph = nullptr;
 	QSize m_size;
 	QColor m_contrast_ground;
+	qint64 m_view_from = 0;
+	qint64 m_view_span_s = 0;
 	int m_cursor_column = -1;
 	bool m_opaque_background = true;
+	bool m_following_now = true;
 };
+
+/*
+ * Put the graph into the state a home-screen picture is drawn from
+ * (project.md sec 16.36).
+ *
+ * Five things, and every one of them is a difference between what a
+ * window is for and what a widget is for:
+ *
+ *   the ground     off, so the scrim carries it
+ *   the clamp      on, against a ground this program did not choose
+ *   the readout    cleared; a home screen has no cursor
+ *   the view       back to now; a widget is a glance at the present
+ *   the size       the widget's box
+ *
+ * Available off Android, unlike the render, so the pose can be tested
+ * where the JNI cannot go. That is deliberate: the readout fix
+ * (sec 16.35) left its clearing reachable only by screenshot, and this
+ * is the shape that does not.
+ *
+ * Pair it with bbq_borrowed_graph, which puts it all back.
+ */
+void bbq_pose_graph_for_picture(bbq_forecast_graph *graph,
+                                const QColor &ground, double floor,
+                                const QSize &shape);
 
 /*
  * The translucent ground the picture is filled with, from the graph's
