@@ -10325,3 +10325,39 @@ nothing then draws. **A value that is only ever processed looks alive to
 any detector that asks who touches it**, which is the third way this
 search can lie and the reason its clean answers are worth less than its
 dirty ones.
+
+
+## 16.53 The README counted six gates while the Makefile ran eight
+
+`make style` gained `xml-gate` (sec 16.24.3) and `build-wiring`
+(sec 16.39.1, sec 16.40) in two commits today. Neither touched the
+README, which went on saying **six** and naming six.
+
+That is `build-and-commit.md`'s rule about documentation riding along
+with the code it describes, broken twice in one session by the person
+who added the gates -- and it is the countable present-tense claim
+`evidence.md` names as the kind that rots, in the file a reader meets
+first.
+
+The sentence carries no number now. The list is still there, because a
+reader wants to know what is checked, but a missing name is a smaller
+lie than a wrong count and the wrong count was what nothing re-derived.
+
+### 16.53.1 Two instruments wrong on the way to one small fix
+
+Neither reached the record as a finding, both because the output was
+read rather than repeated:
+
+- **Counting the gates**, `grep -n "^style:"` prefixed a line number, so
+  the first token read `318:style-source` and did not match `^style-`.
+  Seven, for a list of eight, from a command written to check a count.
+- **Comparing the README's options to the program's**, one set carried
+  `--` and the other did not, so the intersection was empty and the
+  result claimed fifteen documented options the program does not accept
+  -- including `--station`. **Absurd on its face, which is the only
+  reason it was caught**; a subtler mismatch would have been written
+  down.
+
+Corrected, the README shows no option that does not exist, and the seven
+it omits are deliberate: the manual is the exhaustive list and
+`man_options` gates that in both directions.
