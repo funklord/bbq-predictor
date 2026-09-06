@@ -69,6 +69,7 @@ private slots:
 	 */
 	void no_wallpaper_can_get_between_the_scrim_and_an_ink();
 	void a_scrim_light_enough_to_pass_an_ink_is_reported_unbounded();
+	void the_clamp_nudges_a_colour_rather_than_redesigning_it();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1041,4 +1042,79 @@ void test_window::a_scrim_light_enough_to_pass_an_ink_is_reported_unbounded() {
 	QColor thick(0x16, 0x18, 0x1a);
 	thick.setAlphaF(0.75);
 	QVERIFY(bbq_widget_scrim_is_bounded(thick, red));
+}
+
+/*
+ * HOW FAR THE CLAMP HAS TO MOVE A COLOUR, WHICH IS THE COST NOTHING
+ * ELSE MEASURES (project.md sec 16.27).
+ *
+ * The floor is always reachable -- the walk simply goes further -- so
+ * "does it still clear 3:1" cannot say whether a scrim is too thin. It
+ * answers yes at every alpha down to 0.5. What actually degrades is the
+ * distance travelled, and past some distance the widget has stopped
+ * showing the colours the window shows.
+ *
+ * Worst HSL lightness shift over the protected inks, measured across
+ * both schemes:
+ *
+ *     alpha    dark     light
+ *     0.85     0.125    0.071
+ *     0.80     0.180    0.094
+ *     0.75     0.235    0.122     <- the scrim in use
+ *     0.70     0.286    0.145
+ *     0.65     0.337    0.169
+ *
+ * A quarter is therefore not a round number picked to pass: it is the
+ * value that separates the scrim in use from the next notch thinner.
+ * The assertion means "0.75 is the thinnest scrim at which this is a
+ * nudge", and thinning it further has to be a decision somebody takes
+ * with this test in front of them rather than a constant they edit.
+ *
+ * The dark scheme is the binding one, which is not the intuition: it is
+ * Weather Underground's red at 1.52:1 against the dark worst ground
+ * that travels furthest, not the light scheme's amber at 1.61:1.
+ */
+void test_window::the_clamp_nudges_a_colour_rather_than_redesigning_it() {
+	const double furthest_allowed = 0.25;
+
+	bbq_forecast_graph graph;
+
+	for (const bbq_theme scheme : {bbq_theme::dark, bbq_theme::light}) {
+		graph.set_contrast_ground(QColor(), 3.0);
+		graph.set_theme(scheme);
+		const bbq_graph_palette plain = graph.palette_colours();
+
+		const QColor scrim = bbq_widget_scrim(plain.background);
+		graph.set_contrast_ground(bbq_widget_worst_ground(scrim), 3.0);
+		const bbq_graph_palette clamped = graph.palette_colours();
+
+		const QColor before[] = {
+			plain.axis_text,     plain.temperature,
+			plain.corrected,     plain.day_divider,
+			plain.stale_warning, plain.now_marker,
+		};
+		const QColor after[] = {
+			clamped.axis_text,     clamped.temperature,
+			clamped.corrected,     clamped.day_divider,
+			clamped.stale_warning, clamped.now_marker,
+		};
+
+		for (size_t at = 0; at < sizeof(before) / sizeof(before[0]); ++at) {
+			const double moved = qAbs(after[at].lightnessF() -
+			                          before[at].lightnessF());
+
+			QVERIFY2(moved <= furthest_allowed,
+			         qPrintable(QStringLiteral(
+			                 "%1 became %2, a lightness shift of %3")
+			                            .arg(before[at].name(),
+			                                 after[at].name())
+			                            .arg(moved, 0, 'f', 3)));
+
+			/* And it is still the same colour, not a different one that
+			 * happens to be legible. */
+			if (before[at].hslSaturation() > 20) {
+				QCOMPARE(after[at].hslHue(), before[at].hslHue());
+			}
+		}
+	}
 }

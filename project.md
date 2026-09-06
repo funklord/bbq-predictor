@@ -8518,3 +8518,74 @@ that it ignores its argument.** That is why the control constructs a
 scrim rather than reusing the real one, and it is the argument for a
 control that can fail the way the real thing fails rather than one that
 merely fails.
+
+
+## 16.27 The light scheme on a home screen, and what the clamp costs
+
+Set `theme=light` on the phone and re-rendered. The white scrim at 0.75
+over a dark wallpaper gives a pale card, and everything reads.
+
+Measured from the picture rather than described from the screenshot:
+
+    light worst ground (scrim over black)   #bfbfbf
+    temperature    #d5202a -> #cc1f28    2.81 -> 3.01
+    now_marker     #c88a00 -> #8a5f00    1.61 -> 3.07
+
+**The now-marker is the visible cost.** Amber at 1.61:1 against a ground
+that pale cannot stay amber, and the clamp walks it DOWN -- the ground is
+lighter than the ink, so away from it is darker -- landing on a dark
+olive. It is legible and it is no longer amber.
+
+Worth connecting to something already written down:
+`tool/palette_contrast.py` lets `now_marker` on light under the floor at
+2.96:1, recorded as "a rounding difference rather than a legibility
+one". That was true against the palette's own white background. Under a
+scrim it is 1.61, which is not a rounding difference by any reading, and
+**the exception was measured against the only ground that existed when
+it was written.** The clamp moving it a long way is the system reporting
+that, not misbehaving.
+
+### 16.27.1 The cost the floor cannot see
+
+**"Does it still clear 3:1" cannot say whether a scrim is too thin.** It
+answers yes at every alpha down to 0.5, because the walk simply goes
+further. A check that cannot fail over the range you are choosing within
+is not a check you are choosing with.
+
+What degrades is the DISTANCE travelled. Worst HSL lightness shift over
+the protected inks:
+
+    alpha    dark     light
+    0.85     0.125    0.071
+    0.80     0.180    0.094
+    0.75     0.235    0.122     <- in use
+    0.70     0.286    0.145
+    0.65     0.337    0.169
+
+`the_clamp_nudges_a_colour_rather_than_redesigning_it` holds it at 0.25,
+which is not a round number picked to pass: it is the value that
+separates the scrim in use from the next notch thinner. The assertion
+means *0.75 is the thinnest scrim at which this is a nudge*, so thinning
+it further is a decision taken with the test in front of you rather than
+a constant somebody edits. Set to 0.70 it fails naming the colour:
+
+    #d5202a became #ef989c, a lightness shift of 0.286
+
+**The binding scheme is the dark one, which is not the intuition.** The
+eye goes to the light scheme's olive marker, and the furthest-travelled
+colour is Weather Underground's red on dark -- 0.235 against the
+marker's 0.122, nearly double. A perceptual reading picked the wrong
+outlier, and the arithmetic picked the right one; this entry was drafted
+around the marker before the table was computed.
+
+### 16.27.2 What is left open, and whose it is
+
+The amber now-marker on light is the one colour the scrim genuinely
+costs. Three things could be done and none is this session's to choose:
+leave it, since a dark olive "now" line is legible and the widget is a
+glance; pick a light-scheme marker that survives a pale ground, which is
+a palette change; or keep the widget's scrim thicker on light than on
+dark, which is two constants where there is one.
+
+Recorded rather than decided. It is a look, and the person whose home
+screen it is has not seen the olive yet.
