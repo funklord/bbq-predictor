@@ -18,6 +18,7 @@ background is the wrong population, and the answer looks like a finding.
 Exits 1 when a pair falls under the floor, so `make style` fails.
 """
 
+import itertools
 import re
 import sys
 from pathlib import Path
@@ -36,47 +37,88 @@ PAIRS = [
 	("readout_text", "readout_back", "the cursor readout, on its own box"),
 ]
 
-# The plot has more than one ground, and for a long time this gate knew
-# about one of them (project.md sec 16.28). Everything above is drawn
-# over the grill window's shading too, wherever a good grilling window
-# falls, and that tint is the DARKEST ground in the light scheme and the
-# warmest in the dark one -- so a colour cleared against `background`
-# has been cleared against the easier case.
-#
-# Named separately rather than folded in, because it is not a palette
-# entry: it is grill_window composited over background at the alpha the
-# graph actually uses.
-OVER_GRILL = "over_grill"
-
-# The cap is the grill colour's OWN alpha, read from the palette, so
-# this gate and the painter cannot disagree about it. It used to be a
-# literal 80 here copied from a literal 80 there -- two copies of one
-# number, which is one more than can be kept true (sec 16.29).
-
-GRILL_PAIRS = [
-	("axis_text", "the scale numbers, where a window shades them"),
-	("temperature", "the forecast curve, inside a grilling window"),
-	("corrected", "the bias-corrected overlay, inside one"),
-	("day_divider", "the midnight rule crossing one"),
-	("stale_warning", "said over one"),
-	("now_marker", "the now line crossing one"),
-]
-
-# A pair kept under the floor deliberately, with what it measured at when
-# it was allowed and why. Anything not listed here must clear the floor.
+# A pair kept under the floor deliberately, with what it measured at
+# when it was allowed and why.
 ALLOWED_UNDER = {
 	("readout_edge", "readout_back"): (
 		"2.94 on dark. It is the border of a box, not ink in it, and the "
 		"box's own text clears the floor at 11.83."),
 }
 
-# Nothing is allowed under the floor on the grill ground. The three that
-# were -- temperature and stale_warning at 1.89, corrected at 2.24, all
-# in the dark scheme -- were fixed rather than waived by dropping the
-# dark wash from alpha 80 to 24 and moving the window's signal onto its
-# edges (sec 16.29). An empty table is kept rather than deleted so that
-# adding an entry is a visible act.
-GRILL_ALLOWED_UNDER = {}
+# THE PLOT HAS MORE THAN ONE GROUND, and for a long time this gate knew
+# about one (project.md sec 16.28, sec 16.31). Everything in PAIRS is
+# also drawn over the washes below, wherever the weather puts them, so a
+# colour cleared against `background` has been cleared against the
+# easiest case only.
+#
+# Named separately rather than folded in, because a wash is not a
+# palette entry: it is a colour composited over background at the alpha
+# the painter uses. `None` means the colour carries its own alpha, as
+# grill_window does.
+WASHES = [
+	("grill", "grill_window", None),
+	("chance", "chance", 60),
+	("rain", "rain", 120),
+]
+
+# The grill cap is that colour's OWN alpha, read from the palette, so
+# this gate and the painter cannot disagree about it. It used to be a
+# literal 80 here copied from a literal 80 there -- two copies of one
+# number, which is one more than can be kept true (sec 16.29). The other
+# two alphas are still literals in the painter and are copied above,
+# which is the same fault at one remove and is recorded in sec 16.31.
+
+WASHED_PAIRS = [
+	("axis_text", "the scale numbers, where a wash shades them"),
+	("temperature", "the forecast curve, over one"),
+	("corrected", "the bias-corrected overlay, over one"),
+	("day_divider", "the midnight rule crossing one"),
+	("stale_warning", "said over one"),
+	("now_marker", "the now line crossing one"),
+]
+
+# THE WORST INK OVER EVERY COMBINATION OF WASHES, MEASURED (sec 16.31).
+#
+# A table rather than an ignore list, because the honest version of this
+# check is thirty-four per-ink waivers and a gate carrying that has been
+# switched off by instalments. One number per combination says the same
+# thing and cannot hide a new failure behind an old name.
+#
+# Two kinds of entry, and the gate reports the split rather than
+# averaging over it:
+#
+#   >= FLOOR   a real pass. The combination is legible.
+#   <  FLOOR   a TRIPWIRE. The number is what was measured on
+#              2026-09-06 and is not endorsed; the gate's job is to
+#              refuse to let it get worse while the fix is decided.
+#
+# It cannot be fixed by dimming, and that is structural. The grill wash
+# alone leaves the curve at 3.03:1 on dark, so there is no budget for a
+# second one -- searched over every (chance, rain) pair down to alpha 5,
+# nothing clears 3:1 with all three present. What would fix it is giving
+# the curve a ground of its own, which is a change to the primary data
+# element and the holder's to make.
+WASH_WORST = {
+	("light", "grill"): 3.34,
+	("light", "chance"): 3.45,
+	("light", "rain"): 2.32,
+	("light", "grill+chance"): 2.73,
+	("light", "grill+rain"): 1.92,
+	("light", "chance+rain"): 2.03,
+	("light", "grill+chance+rain"): 1.73,
+	("dark", "grill"): 3.03,
+	("dark", "chance"): 2.35,
+	("dark", "rain"): 1.86,
+	("dark", "grill+chance"): 2.08,
+	("dark", "chance+rain"): 1.44,
+	("dark", "grill+rain"): 1.72,
+	("dark", "grill+chance+rain"): 1.35,
+}
+
+# How far a measured value may drift before the gate calls it a
+# regression. Two hundredths: smaller than any real palette change and
+# larger than the rounding in the table above.
+WASH_SLACK = 0.02
 
 
 def channel(value):
@@ -164,23 +206,46 @@ def main():
 
 	bad = 0
 
-	for ink, _why in GRILL_PAIRS:
-		for scheme, palette in (("light", light), ("dark", dark)):
-			if ink not in palette or "grill_window" not in palette:
-				print(f"palette: {scheme} has no colour {ink!r} or "
-				      f"'grill_window'", file=sys.stderr)
+	held = 0
+	clear = 0
+
+	for scheme, palette in (("light", light), ("dark", dark)):
+		for _name, key, _alpha in WASHES:
+			if key not in palette:
+				print(f"palette: {scheme} has no colour {key!r}",
+				      file=sys.stderr)
 				return 2
 
-			ground = over(palette["grill_window"],
-			              alphas[scheme]["grill_window"],
-			              palette["background"])
-			ratio = contrast(palette[ink], ground)
-			if ratio >= FLOOR or (ink, scheme) in GRILL_ALLOWED_UNDER:
-				continue
+		for count in (1, 2, 3):
+			for combo in itertools.combinations(WASHES, count):
+				ground = palette["background"]
+				for _name, key, alpha in combo:
+					part = (alphas[scheme][key] if alpha is None
+					        else alpha)
+					ground = over(palette[key], part, ground)
 
-			print(f"palette: {ink} on {OVER_GRILL} is {ratio:.2f}:1 in "
-			      f"the {scheme} scheme, under {FLOOR}:1", file=sys.stderr)
-			bad += 1
+				tag = "+".join(name for name, _k, _a in combo)
+				worst = min((contrast(palette[ink], ground), ink)
+				            for ink, _why in WASHED_PAIRS)
+
+				recorded = WASH_WORST.get((scheme, tag))
+				if recorded is None:
+					print(f"palette: no recorded worst for {tag} in "
+					      f"the {scheme} scheme", file=sys.stderr)
+					bad += 1
+					continue
+
+				if worst[0] < recorded - WASH_SLACK:
+					print(f"palette: {worst[1]} over {tag} is "
+					      f"{worst[0]:.2f}:1 in the {scheme} scheme, "
+					      f"worse than the recorded {recorded:.2f}:1",
+					      file=sys.stderr)
+					bad += 1
+				elif recorded >= FLOOR:
+					clear += 1
+				else:
+					held += 1
+
 
 	for ink, ground, _why in PAIRS + [(a, b, "") for a, b in ALLOWED_UNDER]:
 		for scheme, palette in (("light", light), ("dark", dark)):
@@ -200,10 +265,10 @@ def main():
 	if bad:
 		return 1
 
-	print(f"palette: {len(PAIRS)} pair(s) on the plot and "
-	      f"{len(GRILL_PAIRS)} over the grill window clear {FLOOR}:1 in "
-	      f"both schemes, {len(ALLOWED_UNDER) + len(GRILL_ALLOWED_UNDER)} "
-	      f"allowed under it by name")
+	print(f"palette: {len(PAIRS)} pair(s) on the plot clear {FLOOR}:1 "
+	      f"in both schemes, {len(ALLOWED_UNDER)} allowed under by name; "
+	      f"of {clear + held} wash combination(s), {clear} clear the "
+	      f"floor and {held} are held at their measured worst")
 	return 0
 
 

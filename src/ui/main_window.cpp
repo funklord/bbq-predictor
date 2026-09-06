@@ -1342,8 +1342,21 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 
 void bbq_main_window::refresh_corrected() {
 	/*
-	 * Recomputed for whatever the graph is looking at, because the
-	 * correction depends on lead time and lead time depends on the view.
+	 * Recomputed for whatever the graph is looking at, because the view
+	 * decides WHICH instants need a corrected value -- not what the
+	 * correction is.
+	 *
+	 * The distinction is worth the sentence (project.md sec 16.31). The
+	 * bias curves come from history.verification over the whole
+	 * archive, and an instant's lead time is its own start against when
+	 * the forecast was issued; neither moves when somebody scrolls. So
+	 * panning re-derives the same numbers for a different set of
+	 * instants, and the curve does not change shape under the hand.
+	 *
+	 * This used to say the correction depends on lead time and lead
+	 * time depends on the view, which is the confusion the sentence now
+	 * exists to prevent: it reads as licence for a view-dependent
+	 * answer, and one of those in bbq_grill_windows cost sec 16.30.1.
 	 */
 	const qint64 from = m_graph->view_from_utc();
 	const qint64 to = from + m_graph->view_span_s();

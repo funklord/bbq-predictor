@@ -8906,3 +8906,113 @@ fixture: five cold hours, so the window opens on a transition. The test
 now asserts that before relying on it, because a fixture that has
 quietly stopped exercising the hazard reads exactly like one that never
 did.
+
+
+## 16.31 The lens from the last bug, and what it found
+
+The last three defects share one shape: **an answer that depends on the
+question rather than on the data.** A window scored over the viewport, a
+scan grid phased to the query, a proportion taken against the one
+dimension that had ever varied. So the lens was every computation here
+that takes a range, asked whether the range SELECTS or whether it
+DECIDES.
+
+**It came back almost empty, and the sweep is recorded so the next
+person picks a different lens rather than this one again:**
+
+    bbq_grill_windows       decided    fixed in sec 16.30.1
+    bbq_corrected_forecast  selects    bias from the whole archive
+    reduce(composite,..)    selects    per-column drawing, view-scoped
+    series::range           selects    index lookup
+    newest_observation      selects    a calendar day
+    record_forecast's range selects    the composite's own span
+    feed::set_view_range    decides    and correctly: it is a request
+                                       for data to be loaded
+
+One correction came out of it. `refresh_corrected` said it recomputed
+"because the correction depends on lead time and lead time depends on
+the view" -- and the code is right while the sentence is not. An
+instant's lead is its own start against the issue time, and the bias
+curves come from the whole archive; the view decides which instants get
+a value, not what the value is. **The sentence read as licence for a
+view-dependent answer**, which is the defect it sits three files away
+from.
+
+### 16.31.1 The lens's successor found more than the lens did
+
+The grill window was a wash creating a ground. **There are three**, and
+the one already fixed was the mildest:
+
+    dark scheme          ground     worst ink
+    grill (alpha 22)     #2a221c      3.03    stale_warning
+    chance (alpha 60)    #163a47      2.35
+    rain (alpha 120)     #214866      1.86
+    chance+rain          #215a7e      1.44
+    all three            #2a5e7f      1.35
+
+The light scheme is better and not clear either: `corrected` reaches
+1.73 over all three.
+
+**And it cannot be fixed by dimming, which is the finding rather than
+the numbers.** The grill wash alone leaves the curve at 3.03:1 on dark,
+so there is no budget left for a second one -- searched over every
+(chance, rain) pair down to alpha 5, nothing clears 3:1 with all three
+present. Washes COMPOSE, and a floor met by each of them separately is
+not a floor met by the drawing.
+
+**So sec 16.28.1 undercounted its own finding.** It said the plot has
+three grounds and the gate knew one. The plot has eight, and the gate
+now knows all of them.
+
+### 16.31.2 A table, not an ignore list
+
+Waiving this per ink would be thirty-four entries, and **a gate carrying
+that has been switched off by instalments**. `WASH_WORST` records one
+number per combination instead -- the worst ink over that ground, and
+which ink it was -- with the gate reporting the split rather than
+averaging it: three combinations clear the floor, eleven are held at
+their measured worst.
+
+Entries at or above 3:1 are a real pass. Entries below are a **tripwire**
+carrying the date, not an endorsement: the gate's job there is to refuse
+to let the number get worse while the fix is decided. A combination with
+no recorded worst is an error rather than a skip, so a fourth wash
+cannot arrive unmeasured.
+
+Controlled twice. Raising the rain wash from 120 to 150 fires on all
+eight affected combinations across both schemes; deleting one row fires
+`no recorded worst for chance+rain in the dark scheme`.
+
+### 16.31.3 What would fix it, and whose it is
+
+The temperature curve is drawn over grounds **the drawing itself
+creates** and cannot predict -- which is the map-label situation this
+project has already met twice and answered the same way both times: the
+tray number and the widget's number are outlined, because the panel and
+the wallpaper are not theirs to know.
+
+Giving the curve a thin halo in the plot's own background colour would
+put a known ground under it whatever the washes do, and would leave
+Weather Underground's measured red exactly where it is. It is not done
+here: it changes how the primary data element is drawn, on every
+screenshot and in the widget, and that is a look rather than a bug fix.
+
+The alternatives, so they are not re-derived as improvements: dimming
+cannot work, as above; drawing the curve before the washes would put the
+data under its own annotation; and a per-wash floor is what the numbers
+already show is unreachable.
+
+### 16.31.4 My own number was wrong in the table I wrote to hold it
+
+The first version of the tripwire recorded the light scheme's worst as
+2.06 -- the TEMPERATURE over all three washes, read off a table whose
+rows I had scanned for the ink I was thinking about. The worst is
+`corrected` at 1.73.
+
+The gate caught it on its first run, which is the argument for computing
+a table rather than typing one: the second version is generated by the
+same expression the gate uses to check it. **That is one witness twice
+and would be a bad way to establish the numbers are RIGHT** -- what
+makes it acceptable is that the table's job is to detect change, not to
+certify a value, and the values it holds are stated as measured rather
+than as good.
