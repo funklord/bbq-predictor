@@ -1,6 +1,7 @@
 #include <QTest>
 
 #include "model/composite.h"
+#include "model/duration.h"
 #include "model/grill.h"
 #include "model/series.h"
 
@@ -15,6 +16,7 @@ class test_model : public QObject {
 	Q_OBJECT
 
 private slots:
+	void a_span_is_said_in_units_a_reader_thinks_in();
 	void samples_are_sorted_on_the_way_in();
 	void a_span_that_ended_does_not_cover_now();
 	void range_takes_overlaps_not_containment();
@@ -412,3 +414,39 @@ void test_model::radar_still_sharpens_the_rain() {
 
 QTEST_APPLESS_MAIN(test_model)
 #include "test_model.moc"
+
+/*
+ * DURATIONS IN UNITS SOMEBODY READS (sec 16.45).
+ *
+ * The feed said "ISTOCK877 has not reported for 1248 minutes" on the
+ * phone. Correct, and nobody reads it as the twenty-one hours it is.
+ *
+ * The boundaries are asserted rather than a few sample values, because
+ * a unit switch is exactly where an off-by-one lives and the middle of
+ * a range is where it cannot be seen.
+ */
+void test_model::a_span_is_said_in_units_a_reader_thinks_in() {
+	/* Under an hour: minutes. */
+	QCOMPARE(bbq_describe_duration(0), QStringLiteral("0 min"));
+	QCOMPARE(bbq_describe_duration(59 * 60 + 59), QStringLiteral("59 min"));
+
+	/* At an hour it changes, and keeps the minutes. */
+	QCOMPARE(bbq_describe_duration(3600), QStringLiteral("1 h 0 min"));
+	QCOMPARE(bbq_describe_duration(3600 + 59 * 60),
+	         QStringLiteral("1 h 59 min"));
+
+	/* The case that prompted this: 1248 minutes. */
+	QCOMPARE(bbq_describe_duration(1248 * 60), QStringLiteral("20 h 48 min"));
+
+	/* Two days is where the minutes stop being worth saying. */
+	QCOMPARE(bbq_describe_duration(47 * 3600 + 59 * 60),
+	         QStringLiteral("47 h 59 min"));
+	QCOMPARE(bbq_describe_duration(48 * 3600), QStringLiteral("2 days"));
+
+	/*
+	 * A clock that has moved backwards is not a duration, and "-3 min"
+	 * inside a sentence about how long something has been quiet is
+	 * worse than the vaguer true answer.
+	 */
+	QCOMPARE(bbq_describe_duration(-90), QStringLiteral("no time at all"));
+}

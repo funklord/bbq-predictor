@@ -9928,3 +9928,49 @@ compares the first line of each now, which is what actually holds.
 **Reordering code invalidates assertions about its output, and nothing
 says so**: the test kept passing, the sabotages kept failing, and only
 reading the assertion against the new shape found it.
+
+
+## 16.45 A number that was correct and unreadable
+
+Read off the phone:
+
+    last error: observed: ISTOCK877 has not reported for 1248 minutes
+
+Twenty-one hours, said in a unit nobody converts in their head. The
+number was right, the unit was fixed, and the message stopped being
+legible the moment the span outgrew it.
+
+`bbq_describe_duration` says it in units a reader thinks in, and the
+thresholds are **the ones `GraphWidget.describe` already uses** for the
+widget's own staleness line -- minutes under an hour, hours under two
+days, days beyond. That file is Java and cannot share the function, so
+the agreement is stated in a comment rather than assumed: two surfaces
+of one program should not disagree about how long a while is.
+
+The second message went with it. It said "%3 hours before the day did",
+which has the same fault pointed the other way: a hole of forty minutes
+read as "0 hours".
+
+**The minutes stay while the hours are few**, because *3 h 5 min* is a
+different afternoon from *3 h 55 min* and both round to three. Past two
+days they are noise.
+
+A negative span answers "no time at all" rather than "-3 min". A clock
+that has moved is not a duration, and the vaguer true answer beats the
+precise nonsense inside a sentence about how long something has been
+quiet.
+
+### 16.45.1 Boundaries, not samples
+
+The test asserts each unit switch from both sides -- 59 min and 1 h 0
+min, 47 h 59 min and 2 days -- rather than a few values from the middle
+of each range. **A unit switch is exactly where an off-by-one lives, and
+the middle of a range is where it cannot be seen.** Sabotaged never to
+leave minutes, and to reach days a day early, it fails at the boundary
+in both.
+
+**Not yet seen on the device.** The phone dropped off USB between the
+build and the install, so the line above has not been read again in its
+new form. The formatter is covered by the suite, including the exact
+1248-minute case; what is unverified is that this message is the one
+that formats it.

@@ -1,5 +1,7 @@
 #include "wu/feed.h"
 
+#include "model/duration.h"
+
 #include <QDate>
 #include <QDateTime>
 
@@ -1059,9 +1061,9 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 		if (behind > station_quiet_s) {
 			emit band_failed(
 			        QStringLiteral("observed"),
-			        tr("%1 has not reported for %2 minutes")
+			        tr("%1 has not reported for %2")
 			                .arg(m_station_id)
-			                .arg(behind / 60));
+			                .arg(bbq_describe_duration(behind)));
 		}
 
 		return;
@@ -1078,11 +1080,11 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 	}
 
 	emit band_failed(QStringLiteral("observed"),
-	                 tr("%1 returned only %2 rows, ending %3 hours before the "
+	                 tr("%1 returned only %2 rows, ending %3 before the "
 	                    "day did -- the archive has a hole in it")
 	                         .arg(asked.toString(Qt::ISODate))
 	                         .arg(measured.size())
-	                         .arg(short_by / 3600));
+	                         .arg(bbq_describe_duration(short_by)));
 }
 
 QDate bbq_wu_feed::backfill_day_wanted(const QString &station) const {
