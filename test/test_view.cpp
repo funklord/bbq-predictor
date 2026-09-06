@@ -71,6 +71,7 @@ private slots:
 	void a_window_boundary_in_view_is_drawn();
 	void a_window_running_off_the_edge_draws_no_rule_there();
 	void a_window_lands_where_it_lands_whatever_range_was_asked();
+	void the_curve_clears_the_floor_against_whatever_it_crosses();
 
 	/*
 	 * The contrast clamp the home-screen picture draws through
@@ -1230,4 +1231,154 @@ void test_view::a_window_lands_where_it_lands_whatever_range_was_asked() {
 	QCOMPARE(shifted.end_utc, whole.end_utc);
 	QCOMPARE(shifted_again.start_utc, whole.start_utc);
 	QCOMPARE(shifted_again.end_utc, whole.end_utc);
+}
+
+/*
+ * THE HALO, ASSERTED AS THE PROPERTY IT EXISTS FOR (sec 16.32).
+ *
+ * Not "is a halo drawn" -- that is a mechanism, and a test on it would
+ * pass a halo one pixel wide, the wrong colour, or on the wrong side.
+ * What the curve needs is to clear the contrast floor against WHATEVER
+ * IS BESIDE IT, and beside it is a ground this drawing invents: the
+ * rain area, the chance wash, a grilling window, or any two at once.
+ *
+ * So the fixture is certain rain at a rate, which puts both washes over
+ * the plot, and the assertion samples what actually surrounds the ink.
+ * Reverted, the same measurement reads about 1.4:1.
+ */
+void test_view::the_curve_clears_the_floor_against_whatever_it_crosses() {
+	std::vector<bbq_sample> samples;
+	for (int at = 0; at < 24; ++at) {
+		bbq_sample sample;
+		sample.start_utc = 1600000000 + at * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 15.0 + (at % 6);
+		sample.precip_chance = 100.0;
+		sample.precip_rate = 8.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+	graph.set_composite(composite);
+	/*
+	 * Samples ON, and it matters. The first draft turned them off to
+	 * keep the measurement clean, and the sample dots turned out to be
+	 * the only thing that failed: the curve is smoothed, so a knot can
+	 * sit well away from the line, and two of them landed on the rain
+	 * wash with nothing under them (sec 16.32.1). Excluding them would
+	 * have measured the easy half.
+	 */
+	graph.set_show_samples(true);
+	graph.resize(900, 400);
+	graph.set_view(1600000000, 12 * 3600);
+
+	const QImage shot = graph.grab().toImage();
+	const QColor ink = graph.palette_colours().temperature;
+
+	/*
+	 * WALK OUT AND SEE WHICH ARRIVES FIRST: the plot's own ground, or
+	 * the wash.
+	 *
+	 * That ordering IS the property. A fixed sample distance was tried
+	 * twice and is the wrong instrument, for two reasons the profiles
+	 * showed and no amount of care would have predicted: the ink is
+	 * antialiased, so three rows below the last pure #d5202a are still
+	 * dark red and read 1.56:1 against it; and a sloped column stretches
+	 * both the ink and its halo vertically, so the right distance is
+	 * different in every column.
+	 *
+	 * Walking is immune to both. It does not care how thick the halo is
+	 * or how steep the line -- only that the ink is bordered by a colour
+	 * this program chose rather than by one the weather painted.
+	 */
+	/*
+	 * CONTRAST, not colour identity, and the difference took three
+	 * drafts to find. A 1.5-pixel halo under an antialiased 2.6-pixel
+	 * line does not produce a pixel equal to the ground: the profile on
+	 * the tighter side reads #d5202a, #33191c, #182128, then the wash.
+	 * Nothing there IS the background, and asking for one failed on
+	 * eight of seventeen columns while the halo was working perfectly.
+	 *
+	 * What the curve needs is not a pixel of a particular colour beside
+	 * it. It is a border it can be read against -- so the question is
+	 * whether contrast reaches the floor before the wash arrives.
+	 */
+	const auto legible_against = [&](const QColor &at) {
+		return bbq_contrast_ratio(ink, at) >= 3.0;
+	};
+
+	/*
+	 * Unambiguously the wash rather than a blend on the way to it. The
+	 * washes are blue where the ground is neutral, so the test is
+	 * "clearly bluer than the ink" -- which names no wash's colour and
+	 * so does not go stale when an alpha moves.
+	 */
+	const auto is_wash = [&](const QColor &at) {
+		return at.blue() - at.red() > 25;
+	};
+
+	int checked = 0;
+	int bare = 0;
+	int bare_x = 0;
+
+	for (int x = 200; x < 700; x += 25) {
+		int first = -1;
+		int last = -1;
+		for (int y = 1; y < shot.height() - 1; ++y) {
+			if (shot.pixelColor(x, y) != ink) {
+				continue;
+			}
+			if (first < 0) {
+				first = y;
+			}
+			last = y;
+		}
+
+		if (first < 0 || first < 12 || last + 12 >= shot.height()) {
+			continue;
+		}
+
+		/* Up from the top of the ink, and down from the bottom. */
+		const std::pair<int, int> walks[] = {{first, -1}, {last, 1}};
+
+		for (const std::pair<int, int> &walk : walks) {
+			++checked;
+
+			for (int step = 1; step <= 10; ++step) {
+				const QColor at =
+				        shot.pixelColor(x, walk.first + walk.second * step);
+
+				if (legible_against(at)) {
+					break;
+				}
+
+				if (is_wash(at)) {
+					++bare;
+					bare_x = x;
+					break;
+				}
+			}
+		}
+	}
+
+	QVERIFY2(checked >= 16,
+	         qPrintable(QStringLiteral("only %1 side(s) had the curve in "
+	                                   "them, so this measured almost "
+	                                   "nothing")
+	                            .arg(checked)));
+
+	QVERIFY2(bare == 0,
+	         qPrintable(QStringLiteral("%1 of %2 side(s) put the curve "
+	                                   "straight onto the wash with no "
+	                                   "ground of its own, at x=%3")
+	                            .arg(bare)
+	                            .arg(checked)
+	                            .arg(bare_x)));
 }

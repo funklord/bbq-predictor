@@ -68,12 +68,28 @@ WASHES = [
 # two alphas are still literals in the painter and are copied above,
 # which is the same fault at one remove and is recorded in sec 16.31.
 
+# The inks that meet a wash WITH NOTHING UNDER THEM.
+#
+# Three names are deliberately absent and each for a different reason,
+# which is why they are listed here rather than just left out:
+#
+#   temperature   haloed (sec 16.32). The curve is stroked in the
+#                 plot's own ground before the ink, so what it is read
+#                 against is `background` -- already checked in PAIRS --
+#                 whatever the weather shades underneath. `corrected`
+#                 is NOT haloed and stays in the list below: a halo on
+#                 it erased the curve it runs along (sec 16.32.1).
+#
+#   stale_warning DRAWN NOWHERE. It is set in both schemes, carried
+#                 through the contrast clamp and asserted about by three
+#                 tests, and no painter ever uses it (sec 16.32.2). It
+#                 was in this list described as "said when a band is
+#                 old", which is a claim about a drawing that does not
+#                 happen.
 WASHED_PAIRS = [
 	("axis_text", "the scale numbers, where a wash shades them"),
-	("temperature", "the forecast curve, over one"),
 	("corrected", "the bias-corrected overlay, over one"),
 	("day_divider", "the midnight rule crossing one"),
-	("stale_warning", "said over one"),
 	("now_marker", "the now line crossing one"),
 ]
 
@@ -92,12 +108,17 @@ WASHED_PAIRS = [
 #              2026-09-06 and is not endorsed; the gate's job is to
 #              refuse to let it get worse while the fix is decided.
 #
-# It cannot be fixed by dimming, and that is structural. The grill wash
-# alone leaves the curve at 3.03:1 on dark, so there is no budget for a
-# second one -- searched over every (chance, rain) pair down to alpha 5,
-# nothing clears 3:1 with all three present. What would fix it is giving
-# the curve a ground of its own, which is a change to the primary data
-# element and the holder's to make.
+# It could not be fixed by dimming, and that was structural: the grill
+# wash alone left the curve at 3.03:1 on dark, so there was no budget
+# for a second, and no (chance, rain) pair down to alpha 5 cleared 3:1
+# with all three present. The CURVE was fixed by giving it a ground of
+# its own instead (sec 16.32); it no longer appears here at all, because
+# what it is read against is `background` and PAIRS checks that.
+#
+# Every remaining number below is the bias-corrected overlay, which is
+# not haloed: a halo on it erased the curve it runs along, and the fix
+# for that is to draw every halo before every ink, which is a
+# restructure rather than an alpha (sec 16.32.1).
 WASH_WORST = {
 	("light", "grill"): 3.34,
 	("light", "chance"): 3.45,
@@ -106,13 +127,13 @@ WASH_WORST = {
 	("light", "grill+rain"): 1.92,
 	("light", "chance+rain"): 2.03,
 	("light", "grill+chance+rain"): 1.73,
-	("dark", "grill"): 3.03,
-	("dark", "chance"): 2.35,
-	("dark", "rain"): 1.86,
-	("dark", "grill+chance"): 2.08,
-	("dark", "chance+rain"): 1.44,
-	("dark", "grill+rain"): 1.72,
-	("dark", "grill+chance+rain"): 1.35,
+	("dark", "grill"): 3.60,
+	("dark", "chance"): 2.79,
+	("dark", "rain"): 2.21,
+	("dark", "grill+chance"): 2.47,
+	("dark", "grill+rain"): 2.05,
+	("dark", "chance+rain"): 1.71,
+	("dark", "grill+chance+rain"): 1.61,
 }
 
 # How far a measured value may drift before the gate calls it a

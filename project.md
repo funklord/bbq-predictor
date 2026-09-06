@@ -9016,3 +9016,111 @@ and would be a bad way to establish the numbers are RIGHT** -- what
 makes it acceptable is that the table's job is to detect change, not to
 certify a value, and the values it holds are stated as measured rather
 than as good.
+
+
+## 16.32 The curve carries its own ground
+
+The temperature curve is stroked twice: the plot's own background at
+1.5 pixels wider, then Weather Underground's red over it. What it is
+read against is now a colour this program chose, whatever the weather
+shades underneath -- so it leaves the measured red exactly where it is
+and stops the washes deciding whether the forecast is visible.
+
+The same answer this project reached for the tray icon and for the
+widget's number, and for the same reason: the ground is not ours to
+know, so the ink brings one. It is what map labels do.
+
+**What that did to sec 16.31's table**: the curve's eleven tripwires are
+gone -- it does not appear in the wash checks at all now, because
+`background` is its ground and PAIRS already checks that.
+
+### 16.32.1 Three things a contrast measurement could not have told me
+
+All three were found by looking at a picture, and the suite was green
+for two of them.
+
+**The overlay's halo erased the curve.** The bias-corrected line is
+drawn after the temperature curve and runs along it, so its halo laid
+ground over the red under every dash -- and the curve then rendered as
+DASHED, which in this chart's own language means *arithmetic rather than
+measured*. **A legibility fix that makes a measured line claim to be
+derived is a worse bug than the one it fixes.** The overlay is not
+haloed; its wash contrast stays in the gate as tripwires.
+
+**A ring around every sample dot cut the line.** Same cause -- a halo is
+destructive and the dots came after the curve -- and the graph rendered
+as a row of dots with black collars. The dots are drawn BEFORE the curve
+now. Moving them under costs nothing: where a knot and the curve agree
+the line covers the dot, and that is the case where the dot said what
+the line already said.
+
+**Then the ring swallowed the dot.** A pen of width w centres its stroke
+on the outline, so half falls inside; at the width this needs, a
+radius-3 dot became a ground ring with a pinprick of red in it. Two
+fills -- a larger disc in the ground, the real one over it -- put the
+whole ring outside.
+
+**The shape worth keeping: a halo is not a property of a line, it is an
+ordering constraint on the whole drawing.** Every halo must be laid
+before every ink, or it reaches back and eats what is already there.
+This function does not do that in general; it does it for the three
+cases that matter, and the general fix is a restructure recorded rather
+than done.
+
+### 16.32.2 The arithmetic that nearly dropped the ring was right and useless
+
+A knot sits on the curve at radius 3.0 and the curve's halo reaches 2.8
+from the same centre, so a dot protrudes by two tenths of a pixel and
+needs no ring. That reasoning is correct, and I acted on it.
+
+**It is true of the knots ON the curve and false of the ones that
+matter.** The line is smoothed, so a knot can sit well away from it --
+and those are precisely the samples worth marking, because they are
+where the drawn line and the measurement disagree. Two of them landed
+straight on the rain wash with nothing under them.
+
+The test caught it only because the fixture was changed to turn sample
+marks ON. **The first draft turned them off to keep the measurement
+clean, and would have measured the easy half.**
+
+### 16.32.3 A dead colour, found by asking who draws each ink
+
+`stale_warning` is set in both schemes, carried through the contrast
+clamp, and asserted about by three tests. **No painter uses it
+anywhere.** It was in the palette gate described as "said when a band is
+old", which is a claim about a drawing that does not happen.
+
+Found only because the halo forced the question *which inks actually
+meet a wash* -- and answering it per ink, rather than per interface,
+is what `evidence.md` prescribes for exactly this: a method that exists,
+compiles and is obviously correct attracts no suspicion.
+
+It is out of the wash checks and recorded rather than removed: whether
+the graph should say staleness in its own colour, or whether the tray
+and the status line saying it is enough, is a decision and not a tidy-up.
+
+### 16.32.4 What the test asserts, and the two instruments that failed first
+
+Not "is a halo drawn" -- that is a mechanism, and a test on it passes a
+halo one pixel wide, the wrong colour, or on the wrong side. It walks
+outward from the ink and asks **which arrives first, a border it can be
+read against or the wash.**
+
+Two earlier instruments were wrong, and both failed in the direction
+that blames working code:
+
+- **A fixed sampling distance.** The ink is antialiased, so three rows
+  below the last pure `#d5202a` are still dark red and read 1.56:1
+  against it -- and a sloped column stretches ink and halo differently,
+  so the right distance differs per column. The first draft asked for
+  four pixels and failed against a halo that was working.
+- **Colour identity.** A 1.5-pixel halo under a 2.6-pixel antialiased
+  line does not produce a pixel EQUAL to the ground; the tighter side
+  reads `#d5202a`, `#33191c`, `#182128`, then wash. Asking for a
+  background-coloured pixel failed on eight of seventeen columns while
+  the halo was working perfectly.
+
+Walking is immune to both, because it asks the question the drawing
+actually has to answer. Sabotaged by removing the halo it reports 34 of
+34 sides bare; sabotaged by offsetting the halo two pixels so it covers
+one side only, 16 of 17.

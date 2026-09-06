@@ -170,6 +170,41 @@ enum class quantity {
 	wind,
 };
 
+/*
+ * HOW MUCH GROUND A LINE CARRIES WITH IT (project.md sec 16.32).
+ *
+ * One pixel each side. Enough to separate the ink from whatever wash it
+ * crosses, small enough that two lines a couple of pixels apart still
+ * read as two lines rather than as one thick one.
+ */
+const double halo_grow = 1.5;
+
+/*
+ * A pen that strokes the plot's own ground under a line, so the line is
+ * read against a colour this program chose rather than against whatever
+ * the weather happened to shade underneath it (sec 16.32).
+ *
+ * The dashed case is the fiddly one and is why this is a function. Qt
+ * scales a dash pattern by the pen's width, so a wider pen drawn with
+ * Qt::DashLine has LONGER dashes -- the halo would run past the ink at
+ * one end of every dash and fall short at the other. Restating the
+ * pattern in the wider pen's own units puts the two back in step in
+ * pixels, which is the unit that matters on screen.
+ */
+QPen halo_pen(const QColor &ground, double line_width, Qt::PenStyle style) {
+	const double wide = line_width + 2.0 * halo_grow;
+
+	QPen pen(ground, wide, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin);
+
+	if (style == Qt::DashLine) {
+		/* Qt's own DashLine is 4 on, 2 off, in units of pen width. */
+		pen.setDashPattern({4.0 * line_width / wide,
+		                    2.0 * line_width / wide});
+	}
+
+	return pen;
+}
+
 QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
 	switch (band) {
 	case bbq_band::observed:
@@ -1949,9 +1984,102 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		}
 	}
 
+	/*
+	 * Below one sample per pixel the marks are not drawn at all
+	 * (sec 13.2).
+	 *
+	 * Sec 3.11.3 makes a dot mean "a real sample, here". At a zoom where
+	 * twenty of them share a pixel they merge into a band of ink that
+	 * claims a density of measurement nobody made -- the graph that is
+	 * wrong while looking fine. Absent dots say "zoomed out"; smeared
+	 * dots say something false.
+	 */
+	int knot_total = 0;
+	for (const column &c : columns) {
+		knot_total += c.knot_count;
+	}
+
+	const bool marks_would_crowd = knot_total > plot.width();
+
+	if (m_show_samples && !marks_would_crowd) {
+		/*
+		 * RINGED IN THE GROUND, and drawn BEFORE the curve rather than
+		 * after it (sec 16.32.1).
+		 *
+		 * A halo is destructive -- it lays ground over whatever is
+		 * already there -- so a ring drawn after the line cut the line,
+		 * and the curve rendered as a row of dots with black collars.
+		 * A screenshot showed that; no contrast measurement would have.
+		 *
+		 * The ring was nearly dropped instead, on the arithmetic that a
+		 * knot sits on the curve and the curve's own halo already
+		 * reaches past it. That is true of the knots ON the curve and
+		 * false of the ones that matter: the line is smoothed, so a
+		 * knot can sit well away from it, and those are exactly the
+		 * samples worth marking. Two of them landed straight on the
+		 * rain wash with nothing under them.
+		 *
+		 * Moving the marks under the line costs nothing. Where a knot
+		 * and the curve agree the line covers the dot, and that is the
+		 * case where the dot was saying what the line already said.
+		 */
+		painter.setPen(Qt::NoPen);
+
+		/*
+		 * Two fills rather than a stroke. A pen of width w centres its
+		 * stroke ON the outline, so half of it falls INSIDE the dot --
+		 * at the widths this needs that left a ring of ground with a
+		 * pinprick of red in the middle, which is a different mark
+		 * meaning nothing. Filling a larger disc first and the real one
+		 * over it puts the whole ring outside, where it belongs.
+		 */
+		for (int x = 0; x < plot.width(); ++x) {
+			const column &c = columns[x];
+			if (!c.covered || !c.knot_has_temperature) {
+				continue;
+			}
+
+			const double px = plot.left() + x;
+			const double py = y_for_temperature(c.knot_temperature);
+			const double r = m_metrics.sample_radius;
+
+			painter.setBrush(m_palette.background);
+			painter.drawEllipse(QPointF(px, py), r + halo_grow,
+			                    r + halo_grow);
+
+			painter.setBrush(m_palette.temperature);
+			painter.drawEllipse(QPointF(px, py), r, r);
+		}
+
+		painter.setBrush(Qt::NoBrush);
+	}
+
 	/* --- temperature, broken wherever no band covers a column --------- */
 	painter.setBrush(Qt::NoBrush);
-	painter.setPen(QPen(m_palette.temperature, m_metrics.line_width));
+
+	/*
+	 * HALOED (sec 16.32). The curve crosses grounds this drawing makes
+	 * for itself -- the rain area, the chance wash, a grilling window,
+	 * and any two of them at once -- and stacked they take Weather
+	 * Underground's red to 1.35:1 on the dark scheme. No alpha fixes
+	 * that, because the washes compose; a ground of the line's own does,
+	 * and it leaves the measured red exactly where it is.
+	 *
+	 * The same answer this project reached for the tray icon and the
+	 * widget's number, and for the same reason: the ground is not ours
+	 * to know, so the ink brings one.
+	 */
+	const QPen curve_ink(m_palette.temperature, m_metrics.line_width);
+	const QPen curve_halo =
+	        halo_pen(m_palette.background, m_metrics.line_width,
+	                 Qt::SolidLine);
+
+	const auto stroke_curve = [&](const QPolygonF &line) {
+		painter.setPen(curve_halo);
+		painter.drawPolyline(line);
+		painter.setPen(curve_ink);
+		painter.drawPolyline(line);
+	};
 
 	QPolygonF run;
 	for (int x = 0; x < plot.width(); ++x) {
@@ -1964,7 +2092,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 * nothing has reported on (sec 3.6).
 			 */
 			if (run.size() > 1) {
-				painter.drawPolyline(run);
+				stroke_curve(run);
 			}
 			run.clear();
 			continue;
@@ -1974,7 +2102,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	}
 
 	if (run.size() > 1) {
-		painter.drawPolyline(run);
+		stroke_curve(run);
 	}
 
 	/*
@@ -2080,8 +2208,29 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 				QPen corrected_pen(ink, m_metrics.line_width);
 				corrected_pen.setStyle(Qt::DashLine);
-				painter.setPen(corrected_pen);
+
+				/*
+				 * NOT HALOED, and that is a decision rather than an
+				 * omission (sec 16.32.1).
+				 *
+				 * A halo is destructive: it lays ground over whatever
+				 * is already there. This line is drawn after the
+				 * forecast curve and runs along it, so its halo erased
+				 * the red under every dash -- and the curve then read
+				 * as DASHED, which in this chart's own language means
+				 * "arithmetic rather than measured". A legibility fix
+				 * that makes a measured line claim to be derived is a
+				 * worse bug than the one it fixes.
+				 *
+				 * What would work is drawing every halo before every
+				 * ink, so no halo can reach an ink already down. That
+				 * is a restructure of this function and is recorded
+				 * rather than done; meanwhile the overlay's contrast
+				 * over the washes is held by the palette gate's
+				 * tripwires.
+				 */
 				painter.setBrush(Qt::NoBrush);
+				painter.setPen(corrected_pen);
 				painter.drawPolyline(corrected_run);
 
 				/*
@@ -2207,41 +2356,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * lets a smoothed curve be read honestly: the dots are the data and
 	 * the line between them is drawn.
 	 */
-	/*
-	 * Below one sample per pixel the marks are not drawn at all
-	 * (sec 13.2).
-	 *
-	 * Sec 3.11.3 makes a dot mean "a real sample, here". At a zoom where
-	 * twenty of them share a pixel they merge into a band of ink that
-	 * claims a density of measurement nobody made -- the graph that is
-	 * wrong while looking fine. Absent dots say "zoomed out"; smeared
-	 * dots say something false.
-	 */
-	int knot_total = 0;
-	for (const column &c : columns) {
-		knot_total += c.knot_count;
-	}
 
-	const bool marks_would_crowd = knot_total > plot.width();
-
-	if (m_show_samples && !marks_would_crowd) {
-		painter.setPen(Qt::NoPen);
-		painter.setBrush(m_palette.temperature);
-
-		for (int x = 0; x < plot.width(); ++x) {
-			const column &c = columns[x];
-			if (!c.covered || !c.knot_has_temperature) {
-				continue;
-			}
-
-			const double px = plot.left() + x;
-			const double py = y_for_temperature(c.knot_temperature);
-			const double r = m_metrics.sample_radius;
-			painter.drawEllipse(QPointF(px, py), r, r);
-		}
-
-		painter.setBrush(Qt::NoBrush);
-	}
 
 	/* --- the provenance ribbon (sec 3.4) ------------------------------ */
 	for (int x = 0; x < plot.width(); ++x) {
