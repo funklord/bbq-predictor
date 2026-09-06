@@ -8753,3 +8753,34 @@ That is the one that proves the gate is reading the alpha out of the
 source rather than carrying its own copy -- which is the entire point of
 sec 16.29.1, and the only control that could have caught the parser
 silently ignoring the fourth argument.
+
+
+## 16.30 Dashed, because the plot had run out of colours to be told apart by
+
+The window's edges are dashed. There are three kinds of vertical rule on
+the plot and only two axes to distinguish them on:
+
+    now              solid    amber    #ffd400
+    midnight         solid    white    #ffffff
+    a window's ends  dashed   orange   #ff8b33
+
+Amber and orange are one hue apart, so before this the only way to tell
+`now` from a window boundary was to know which was which. **A difference
+somebody has to be told about is not a difference the drawing makes.**
+
+Dashes also survive the place colour does not. On the home-screen
+picture a wallpaper shows through everything at a quarter strength and
+the temperature curve is walked pale by the contrast clamp, so hue is
+the least reliable channel there and shape is the most. The grid is
+dotted rather than dashed, so all three styles stay separable.
+
+It is drawn with a pen rather than a filled rectangle now, and the right
+edge sits ON the boundary rather than a line-width inside it -- a pen
+centres its stroke, so the offset the fill needed became an error.
+
+**Not gated, and worth saying so.** The palette gate answers about
+colour, and a dash that regressed to solid would pass everything here.
+What makes that acceptable rather than an oversight is that it is
+visible in the first screenshot anybody takes -- unlike the clipping
+rule beside it, which only shows when a window runs off the edge of the
+view and is the thing in this block most likely to break unseen.

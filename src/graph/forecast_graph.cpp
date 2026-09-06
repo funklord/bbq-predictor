@@ -1548,19 +1548,35 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 * Only where the boundary is really there. A window running
 			 * off the side of the view has been clipped, and a rule at
 			 * the clip would claim it starts where the screen does.
+			 *
+			 * DASHED, because there are three kinds of vertical rule on
+			 * this plot now and two of them are a colour apart. Solid
+			 * amber is now, solid white is midnight, and a window's
+			 * ends were solid orange -- which is a hue away from now
+			 * and nothing else, so telling them apart meant naming the
+			 * colours. Dashes are a difference somebody can see without
+			 * being told, and they survive the one place colour does
+			 * not: the home-screen picture, where a wallpaper shows
+			 * through everything at a quarter strength.
+			 *
+			 * Distinct from the grid, which is dotted, for the same
+			 * reason.
 			 */
 			QColor edge = m_palette.grill_window;
 			edge.setAlpha(255);
 
 			const double thick = 2.0;
+			const double bottom = plot.top() + tall;
+
+			QPen edge_pen(edge, thick, Qt::DashLine);
+			edge_pen.setCapStyle(Qt::FlatCap);
+			painter.setPen(edge_pen);
+
 			if (x0 >= plot.left()) {
-				painter.fillRect(
-				        QRectF(x0, plot.top(), thick, tall), edge);
+				painter.drawLine(QLineF(x0, plot.top(), x0, bottom));
 			}
 			if (x1 <= plot.right()) {
-				painter.fillRect(
-				        QRectF(x1 - thick, plot.top(), thick, tall),
-				        edge);
+				painter.drawLine(QLineF(x1, plot.top(), x1, bottom));
 			}
 		}
 	}
