@@ -103,25 +103,57 @@ public class GraphWidget extends AppWidgetProvider {
 
 	/*
 	 * How wide and tall the placed widget actually is, in dp, or 0 when
-	 * that cannot be told (project.md sec 16.22).
+	 * that cannot be told (project.md sec 16.33).
 	 *
 	 * The picture used to be drawn at a fixed 1000 by 440 on the
 	 * reasoning that a launcher would scale it UP. This launcher scales
-	 * it DOWN: the widget is 440 by 195 physical pixels on the cover
-	 * screen, so every glyph was minified by about two and a third and
-	 * the readout, the caption and the axis labels were smears.
+	 * it DOWN: the widget is 337 by 208 dp on the cover screen, so
+	 * every glyph was minified and the readout, the caption and the
+	 * axis labels were smears.
 	 *
 	 * dp rather than pixels because Qt's logical pixel is a dp here, so
 	 * a graph resized to these and grabbed at the device ratio comes
 	 * out at the widget's real pixel size, and the text is drawn at the
 	 * size it was designed at.
+	 *
+	 * THE LARGER OF THE TWO BOUNDS. Android reports a RANGE, not a
+	 * size: MIN_WIDTH and MAX_WIDTH are the lower and upper bounds on
+	 * the current width, because a widget is one shape in portrait and
+	 * another in landscape and the host describes both at once. Reading
+	 * the lower bound draws a picture that can be SMALLER than the box
+	 * it goes in, and the ImageView then scales it up -- blurring the
+	 * text this whole exercise exists to keep sharp.
+	 *
+	 * Taking the upper bound cannot be too small, so the picture is
+	 * never magnified. Where the box is smaller than the bound the
+	 * ImageView shrinks it, which costs nothing.
+	 *
+	 * WHAT THIS DOES NOT DO is guarantee the picture fills the box
+	 * exactly. The layout is fitCenter, which preserves the aspect
+	 * ratio, so a picture whose shape differs from the box's is
+	 * letterboxed rather than cropped -- and that is the right trade
+	 * for a graph, where centerCrop would cut the axis labels off and
+	 * fitXY would misstate the data by stretching it. The letterbox is
+	 * bounded by the gap between the two bounds, and is nothing at all
+	 * on a host that reports a single size.
+	 *
+	 * Measured on the device: this launcher pins the home screen to
+	 * portrait, reports min and max equal at 337 by 208, and keeps them
+	 * equal through a forced rotation -- so here the two readings agree
+	 * and this change is provably a no-op. It is made for the hosts
+	 * that do report a range, which are hosts this workspace has not
+	 * got.
 	 */
 	public static int wantedWidth(Context context) {
-		return option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
+		return Math.max(
+		        option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
+		        option(context, AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH));
 	}
 
 	public static int wantedHeight(Context context) {
-		return option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
+		return Math.max(
+		        option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
+		        option(context, AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT));
 	}
 
 	private static int option(Context context, String key) {

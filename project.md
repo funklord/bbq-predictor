@@ -9180,3 +9180,71 @@ four steps" as *this is the line's own direction*, not a failure.
 
 `evidence.md` says when a result surprises you the apparatus is where
 the error usually is. Four for four here.
+
+
+## 16.33 The upper bound, and the question it does not answer
+
+The widget picture is drawn from the LARGER of the two bounds Android
+reports rather than the smaller.
+
+**Android reports a RANGE, not a size.** `MIN_WIDTH` and `MAX_WIDTH` are
+the lower and upper bounds on the current width, because a widget is one
+shape in portrait and another in landscape and the host describes both
+at once. Reading the lower bound can draw a picture SMALLER than the box
+it goes in, and the `ImageView` then scales it up -- blurring the text
+that sec 16.22 exists to keep sharp. The upper bound cannot be too
+small, so the picture is never magnified.
+
+**"So it always fills" is the half this does not deliver, and saying so
+is the point.** The layout is `fitCenter`, which preserves the aspect
+ratio, so a picture whose shape differs from the box's is letterboxed.
+The alternatives were considered and both are worse for a graph:
+`centerCrop` fills by cutting the axis labels off the edges, and
+`fitXY` fills by stretching, which makes a chart misstate its own data.
+**A graph can have "no crop and no distortion" or "always exactly
+fills", not both** -- unless the picture matches the box, which is what
+happens whenever a host reports a single size.
+
+The residual letterbox is bounded by the gap between the two bounds, and
+is nothing at all where they are equal.
+
+### 16.33.1 Provably a no-op here, and that is the honest claim
+
+Measured before changing anything: this launcher reports min and max
+EQUAL at 337 by 208 dp for the placed widget, and **keeps them equal
+through a forced rotation** -- the cover screen's home is pinned to
+portrait, so there is no second shape to describe. The rendered picture
+is 885 by 546 before and after, which is 337 by 208 at this screen's
+2.625 pixels per dp.
+
+So the change cannot be shown to do anything on the only host available.
+It is made for the hosts that do report a range, and those are hosts
+this workspace has not got.
+
+**That is a weaker position than it looks, and the neighbouring rule is
+why.** `harmonization.md` refused to ship a parser for a colour-scheme
+file nobody here can open, on the grounds that a plausible format is not
+a measured one. The same argument nearly refuses this. What separates
+them is that the format there was GUESSED and the bounds here are
+DOCUMENTED and already being read -- the change is which of two values
+already in hand gets used, and the direction is decided by which failure
+is possible: too small magnifies, too large shrinks, and only one of
+those loses information.
+
+**What was NOT built for the same reason.** The exact box is derivable
+-- portrait is `MIN_WIDTH` by `MAX_HEIGHT`, landscape is `MAX_WIDTH` by
+`MIN_HEIGHT` -- and that would fill precisely with no letterbox at all.
+It needs the current orientation, the mapping is convention rather than
+anything this device can be made to demonstrate, and the rotation
+experiment above is exactly the test that would have verified it and
+could not. A branch that cannot be exercised here is a branch that gets
+written once and read wrong later.
+
+### 16.33.2 An assumption corrected on the way
+
+Every earlier note in sec 16.22 and sec 16.23 worked from a device
+ratio of 3.0. It is **2.625**: 337 dp times 2.625 is 885, which is the
+picture's real width to the pixel. Nothing depended on the number --
+the render asks Qt for the ratio rather than assuming one -- but the
+arithmetic in those entries was checked against a figure that was
+wrong, and agreed anyway because both sides of the check used it.
