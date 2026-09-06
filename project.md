@@ -10191,3 +10191,61 @@ one that can say the tree has been swept.
 The two that were left are recorded with their reasons, because the next
 person to run that grep will find the same five lines and should not
 have to re-derive why two of them are fine.
+
+
+## 16.51 Searching for dead fields, and the two ways the search lied
+
+`stale_warning` (sec 16.32.3) and `bbq_window::worst` (sec 16.43) were
+both found by chance -- a colour nothing painted, a number nothing read.
+Two sightings of one class, so it was worth a search: every field of the
+model structs, against every member access in `src/`.
+
+**43 fields across 7 structs, 0 with no reader.** So the class is closed
+for the model, and the next instance will have to come from somewhere
+else.
+
+That result is only worth writing down because the search was made to
+fail first, and it took two goes.
+
+### 16.51.1 A false positive: a member read by its own class
+
+The first run reported `bbq_reliability_bin::probability_bin` dead. It
+is not -- `forecast()` reads it, in the struct's own body, as a bare
+name with no `.` or `->` in front of it. A pattern looking for member
+ACCESS cannot see a member used by the class that owns it.
+
+Checked before it was written up, which is the only reason it did not
+become a section about removing a live field.
+
+### 16.51.2 A false negative: the comment that kept a field alive
+
+With that fixed the search still needed a control, so the dip from
+sec 16.43 was reverted to make `worst` unread again. **The search
+reported nothing.**
+
+`bbq_window` carries the comment *"Mean and worst score across the
+window"*, and the detector counted that line as a reader. Comments read
+as code -- the exact fault swept out of four gates in sec 16.41, in a
+script written hours later by the person who had swept them.
+
+Stripping comments, the control fires and names `bbq_window::worst`.
+
+**Both errors point the same way as a class**: a detector for "nothing
+uses this" is a detector whose whole output is an absence, and both
+failures made an absence look like presence or the reverse without
+either being visible in the result.
+
+### 16.51.3 Left as a sweep, not made a gate
+
+The tree is clean, so a gate would lock that in -- and this detector
+needs comment stripping, member-access patterns and a carve-out for a
+class's own methods before it says anything true. `evidence.md` draws
+the line where this falls: a one-off sweep is read entirely by whoever
+ran it, and over-reporting costs them reading time, while a standing
+gate accumulates ignore rules until it has been switched off by
+instalments.
+
+The script is not kept. What is kept is the result, the control that
+makes it mean something, and the two blind spots -- so the next person
+sweeping this class starts from a working instrument rather than
+rediscovering both.
