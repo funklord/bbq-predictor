@@ -83,6 +83,23 @@ const QColor halo(0xf2, 0xf2, 0xf2);
 
 } // namespace
 
+QString bbq_tray_icon::reading_label(const bbq_composite &composite) {
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	/* The owner-then-cover order show_state explains just below. */
+	bbq_reading reading = composite.owner_at(now);
+	if (!reading.is_valid()) {
+		reading = composite.at(now);
+	}
+
+	const bbq_sample sample = composite.resolved_at(now);
+	if (!reading.is_valid() || !sample.temperature.has_value()) {
+		return QStringLiteral("--");
+	}
+
+	return QString::number(*sample.temperature, 'f', 0);
+}
+
 void bbq_tray_icon::show_state(const bbq_composite &composite,
                                const QString &verdict) {
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
@@ -108,11 +125,10 @@ void bbq_tray_icon::show_state(const bbq_composite &composite,
 
 	const bbq_sample sample = composite.resolved_at(now);
 
-	QString label = QStringLiteral("--");
+	const QString label = reading_label(composite);
 	QString detail;
 
 	if (reading.is_valid() && sample.temperature.has_value()) {
-		label = QString::number(*sample.temperature, 'f', 0);
 		detail = QString::number(*sample.temperature, 'f', 1);
 		detail += QStringLiteral(" C from ");
 		detail += QString::fromLatin1(bbq_band_name(reading.series->band()));

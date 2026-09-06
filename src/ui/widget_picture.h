@@ -1,7 +1,8 @@
 #ifndef BBQ_UI_WIDGET_PICTURE_H
 #define BBQ_UI_WIDGET_PICTURE_H
 
-class QWidget;
+class QString;
+class bbq_forecast_graph;
 
 /*
  * Render `source` to the picture the home-screen widget reads, and tell
@@ -17,8 +18,12 @@ class QWidget;
  * decode the file at any moment and a half-written PNG decodes to
  * nothing -- which the widget would correctly report as no picture at
  * all, having no way to tell that from a file still being written.
+ *
+ * `reading` is the number to draw over the graph -- the tray's, from
+ * bbq_tray_icon::reading_label, so that the two cannot disagree.
  */
-void bbq_write_widget_picture(QWidget *source);
+void bbq_write_widget_picture(bbq_forecast_graph *source,
+                              const QString &reading);
 
 /*
  * Ask Android to fetch periodically even when nothing is on screen

@@ -1098,10 +1098,21 @@ void bbq_forecast_graph::set_window(qint64 before_s, qint64 after_s) {
 	update();
 }
 
+void bbq_forecast_graph::set_opaque_background(bool opaque) {
+	if (m_opaque_background == opaque) {
+		return;
+	}
+
+	m_opaque_background = opaque;
+	update();
+}
+
 void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	QPainter painter(this);
 	painter.setRenderHint(QPainter::Antialiasing);
-	painter.fillRect(event->rect(), m_palette.background);
+	if (m_opaque_background) {
+		painter.fillRect(event->rect(), m_palette.background);
+	}
 
 	/*
 	 * The right gutter is measured, not chosen.

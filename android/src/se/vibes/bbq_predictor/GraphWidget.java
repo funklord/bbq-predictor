@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Bundle;
 import android.widget.RemoteViews;
 
 import java.io.File;
@@ -98,6 +99,56 @@ public class GraphWidget extends AppWidgetProvider {
 
 		/* A null array is the question failing, not an answer. */
 		return ids == null || ids.length > 0;
+	}
+
+	/*
+	 * How wide and tall the placed widget actually is, in dp, or 0 when
+	 * that cannot be told (project.md sec 16.22).
+	 *
+	 * The picture used to be drawn at a fixed 1000 by 440 on the
+	 * reasoning that a launcher would scale it UP. This launcher scales
+	 * it DOWN: the widget is 440 by 195 physical pixels on the cover
+	 * screen, so every glyph was minified by about two and a third and
+	 * the readout, the caption and the axis labels were smears.
+	 *
+	 * dp rather than pixels because Qt's logical pixel is a dp here, so
+	 * a graph resized to these and grabbed at the device ratio comes
+	 * out at the widget's real pixel size, and the text is drawn at the
+	 * size it was designed at.
+	 */
+	public static int wantedWidth(Context context) {
+		return option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH);
+	}
+
+	public static int wantedHeight(Context context) {
+		return option(context, AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
+	}
+
+	private static int option(Context context, String key) {
+		if (context == null) {
+			return 0;
+		}
+
+		AppWidgetManager manager = AppWidgetManager.getInstance(context);
+		if (manager == null) {
+			return 0;
+		}
+
+		int[] ids = manager.getAppWidgetIds(
+		        new ComponentName(context, GraphWidget.class));
+		if (ids == null || ids.length == 0) {
+			return 0;
+		}
+
+		/*
+		 * The first one. More than one placed widget is possible and
+		 * they may differ; drawing for the first is a choice rather
+		 * than an oversight, and the alternative -- a picture each --
+		 * is a render apiece every five minutes for a case nobody has
+		 * yet had.
+		 */
+		Bundle options = manager.getAppWidgetOptions(ids[0]);
+		return options == null ? 0 : options.getInt(key, 0);
 	}
 
 	/*

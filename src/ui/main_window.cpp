@@ -2,6 +2,7 @@
 
 #include "ui/flow_layout.h"
 #include "ui/widget_picture.h"
+#include "ui/tray_icon.h"
 
 #include <QGuiApplication>
 
@@ -491,7 +492,8 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		 *
 		 * A no-op off Android.
 		 */
-		bbq_write_widget_picture(m_graph);
+		bbq_write_widget_picture(
+		        m_graph, bbq_tray_icon::reading_label(m_feed->composite()));
 	});
 
 	/*

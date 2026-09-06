@@ -48,6 +48,17 @@ public:
 	 */
 	void show_state(const bbq_composite &composite, const QString &verdict);
 
+	/*
+	 * The number the tray shows, or "--" when there is not one.
+	 *
+	 * Static and public because the home-screen widget draws the same
+	 * number over its graph (project.md sec 16.23), and a second copy
+	 * of "which band owns this instant, and does it carry a
+	 * temperature" would be a second thing to be wrong. The tray's
+	 * answer is the answer.
+	 */
+	static QString reading_label(const bbq_composite &composite);
+
 signals:
 	/* The user clicked the icon and wants the window shown or hidden. */
 	void toggle_requested();

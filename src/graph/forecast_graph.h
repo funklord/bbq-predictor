@@ -202,6 +202,17 @@ public:
 	void set_theme(bbq_theme theme);
 	bbq_theme theme() const { return m_theme; }
 
+	/*
+	 * Paint the ground, or leave whatever is behind showing through.
+	 *
+	 * On for anything on a screen: a graph that does not fill its own
+	 * rectangle shows the last frame under it. Off for the home-screen
+	 * widget picture (project.md sec 16.23), which is rendered into a
+	 * transparent image so the wallpaper carries the ground.
+	 */
+	void set_opaque_background(bool opaque);
+	bool opaque_background() const { return m_opaque_background; }
+
 	void set_show_wind(bool show);
 	bool show_wind() const { return m_show_wind; }
 
@@ -298,6 +309,7 @@ private:
 	bool m_scale_held = false;
 	int m_smoothing_s = 30 * 60;
 	bool m_show_windows = true;
+	bool m_opaque_background = true;
 
 	/*
 	 * Where the readout is pointing, as a column index into the plot,

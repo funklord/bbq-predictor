@@ -1,5 +1,7 @@
 #include <QApplication>
 #include <QFile>
+#include <QImage>
+#include <QPainter>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QTest>
@@ -55,6 +57,11 @@ private slots:
 	void a_theme_setting_lands_somewhere_defined();
 	void automatic_never_answers_unknown();
 	void automatic_releases_the_override();
+
+	/*
+	 * The home-screen widget's ground (sec 16.23).
+	 */
+	void the_ground_is_painted_unless_it_is_turned_off();
 
 	/*
 	 * Tier 4: the scheme a TDE or KDE 3 desktop writes to kdeglobals,
@@ -840,4 +847,43 @@ void test_view::the_applied_lxqt_palette_is_read_from_lxqt_conf_itself() {
 	/* theme= is lowercase and names no palette file; the answer is in
 	 * this file regardless. */
 	QCOMPARE(bbq_scheme_from_desktop_files({conf}), Qt::ColorScheme::Dark);
+}
+
+/*
+ * THE WIDGET'S TRANSPARENT GROUND, BOTH WAYS ROUND (sec 16.23).
+ *
+ * The home-screen picture is rendered into an image filled transparent
+ * and relies on the graph declining to paint its own ground; the
+ * wallpaper is then what shows through. A graph that painted regardless
+ * would produce a picture with a black slab in it, and the widget would
+ * look wrong rather than fail, which is the kind of fault a screenshot
+ * catches and a suite does not.
+ *
+ * Asserted in both directions on purpose. Only checking the transparent
+ * case would pass against a graph that had stopped painting a ground at
+ * all -- which is the same defect seen from the window's side, where it
+ * shows as the previous frame smeared under the curve.
+ */
+void test_view::the_ground_is_painted_unless_it_is_turned_off() {
+	bbq_forecast_graph graph;
+	graph.resize(200, 100);
+
+	/* A corner the plot does not reach, so what is read there is the
+	 * ground and nothing drawn over it. */
+	const QPoint corner(1, 98);
+
+	QImage opaque(graph.size(), QImage::Format_ARGB32_Premultiplied);
+	opaque.fill(Qt::transparent);
+	graph.render(&opaque, QPoint(), QRegion(), QWidget::DrawChildren);
+
+	QVERIFY(graph.opaque_background());
+	QCOMPARE(qAlpha(opaque.pixel(corner)), 255);
+
+	graph.set_opaque_background(false);
+
+	QImage clear(graph.size(), QImage::Format_ARGB32_Premultiplied);
+	clear.fill(Qt::transparent);
+	graph.render(&clear, QPoint(), QRegion(), QWidget::DrawChildren);
+
+	QCOMPARE(qAlpha(clear.pixel(corner)), 0);
 }

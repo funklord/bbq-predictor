@@ -8104,8 +8104,121 @@ It is the same asymmetry and the same answer as the backfill's "not
 knowing means ask" in sec 15.7.1, and the third time this session that
 an early return has had to be turned round.
 
-**What is not verified is the positive path**, and it is worth saying
+~~**What is not verified is the positive path**, and it is worth saying
 rather than implying: no widget has been placed on either phone all
 evening, so "it still draws when one exists" rests on `anyPlaced` using
 the same call `refresh()` does, not on having seen it. Placing one is
-the test.
+the test.~~ **Verified in sec 16.22**, which is where the test the last
+sentence asked for was finally run.
+
+
+## 16.22 The widget was placed, and the picture was the wrong size
+
+The positive path sec 16.21.1 left open was finally exercised: a widget
+put on the cover-screen home page, bound as `[9] id=27` against the
+launcher's host, with `files/widget.png` written beside it. `anyPlaced`
+answers yes when one exists, which until then rested on it using the
+same call `refresh()` does.
+
+**And the picture in it was a smear.** The graph drew: the curve, the
+samples, the corrected band, the now-marker, the grill window. Every
+piece of text in it -- the readout, the `bias-corrected` caption, the
+axis labels -- was illegible.
+
+**The cause was a comment in this tree that said the opposite of what
+happens.** The picture was rendered at 1000 by 440 with the reasoning
+recorded beside the constant: *renders at twice that so it stays sharp
+when a launcher scales it up*. Measured, this launcher scales it **down**
+-- the placed widget is 440 by 195 physical pixels on the cover screen,
+so every glyph was minified by about two and a third.
+
+The sentence was not wrong about arithmetic. It was a **guess about
+somebody else's software written in the voice of a fact**, and it sat
+next to the constant it justified for as long as nobody looked at a
+placed widget. A guess with a reason attached reads as a measurement,
+which is `evidence.md`'s *a number that arrives already corrected is the
+one nobody re-checks* in its cheapest form: nothing here had ever
+rendered at widget size, so there was no run in which the claim could
+have been contradicted.
+
+**The lesson is the direction, not the factor.** The failure was not
+"too small a render", which is what an author worrying about sharpness
+would have expected and guarded. It was too large a one, and a scale
+factor is a ratio whose denominator belonged to a program this tree does
+not own.
+
+## 16.23 Its own size, a transparent ground, and the tray's number
+
+Three changes, and the first is the one the others depend on.
+
+**Ask how big the widget is rather than guessing.**
+`GraphWidget.wantedWidth` and `wantedHeight` read
+`OPTION_APPWIDGET_MIN_WIDTH` and `MIN_HEIGHT` from the host's own
+options bundle. In **dp**, deliberately: Qt's logical pixel is a dp
+here, so a graph resized to those and rendered at the device ratio comes
+out at the widget's real pixel size and every glyph is drawn at the size
+the font designer meant. Measured on the device the answer is 295 by 84
+dp, and the file is 885 by 252 -- against 1000 by 440 before, so the
+picture is *smaller* and legible where it was larger and not.
+
+Both or neither. A width from Android with a fallback height would be an
+aspect ratio nobody chose, and the launcher would letterbox or crop it.
+An answer outside 60 to 2000 dp is not believed; the fallback is 440 by
+190, which is what a phone will not have to shrink much.
+
+**Draw nothing behind it.** `bbq_forecast_graph::set_opaque_background`
+turns off the ground fill in `paintEvent`, and the picture is rendered
+into an ARGB image filled transparent, so the wallpaper carries the
+ground. The plates the graph already draws behind its own axis labels
+are what keeps those legible over an unknown wallpaper -- they were
+there for the on-screen case and they pay for themselves here.
+
+**Put the temperature over the top**, large, which is what a widget is
+for. It is `bbq_tray_icon::reading_label`, extracted from the tray and
+made static rather than reimplemented: "which band owns this instant and
+does it carry a temperature" is one question, and a second copy of it
+would be a second thing to be wrong. Outlined for the reason the tray's
+number is outlined (sec 4.3), and the reason is stronger here -- the
+tray sits on a panel whose colour is merely unknown, while this lands on
+whatever wallpaper somebody chose. This is `harmonization.md`'s rule
+about a surface owning none of its ground, met by a light halo under a
+dark fill rather than by picking a side.
+
+### 16.23.1 The corners are not free, and today's data cannot tell you
+
+Drawn top-right first, over the rain gutter's `10 mm/h` plate. Top-left
+is the temperature axis's `22 C`. It is centred along the top now,
+because that is the one place free **whatever the weather does**: the
+axis labels are pinned to the corners by the graph's own layout, and the
+curve cannot reach the top edge because the scale keeps headroom above
+its warmest sample.
+
+**A corner that happens to be empty in today's data is not a free
+corner.** It is a collision waiting for a warmer afternoon, and it would
+have arrived long after anybody connected it to this change.
+
+### 16.23.2 Watching the ground fail
+
+`test_view::the_ground_is_painted_unless_it_is_turned_off` renders the
+graph into a transparent image twice and reads the alpha of a corner the
+plot does not reach: opaque with the fill on, clear with it off.
+
+**Both directions on purpose.** Asserting only the transparent case
+would pass against a graph that had stopped painting a ground at all --
+the same defect seen from the window's side, where it shows as the
+previous frame smeared under the curve. Sabotaged by removing the
+condition so the ground is painted regardless, the test fails on exactly
+that assertion:
+
+    FAIL!  : the_ground_is_painted_unless_it_is_turned_off()
+       Actual   (qAlpha(clear.pixel(corner))): 255
+       Expected (0)                          : 0
+
+**And a probe on the device had the same shape of fault, caught the same
+way.** Waiting for a fresh picture with a loop that stops when
+`files/widget.png` exists matched the *old* file instantly and reported
+success in ten milliseconds. An existing artifact and a newly written
+one are indistinguishable to a test for existence. Deleting it first is
+what makes the wait mean anything -- `evidence.md`'s *a passing check is
+not evidence until you know it checked something*, arriving through a
+one-line shell loop.
