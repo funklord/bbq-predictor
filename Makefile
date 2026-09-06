@@ -391,15 +391,41 @@ DEB_DIR ?= $(BUILD_DIR)/deb
 # uses. It writes into the parent directory, so the artifacts are
 # collected from there by name rather than by a glob that could sweep
 # somebody else's build.
+# dpkg-buildpackage writes its artifacts into the PARENT directory, so
+# this collects them. The list comes from the .changes file rather than
+# from names spelled here, because the names are dpkg's to choose and it
+# has already changed one of them: this rule asked for
+# `-dbgsym_....ddeb` and dpkg produced `-dbgsym_....deb`, so every build
+# left a debug package sitting outside the project, for ever and in
+# silence. Reading the manifest cannot go stale that way.
+#
+# And it FAILS rather than shrugging, twice: once if a file the manifest
+# names is not there, and once if anything matching the package name is
+# still in the parent afterwards. A collector is proved by what it
+# leaves behind, and the previous one reported success while leaking.
 deb:
 	dpkg-buildpackage -b -us -uc
 	mkdir -p $(DEB_DIR)
-	for f in bbq-predictor_$(VERSION)-1_$(shell dpkg --print-architecture).deb \
-	         bbq-predictor-dbgsym_$(VERSION)-1_$(shell dpkg --print-architecture).ddeb \
-	         bbq-predictor_$(VERSION)-1_$(shell dpkg --print-architecture).buildinfo \
-	         bbq-predictor_$(VERSION)-1_$(shell dpkg --print-architecture).changes; do \
-		if [ -f ../$$f ]; then mv -f ../$$f $(DEB_DIR)/; echo "deb: $(DEB_DIR)/$$f"; fi; \
-	done
+	@arch=$$(dpkg --print-architecture); \
+	changes=bbq-predictor_$(VERSION)-1_$$arch.changes; \
+	if [ ! -f "../$$changes" ]; then \
+		echo "deb: ../$$changes was not produced" >&2; exit 1; \
+	fi; \
+	for f in $$(awk '/^Files:/{on=1;next} /^[^ ]/{on=0} on{print $$NF}' \
+	                "../$$changes") "$$changes"; do \
+		if [ ! -f "../$$f" ]; then \
+			echo "deb: ../$$f is in the manifest and not on disk" >&2; \
+			exit 1; \
+		fi; \
+		mv -f "../$$f" $(DEB_DIR)/; \
+		echo "deb: $(DEB_DIR)/$$f"; \
+	done; \
+	left=$$(ls ../bbq-predictor*_$(VERSION)-1_* 2>/dev/null || true); \
+	if [ -n "$$left" ]; then \
+		echo "deb: left in the parent directory:" >&2; \
+		echo "$$left" >&2; \
+		exit 1; \
+	fi
 
 hooks:
 	@if ! command -v git >/dev/null 2>&1; then \

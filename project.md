@@ -9456,3 +9456,61 @@ had said the first time.
 **A dark screen is not a quiet program.** On this device an app with no
 visible surface does not fetch, does not emit, and does not render -- so
 every measurement taken through it measures the lock screen.
+
+
+## 16.37 A clean-tree check, and the leak it found in the packaging
+
+Everything this session touched had only ever been built incrementally,
+so the tree was wiped and rebuilt three ways:
+
+    make test, serial, from clean        12 binary(ies), 0 failed
+    make -j12 tests-build, from clean    rc=0, 12 of 12 linked
+    make deb                             rc=0, suite ran, lintian clean
+                                         but for initial-upload-closes-no-bugs
+
+The parallel run matters because `check: style test` exists and
+`debian/rules` has no `dh_auto_test` override, so **the package build
+runs the whole suite in parallel** -- the configuration sec 15.9.1's
+object-name race actually broke. The per-target object directories still
+hold.
+
+**The leak: `make deb` was dropping a debug package outside the
+project.** The rule moved `bbq-predictor-dbgsym_...ddeb`; dpkg writes
+`...deb`. So every package build since left one in the parent directory,
+silently and for ever, which is the same defect `build-and-commit.md`
+records raidcfgd finding in its own first attempt.
+
+The rule reads the `.changes` manifest now rather than spelling names.
+dpkg chooses those names and has already changed one of them, so a list
+written here is a copy that can go stale; a manifest cannot. And it
+FAILS in two directions rather than shrugging -- if a file the manifest
+names is missing, and if anything matching the package name is still in
+the parent afterwards. **A collector is proved by what it leaves
+behind**, and the old one reported success while leaking.
+
+### 16.37.1 The failure that started it was mine, and so were three others
+
+The first clean run reported `test_view` failing to link with undefined
+moc symbols, which reads exactly like sec 15.9.1 returning. It was not.
+A background task had been killed mid-build and the next run continued
+on that tree, where an object left half-written is newer than its source
+-- `make` trusts it and the linker does not.
+
+sec 15.9.1 records the same interruption producing a false PASS: *five
+of twelve with no failure is not a pass, it is an unfinished measurement
+that reads exactly like one.* Mine produced a false FAILURE. **Either
+way the number described the interruption rather than the software**,
+and the sign it comes out with is luck.
+
+Three more, all this project's own rules and all in one stretch:
+
+- `make test 2>&1 | tail -25` threw the build log away before anything
+  had passed, so the diagnosis had to start over from clean.
+- The task then reported **exit code 0** for a failed build, because a
+  pipeline's status is its last process's.
+- Two steps were spent theorising about moc rules that were never wrong,
+  from the 27 lines the `tail` had left.
+
+**The apparatus was wrong four times and the code was wrong once**,
+which is the ratio `evidence.md` predicts and the reason its advice is
+to suspect the instrument first.
