@@ -1860,11 +1860,14 @@ rather than across the data.
 Three latent things, none of them reachable today, all worth knowing
 before somebody makes them reachable:
 
-- **`set_window()` has no callers.** It is superseded by `set_layout`,
-  which takes the span from the layout metrics, and it is the only
-  entry point that could set a zero span -- which would divide by zero
-  in `seconds_per_pixel`. Left alone rather than deleted: removing
-  public API is not a decision to take while reviewing something else.
+- **~~`set_window()` has no callers.~~ Removed, sec 16.54.** It was
+  superseded by `set_layout` for the default and `set_view` for the
+  user's own window, and it was the only entry point that could set a
+  zero span -- which would divide by zero in `seconds_per_pixel`. It
+  was left alone here because "removing public API is not a decision
+  to take while reviewing something else"; the sweep that removed it
+  was reviewing exactly this, so the condition was met rather than
+  waived.
 - **The knot invariant depends on arithmetic nobody stated.** A column
   holding two sample starts would mean the readout's mean temperature
   carried the first sample's timestamp, which breaks sec 3.11.3's
@@ -1875,11 +1878,13 @@ before somebody makes them reachable:
   controls set a larger minimum than the graph does. **It is safe by a
   factor of two, not by construction.** A finer band, or a much wider
   span, would end that quietly.
-- **The readout box flips left when it will not fit right**, and the
-  flipped position is not clamped, so a widget narrower than the box
-  would push it off the left edge. The comment says the box "never
-  leaves the widget", which is true only because the flip is triggered
-  by being near the right edge.
+- **~~The readout box flips left when it will not fit right.~~ Fixed,
+  sec 16.54.** The symptom recorded here was right and the mechanism
+  had gone stale: by the time it was fixed the box WAS clamped on both
+  sides, and the fault was the ORDER -- left clamp then right, so the
+  right one won and carried the box off the left edge. Same outcome,
+  different cause, which is why the observation was worth recording
+  separately from the explanation.
 
 One thing was wrong and is fixed: the readout's text colour was written
 into the painter as a literal while the box's background and border were
@@ -10361,3 +10366,86 @@ read rather than repeated:
 Corrected, the README shows no option that does not exist, and the seven
 it omits are deliberate: the manual is the exhaustive list and
 `man_options` gates that in both directions.
+
+
+## 16.54 Two latent faults, closed by asking which methods have no callers
+
+Sec 16.43's read of `paintEvent` left three latent faults, each judged
+unreachable and each written down. Two are now closed, and what found
+them was not a re-read of that code: it was **a sweep for declared
+methods with no call sites**, which `evidence.md` names as a lens in
+its own right -- an interface is only as wired as its least-used
+method, and a method that exists, compiles and is obviously correct
+attracts no suspicion.
+
+The sweep listed 23 candidates. Most were Qt virtuals, called by Qt and
+not by us, which is the expected noise from a probe told to over-report.
+Three were real, and one of those -- `stop_auto_refresh` -- was already
+documented as knowingly uncalled, in the function itself.
+
+### 16.54.1 `set_window()` is gone
+
+Superseded by `set_layout` for the default span and by `set_view` for
+the window the user pans and zooms, so the idea survives twice over.
+Its comment carried the reasoning for the default -- a little way back
+and a day forward, because the hourly band reaches fifteen days and
+drawing all of it compresses today into a few pixels -- and that has
+moved onto the fields it describes, which is where the default now
+lives.
+
+It was also the only entry point that could set a zero span, dividing
+by zero in `seconds_per_pixel`.
+
+### 16.54.2 The readout box now keeps its left edge, and there is a seam
+
+The shrinking loop drops fields while there are **more than two**, so a
+plot too narrow for the time and the temperature together leaves a box
+wider than the space it has. No position then satisfies both edges, and
+the order the clamps run in decides which edge loses. It ran left then
+right, so the right-hand clamp won and the box hung off the LEFT --
+carrying away the two fields the loop had worked to keep.
+
+`bbq_readout_box_x` is now a free function, and the clamps run right
+then left so an unfittable box starts inside the plot and is cut off at
+the far end by the widget's own clipping. It reads from the front.
+
+**The seam is the point, not the reorder.** The failing case cannot be
+reached from a desktop window, where the box always fits, so a test
+driving the widget would have asserted the fitting cases and passed
+against either order. A function taking four doubles can be asked the
+question directly.
+
+Watched to fail, which is what makes it evidence: with the old order
+restored, the test names the case and the number --
+
+    'x >= left' returned FALSE. (exactly as wide as the plot: box
+    starts at 38, left of the plot at 40 -- the time and the
+    temperature are off the edge)
+
+**And the boundary is tighter than the prediction.** The fault was
+expected where the box is WIDER than the plot; the first case to trip
+is where it is exactly AS WIDE, because each clamp also holds a
+two-pixel margin. Predicting the mechanism and measuring the boundary
+are different acts, and only the second produced the number.
+
+### 16.54.3 The sweep and its check shared a blind spot
+
+Worth more than either fault. The probe reported `set_derived_geocode`
+as having no callers, and a grep run to verify it agreed.
+
+Both were wrong, and for one reason: **a qualified call to a static
+member is spelled exactly like a definition header** --
+`bbq_settings::set_derived_geocode(...)` in both places -- and both
+instruments excluded that pattern to avoid counting definitions. Two
+witnesses, one blind spot, which is `evidence.md`'s corroboration rule
+met by checking a probe with a second probe built on the same idea.
+
+What separated them was the line ending: a definition header ends in
+`{`, a call ends in `;`. The method has exactly one caller, in
+`main_window.cpp`.
+
+`set_geocode_override` survived that correction as genuinely uncalled,
+and is NOT a defect: sec 2.6.7 names the ini key and `--geocode` as the
+two ways to set the point, so the setter stores exactly what a
+hand-edited config would. An unused convenience, not a half-wired
+feature.

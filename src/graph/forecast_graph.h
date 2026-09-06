@@ -126,6 +126,24 @@ struct bbq_graph_palette {
 std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
                                        const QTimeZone &zone, int cap = 400);
 
+/*
+ * Where the readout box starts, given the cursor it points at and the
+ * plot it must stay inside.
+ *
+ * Out here rather than inside paintEvent because the interesting case
+ * cannot be reached from a desktop window: when the box is WIDER than
+ * the plot, no position satisfies both edges, and the order the two
+ * clamps are applied in decides which edge loses. The earlier shape
+ * pushed left then right, so the right-hand clamp won and the box
+ * hung off the LEFT -- taking the time and the temperature with it,
+ * which are the two fields the shrinking loop works to keep.
+ *
+ * The left edge wins here, so an unfittable box is cut off at the
+ * right by the widget's own clipping and reads from the front.
+ */
+double bbq_readout_box_x(double centre_px, double box_w,
+                         double plot_left, double plot_right);
+
 class bbq_forecast_graph : public QWidget {
 	Q_OBJECT
 
@@ -141,15 +159,6 @@ public:
 	 */
 	void set_corrected(bbq_series corrected);
 	const bbq_composite &composite() const { return m_composite; }
-
-	/*
-	 * The visible time window, as offsets from now in seconds. The
-	 * default looks a little way back and a day forward, which is the
-	 * span a question about this afternoon actually needs -- the hourly
-	 * band reaches fifteen days and drawing all of it would compress
-	 * today into a few pixels.
-	 */
-	void set_window(qint64 before_s, qint64 after_s);
 
 	/*
 	 * Adopt a layout's numbers, including its time window (sec 10).
@@ -309,6 +318,20 @@ private:
 	bbq_graph_palette m_palette;
 	bbq_composite m_composite;
 	bbq_series m_corrected;
+	/*
+	 * The DEFAULT visible window, as offsets from now in seconds --
+	 * the span before anybody has panned or zoomed. It looks a little
+	 * way back and a day forward, which is what a question about this
+	 * afternoon actually needs: the hourly band reaches fifteen days
+	 * and drawing all of it would compress today into a few pixels.
+	 *
+	 * Written by set_layout from the layout metrics, and read only
+	 * where the view has not been set. There was a public setter for
+	 * it once, superseded by set_layout for the default and set_view
+	 * for the user's own window -- and removed rather than left,
+	 * because it was the one entry point that could set a zero span,
+	 * which divides by zero in seconds_per_pixel (sec 16.54).
+	 */
 	qint64 m_before_s = 3 * 3600;
 	qint64 m_after_s = 21 * 3600;
 

@@ -1172,10 +1172,19 @@ void bbq_forecast_graph::wheelEvent(QWheelEvent *event) {
 	event->accept();
 }
 
-void bbq_forecast_graph::set_window(qint64 before_s, qint64 after_s) {
-	m_before_s = before_s;
-	m_after_s = after_s;
-	update();
+double bbq_readout_box_x(double centre_px, double box_w,
+                         double plot_left, double plot_right) {
+	double box_x = centre_px - box_w / 2.0;
+
+	/*
+	 * RIGHT FIRST, THEN LEFT, and the order is the whole point --
+	 * whichever runs last wins when the box cannot fit. See the
+	 * header.
+	 */
+	box_x = std::min(box_x, plot_right - box_w - 2.0);
+	box_x = std::max(box_x, plot_left + 2.0);
+
+	return box_x;
 }
 
 void bbq_forecast_graph::set_opaque_background(bool opaque) {
@@ -2506,10 +2515,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 * inside the plot where there is not, so it stays near
 			 * the finger without ever leaving the widget.
 			 */
-			double box_x = px - box_w / 2.0;
-			box_x = std::max(box_x, static_cast<double>(plot.left()) + 2.0);
-			box_x = std::min(box_x,
-			                 static_cast<double>(plot.right()) - box_w - 2.0);
+			const double box_x = bbq_readout_box_x(
+			        px, box_w, plot.left(), plot.right());
 
 			const QRectF box(box_x, plot.top() + 4, box_w, box_h);
 			painter.setPen(m_palette.readout_edge);

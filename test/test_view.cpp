@@ -72,6 +72,7 @@ private slots:
 	void a_window_running_off_the_edge_draws_no_rule_there();
 	void a_window_lands_where_it_lands_whatever_range_was_asked();
 	void the_curve_clears_the_floor_against_whatever_it_crosses();
+	void a_readout_too_wide_to_fit_keeps_its_left_edge();
 
 	/*
 	 * The contrast clamp the home-screen picture draws through
@@ -1491,4 +1492,52 @@ void test_view::the_curve_clears_the_floor_against_whatever_it_crosses() {
 		                                         ? QStringLiteral("mobile")
 		                                         : QStringLiteral("desktop"))));
 	}
+}
+
+/*
+ * The readout box, where it cannot fit.
+ *
+ * The shrinking loop drops fields while there are more than two, so a
+ * plot narrower than the time and the temperature together leaves a box
+ * wider than the space -- and then no position satisfies both edges.
+ * Which edge loses is decided by the order the clamps run in, and it is
+ * invisible from a desktop window, where the box always fits.
+ *
+ * ASSERT THE RELATIONSHIP: the box must start inside the plot in every
+ * case, including the one where it cannot end inside it. Asserting the
+ * fitting cases alone passes against either order.
+ */
+void test_view::a_readout_too_wide_to_fit_keeps_its_left_edge() {
+	const double left = 40.0;
+	const double right = 340.0;
+
+	struct {
+		const char *what;
+		double centre;
+		double box_w;
+	} const cases[] = {
+		{"room on both sides", 200.0, 120.0},
+		{"hard against the right", 338.0, 120.0},
+		{"hard against the left", 41.0, 120.0},
+		{"exactly as wide as the plot", 200.0, 300.0},
+		{"wider than the plot", 200.0, 400.0},
+		{"far wider, cursor at the left", 45.0, 900.0},
+	};
+
+	for (const auto &c : cases) {
+		const double x = bbq_readout_box_x(c.centre, c.box_w, left, right);
+
+		QVERIFY2(x >= left,
+		         qPrintable(QStringLiteral("%1: box starts at %2, left of "
+		                                   "the plot at %3 -- the time and "
+		                                   "the temperature are off the edge")
+		                            .arg(QString::fromLatin1(c.what))
+		                            .arg(x)
+		                            .arg(left)));
+	}
+
+	/* And where it DOES fit, it is still centred and still inside. */
+	const double fits = bbq_readout_box_x(200.0, 120.0, left, right);
+	QCOMPARE(fits, 140.0);
+	QVERIFY(fits + 120.0 <= right);
 }
