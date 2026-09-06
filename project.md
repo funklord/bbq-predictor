@@ -8845,6 +8845,36 @@ second sabotage fails on exactly that one:
 absence is hard**, and "far outside" is the case where every
 implementation agrees.
 
+### 16.30.1.2 Verified by hand on the device, in both directions
+
+The suite renders offscreen at 900 by 400. The phone is a different
+widget, a different plot rectangle and a real finger, so the fix was
+also driven by hand: pan forward until the window's start leaves the
+left edge, pan back until its end leaves the right.
+
+Measured from the screenshots rather than looked at, since "no rule at
+the edge" is exactly the claim an eye will grant too easily:
+
+    panned forward, start off the left    end off the right
+    rule columns    x = 99..102           x = 663..667
+    orange in the 7 leftmost columns   0          0
+    orange in the 7 rightmost columns  0          0
+    ground at the screen edge       #261f1b    #261f1b out to x=837
+    plain plot, for comparison      #16181a    #16181a
+
+**The tint reaching the edge is the half that matters.** Zero rules
+alone would also be produced by a window that had been truncated to the
+view and then shaded nothing -- which is what the old code did. A band
+that runs off the screen with no rule at the cut is the only pattern
+that says the window continues and the drawing knows it.
+
+One measurement error on the way, and it is this document's own
+recurring one: a single sample at x=838 read plain, which looked like
+the tint stopping short of the edge. It is not -- the band runs to 837
+and 838 is past the plot. **A lone sample at a boundary is the cheapest
+way to manufacture an absence**, and the edge of a rectangle is where
+sampling once is most tempting.
+
 ## 16.30.2 A window's edges are the weather's, not the question's
 
 The same defect one layer down, found while fixing the first.
