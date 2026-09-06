@@ -79,6 +79,7 @@ private slots:
 	void a_window_that_dips_says_so_and_a_steady_one_does_not();
 	void a_phone_gets_the_extra_windows_on_the_surface();
 	void the_station_box_asks_for_room_once_it_has_stations();
+	void the_tray_tip_says_an_age_in_units_a_reader_thinks_in();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1637,4 +1638,48 @@ void test_window::the_station_box_asks_for_room_once_it_has_stations() {
 	                                   "in it")
 	                            .arg(empty)
 	                            .arg(filled)));
+}
+
+/*
+ * THE THIRD PLACE THE UNIT FAULT LIVED (sec 16.50).
+ *
+ * The tray's tooltip said "%1 min old", so a station quiet overnight
+ * read as "1332 min old" -- the same fault as the status line and the
+ * hole report, found only by sweeping for the expression rather than
+ * fixing where it was noticed.
+ *
+ * Asserted as what it must NOT be as well as what it must: a tooltip
+ * containing "22 h" would satisfy a contains() check while still
+ * carrying the raw minutes beside it.
+ */
+void test_window::the_tray_tip_says_an_age_in_units_a_reader_thinks_in() {
+	bbq_tray_icon tray;
+
+	bbq_composite composite;
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+
+	std::vector<bbq_sample> samples;
+	bbq_sample sample;
+	sample.start_utc = QDateTime::currentSecsSinceEpoch();
+	sample.duration_s = 3600;
+	sample.temperature = 15.0;
+	samples.push_back(sample);
+	band.set_samples(std::move(samples));
+
+	/* Fetched twenty-two hours ago, which is the case that read as
+	 * 1332 minutes. */
+	band.set_fetched_utc(QDateTime::currentSecsSinceEpoch() - 22 * 3600);
+	composite.set_series(std::move(band));
+
+	tray.show_state(composite, QStringLiteral("verdict"));
+
+	const QString tip = tray.toolTip();
+
+	QVERIFY2(tip.contains(QStringLiteral("22 h")),
+	         qPrintable(QStringLiteral("the age is not in hours: %1")
+	                            .arg(tip)));
+	QVERIFY2(!tip.contains(QStringLiteral("1320 min")) &&
+	                 !tip.contains(QStringLiteral("1332 min")),
+	         qPrintable(QStringLiteral("the raw minutes are still there: %1")
+	                            .arg(tip)));
 }

@@ -10147,3 +10147,47 @@ about a working program.
 It cost nothing this time because the file list was checked before
 anything was written down. **That check is the only reason it did not
 become a section about a defect that does not exist.**
+
+
+## 16.50 Sweeping for the expression, not for the next place I looked
+
+sec 16.49 said a fix applied where a fault was noticed is not a fix
+applied where it lives. So the tree was swept for the expression rather
+than for the next report anybody happened to read:
+
+    grep -rn "/ 60\|/ 3600\|/ 86400" src/ --include=*.cpp
+
+Five sites, one of them a genuine third instance:
+
+- **`tray_icon.cpp`** said *"Oldest band %1 min old"*, so a station quiet
+  overnight read as **1332 min old** in the tray's tooltip. Fixed, and
+  tested by what it must NOT contain as well as what it must -- a tip
+  carrying "22 h" and the raw minutes beside it would satisfy a bare
+  `contains`.
+- **`history.cpp`** prints hours in a `qWarning` about a quantity that
+  never changed. A developer's log line rather than a reader's, and
+  hours are the right grain for "across N hours of observations".
+  Left.
+- **`main_window.cpp`**, twice: a grilling window's length as `%1 h` to
+  one decimal. The policy's floor is two hours, so there is no sub-hour
+  case to render badly, and "4.0 h" is what somebody planning an
+  afternoon wants. Left.
+- **`forecast_graph.cpp`**: `((from / 3600) + 1) * 3600` is tick
+  alignment, not display. Left.
+
+**Four of five were correct, and the sweep was still worth running** --
+because the one that was not had been printed in front of me all
+session, in the tray tooltip, and no amount of looking at the window
+would have shown it.
+
+### 16.50.1 The shape of the sweep is the finding
+
+Each of the three real instances was found a different way: the status
+line by reading the phone's screen, the hole report by running the CLI,
+and this one by grepping for the arithmetic. **The first two are
+sightings and only the third is a search**, and the third is the only
+one that can say the tree has been swept.
+
+The two that were left are recorded with their reasons, because the next
+person to run that grep will find the same five lines and should not
+have to re-derive why two of them are fine.

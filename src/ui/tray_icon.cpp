@@ -1,5 +1,7 @@
 #include "ui/tray_icon.h"
 
+#include "model/units.h"
+
 #include <QAction>
 #include <QApplication>
 #include <QBrush>
@@ -151,10 +153,15 @@ void bbq_tray_icon::show_state(const bbq_composite &composite,
 	if (oldest == 0) {
 		tip += tr("Never updated");
 	} else {
-		const qint64 age = (now - oldest) / 60;
+		/*
+		 * In units a reader thinks in (project.md sec 16.50). This said
+		 * "%1 min old" and a station quiet overnight made that "1332
+		 * min old" -- the same fault as the status line and the hole
+		 * report, in the third place it lives.
+		 */
 		tip += tr("Oldest band ");
-		tip += QString::number(age);
-		tip += tr(" min old");
+		tip += bbq_describe_duration(now - oldest);
+		tip += tr(" old");
 		if (stale) {
 			tip += tr("  -- STALE");
 		}
