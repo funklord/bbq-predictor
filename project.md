@@ -9626,7 +9626,8 @@ without the one line that makes it real. Which is exactly the kind of
 gap that recurs, because reading the `.pro` is not part of adding a
 header.
 
-`tool/header_deps.py` is in `make style` now. It carries its control
+`tool/build_wiring.py` is in `make style` now (it was
+`header_deps.py` for an hour; sec 16.40 says why it grew a name). It carries its control
 inside it -- a synthetic pair where one header is missing and one is not
 -- and refuses to report at all if the comparison cannot separate them,
 or if either the header list or the named list comes back empty. Two
@@ -9639,3 +9640,51 @@ every other signal -- the suite, the gates, the exit code -- says the
 same thing it says on a real pass. The only thing that separates them is
 making the code wrong on purpose and watching, and that only works if
 the build agrees to notice.
+
+
+## 16.40 The same silence one directory along
+
+`header_deps.py` became `tool/build_wiring.py` and grew a second check,
+because the fault it was written for has a sibling with the identical
+shape: **a file exists, nothing names it, and the build reports success
+while doing less than it appears to.**
+
+    a header not named in a .pro   editing it rebuilds nothing, so a
+                                   test asserting on it can never fail
+    a test .pro not in tests.pro   the binary is never built and never
+                                   run, and `make test` reports the
+                                   others passing
+
+The first cost a passing sabotage (sec 16.39.1). The second has not
+happened here -- all twelve projects are registered -- and is gated
+anyway, because reading `tests.pro` is not part of adding a test, which
+is exactly why the first one happened.
+
+**Renamed rather than extended under the old name.** `evidence.md` says
+a detector has to be renamed before it is trusted, because its name is
+what the next person points it at, and `header_deps` pointed at half of
+what the file now does.
+
+### 16.40.1 The second control found the gate reading text rather than meaning
+
+The first control -- an unregistered `test_scratch.pro` -- fired at
+once. The second, commenting out every registration in `tests.pro`,
+**passed.**
+
+The pattern matched `test_feed.pro` anywhere in the file, including on
+lines beginning with `#`. So a `tests.pro` with every entry commented
+out, which builds nothing at all, would have been reported as twelve
+projects registered -- the gate agreeing with a suite that had stopped
+existing.
+
+Comments are cut before matching now, and the same control reports that
+the list is empty and refuses to give a verdict:
+
+    build-wiring: tests.pro names no test project, so the pattern has
+    stopped matching
+
+**Two controls were needed because they fail differently.** The first
+asks whether the gate can see a file that should be listed; the second
+asks whether it can see a listing that has stopped being real. A gate
+checked only by adding a file would have shipped believing a commented
+build was a working one.
