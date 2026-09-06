@@ -9295,3 +9295,64 @@ move between two renders taken minutes apart. A test that reports a
 large difference for a change that provably did nothing is not a weak
 test, it is a test of the wrong quantity, and quoting its number either
 way would have been noise dressed as measurement.
+
+
+## 16.35 A screenshot found the widget quoting a moment nobody asked about
+
+The widget picture had the cursor readout in it -- a box across the top
+saying *19:00 18.0 C 0.0 mm/h 1% ... nowcast*, lying over the current
+temperature and the day label.
+
+**The readout follows a cursor, and on a phone a drag leaves it parked
+where the finger stopped.** That is deliberate and right in the window:
+a touch has no hover, so parking the readout is the only way a finger
+can read a value at all. The widget inherited it, and there it is a
+stale sentence about whatever moment somebody last happened to touch,
+competing with the number the widget exists to show.
+
+Cleared for the render and put straight back, like the ground and the
+contrast clamp beside it.
+
+**Found by looking, not by measuring.** Every gate was green, the
+palette gate had nothing to say about a box that is legible and
+correctly drawn, and no contrast measurement can express "this is the
+right answer to a question nobody asked". It took a screenshot on the
+device, and it only appeared at all because a session had dragged the
+graph an hour earlier.
+
+### 16.35.1 The borrow is a destructor now, and the first test of it was vacuous
+
+`bbq_write_widget_picture` changes four things about the graph -- size,
+ground, contrast clamp, parked readout -- on the LIVE graph the user is
+looking at, every five minutes. `bbq_borrowed_graph` saves them in its
+constructor and restores them in its destructor, so a `return` added
+later cannot leave the window resized, unclamped, or missing the answer
+to a question somebody had just asked.
+
+**The first version of the test called `bbq_write_widget_picture`
+directly, and off Android that function returns immediately.** It
+asserted that a no-op changes nothing, and passed for exactly that
+reason -- the vacuous pass, written by somebody who had just spent a day
+writing about vacuous passes. Making the borrow its own type, compiled
+on every platform, is what turned the test into a test.
+
+It now changes all four inside the scope and **asserts they really
+changed** before asserting they came back, because a restore test whose
+setup silently did nothing is the same failure one layer along.
+
+### 16.35.2 What is verified and what is not
+
+    the restore          tested everywhere; sabotaged by dropping the
+                         cursor line, and it fails naming 37 and -1
+    the clearing         Android-only code, so no test here can reach
+                         it. The defect was reproduced on the device by
+                         screenshot; the fix is one line whose effect is
+                         a screenshot away, and that screenshot has not
+                         been taken.
+
+The device would not hold still for it: Samsung's Freecess freezes the
+application whenever the screen dozes -- `FZ : se.vibes.bbq_predictor
+... reason: LEV` in logcat -- and the cover screen kept dozing through
+`svc power stayon usb`. **Recorded as outstanding rather than implied
+done**, because a fix whose evidence is "it must work" is the thing this
+document exists to refuse.

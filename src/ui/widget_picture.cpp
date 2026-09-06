@@ -212,6 +212,29 @@ void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
 
 } // namespace
 
+bbq_borrowed_graph::bbq_borrowed_graph(bbq_forecast_graph *graph)
+        : m_graph(graph) {
+	if (m_graph == nullptr) {
+		return;
+	}
+
+	m_size = m_graph->size();
+	m_contrast_ground = m_graph->contrast_ground();
+	m_cursor_column = m_graph->cursor_column();
+	m_opaque_background = m_graph->opaque_background();
+}
+
+bbq_borrowed_graph::~bbq_borrowed_graph() {
+	if (m_graph == nullptr) {
+		return;
+	}
+
+	m_graph->resize(m_size);
+	m_graph->set_opaque_background(m_opaque_background);
+	m_graph->set_contrast_ground(m_contrast_ground, contrast_floor);
+	m_graph->set_cursor_column(m_cursor_column);
+}
+
 QColor bbq_widget_scrim(const QColor &ground) {
 	QColor scrim = ground;
 	scrim.setAlphaF(scrim_alpha);
@@ -338,9 +361,7 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 	 * missed silently, and the widget would quietly stop agreeing with
 	 * the window it claims to show.
 	 */
-	const QSize was = source->size();
-	const bool was_opaque = source->opaque_background();
-	const QColor was_clamped = source->contrast_ground();
+	const bbq_borrowed_graph borrowed(source);
 
 	/*
 	 * The scrim is the graph's own ground, made translucent, so the
@@ -352,6 +373,24 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 
 	source->set_opaque_background(false);
 	source->set_contrast_ground(ground, contrast_floor);
+
+	/*
+	 * NO PARKED READOUT (project.md sec 16.35).
+	 *
+	 * The readout box follows a cursor, and on a phone a drag leaves it
+	 * parked where the finger stopped -- deliberately, so a touch can
+	 * read a value at all. The widget inherited that: a screenshot
+	 * found it lying across the top of the picture, over the current
+	 * temperature and the day label, quoting a reading for whatever
+	 * moment somebody last happened to touch.
+	 *
+	 * On the graph that box is the answer to a question the user just
+	 * asked. On the home screen there is no question and no cursor, so
+	 * it is a stale sentence competing with the number the widget
+	 * exists to show. Cleared for the render and put straight back,
+	 * like the ground and the clamp above.
+	 */
+	source->set_cursor_column(-1);
 	source->resize(shape);
 
 	/*
@@ -369,9 +408,6 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 
 	source->render(&picture, QPoint(), QRegion(), QWidget::DrawChildren);
 
-	source->resize(was);
-	source->set_opaque_background(was_opaque);
-	source->set_contrast_ground(was_clamped, contrast_floor);
 
 	/*
 	 * The number over the top, after the render rather than inside it:

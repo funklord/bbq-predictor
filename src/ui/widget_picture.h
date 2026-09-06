@@ -2,6 +2,7 @@
 #define BBQ_UI_WIDGET_PICTURE_H
 
 #include <QColor>
+#include <QSize>
 
 class QString;
 class bbq_forecast_graph;
@@ -26,6 +27,37 @@ class bbq_forecast_graph;
  */
 void bbq_write_widget_picture(bbq_forecast_graph *source,
                               const QString &reading);
+
+/*
+ * The graph settings a widget render borrows, put back when it leaves
+ * (project.md sec 16.35).
+ *
+ * Four things change for the duration of a render: the graph's size,
+ * its opaque ground, its contrast clamp, and the readout parked by
+ * whatever the user last touched. All four belong to the window the
+ * user is looking at, and the render happens on that live graph every
+ * five minutes.
+ *
+ * A destructor rather than four lines at the end, so a return added
+ * later cannot leave the window resized, unclamped or missing the
+ * answer to a question somebody had just asked. Available off Android,
+ * unlike the render itself, so a test can hold it to that.
+ */
+class bbq_borrowed_graph {
+public:
+	explicit bbq_borrowed_graph(bbq_forecast_graph *graph);
+	~bbq_borrowed_graph();
+
+	bbq_borrowed_graph(const bbq_borrowed_graph &) = delete;
+	bbq_borrowed_graph &operator=(const bbq_borrowed_graph &) = delete;
+
+private:
+	bbq_forecast_graph *m_graph = nullptr;
+	QSize m_size;
+	QColor m_contrast_ground;
+	int m_cursor_column = -1;
+	bool m_opaque_background = true;
+};
 
 /*
  * The translucent ground the picture is filled with, from the graph's

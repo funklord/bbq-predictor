@@ -70,6 +70,7 @@ private slots:
 	void no_wallpaper_can_get_between_the_scrim_and_an_ink();
 	void a_scrim_light_enough_to_pass_an_ink_is_reported_unbounded();
 	void the_clamp_nudges_a_colour_rather_than_redesigning_it();
+	void the_widget_render_leaves_the_parked_readout_where_it_was();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -1117,4 +1118,51 @@ void test_window::the_clamp_nudges_a_colour_rather_than_redesigning_it() {
 			}
 		}
 	}
+}
+
+/*
+ * THE STATE THE WIDGET RENDER BORROWS, PUT BACK (sec 16.35).
+ *
+ * A render changes four things about the graph -- its size, its ground,
+ * its contrast clamp and the readout parked by whatever the user last
+ * touched -- and it does that to the LIVE graph the user is looking at,
+ * every five minutes. Leaving any of them changed is a defect in the
+ * window rather than in the widget.
+ *
+ * The first draft of this test called bbq_write_widget_picture, which
+ * off Android returns immediately: it asserted that a no-op changes
+ * nothing and passed for that reason. The borrow is its own type now,
+ * compiled on every platform, so this exercises the thing rather than
+ * the platform.
+ */
+void test_window::the_widget_render_leaves_the_parked_readout_where_it_was() {
+	bbq_forecast_graph graph;
+	graph.resize(400, 300);
+	graph.set_cursor_column(37);
+	graph.set_theme(bbq_theme::dark);
+
+	const QSize was = graph.size();
+	const QColor ink = graph.palette_colours().temperature;
+
+	{
+		const bbq_borrowed_graph borrowed(&graph);
+
+		/* Everything a render does to it. */
+		graph.set_opaque_background(false);
+		graph.set_contrast_ground(QColor(0x39, 0x3b, 0x3c), 3.0);
+		graph.set_cursor_column(-1);
+		graph.resize(885, 546);
+
+		/* Really changed, or the restore below proves nothing. */
+		QCOMPARE(graph.cursor_column(), -1);
+		QVERIFY(!graph.opaque_background());
+		QVERIFY(graph.size() != was);
+		QVERIFY(graph.palette_colours().temperature != ink);
+	}
+
+	QCOMPARE(graph.cursor_column(), 37);
+	QCOMPARE(graph.size(), was);
+	QVERIFY(graph.opaque_background());
+	QVERIFY(!graph.contrast_ground().isValid());
+	QCOMPARE(graph.palette_colours().temperature, ink);
 }

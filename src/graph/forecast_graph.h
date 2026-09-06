@@ -251,6 +251,7 @@ public:
 	 * rendered shot can show it. -1 clears.
 	 */
 	void set_cursor_column(int column);
+	int cursor_column() const { return m_cursor_column; }
 
 	/*
 	 * The view, which is the user's rather than the layout's once they
