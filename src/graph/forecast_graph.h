@@ -144,6 +144,20 @@ std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
 double bbq_readout_box_x(double centre_px, double box_w,
                          double plot_left, double plot_right);
 
+/*
+ * What the readout calls the moment it is describing.
+ *
+ * One sample in the column and it is that sample's own start time. More
+ * than one and the mean is what gets drawn (sec 3.7's rule that the
+ * trace and the readout are replaced together), so a single timestamp
+ * beside it would claim a precision nobody measured -- the same fault
+ * sec 13.2 stops the sample marks committing when they would crowd.
+ * The label becomes a range instead.
+ */
+QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
+                               int knot_count, bool wide,
+                               const QTimeZone &zone);
+
 class bbq_forecast_graph : public QWidget {
 	Q_OBJECT
 

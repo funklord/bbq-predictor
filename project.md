@@ -1868,16 +1868,15 @@ before somebody makes them reachable:
   to take while reviewing something else"; the sweep that removed it
   was reviewing exactly this, so the condition was met rather than
   waived.
-- **The knot invariant depends on arithmetic nobody stated.** A column
-  holding two sample starts would mean the readout's mean temperature
-  carried the first sample's timestamp, which breaks sec 3.11.3's
-  promise that every number in the box is one a provider reported.
-  Measured rather than assumed: columns come out at 77 s on the desktop
-  and about 130 s on mobile, against a finest band of 300 s, and the
-  window cannot be dragged narrow enough to close the gap because the
-  controls set a larger minimum than the graph does. **It is safe by a
-  factor of two, not by construction.** A finer band, or a much wider
-  span, would end that quietly.
+- **~~The knot invariant depends on arithmetic nobody stated.~~ The
+  arithmetic was stated and had already stopped holding, sec 16.55.**
+  The reading was right and its margin was not: "safe by a factor of
+  two" was measured at the default span on a desktop, and the same
+  sum on the Fold's 320-pixel cover screen gives about 270 s against a
+  300 s band -- a factor of 1.1. **And the sentence that ends it named
+  the wrong hazard.** It expected a finer band or a wider span to end
+  the safety quietly; what ended it was the zoom added in sec 16.28,
+  which lets any reader make the span arbitrarily wide by hand.
 - **~~The readout box flips left when it will not fit right.~~ Fixed,
   sec 16.54.** The symptom recorded here was right and the mechanism
   had gone stale: by the time it was fixed the box WAS clamped on both
@@ -10449,3 +10448,79 @@ and is NOT a defect: sec 2.6.7 names the ini key and `--geocode` as the
 two ways to set the point, so the setter stores exactly what a
 hand-edited config would. An unused convenience, not a half-wired
 feature.
+
+
+## 16.55 The readout stopped claiming a moment it could not have
+
+A column is a pixel wide in time, and it holds every sample whose start
+falls in it. The value drawn for that column is the MEAN of them, which
+sec 3.7 requires -- the trace and the readout are replaced together or
+they disagree about the same column. The timestamp beside it was the
+FIRST sample's own start, and the comment on the field says why: a
+column is a couple of minutes wide, so deriving the time from the
+cursor's position put 05:59 in the readout for a sample stamped 06:00.
+
+**Both halves are right and the pair is not, once a column is wide.**
+The reader gets one sample's clock time against twenty samples' mean,
+and a single time is the most measured-looking thing in the row.
+
+### 16.55.1 The premise was true when it was written
+
+"A column is a couple of minutes wide" was a fact about a graph whose
+span was fixed. Sec 16.28 added pan and zoom, and the span is now the
+reader's to choose up to a ten-year ceiling.
+
+The arithmetic, which is span over plot width against the finest band's
+300 s step:
+
+    span            desktop 900 px      Fold cover 320 px
+    24 h default            96 s                  270 s     both under 300
+    15 d hourly band      1440 s                 4050 s     multi-sample
+    1 year               35040 s                98550 s     multi-sample
+    10 y ceiling        350400 s               985500 s     multi-sample
+
+So the default view is honest on both, though the cover screen clears
+the band by a tenth rather than by the factor sec 16.43 recorded. Every
+zoom-out past about a day is not.
+
+**This is the shape `working-practice.md` names**: a rule written under
+one configuration, never tested against the question it was actually
+answering, and a second configuration revealing it rather than causing
+it. The zoom did not make that comment wrong. It made it checkable.
+
+### 16.55.2 The project had already decided this under another name
+
+Sec 13.2 stops drawing the sample marks once they would crowd: at a
+zoom where twenty share a pixel they merge into a band of ink that
+claims a density of measurement nobody made, and **absent dots say
+"zoomed out" while smeared dots say something false**.
+
+One timestamp printed beside the mean of twenty is that same claim in
+text, where it is harder to notice. So this needed applying rather than
+deciding, which is the cheaper of the two -- and it was found by
+looking for what else in the tree chooses between the same two answers,
+not by looking for the rule by name.
+
+Where it differs: the marks had no way to say "this is a summary", so
+absence was the only honest answer available. The readout is text and
+can be explicit, so it is: `bbq_readout_time_label` returns the sample's
+own stamp for one knot, `12:00-18:00` within a day, and `7 Sep-18 Sep`
+across them -- because a column at the ten-year ceiling spans about
+eleven days, and `Mon-Mon` would be true of two Mondays and useful
+about neither.
+
+### 16.55.3 Whichever assertion runs first is the only one proved
+
+The test pinned the exact spellings and then asserted the relationship
+that survives a change of format. Sabotaged, it failed on the first
+`QCOMPARE` -- which aborts the function, so the relationship assertion
+never ran and the sabotage proved nothing about it.
+
+Reordered, the durable one fires:
+
+    'many != one' returned FALSE. (2 sample(s) spanning 300 s read as
+    "12:00", the same as a single sample -- the mean is wearing one
+    sample's timestamp)
+
+**A test with two assertions has one witness under sabotage**, and it
+is whichever comes first. Ordering is not presentation.

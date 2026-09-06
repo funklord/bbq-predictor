@@ -154,6 +154,13 @@ struct column {
 	 * measured because everything around it is.
 	 */
 	qint64 knot_utc = 0;
+
+	/*
+	 * And the LAST one, which matters only when the column holds more
+	 * than one (sec 16.55). The pair is what lets the readout say it
+	 * is describing a range rather than a moment.
+	 */
+	qint64 knot_last_utc = 0;
 	bool knot_has_temperature = false;
 	double knot_temperature = 0.0;
 	bool knot_has_rain = false;
@@ -308,6 +315,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 			if (!result.has_knot) {
 				result.knot_utc = samples[i].start_utc;
 			}
+			result.knot_last_utc = samples[i].start_utc;
 			result.has_knot = true;
 			++result.knot_count;
 
@@ -1170,6 +1178,55 @@ void bbq_forecast_graph::wheelEvent(QWheelEvent *event) {
 	emit view_changed(view_from_utc(), view_from_utc() + view_span_s());
 	update();
 	event->accept();
+}
+
+QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
+                              int knot_count, bool wide,
+                              const QTimeZone &zone) {
+	const QDateTime first = local_time(first_utc, zone);
+
+	/*
+	 * One sample in the column: its own start time, unchanged. The
+	 * reason is in the column struct -- deriving the time from the
+	 * cursor's position put 05:59 in the readout for a sample stamped
+	 * 06:00.
+	 */
+	if (knot_count <= 1) {
+		return first.toString(wide ? QStringLiteral("ddd HH:mm")
+		                           : QStringLiteral("HH:mm"));
+	}
+
+	/*
+	 * SEVERAL, so say so. Sec 13.2 stops drawing the sample marks once
+	 * they would crowd, because dots that merge claim a density of
+	 * measurement nobody made -- and one sample's timestamp printed
+	 * beside the mean of twenty is the same claim in text, where it is
+	 * harder to notice because a single time looks measured.
+	 *
+	 * A range cannot be misread that way, and unlike the marks the
+	 * readout has room to be explicit rather than absent.
+	 */
+	const QDateTime last = local_time(last_utc, zone);
+
+	if (first.date() == last.date()) {
+		return (wide ? first.toString(QStringLiteral("ddd HH:mm"))
+		             : first.toString(QStringLiteral("HH:mm"))) +
+		       QStringLiteral("-") + last.toString(QStringLiteral("HH:mm"));
+	}
+
+	/*
+	 * Across days the weekday stops being enough: a column at the
+	 * ten-year ceiling spans about eleven days, so "Mon-Mon" would be
+	 * true of two Mondays and useful about neither.
+	 */
+	if (wide) {
+		return first.toString(QStringLiteral("d MMM HH:mm")) +
+		       QStringLiteral("-") +
+		       last.toString(QStringLiteral("d MMM HH:mm"));
+	}
+
+	return first.toString(QStringLiteral("d MMM")) + QStringLiteral("-") +
+	       last.toString(QStringLiteral("d MMM"));
 }
 
 double bbq_readout_box_x(double centre_px, double box_w,
@@ -2429,7 +2486,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 * actually wants, because that is also the order they get
 			 * dropped in when the row will not fit.
 			 */
-			const QDateTime when = local_time(c.knot_utc, zone);
 
 			/*
 			 * Two spellings, and the narrow one is not a fallback for
@@ -2447,9 +2503,10 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			const bool wide_enough = plot.width() >= 420;
 
 			QStringList parts;
-			parts.append(when.toString(wide_enough
-			                                   ? QStringLiteral("ddd HH:mm")
-			                                   : QStringLiteral("HH:mm")));
+			parts.append(bbq_readout_time_label(c.knot_utc,
+			                                    c.knot_last_utc,
+			                                    c.knot_count, wide_enough,
+			                                    zone));
 
 			if (c.knot_has_temperature) {
 				parts.append(QString::number(c.knot_temperature, 'f', 1) +

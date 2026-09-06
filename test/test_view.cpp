@@ -73,6 +73,7 @@ private slots:
 	void a_window_lands_where_it_lands_whatever_range_was_asked();
 	void the_curve_clears_the_floor_against_whatever_it_crosses();
 	void a_readout_too_wide_to_fit_keeps_its_left_edge();
+	void a_column_holding_several_samples_reads_as_a_range();
 
 	/*
 	 * The contrast clamp the home-screen picture draws through
@@ -1540,4 +1541,76 @@ void test_view::a_readout_too_wide_to_fit_keeps_its_left_edge() {
 	const double fits = bbq_readout_box_x(200.0, 120.0, left, right);
 	QCOMPARE(fits, 140.0);
 	QVERIFY(fits + 120.0 <= right);
+}
+
+/*
+ * The readout's time, where the column holds more than one sample.
+ *
+ * The value drawn is the mean over the column -- sec 3.7 requires the
+ * trace and the readout to be replaced together -- so a single sample's
+ * timestamp beside it claims a precision nobody measured. Sec 13.2
+ * already refuses that claim for the sample marks; this is the same
+ * refusal in text.
+ *
+ * The single-sample case is asserted too, because it is the one that
+ * must NOT change: deriving the time from the cursor put 05:59 in the
+ * readout for a sample stamped 06:00.
+ */
+void test_view::a_column_holding_several_samples_reads_as_a_range() {
+	const QTimeZone utc = QTimeZone::utc();
+	const qint64 noon = QDateTime(QDate(2026, 9, 7), QTime(12, 0), utc)
+	                            .toSecsSinceEpoch();
+
+	/*
+	 * ASSERT THE RELATIONSHIP FIRST, because it is what survives a
+	 * change of format -- and because QCOMPARE aborts the function, so
+	 * whichever assertion runs first is the only one a sabotage run
+	 * proves. Pinning the exact spellings below is worth having and is
+	 * not what this test is for.
+	 */
+	const struct {
+		int count;
+		qint64 last;
+		bool wide;
+	} several[] = {
+		{2, noon + 300, false},
+		{2, noon + 300, true},
+		{24, noon + 86400, false},
+		{260, noon + 11 * 86400, true},
+	};
+
+	for (const auto &c : several) {
+		const QString many =
+		        bbq_readout_time_label(noon, c.last, c.count, c.wide, utc);
+		const QString one =
+		        bbq_readout_time_label(noon, noon, 1, c.wide, utc);
+
+		QVERIFY2(many != one,
+		         qPrintable(QStringLiteral("%1 sample(s) spanning %2 s read "
+		                                   "as \"%3\", the same as a single "
+		                                   "sample -- the mean is wearing one "
+		                                   "sample's timestamp")
+		                            .arg(c.count)
+		                            .arg(c.last - noon)
+		                            .arg(many)));
+	}
+
+	/* One sample: its own stamp, both spellings, unchanged. */
+	QCOMPARE(bbq_readout_time_label(noon, noon, 1, false, utc),
+	         QStringLiteral("12:00"));
+	QCOMPARE(bbq_readout_time_label(noon, noon, 1, true, utc),
+	         QStringLiteral("Mon 12:00"));
+
+	/* Several within the day: a range, and it still starts where it did. */
+	const QString within =
+	        bbq_readout_time_label(noon, noon + 6 * 3600, 7, false, utc);
+	QCOMPARE(within, QStringLiteral("12:00-18:00"));
+
+	/* Across days the weekday is not enough, so both dates are named. */
+	const QString across =
+	        bbq_readout_time_label(noon, noon + 11 * 86400, 260, true, utc);
+	QCOMPARE(across, QStringLiteral("7 Sep 12:00-18 Sep 12:00"));
+	QCOMPARE(bbq_readout_time_label(noon, noon + 11 * 86400, 260, false, utc),
+	         QStringLiteral("7 Sep-18 Sep"));
+
 }
