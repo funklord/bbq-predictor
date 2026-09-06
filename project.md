@@ -9427,13 +9427,32 @@ in the suite, and each one fails when removed:
 where it should have been.** A platform guard is a reason a thing cannot
 be tested; it is not a reason for logic to live inside it.
 
-### 16.36.3 What is not verified
+### 16.36.3 Verified on the device, both halves at one moment
 
-The device demonstration of the original defect was attempted and
-abandoned: the phone dropped off USB mid-run, after Freecess had already
-frozen the application twice. **The defect is certain from the code**
--- the render set four fields and the view is not among them, and the
-view is user-mutable -- and the fix is asserted by tests that fail
-without it. But no screenshot shows a widget stuck at last Tuesday, and
-none shows the fixed one following. Worth taking when the phone is next
-awake.
+~~The device demonstration was attempted and abandoned.~~ **Done.** The
+run panned the window three days back, deleted the picture, and waited
+for the next fetch to render one:
+
+    the window, after the render    Thu 08:00 .. Thu 14:00, and the
+                                    readout still parked at 14:54
+    the picture from that render    Sun 20:00 .. Mon 02:00, the window
+                                    around a 17:58 clock
+
+**Both halves matter and only together.** The picture following now is
+the fix; the window still sitting at Thursday is the proof that the fix
+does not drag a reader back to the present, which is the failure
+sec 16.36.1 describes and which no amount of looking at the widget alone
+would have shown.
+
+**And it settled a suspicion that was heading somewhere wrong.** Three
+earlier attempts saw no render for four hundred seconds and I began to
+wonder whether periodic refreshes produced widget pictures at all --
+every successful render in the session having followed a restart. They
+do: this one arrived after 240 seconds, which is the `current` band's
+five-minute cadence. The earlier silence was Samsung's Freecess freezing
+the process whenever its window is not visible, which the logcat line
+had said the first time.
+
+**A dark screen is not a quiet program.** On this device an app with no
+visible surface does not fetch, does not emit, and does not render -- so
+every measurement taken through it measures the lock screen.
