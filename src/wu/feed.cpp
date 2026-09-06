@@ -1,6 +1,6 @@
 #include "wu/feed.h"
 
-#include "model/duration.h"
+#include "model/units.h"
 
 #include <QDate>
 #include <QDateTime>

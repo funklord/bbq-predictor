@@ -1,4 +1,4 @@
-#include "model/duration.h"
+#include "model/units.h"
 
 #include <QCoreApplication>
 
@@ -35,4 +35,23 @@ QString bbq_describe_duration(qint64 seconds) {
 
 	return QCoreApplication::translate("bbq_duration", "%1 days")
 	        .arg(hours / 24);
+}
+
+QString bbq_describe_distance(double km) {
+	/*
+	 * A negative distance is the reader's "not known" -- the callers
+	 * all guard on `>= 0` before asking -- so this says so rather than
+	 * printing a minus sign into a list of neighbours.
+	 */
+	if (km < 0.0) {
+		return QCoreApplication::translate("bbq_units", "distance unknown");
+	}
+
+	if (km < 1.0) {
+		const int metres = static_cast<int>(km * 1000.0 / 10.0 + 0.5) * 10;
+		return QCoreApplication::translate("bbq_units", "%1 m").arg(metres);
+	}
+
+	return QCoreApplication::translate("bbq_units", "%1 km")
+	        .arg(QString::number(km, 'f', 1));
 }

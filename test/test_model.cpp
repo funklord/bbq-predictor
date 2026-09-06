@@ -1,7 +1,7 @@
 #include <QTest>
 
 #include "model/composite.h"
-#include "model/duration.h"
+#include "model/units.h"
 #include "model/grill.h"
 #include "model/series.h"
 
@@ -17,6 +17,7 @@ class test_model : public QObject {
 
 private slots:
 	void a_span_is_said_in_units_a_reader_thinks_in();
+	void a_near_neighbour_is_not_zero_kilometres_away();
 	void samples_are_sorted_on_the_way_in();
 	void a_span_that_ended_does_not_cover_now();
 	void range_takes_overlaps_not_containment();
@@ -449,4 +450,36 @@ void test_model::a_span_is_said_in_units_a_reader_thinks_in() {
 	 * worse than the vaguer true answer.
 	 */
 	QCOMPARE(bbq_describe_duration(-90), QStringLiteral("no time at all"));
+}
+
+/*
+ * "0.0 km" IS NOT A DISTANCE ANYBODY MEANT (sec 16.46).
+ *
+ * The list printed one decimal of kilometres, so a station under fifty
+ * metres read as 0.0 km -- which looks like missing data rather than a
+ * near neighbour. Not a corner: with no location fix the geocode is
+ * back-filled from the watched station's own position, so discovery
+ * returns that station at zero and the list said so.
+ *
+ * The boundary is asserted from both sides for the reason the duration
+ * test gives: a unit switch is where an off-by-one lives.
+ */
+void test_model::a_near_neighbour_is_not_zero_kilometres_away() {
+	/* The case that prompted it. */
+	QCOMPARE(bbq_describe_distance(0.0), QStringLiteral("0 m"));
+	QCOMPARE(bbq_describe_distance(0.04), QStringLiteral("40 m"));
+	QCOMPARE(bbq_describe_distance(0.34), QStringLiteral("340 m"));
+
+	/* Rounded to ten metres, because the provider's own figure is not
+	 * good to the metre and pretending otherwise invents precision. */
+	QCOMPARE(bbq_describe_distance(0.3449), QStringLiteral("340 m"));
+	QCOMPARE(bbq_describe_distance(0.3451), QStringLiteral("350 m"));
+
+	/* The switch, from both sides. */
+	QCOMPARE(bbq_describe_distance(0.999), QStringLiteral("1000 m"));
+	QCOMPARE(bbq_describe_distance(1.0), QStringLiteral("1.0 km"));
+	QCOMPARE(bbq_describe_distance(2.14), QStringLiteral("2.1 km"));
+
+	/* Not known is said, not printed as a negative number. */
+	QVERIFY(bbq_describe_distance(-1.0).contains(QStringLiteral("unknown")));
 }

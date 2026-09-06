@@ -4,6 +4,8 @@
 #include "ui/widget_picture.h"
 #include "ui/tray_icon.h"
 
+#include "model/units.h"
+
 #include <QGuiApplication>
 
 #ifdef Q_OS_ANDROID
@@ -1723,8 +1725,7 @@ void bbq_main_window::refresh_station_list() {
 
 		if (one.distance_km >= 0.0) {
 			label += QStringLiteral("  ");
-			label += QString::number(one.distance_km, 'f', 1);
-			label += tr(" km");
+			label += bbq_describe_distance(one.distance_km);
 		}
 
 		m_station_box->addItem(label, one.id);

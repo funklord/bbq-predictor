@@ -9974,3 +9974,38 @@ build and the install, so the line above has not been read again in its
 new form. The formatter is covered by the suite, including the exact
 1248-minute case; what is unverified is that this message is the one
 that formats it.
+
+
+## 16.46 The same fault at the other end of a range
+
+The lens from sec 16.45 -- a number correct in a unit chosen once and
+wrong at the other end of its range -- pointed at the station list,
+which printed one decimal of kilometres:
+
+    ISTOCK877  0.0 km
+
+**That is not a corner case.** With no location fix the geocode is
+back-filled from the watched station's own position, so discovery asks
+about a point that station sits on and returns it at zero. The list then
+reports the neighbour it knows best as though its distance were missing.
+340 m read as "0.3 km" for the same reason.
+
+Metres under a kilometre, rounded to ten of them -- the provider's
+figure is its own arithmetic over coordinates it rounded first, and a
+metre of precision here would be invented. Sabotaged to round to the
+metre, the test fails on `0.3449 km` reading as `345 m`.
+
+`duration.{h,cpp}` became `units.{h,cpp}` and holds both. Named for what
+it holds rather than for the first thing that went in it, which is the
+argument sec 16.40 makes about renaming a detector before trusting it.
+
+### 16.46.1 What was deliberately left alone
+
+`main.cpp` prints the same distance in a station TABLE, right-justified
+into six columns. It keeps kilometres: a column of mixed units cannot be
+scanned down, and the fixed unit that is wrong in a sentence is right in
+a table where every row shares it.
+
+So the two do differ, and that is the decision rather than an oversight.
+**A shared formatter is worth having and is not worth forcing where its
+answer is the wrong shape.**
