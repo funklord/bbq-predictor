@@ -56,6 +56,39 @@ const int fallback_height = 190;
 const int smallest_dp = 60;
 const int largest_dp = 2000;
 
+/*
+ * HOW MUCH WALLPAPER SHOWS THROUGH, AND WHY IT IS A NUMBER RATHER THAN
+ * NONE (sec 16.25).
+ *
+ * A fully transparent picture reads well on a plain wallpaper and badly
+ * on a photograph: the curve competes with whatever is behind it, and
+ * the middle of the plot was the worst of it. A fully opaque one is a
+ * slab on somebody's home screen.
+ *
+ * A scrim of the theme's own ground is the trade, and it buys more than
+ * a look. It BOUNDS the ground: whatever the wallpaper is, the composite
+ * lies between the scrim over black and the scrim over white, and the
+ * second of those is the worst case for a dark scrim. That is a ground
+ * this program can name, which is the precondition harmonization.md sets
+ * before a program may draw onto one it does not own.
+ *
+ * 0.75, so a quarter of the wallpaper carries. It started at 0.85 and
+ * the sweep in sec 16.26 is why it did not go further: the clamp still
+ * reaches the floor at every alpha down to 0.5, so "does it stay
+ * legible" is the wrong question and stops discriminating. What moves
+ * is how far the colours have to travel to get there -- Weather
+ * Underground's red is #e55058 at 0.85, #ec8187 at 0.75 and #f3aeb2 at
+ * 0.65, which is no longer a red anybody measured.
+ */
+const double scrim_alpha = 0.75;
+
+/*
+ * The floor the clamp holds the inks to, and it is the palette gate's,
+ * deliberately. A second number here would be a second answer to "how
+ * legible is legible".
+ */
+const double contrast_floor = 3.0;
+
 #ifdef Q_OS_ANDROID
 
 /*
@@ -101,64 +134,6 @@ const QColor reading_halo(0xf2, 0xf2, 0xf2);
  */
 const double reading_height_share = 0.25;
 const double reading_width_share = 0.10;
-
-/*
- * HOW MUCH WALLPAPER SHOWS THROUGH, AND WHY IT IS A NUMBER RATHER THAN
- * NONE (sec 16.25).
- *
- * A fully transparent picture reads well on a plain wallpaper and badly
- * on a photograph: the curve competes with whatever is behind it, and
- * the middle of the plot was the worst of it. A fully opaque one is a
- * slab on somebody's home screen.
- *
- * A scrim of the theme's own ground at 0.85 is the trade, and it buys
- * more than a look. It BOUNDS the ground: whatever the wallpaper is, the
- * composite lies between the scrim over black and the scrim over white,
- * and the second of those is the worst case for a dark scrim. That is a
- * ground this program can name, which is the precondition
- * harmonization.md sets before a program may draw onto one it does not
- * own.
- */
-const double scrim_alpha = 0.85;
-
-/*
- * The floor the clamp holds the inks to, and it is the palette gate's,
- * deliberately. A second number here would be a second answer to "how
- * legible is legible".
- */
-const double contrast_floor = 3.0;
-
-/*
- * The lightest ground the scrim can produce: itself over white.
- *
- * The worst case for a dark scrim, and the whole reason the bound is
- * worth having. Contrast against a fixed ink rises as the ground moves
- * away from it, so for a scrim darker than every ink it protects, the
- * palest composite is the one that fails first -- clear that and every
- * wallpaper is cleared.
- *
- * A light theme inverts it, and the expression follows the scrim rather
- * than assuming: over black when the scrim is light.
- */
-QColor worst_ground(const QColor &scrim) {
-	const bool scrim_is_dark = bbq_relative_luminance(scrim) < 0.5;
-	const int wallpaper = scrim_is_dark ? 255 : 0;
-
-	/*
-	 * Rounded, not truncated. Truncation shifts the composite towards
-	 * black by up to one level, which for a dark scrim makes the
-	 * "worst" ground very slightly better than the real worst -- a bound
-	 * that is not quite a bound. It is a fraction of a level and it
-	 * would never be visible; it would also be wrong in the one
-	 * direction a bound must never be wrong in.
-	 */
-	const auto mix = [&](int channel) {
-		return qRound(scrim_alpha * channel +
-		              (1.0 - scrim_alpha) * wallpaper);
-	};
-
-	return QColor(mix(scrim.red()), mix(scrim.green()), mix(scrim.blue()));
-}
 
 /*
  * How big the placed widget actually is, in dp, or 0 for "Android did
@@ -236,6 +211,62 @@ void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
 #endif
 
 } // namespace
+
+QColor bbq_widget_scrim(const QColor &ground) {
+	QColor scrim = ground;
+	scrim.setAlphaF(scrim_alpha);
+	return scrim;
+}
+
+QColor bbq_widget_worst_ground(const QColor &scrim) {
+	/*
+	 * A light theme inverts it, and the expression follows the scrim
+	 * rather than assuming: over black when the scrim is light.
+	 */
+	const bool scrim_is_dark = bbq_relative_luminance(scrim) < 0.5;
+	const int wallpaper = scrim_is_dark ? 255 : 0;
+
+	/*
+	 * THE SCRIM'S OWN ALPHA, not the constant above.
+	 *
+	 * It read scrim_alpha, which made this correct for the one scrim
+	 * bbq_widget_scrim builds and a lie about every other -- so it
+	 * answered "bounded" for a scrim thin enough to be plainly
+	 * unbounded. Found by the control in
+	 * a_scrim_light_enough_to_pass_an_ink_is_reported_unbounded, which
+	 * is the whole reason that test constructs a scrim rather than
+	 * reusing the real one: a check exercised only on the value it was
+	 * written for cannot notice that it ignores its argument.
+	 */
+	const double alpha = scrim.alphaF();
+
+	/*
+	 * Rounded, not truncated. Truncation shifts the composite towards
+	 * black by up to one level, which for a dark scrim makes the
+	 * "worst" ground very slightly better than the real worst -- a bound
+	 * that is not quite a bound. It is a fraction of a level and it
+	 * would never be visible; it would also be wrong in the one
+	 * direction a bound must never be wrong in.
+	 */
+	const auto mix = [&](int channel) {
+		return qRound(alpha * channel + (1.0 - alpha) * wallpaper);
+	};
+
+	return QColor(mix(scrim.red()), mix(scrim.green()), mix(scrim.blue()));
+}
+
+bool bbq_widget_scrim_is_bounded(const QColor &scrim, const QColor &ink) {
+	const double at_scrim = bbq_relative_luminance(scrim);
+	const double at_worst = bbq_relative_luminance(bbq_widget_worst_ground(scrim));
+	const double of_ink = bbq_relative_luminance(ink);
+
+	/*
+	 * The ink must be on the same side of both, so no wallpaper can put
+	 * the ground between the two and reverse which way the clamp walks.
+	 */
+	return (of_ink > at_scrim && of_ink > at_worst) ||
+	       (of_ink < at_scrim && of_ink < at_worst);
+}
 
 void bbq_write_widget_picture(bbq_forecast_graph *source,
                               const QString &reading) {
@@ -316,9 +347,8 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 	 * picture is the window's colours seen through the wallpaper rather
 	 * than a second scheme nobody set.
 	 */
-	QColor scrim = source->palette_colours().background;
-	const QColor ground = worst_ground(scrim);
-	scrim.setAlphaF(scrim_alpha);
+	const QColor scrim = bbq_widget_scrim(source->palette_colours().background);
+	const QColor ground = bbq_widget_worst_ground(scrim);
 
 	source->set_opaque_background(false);
 	source->set_contrast_ground(ground, contrast_floor);

@@ -14,6 +14,8 @@
 
 #include "model/settings.h"
 #include "graph/forecast_graph.h"
+#include "ui/theme.h"
+#include "ui/widget_picture.h"
 #include "model/composite.h"
 #include "store/history.h"
 #include "ui/layout.h"
@@ -60,6 +62,13 @@ class test_window : public QObject {
 private slots:
 	void initTestCase();
 	void a_label_is_not_stored_as_a_station_id();
+
+	/*
+	 * The scrim's bound, which the widget's whole clamp rests on
+	 * (project.md sec 16.26).
+	 */
+	void no_wallpaper_can_get_between_the_scrim_and_an_ink();
+	void a_scrim_light_enough_to_pass_an_ink_is_reported_unbounded();
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
@@ -950,3 +959,86 @@ int main(int argc, char *argv[]) {
 }
 
 #include "test_window.moc"
+
+/*
+ * THE PRECONDITION THE WORST-CASE GROUND IS ONLY THE WORST CASE UNDER.
+ *
+ * bbq_widget_worst_ground calls the scrim over white the worst ground,
+ * and that holds while the scrim stays darker than every ink it
+ * protects: contrast rises as a ground moves away from an ink, so the
+ * nearest reachable ground is the one that fails first.
+ *
+ * Let a wallpaper push the composite PAST an ink's luminance and the
+ * relationship inverts. The clamp walks away from the ground, so an ink
+ * that was being lifted starts being darkened -- measured on the sweep
+ * in sec 16.26, Weather Underground's red goes to #f3aeb2 at one alpha
+ * and to #580d11 at the next, and nothing in the picture announces the
+ * threshold.
+ *
+ * Asserted over the dark palette's real inks rather than a sample,
+ * because the question is about this program's colours at this
+ * program's alpha, and both move.
+ */
+void test_window::no_wallpaper_can_get_between_the_scrim_and_an_ink() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+	const bbq_graph_palette dark = graph.palette_colours();
+
+	const QColor scrim = bbq_widget_scrim(dark.background);
+
+	const QColor must_read[] = {
+		dark.axis_text,
+		dark.temperature,
+		dark.corrected,
+		dark.day_divider,
+		dark.stale_warning,
+		dark.now_marker,
+	};
+
+	for (const QColor &ink : must_read) {
+		QVERIFY2(bbq_widget_scrim_is_bounded(scrim, ink),
+		         qPrintable(QStringLiteral(
+		                 "%1 is not on one side of the scrim %2 and its "
+		                 "worst ground %3")
+		                            .arg(ink.name(), scrim.name(),
+		                                 bbq_widget_worst_ground(scrim).name())));
+	}
+
+	graph.set_theme(bbq_theme::light);
+	const bbq_graph_palette light = graph.palette_colours();
+	const QColor pale = bbq_widget_scrim(light.background);
+
+	const QColor light_inks[] = {
+		light.axis_text,
+		light.temperature,
+		light.corrected,
+		light.day_divider,
+		light.stale_warning,
+	};
+
+	for (const QColor &ink : light_inks) {
+		QVERIFY2(bbq_widget_scrim_is_bounded(pale, ink),
+		         qPrintable(ink.name()));
+	}
+}
+
+/*
+ * And the control: the check must be able to say no.
+ *
+ * A scrim so thin that the composite passes the ink is exactly the
+ * condition above, constructed. Without this the test would pass
+ * against a bbq_widget_scrim_is_bounded that returned true always --
+ * which is the shape a predicate written in a hurry takes, and it would
+ * report every alpha safe including the ones the sweep showed are not.
+ */
+void test_window::a_scrim_light_enough_to_pass_an_ink_is_reported_unbounded() {
+	const QColor red(0xd5, 0x20, 0x2a);
+
+	QColor thin(0x16, 0x18, 0x1a);
+	thin.setAlphaF(0.4);
+	QVERIFY(!bbq_widget_scrim_is_bounded(thin, red));
+
+	QColor thick(0x16, 0x18, 0x1a);
+	thick.setAlphaF(0.75);
+	QVERIFY(bbq_widget_scrim_is_bounded(thick, red));
+}

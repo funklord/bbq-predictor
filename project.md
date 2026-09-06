@@ -8447,3 +8447,74 @@ It did leave one real finding. The widget's own composite used `int()`,
 which truncates, so its "worst" ground was up to one level darker than
 the real worst -- a bound that is not quite a bound, wrong in the one
 direction a bound must never be wrong in. It rounds now.
+
+
+## 16.26 Lighter, and the question that stopped discriminating
+
+Asked for more wallpaper. The scrim is 0.75 rather than 0.85, so a
+quarter of the wallpaper carries rather than a sixth.
+
+**The obvious check does not decide it.** Sweeping the alpha and asking
+whether the clamp still reaches the floor, the answer is yes at every
+value down to 0.5 -- the walk simply goes further. So "is it still
+legible" separates nothing, and a decision resting on it would have been
+a decision resting on a check that could not fail.
+
+What moves is **how far the colours have to travel**, and Weather
+Underground's red is the one to watch because sec 3.8.2 says it is a
+measurement rather than a decoration:
+
+    alpha   wallpaper   worst ground   WU red drawn as
+    0.85       15%        #393b3c          #e55058
+    0.80       20%        #454648          #e86970
+    0.75       25%        #505253          #ec8187
+    0.70       30%        #5c5d5f          #ef989c
+    0.65       35%        #68696a          #f3aeb2
+
+0.75 is where a red is still a red. At 0.65 it is a pink that nobody
+measured, and the widget would have stopped being a view of the same
+data the window shows.
+
+### 16.26.1 The bound has a precondition, and the sweep is what showed it
+
+At 0.60 and below the sweep does something that is not a gradual loss:
+
+    0.65   #d5202a -> #f3aeb2      lifted, pale
+    0.60   #d5202a -> #580d11      DARKENED, nearly black
+
+**The clamp reverses.** It walks away from the ground, and by 0.60 the
+worst composite has passed the red's own luminance, so away is now
+downwards. Nothing announces the threshold; the curve simply changes
+character between one constant and the next.
+
+Which means the sentence sec 16.25 rests on -- *the palest composite is
+the worst case* -- is true only while the scrim stays on one side of
+every ink it protects. That was an unstated precondition, true at 0.85,
+true at 0.75, and false at 0.60. **An unstated precondition and one
+nobody thought of look identical from outside**, and the next person to
+want more wallpaper is exactly who would have met it.
+
+`bbq_widget_scrim_is_bounded` states it, and
+`no_wallpaper_can_get_between_the_scrim_and_an_ink` asserts it over both
+palettes' real inks at the real alpha. Set to 0.55 it fails by name:
+
+    #d5202a is not on one side of the scrim #16181a and its
+    worst ground #7f8081
+
+### 16.26.2 The control found the check ignoring its argument
+
+The paired control constructs a scrim thin enough to be plainly
+unbounded and expects a no. It got a yes.
+
+`bbq_widget_worst_ground` was compositing with `scrim_alpha`, the file's
+own constant, rather than with the alpha of the scrim it had been handed
+-- correct for the one scrim `bbq_widget_scrim` builds and a lie about
+every other. The predicate above would have reported every alpha safe,
+including the ones the sweep had just shown are not, and the test it was
+written for would have passed while proving nothing.
+
+**A check exercised only on the value it was written for cannot notice
+that it ignores its argument.** That is why the control constructs a
+scrim rather than reusing the real one, and it is the argument for a
+control that can fail the way the real thing fails rather than one that
+merely fails.
