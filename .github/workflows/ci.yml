@@ -1,0 +1,137 @@
+# Continuous integration.
+#
+# Free, because the repository is public: build-and-commit.md settles that no
+# Actions bill is ever paid, so CI exists here on that condition and not
+# otherwise. The local gates are still what blocks a bad push; this is the
+# same work on a machine nobody has configured.
+#
+# Two jobs, split by what they cost. The gates need python3 and finish in
+# seconds; the build needs Qt and does not. Keeping them apart means a
+# misplaced tab is reported in under a minute rather than after a compile,
+# and a failed build does not hide a failed gate.
+#
+# **Spaces, not tabs.** The YAML spec forbids tabs for indentation outright,
+# which is a settled exception in code-style.md rather than a divergence.
+#
+# **A green check has to mean something was checked.** Every job asserts it
+# inspected a plausible number of things before it is allowed to pass. An
+# empty file list, a collapsed suite list, or a binary that did not rebuild
+# all report success exactly as loudly as a real pass.
+
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# A second push supersedes the first.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: style and document gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Eight gates, and every one of them is python3 over the tree: no Qt,
+      # no compiler, nothing to install. They are first because they are the
+      # cheap half of `make check`.
+      - name: Run the gates
+        run: make style
+
+      # The source gate carries its own floor in .style-gate.toml and cannot
+      # pass over an empty list. The document gate has no floor of its own,
+      # so this is the same assurance for it: a gate over a truncated
+      # project.md passes for the wrong reason.
+      - name: The document gate actually read project.md
+        run: |
+          test -s project.md || { echo "project.md is empty or missing"; exit 1; }
+          lines=$(wc -l < project.md)
+          test "$lines" -gt 5000 || {
+            echo "project.md is $lines lines; expected thousands."
+            exit 1
+          }
+
+  build:
+    name: build and offline suites
+    runs-on: ubuntu-latest
+    # **Debian trixie, not the runner's own Ubuntu**, so CI builds against
+    # the same Qt as the person writing the code rather than an older one
+    # nobody uses.
+    container: debian:trixie
+    steps:
+      # Before checkout, deliberately: actions/checkout falls back to an API
+      # tarball when the container has no git, which works and then leaves no
+      # repository for anything to inspect.
+      #
+      # **The same list as debian/control's Build-Depends, plus the runtime
+      # driver.** Writing it down here is what found that README.md claimed
+      # "widgets and network" while the build also needs sql and positioning.
+      - name: Install the build and runtime dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git ca-certificates make g++ pkgconf python3 \
+            qt6-base-dev qt6-base-dev-tools qt6-positioning-dev libgl-dev \
+            libqt6sql6-sqlite
+
+      - uses: actions/checkout@v7
+
+      # Printed because a build log that does not say which Qt it used cannot
+      # be argued with later.
+      - name: Say which Qt this is
+        run: qmake6 -query QT_VERSION
+
+      # **Loaded at run time, so it appears in no ELF header** -- which is
+      # why debian/control names it under Depends and why nothing else in
+      # this job would notice its absence. Without it the archive cannot be
+      # opened at all, and the archive is the whole point of the program.
+      - name: The SQLite driver is installed
+        run: |
+          ls /usr/lib/*/qt6/plugins/sqldrivers/libqsqlite.so || {
+            echo "no QSQLITE driver; every archive operation would fail"
+            exit 1
+          }
+
+      - name: Build
+        run: make -j2
+
+      - name: The build produced a binary that runs
+        run: |
+          test -x build/bbq-predictor || { echo "no build/bbq-predictor"; exit 1; }
+          ./build/bbq-predictor --version
+
+      # **As an ordinary user, because root cannot fail to write a file.**
+      #
+      # A container job runs as root, and for uid 0 the permission bits are
+      # advice. Every assertion of the form "this write should be refused"
+      # therefore could not fail. The build above ran as root, so the tree
+      # has to change hands before the suite can write into it.
+      #
+      # The suites set QT_QPA_PLATFORM themselves rather than trusting the
+      # environment, so no display is needed here.
+      - name: Run the offline suites
+        run: |
+          useradd -m ci
+          chown -R ci:ci .
+          su ci -c "cd '$PWD' && make test 2>&1 | tee test.log"
+
+      # `make test` refuses a run over zero binaries, which is the collapse it
+      # can see. This is the one it cannot: a suite that stopped being listed
+      # in tests.pro leaves the others passing and the count quietly lower.
+      # Both sides are derived, so neither goes stale when a suite is added.
+      - name: Every suite in the tree actually ran
+        run: |
+          want=$(ls test/test_*.pro | wc -l)
+          got=$(sed -n 's/^test: \([0-9]*\) binary(ies).*/\1/p' test.log)
+          echo "$got of $want suite(s) ran"
+          test -n "$got" || { echo "make test printed no count"; exit 1; }
+          test "$got" -eq "$want" || {
+            echo "a suite was built or listed but did not run"
+            exit 1
+          }

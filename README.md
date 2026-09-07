@@ -93,7 +93,20 @@ The command line overrides a run without writing to the file:
 
 ## Building
 
-Needs Qt 6 (widgets and network) and a C++17 compiler.
+Needs Qt 6 -- widgets, network, sql and positioning -- and a C++17
+compiler. On Debian:
+
+    sudo apt-get install -y qt6-base-dev qt6-base-dev-tools \
+        qt6-positioning-dev libgl-dev pkg-config libqt6sql6-sqlite
+
+The last of those is a **run time** dependency rather than a build one:
+the SQLite driver is loaded rather than linked, so it appears in no ELF
+header, nothing in a successful build mentions it, and without it the
+archive cannot be opened at all. `debian/control` names it under
+`Depends` for the same reason.
+
+This line said "widgets and network" until CI needed the list written
+down and the two disagreed.
 
     make            # build
     make run        # build and run

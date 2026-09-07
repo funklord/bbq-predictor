@@ -11262,3 +11262,58 @@ Sabotaged by reading `rain_count` from the total column:
 **Exactly one test failed**, and the pre-existing rain_count assertion
 was not it -- the same result as sec 16.67, from the same cause, which
 is why the sweep was worth running rather than the fix worth repeating.
+
+
+## 16.69 CI, and the dependency list that disagreed with itself
+
+`build-and-commit.md` settles that no Actions bill is ever paid, and
+that a repository's visibility is worth **re-checking rather than
+assuming** because CI becomes free the moment one goes public.
+
+Checked: `gh repo view --json visibility` says **PUBLIC**, and this tree
+had no workflow at all. Seven of ten siblings carry exactly one. That
+makes adding it the first branch of `harmonization.md` -- small, local,
+matching what the others already do -- rather than a pattern anybody has
+to agree to.
+
+The shape is hydra's, adapted: a gates job that needs only python3 and
+finishes in seconds, and a build job in a `debian:trixie` container so
+CI compiles against the same Qt as the machine the code is written on.
+
+### 16.69.1 Writing the list down is what found the disagreement
+
+`README.md` said the build "Needs Qt 6 (widgets and network)". The
+project file says `QT += widgets network sql` and `QT += positioning`,
+and `debian/control` names `qt6-base-dev`, `qt6-positioning-dev`,
+`libgl-dev` and `pkg-config`.
+
+**A reader following the README could not build this program**, and if
+they got past that, `libqt6sql6-sqlite` is a RUN TIME dependency -- the
+driver is loaded rather than linked, so it appears in no ELF header,
+nothing in a successful build mentions it, and without it the archive
+cannot be opened at all.
+
+hydra's workflow carries the same lesson in a comment: the same list
+lives in the README and in `Build-Depends`, and they were missing three
+packages between them until somebody wrote it down and compared. This
+is that, exactly, in a second tree.
+
+### 16.69.2 What each job refuses to pass vacuously
+
+- **The document gate** has no floor of its own, so the job asserts
+  `project.md` is thousands of lines. The source gate needs none: its
+  own `.style-gate.toml` refuses a short file list.
+- **The SQLite driver** is checked by name on disk, because nothing
+  else in the job would notice it missing.
+- **The suite runs as an ordinary user.** A container job runs as root,
+  and for uid 0 permission bits are advice -- so every assertion of the
+  form "this write should be refused" could not fail.
+- **Every suite in the tree actually ran**, comparing the count `make
+  test` prints against the number of `test_*.pro` files. Both sides are
+  derived, so neither goes stale when a suite is added. Verified
+  against a real log before being committed: 13 and 13.
+
+That last one's limit is worth stating: it catches a suite that was
+built and did not run, not one deleted outright, since then both sides
+fall together. `build_wiring` covers the other half by refusing a
+`test_*.pro` that `tests.pro` does not name.
