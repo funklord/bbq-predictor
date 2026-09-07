@@ -288,6 +288,22 @@ bool bbq_history::open(const QString &path) {
 	exec(QStringLiteral("PRAGMA synchronous = NORMAL"));
 
 	if (!create_schema()) {
+		/*
+		 * NOT OPEN AFTER ALL (sec 16.78).
+		 *
+		 * SQLite opens lazily: a file that is not a database at all
+		 * passes `database.open()` and fails at the first statement,
+		 * which is here. `m_open` was already true by then, so every
+		 * one of the nineteen `if (!m_open)` guards downstream let a
+		 * call through to a database that had refused to exist -- and
+		 * the caller was told "Parameter count mismatch" by a prepared
+		 * statement rather than "file is not a database" by the open.
+		 *
+		 * Seen on a corrupt archive: the applet drew, said nothing was
+		 * remembered, and named the wrong cause for it on the status
+		 * line.
+		 */
+		m_open = false;
 		return false;
 	}
 

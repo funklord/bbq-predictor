@@ -27,6 +27,7 @@ private slots:
 	void one_archive_is_recognised_however_it_is_spelled();
 	void the_default_archive_is_somewhere_a_person_owns();
 	void an_archive_says_which_shape_it_has();
+	void a_store_that_failed_to_open_says_it_is_shut();
 	void observations_survive_being_stored_twice();
 	void a_forecast_is_kept_once_per_bucket_not_once_per_fetch();
 	void verifying_computes_the_standard_scores_and_empties_the_queue();
@@ -1203,4 +1204,56 @@ void test_history::an_archive_says_which_shape_it_has() {
 	                                   "file written before the stamp would "
 	                                   "stay unidentifiable")
 	                            .arg(adopted.schema_version())));
+}
+
+/*
+ * A failed open leaves the store SHUT, not half open.
+ *
+ * SQLite opens lazily, so a file that is not a database at all passes
+ * QSqlDatabase::open() and fails at the first statement -- which is the
+ * schema. `m_open` was set true before that, so `open()` returned false
+ * while the object still reported itself open, and all nineteen
+ * `if (!m_open)` guards downstream let calls through to a database that
+ * had refused to exist.
+ *
+ * What the reader saw was the shape this project keeps meeting: a
+ * message naming a cause the code never tested. The applet drew, did
+ * not remember, and blamed "Parameter count mismatch" -- a prepared
+ * statement's complaint -- when the truth was "file is not a database"
+ * (sec 16.78).
+ */
+void test_history::a_store_that_failed_to_open_says_it_is_shut() {
+	QTemporaryDir directory;
+	const QString path = directory.filePath(QStringLiteral("not-a-db.sqlite"));
+
+	QFile rubbish(path);
+	QVERIFY(rubbish.open(QIODevice::WriteOnly));
+	rubbish.write("this is not an sqlite file");
+	rubbish.close();
+
+	bbq_history store;
+	QVERIFY2(!store.open(path), "opening a file that is not a database "
+	                            "reported success");
+
+	QVERIFY2(!store.is_open(),
+	         "open() failed and the store still calls itself open, so every "
+	         "guard downstream lets a call through to a database that "
+	         "refused to exist");
+
+	/*
+	 * And the consequence, which is what the reader actually met: a
+	 * write attempted against it must be refused by the guard rather
+	 * than executed and blamed on the statement.
+	 */
+	bbq_sample sample;
+	sample.start_utc = 1780000000;
+	sample.duration_s = 300;
+	sample.temperature = 12.0;
+
+	bbq_series series(bbq_band::observed, QStringLiteral("wunderground"));
+	series.set_samples({sample});
+
+	QCOMPARE(store.record_observations(QStringLiteral("ITEST1"), series), 0);
+	QVERIFY2(!store.last_error().isEmpty(),
+	         "the store failed to open and says nothing about why");
 }

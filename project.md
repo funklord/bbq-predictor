@@ -11812,3 +11812,59 @@ from source comments, so renaming the series is a change to hundreds of
 references to improve an appearance. It is recorded for whoever decides
 how this document is shaped, which is not a call to make while repairing
 something else.
+
+
+## 16.78 A store that failed to open still called itself open
+
+Found by damaging an archive on purpose, which is a thing this program
+has to survive: it keeps observations for a decade in one SQLite file,
+and power cuts and full disks are ordinary.
+
+Both damaged cases are handled by the diagnostics -- `--history` against
+a file of rubbish says "cannot open: file is not a database", and
+against a truncated archive "database disk image is malformed", each
+exiting 1. The applet survives too: it drew, fetched, and said `record:
+none yet`.
+
+**What it said on the status line was wrong.**
+
+    last error: observed: the store took 0 of 288 observations:
+                Parameter count mismatch
+
+The archive was not a database. "Parameter count mismatch" is a prepared
+statement complaining about a bind, two layers downstream of the real
+answer -- and it is `sec 19`'s shape exactly: a message naming a cause
+the code never tested.
+
+### 16.78.1 SQLite opens lazily, and the flag did not wait
+
+    if (!database.open()) { return false; }
+    m_open = true;
+    ...
+    if (!create_schema()) { return false; }   <- m_open stays true
+
+A file that is not a database **passes** `QSqlDatabase::open()`, because
+nothing has read it yet. It fails at the first statement, which is the
+schema. By then `m_open` was true, so `open()` returned false while the
+object went on calling itself open -- and all **nineteen** `if
+(!m_open)` guards downstream let calls through to a database that had
+refused to exist.
+
+One line: `m_open = false` before that return. The status line then
+carries a real condition instead of an invented one.
+
+### 16.78.2 What is still not right, and is not this fix
+
+With the wrong message gone, **nothing durable says the archive failed
+at all.** The open error is written to `m_last_error` at startup and the
+first band message replaces it seconds later, so a reader with a corrupt
+archive sees an ordinary status line and a program that quietly does not
+remember. `record: none yet` is consistent with it and equally
+consistent with a fresh install.
+
+Sec 12 says a store failure "is reported and not fatal". It is reported
+once, into a field whose whole job is to hold the LATEST thing, and a
+store that never opened is a standing condition rather than an event.
+Recorded rather than fixed: making it stick is a change to what the
+status line is for, and that is a design question about the one line
+this program has to say things in.
