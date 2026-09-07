@@ -11218,3 +11218,47 @@ the suite was green while the statistic was wrong.
 sabotage at all -- a broken build and a check that cannot fail are
 indistinguishable from the output. The second was written to compile
 and be wrong, which is the only kind that proves anything.
+
+
+## 16.68 The same blind spot, found by looking for its shape
+
+Sec 16.67's fault -- two numbers that agree cannot separate the columns
+they came from -- is a shape, not an instance. Swept for mechanically:
+within each test function, collect the QCOMPARE expectations that are
+plain numeric literals, and report any literal expected for more than
+one thing.
+
+Fourteen hits, and most are the assertion rather than a weakness.
+`step_holds_its_value` expects 20.0 at two points BECAUSE a step holds
+its value; a window test expects 3600 from the control and from the
+graph because their agreeing is the property. **Equality is a finding
+only where the two things are supposed to be able to differ.**
+
+Two were sec 16.67's own instances, now covered.
+
+### 16.68.1 The one that was a real gap
+
+`a_chance_forecast_is_scored_by_occurrence_not_by_error` expects **1**
+for four different things: the bin count, the score count, the rainy
+count, and what `verify` returned. Its distinct values -- Brier 0.09,
+base rate 1.0, bin 7 -- discriminate well. The four 1s do not.
+
+**`rain_count` was asserted in exactly one place in the whole suite,
+in a fixture where it equalled the bin's total, and that bin's own
+`count` was never asserted at all.**
+
+The pair is user-facing. Every reliability line reads "said 20%, rained
+4% (n=27)", and both halves come out of one row as `rain_count` over
+`count`. Anything returning the total for the rainy number passes the
+suite and prints **"rained 100%"** on every line ever after.
+
+Two forecasts in one bin, one wet and one dry: count 2, rain_count 1,
+observed rate a half, nominal 0.7. Four numbers, no two alike.
+
+Sabotaged by reading `rain_count` from the total column:
+
+    'bin.rain_count == 1' returned FALSE.
+
+**Exactly one test failed**, and the pre-existing rain_count assertion
+was not it -- the same result as sec 16.67, from the same cause, which
+is why the sweep was worth running rather than the fix worth repeating.

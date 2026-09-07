@@ -20,6 +20,7 @@ class test_history : public QObject {
 
 private slots:
 	void lead_times_bucket_by_their_upper_bound();
+	void a_bin_counts_the_wet_ones_apart_from_the_total();
 	void the_three_scores_are_told_apart_by_the_fixture();
 	void one_archive_is_recognised_however_it_is_spelled();
 	void observations_survive_being_stored_twice();
@@ -1005,4 +1006,88 @@ void test_history::the_three_scores_are_told_apart_by_the_fixture() {
 	 */
 	QVERIFY(score.mean_absolute_error >= std::abs(score.bias));
 	QVERIFY(score.root_mean_square_error >= score.mean_absolute_error);
+}
+
+/*
+ * How often it rained in a bin, against how many fell in it.
+ *
+ * The reliability line a reader sees is "said 20%, rained 4% (n=27)",
+ * and both halves come from one row: `rain_count` over `count`. The
+ * only fixture asserting rain_count had ONE observation and it rained,
+ * so rain_count and count were both 1 and the bin's own count was never
+ * asserted at all. Anything returning the total for the rainy number
+ * passes that, and prints "rained 100%" on every line ever after.
+ *
+ * Two forecasts in the same bin, one wet and one dry: count 2,
+ * rain_count 1, observed rate a half. Three numbers, no two alike.
+ */
+void test_history::a_bin_counts_the_wet_ones_apart_from_the_total() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	const qint64 valid = issued + 1800;
+
+	/* Both say 70%, so both land in one probability bin. */
+	bbq_sample wet_forecast;
+	wet_forecast.start_utc = valid;
+	wet_forecast.duration_s = 3600;
+	wet_forecast.precip_chance = 70.0;
+
+	bbq_sample dry_forecast;
+	dry_forecast.start_utc = valid + 600;
+	dry_forecast.duration_s = 3600;
+	dry_forecast.precip_chance = 70.0;
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples({wet_forecast, dry_forecast});
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+
+	/* It rained on the first and not on the second. */
+	bbq_sample wet;
+	wet.start_utc = valid;
+	wet.duration_s = 300;
+	wet.precip_rate = 2.5;
+
+	bbq_sample dry;
+	dry.start_utc = valid + 600;
+	dry.duration_s = 300;
+	dry.precip_rate = 0.0;
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples({wet, dry});
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 2);
+
+	const std::vector<bbq_reliability_bin> bins = store.reliability(
+	        QStringLiteral("ITEST1"), bbq_band::hourly, bbq_lead_bucket::hour);
+
+	QCOMPARE(static_cast<int>(bins.size()), 1);
+
+	const bbq_reliability_bin &bin = bins.front();
+	QCOMPARE(bin.probability_bin, 7);
+
+	QVERIFY2(bin.count == 2,
+	         qPrintable(QStringLiteral("the bin holds %1 forecast(s), not 2")
+	                            .arg(bin.count)));
+
+	QVERIFY2(bin.rain_count == 1,
+	         qPrintable(QStringLiteral("%1 of %2 in the bin counted as rain "
+	                                   "-- if it equals the total, the rainy "
+	                                   "number is the total")
+	                            .arg(bin.rain_count)
+	                            .arg(bin.count)));
+
+	/*
+	 * And the rate the line prints, which is what the two are for --
+	 * and which is 1.0, not 0.5, if the rainy number is the total.
+	 */
+	QVERIFY2(qAbs(bin.observed() - 0.5) < 1e-9,
+	         qPrintable(QStringLiteral("the bin reports %1 rain, not 0.5")
+	                            .arg(bin.observed())));
+
+	/* The nominal side of the pair, which the diagonal is read against. */
+	QVERIFY(qAbs(bin.forecast() - 0.7) < 1e-9);
 }
