@@ -11868,3 +11868,55 @@ store that never opened is a standing condition rather than an event.
 Recorded rather than fixed: making it stick is a change to what the
 status line is for, and that is a design question about the one line
 this program has to say things in.
+
+
+## 16.79 The history endpoint fell thirteen hours behind the current one
+
+Measured 2026-09-07 around 21:00Z, on three stations fetched within a
+minute of each other:
+
+    ISTOCK877   observed history ends 07:24Z   current 20:48Z
+    IENSKE4     observed history ends 07:29Z   current 20:49Z
+    IJOHAN69    observed history ends 07:25Z   current 20:49Z
+
+**The stations are reporting.** `current` answers with a reading minutes
+old for every one of them. Weather Underground's history endpoint is
+about thirteen and a half hours behind its own current endpoint, across
+stations, so it is the provider rather than any station.
+
+The visible symptom is this program calling a live station quiet:
+
+    observed   FAIL  ISTOCK877 has not reported for 13 h 28 min
+
+Which is TRUE of the endpoint that was asked. Sec 12.13.3 measures
+staleness from the newest observation the observed band returned, and
+that is the right source for the question "is the archive advancing" --
+it just reads as an accusation against the station.
+
+### 16.79.1 The design already answers it, and the comment that says so
+### was resting on this
+
+`current` is deliberately not archived. The comment gives the reason --
+an instantaneous reading has no honest duration, and storing it with one
+would put a priority-300 band across minutes nobody measured -- and then
+says: **"Nothing is lost: the station's own history reports the same
+reading on the next observed fetch, with an honest duration."**
+
+That is a claim about somebody else's system, and today it is thirteen
+hours from being true. What saves it is a property nobody wrote down as
+a defence: **the observed fetch asks for a whole DAY, not for what has
+arrived since**, and `record_observations` is INSERT OR IGNORE on
+`(station, valid_utc)`. So when the endpoint catches up, the next fetch
+of that day returns the missing hours and they land, harmlessly, beside
+what is already there. The backfill covers the case where the lag
+outlives the day.
+
+**The condition is that a fetch happens after the catch-up**, and
+nothing on this machine guarantees one: the timer is not installed
+(sec 16.64), so the archive advances only while somebody has the applet
+open. A provider lag and an absent timer are separately harmless and
+together are how a day goes missing.
+
+Recorded, not fixed. Archiving `current` would trade a real hole for a
+band that lies about its own duration, and that trade is sec 12's to
+make rather than a fix to slip in while looking at something else.
