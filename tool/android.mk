@@ -308,6 +308,54 @@ ANDROID_KEY_ALIAS ?=
 # -j`. A recursive call is sequenced by construction.
 ANDROID_CHECK_LOCAL ?=
 
+# The activity `android-run` starts. Three of the four adopters declare Qt's
+# own class in their manifests and never touch this; hydra subclasses it and
+# declares se.vibes.hydra.HydraActivity, so with the name hardcoded here the
+# only way to launch it was to define android-run again -- which make accepts
+# in silence, retires the shared recipe, and announces on every build of that
+# project as "overriding recipe for target". The fragment's own history has a
+# version of that bug shipping, which is why ANDROID_CHECK_LOCAL is a hook
+# rather than an invitation to redefine android-check.
+#
+# A default-valued variable is the smaller form of the same answer: the three
+# that declare Qt's class notice nothing, and the one that does not sets a
+# line instead of a recipe.
+ANDROID_ACTIVITY ?= org.qtproject.qt.android.bindings.QtActivity
+
+# A check on the built artifact, run before it is installed. Empty by
+# default, invoked the same recursive way as ANDROID_CHECK_LOCAL.
+#
+# It exists because an Android build can exit 0 having quietly not packaged
+# something. androiddeployqt scans a library's dependencies under names it
+# builds by appending the ABI, so a kit shipping its FFmpeg libraries
+# unsuffixed makes the scan fail while the copy, which uses the real names,
+# succeeds: fifteen llvm-readobj errors, exit 0, a working APK. **A build
+# that dropped a library looks exactly the same from outside** -- same log
+# shape, same status -- and nothing short of reading the artifact separates
+# them. harmonization.md already asks shared tooling to verify the
+# artifact's SIGNATURE rather than trust a build that reported success,
+# after signing flags were silently dropped by Qt's generated Makefile.
+# What gets packaged is decided by a step whose failures are warnings, so
+# it is the same shape and the fragment checked one and not the other.
+#
+# Attached to android-install rather than to a build, because the fragment
+# does not own the build -- each project has its own `android` rule -- and
+# a hook declared here that nothing here invokes would be a check that
+# cannot run, which reads exactly like a clean tree. android-install is the
+# fragment's own target, depends on `android`, and knows ANDROID_ARTIFACT,
+# so a project that sets this cannot install an APK that failed it. A
+# project wanting it earlier can invoke the same target from its own rule.
+#
+# What to check is the project's to decide, and so is whether an adopter
+# without QtMultimedia wants the cost at all: fuzzypickles carries
+# tool/check_apk_libs.py, which walks every .so in the APK and reports any
+# NEEDED entry neither packaged nor provided by the platform, DERIVING the
+# platform set from the NDK sysroot at the declared API rather than listing
+# it -- an allowlist of what Android provides is a waiver list, and goes
+# stale silently when ANDROID_API moves. The fragment supplies the place to
+# attach, not the policy.
+ANDROID_ARTIFACT_CHECK ?=
+
 android-check:
 	@# ANDROID_API must not exceed what the app declares.
 	@#
@@ -508,11 +556,12 @@ define android_verify_signature
 endef
 
 android-install: android
+	$(if $(ANDROID_ARTIFACT_CHECK),@$(MAKE) --no-print-directory $(ANDROID_ARTIFACT_CHECK))
 	$(ANDROID_ADB) install -r $(ANDROID_ARTIFACT)
 
 android-run: android-install
 	$(ANDROID_ADB) shell am start -n \
-	        $(APP_ID)/org.qtproject.qt.android.bindings.QtActivity
+	        $(APP_ID)/$(ANDROID_ACTIVITY)
 
 # This app's log and nothing else. `adb logcat` unfiltered is every process
 # on the device, which is how a real message gets lost rather than read.
