@@ -19,6 +19,24 @@ class QNetworkAccessManager;
  * whatever Tuesday that happens, with no fix the user can apply.
  * Everything here exists to make re-acquiring one cheap.
  */
+/*
+ * What to say when the key page could not be fetched.
+ *
+ * Qt's own text ends "- server replied: " and then whatever the server
+ * said, which for a bare 404 from a CDN is NOTHING -- so the reader is
+ * handed a sentence that stops at a colon and looks truncated. Seen on
+ * this path, which sec 2.2 already documents as the fragile one:
+ *
+ *     no API key: Error transferring https://www.wunderground.com/
+ *     forecast - server replied:
+ *
+ * The status is the actionable half and this program names it
+ * everywhere else -- "no data (HTTP 204)", the probe's "HTTP 401" -- so
+ * it names it here too. Out of the reply handler because a message is
+ * worth testing and a network failure is not worth staging to test one.
+ */
+QString bbq_wu_transfer_error(const QString &qt_message, int http_status);
+
 class bbq_wu_key_source : public QObject {
 	Q_OBJECT
 

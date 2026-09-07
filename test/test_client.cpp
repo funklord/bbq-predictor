@@ -36,6 +36,7 @@ private slots:
 	void a_refused_key_page_is_tried_three_times();
 	void api_requests_ask_for_identity_encoding();
 	void a_query_parameter_is_read_back_by_name();
+	void a_failed_key_page_says_what_the_server_answered();
 };
 
 void test_client::requests_wait_when_there_is_no_key() {
@@ -211,4 +212,49 @@ void test_client::a_query_parameter_is_read_back_by_name() {
 	        QStringLiteral("updateDate=19990101&date=20260907");
 	QCOMPARE(bbq_wu_query_parameter(awkward, QStringLiteral("date")),
 	         QStringLiteral("20260907"));
+}
+
+/*
+ * The message when the key page cannot be fetched.
+ *
+ * Qt's text ends "- server replied: " and then whatever the server
+ * said, which for a bare 404 is nothing -- so the reader gets a
+ * sentence that stops at a colon and reads as truncated. Seen on this
+ * path, the one sec 2.2 documents as fragile:
+ *
+ *     no API key: Error transferring https://www.wunderground.com/
+ *     forecast - server replied:
+ *
+ * Asked of the function rather than of a staged network failure. A
+ * connection that never reaches a server has no status, and that case
+ * must keep Qt's text unchanged -- which is the half a test written
+ * only for the 404 would let rot.
+ */
+void test_client::a_failed_key_page_says_what_the_server_answered() {
+	const QString dangling =
+	        QStringLiteral("Error transferring https://www.wunderground.com/"
+	                       "forecast - server replied:");
+
+	const QString named = bbq_wu_transfer_error(dangling, 404);
+	QVERIFY2(named.contains(QStringLiteral("HTTP 404")),
+	         qPrintable(QStringLiteral("the status is not in \"%1\"").arg(named)));
+	QVERIFY2(!named.endsWith(QLatin1Char(':')),
+	         qPrintable(QStringLiteral("\"%1\" still stops at a colon")
+	                            .arg(named)));
+
+	/* A server that DID say something keeps what it said, plus the status. */
+	const QString spoke = bbq_wu_transfer_error(
+	        QStringLiteral("Error transferring x - server replied: Forbidden"),
+	        403);
+	QVERIFY(spoke.contains(QStringLiteral("Forbidden")));
+	QVERIFY(spoke.contains(QStringLiteral("HTTP 403")));
+
+	/*
+	 * And no status means the transfer never reached a server, so Qt's
+	 * text is the whole of what is known and must come back untouched.
+	 */
+	const QString unreached =
+	        QStringLiteral("Connection refused");
+	QCOMPARE(bbq_wu_transfer_error(unreached, 0), unreached);
+	QCOMPARE(bbq_wu_transfer_error(dangling, 0), dangling);
 }

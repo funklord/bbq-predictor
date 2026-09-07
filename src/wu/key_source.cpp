@@ -130,13 +130,42 @@ void bbq_wu_key_source::send() {
 		                             ? QString::fromUtf8(reply->readAll())
 		                             : QString();
 
-		m_transfer_error = reply->error() == QNetworkReply::NoError
-		                           ? QString()
-		                           : reply->errorString();
+		m_transfer_error =
+		        reply->error() == QNetworkReply::NoError
+		                ? QString()
+		                : bbq_wu_transfer_error(
+		                          reply->errorString(),
+		                          reply->attribute(
+		                                       QNetworkRequest::
+		                                               HttpStatusCodeAttribute)
+		                                  .toInt());
 
 		page_arrived(body);
 	});
 #endif
+}
+
+QString bbq_wu_transfer_error(const QString &qt_message, int http_status) {
+	if (http_status <= 0) {
+		/*
+		 * No status at all: the transfer never reached a server, so
+		 * Qt's text is the whole of what is known.
+		 */
+		return qt_message;
+	}
+
+	/*
+	 * A trailing "server replied:" with nothing after it is Qt telling
+	 * the reader the server said nothing. Said plainly rather than left
+	 * dangling, and the status carries the meaning either way.
+	 */
+	QString said = qt_message.trimmed();
+	if (said.endsWith(QStringLiteral("server replied:"))) {
+		said.chop(QStringLiteral(" server replied:").size());
+		said = said.trimmed();
+	}
+
+	return said + QStringLiteral(" (HTTP %1)").arg(http_status);
 }
 
 void bbq_wu_key_source::page_arrived(const QString &page) {

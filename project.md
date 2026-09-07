@@ -11944,3 +11944,36 @@ keeps sec 16.79's "nothing is lost" true.
 Recorded, not fixed. Archiving `current` would trade a real hole for a
 band that lies about its own duration, and that trade is sec 12's to
 make rather than a fix to slip in while looking at something else.
+
+
+## 16.80 A message that stopped at a colon
+
+Seen while the key scrape failed transiently, on the path sec 2.2
+already calls the fragile one:
+
+    no API key: Error transferring https://www.wunderground.com/
+    forecast - server replied:
+
+Qt's text ends "server replied:" and then whatever the server said,
+which for a bare 404 from a CDN is **nothing**. So the reader gets a
+sentence that stops at a colon and reads as truncated -- the message
+looking broken on top of the thing that actually broke.
+
+The status is the actionable half, and this program names it everywhere
+else: `no data (HTTP 204)` from the client, `HTTP 401` from the probe.
+It names it here now, and drops the dangling clause when the server
+said nothing.
+
+### 16.80.1 The half a test written for the 404 would have let rot
+
+A transfer that never reaches a server has **no** status, and there
+Qt's text is the whole of what is known and must come back untouched.
+That is the case a test aimed at the 404 would never look at, so it is
+asserted explicitly -- and it is the one the sabotage broke:
+
+    if (false) { /* a statusless failure gets the suffix too */
+
+    Compared values are not the same
+
+Out of the reply handler as a free function, because a message is worth
+testing and staging a network failure to test one is not.
