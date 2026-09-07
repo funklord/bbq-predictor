@@ -69,6 +69,28 @@ def options_in_page(text):
 	return found
 
 
+# What the packaging invokes the program WITH. A unit file is a caller
+# like any other, and the only one whose failure nobody watches.
+UNIT_DIR = Path("packaging/systemd")
+
+# An option appearing in a unit's ExecStart or ExecCondition line.
+IN_UNIT = re.compile(r"(--[a-z][a-z-]*)")
+
+
+def options_in_units(texts):
+	found = set()
+	for text in texts:
+		for line in text.splitlines():
+			if line.startswith("Exec"):
+				found.update(IN_UNIT.findall(line))
+	return found
+
+
+def unit_only(unit_options, source_options):
+	"""Options the packaging passes that the program does not accept."""
+	return sorted(o for o in unit_options if o not in source_options)
+
+
 def compare(source_text, page_text):
 	"""Returns (undocumented, invented)."""
 	in_source = options_in_source(source_text)
@@ -90,7 +112,14 @@ def control_passes():
 	page = r'.B \-\-invented'
 
 	undocumented, invented = compare(source, page)
-	return undocumented == ["--real"] and invented == ["--invented"]
+	if undocumented != ["--real"] or invented != ["--invented"]:
+		return False
+
+	# And the unit comparison, which is silent in the same way.
+	unit = "ExecStart=/usr/bin/thing --real --gone\nUser=nobody\n"
+	seen = options_in_units([unit])
+	return (seen == {"--real", "--gone"} and
+	        unit_only(seen, {"--real"}) == ["--gone"])
 
 
 def main():
@@ -121,6 +150,32 @@ def main():
 			  "same as a program with no options", file=sys.stderr)
 		return 2
 
+	# A UNIT FILE IS A CALLER, and the one whose failure nobody sees.
+	#
+	# The service runs on a timer, offscreen, as its own user, and its
+	# stdout goes where sec 17.4 says nothing reads. An option renamed
+	# in the program and not in the unit fails there and only there --
+	# the archive simply stops advancing, which is the symptom sec 15.6
+	# exists to remove.
+	unit_texts = [path.read_text(encoding="utf-8")
+	              for path in sorted(UNIT_DIR.glob("*.service"))]
+
+	if not unit_texts:
+		print("man-options: found no unit files, so nothing checked what "
+		      "the packaging invokes", file=sys.stderr)
+		return 2
+
+	in_units = options_in_units(unit_texts)
+	if not in_units:
+		print("man-options: no unit file names an option, so the Exec "
+		      "pattern has stopped matching", file=sys.stderr)
+		return 2
+
+	unmatched = unit_only(in_units, in_source)
+	for option in unmatched:
+		print("man-options: %s is passed by a systemd unit and the program "
+		      "does not accept it" % option, file=sys.stderr)
+
 	undocumented, invented = compare(source_text, page_text)
 
 	for option in undocumented:
@@ -130,10 +185,11 @@ def main():
 		print(f"man-options: {option} is documented but not accepted",
 			  file=sys.stderr)
 
-	if undocumented or invented:
+	if undocumented or invented or unmatched:
 		return 1
 
-	print(f"man-options: {len(in_source)} option(s), documented both ways")
+	print(f"man-options: {len(in_source)} option(s), documented both ways, "
+	      f"and {len(in_units)} passed by the packaging that it accepts")
 	return 0
 
 

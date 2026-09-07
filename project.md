@@ -11025,3 +11025,50 @@ That is why 1534 forecasts sit unverified: a forecast is only checked
 once the hour it predicted has been observed, and nothing is being
 observed. **Which station to watch is the holder's choice**, so it is
 recorded here rather than changed.
+
+
+## 16.64 A unit file is a caller, and the one nobody watches
+
+The station switch fixed the data source. Asking what would keep the
+archive advancing afterwards turned up the state of the machine and one
+gap in the gates.
+
+**Nothing fetches on a schedule here.** The package is not installed and
+no unit exists on this machine, so the archive advances only while
+somebody has the applet open -- which is precisely the complaint sec
+15.6 was built to answer.
+
+**And installing it would not fill the archive the applet reads.** The
+timer's service runs as its own user with `StateDirectory=bbq-predictor`,
+so it writes `/var/lib/bbq-predictor/history.sqlite` while the applet
+reads one under `$HOME`. That is sec 15.6's recorded open question --
+whether the two should be one store, and which way the sharing goes --
+arriving in practice rather than in theory. Left for the holder.
+
+### 16.64.1 What the packaging invokes was checked by nothing
+
+The unit's `ExecStart` passes `--fetch-once`, `--station` and
+`--history-path`. All three are real, verified by reading. Nothing
+enforced it.
+
+`man_options` already compares the options the program accepts against
+the manual, in both directions. A unit file is a third list of the same
+options and **the only one whose failure nobody sees**: the service runs
+offscreen, on a timer, as another user, and its stdout goes where sec
+17.4 says nothing reads. An option renamed in the program and not in the
+unit fails there and only there, and the symptom is an archive that
+quietly stops advancing -- the exact thing that was being investigated
+when this was found.
+
+The gate reads `Exec` lines from `packaging/systemd/*.service` and
+requires every option in them to be one the program accepts. Its control
+provokes the new comparison as well as the two old ones, since a check
+that catches one direction reads exactly like one that catches all
+three. Proved by renaming the option in the unit:
+
+    man-options: --history-file is passed by a systemd unit and the
+    program does not accept it
+
+**It does not check the other direction**, and that is deliberate: the
+program accepts twenty-two options and a unit is expected to pass three.
+An absence there is a fact about packaging, not a defect.
