@@ -25,6 +25,27 @@ namespace {
 struct probe_target {
 	const char *what;
 	const char *url;
+
+	/*
+	 * An HTTP status that means REACHED for this target, even though Qt
+	 * reports it as an error. Zero where only a clean reply will do.
+	 *
+	 * weather.com is asked with `apiKey=0` on purpose: this probe is
+	 * about reachability and TLS, and requiring a real key would make
+	 * that one target unrunnable from a machine that has not scraped
+	 * one yet -- which is exactly the machine somebody is probing.
+	 *
+	 * So 401 is the CORRECT answer there and proves the host answered.
+	 * QNetworkReply calls it AuthenticationRequiredError, which counted
+	 * as a failure -- so the probe reported "1 of 6 failed" and exited
+	 * 1 on a completely healthy machine, every single run. A diagnostic
+	 * that always cries wolf is one nobody reads, which is the same
+	 * argument this workspace makes against leaving a CI badge red.
+	 *
+	 * Named exactly rather than accepting any status, so that a 500 or
+	 * a 403 from that host stays a real finding.
+	 */
+	int reached_status;
 };
 
 const probe_target targets[] = {
@@ -34,17 +55,17 @@ const probe_target targets[] = {
 	 * single most useful thing to know, and the one a failing HTTPS
 	 * request alone cannot tell you.
 	 */
-	{ "http (no TLS at all)", "http://example.com/" },
+	{ "http (no TLS at all)", "http://example.com/", 0 },
 
 	/* A boring HTTPS host, to separate "TLS is broken" from "that
 	 * provider is broken". */
-	{ "https (a plain host)", "https://example.com/" },
+	{ "https (a plain host)", "https://example.com/", 0 },
 
 	/* The three the applet actually depends on. */
-	{ "wunderground page", "https://www.wunderground.com/forecast" },
-	{ "met.no api", "https://api.met.no/weatherapi/nowcast/2.0/complete?lat=59.33&lon=18.07" },
-	{ "open-meteo api", "https://api.open-meteo.com/v1/forecast?latitude=59.33&longitude=18.07&hourly=temperature_2m" },
-	{ "weather.com api", "https://api.weather.com/v2/pws/observations/current?stationId=ISTOCK822&format=json&units=m&apiKey=0" },
+	{ "wunderground page", "https://www.wunderground.com/forecast", 0 },
+	{ "met.no api", "https://api.met.no/weatherapi/nowcast/2.0/complete?lat=59.33&lon=18.07", 0 },
+	{ "open-meteo api", "https://api.open-meteo.com/v1/forecast?latitude=59.33&longitude=18.07&hourly=temperature_2m", 0 },
+	{ "weather.com api", "https://api.weather.com/v2/pws/observations/current?stationId=ISTOCK822&format=json&units=m&apiKey=0", 401 },
 };
 
 /*
@@ -271,11 +292,19 @@ int bbq_net_probe(int timeout_s) {
 		const int status =
 		        reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-		if (reply->error() == QNetworkReply::NoError) {
-			say(QStringLiteral("probe: OK   %1  HTTP %2, %3 bytes")
+		const bool expected_refusal =
+		        target.reached_status != 0 && status == target.reached_status;
+
+		if (reply->error() == QNetworkReply::NoError || expected_refusal) {
+			say(QStringLiteral("probe: OK   %1  HTTP %2, %3 bytes%4")
 			            .arg(QString::fromLatin1(target.what))
 			            .arg(status)
-			            .arg(reply->readAll().size()));
+			            .arg(reply->readAll().size())
+			            .arg(expected_refusal
+			                         ? QStringLiteral(" (asked with no key,"
+			                                          " so this is the host"
+			                                          " answering)")
+			                         : QString()));
 		} else {
 			++failures;
 

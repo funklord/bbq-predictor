@@ -10808,3 +10808,60 @@ the shipped binary holds none.
 **A green gate answered the question it was given.** The size was not
 in that question, and nothing would have raised it -- the number came
 from a listing printed on the way past.
+
+
+## 16.61 The probe could not pass
+
+Run on a machine with nothing wrong with it, `--probe` said:
+
+    probe: FAIL weather.com api  error 204 (Host requires
+           authentication), HTTP 401
+    probe: 1 of 6 failed
+
+and exited 1. It had always said that, and would have said it on any
+machine, because **that target is asked with `apiKey=0` on purpose**:
+the probe is about reachability and TLS, and requiring a real key would
+make it unrunnable on a machine that has not scraped one -- which is
+exactly the machine somebody is probing.
+
+So 401 is the CORRECT answer there and proves the host answered.
+`QNetworkReply` calls it `AuthenticationRequiredError`, the check was
+`error() == NoError`, and a target that could never pass reported a
+failure and set the exit code on every healthy run.
+
+**A diagnostic that always cries wolf is one nobody reads** -- the same
+argument `build-and-commit.md` makes for deactivating a workflow rather
+than leaving its badge red, met inside a program.
+
+    probe: OK   weather.com api  HTTP 401, 135 bytes (asked with no
+           key, so this is the host answering)
+    probe: 0 of 6 failed
+
+### 16.61.1 Named exactly, not "any answer"
+
+`reached_status` is 401 for that target and zero everywhere else, so a
+500 or a 403 from the same host stays a real finding. Accepting any
+HTTP status would have removed the false alarm and the probe's ability
+to report a broken provider with it.
+
+### 16.61.2 Watched failing, on the real thing
+
+There is no test: `net/probe.cpp` is one of the files no suite links,
+and the predicate under it is two lines whose whole content is what a
+live server replies. The evidence is the pair of runs -- `1 of 6
+failed`, exit 1, then `0 of 6 failed`, exit 0, against the same network
+minutes apart. **That is the same discipline as a sabotage run and not
+a weaker one**: the failure was observed before the change rather than
+constructed after it.
+
+### 16.61.3 One line above the summary is Qt's, and is expected
+
+    qt.network.http2: stream 1 finished with error: "Host requires
+    authentication"
+
+The probe turns on `qt.tlsbackend.ossl` and `qt.network.ssl` debug
+deliberately; this is not one of those, it is Qt warning about the 401
+at its own default level. It is left alone -- silencing Qt's network
+warnings to tidy a diagnostic would hide the next real one -- but it
+reads as a contradiction of the `OK` line beside it, so it is recorded
+here rather than rediscovered.
