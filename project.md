@@ -11917,6 +11917,30 @@ nothing on this machine guarantees one: the timer is not installed
 open. A provider lag and an absent timer are separately harmless and
 together are how a day goes missing.
 
+### 16.79.2 That property is asserted now, and the first sabotage proved
+### nothing
+
+It had never been tested. `observations_survive_being_stored_twice`
+covers the SAME series arriving twice, which is idempotence; a catch-up
+is a SUPERSET arriving later, and nothing asserted what happens then.
+
+**The first sabotage was behaviourally equivalent and the suite was
+right to stay green.** Skipping rows older than the newest one held
+still reaches 288, because a day that stops at 07:24 and returns
+complete is an EXTENSION -- the skipped rows are exactly the ones
+already stored. It modelled the WU case and not a defect.
+
+The defect that property actually guards is an "we already have this
+day" shortcut, which is a plausible thing to add and would leave the
+morning's 88 rows as the whole day for ever:
+
+    'store.observation_count(...) == 288' returned FALSE. (the day
+    holds 88 rows after a catch-up that should have brought it to 288)
+
+It also fails `a_day_with_a_hole_in_it_is_still_asked_for` in the feed,
+which is the same property one layer up -- so the pair of them are what
+keeps sec 16.79's "nothing is lost" true.
+
 Recorded, not fixed. Archiving `current` would trade a real hole for a
 band that lies about its own duration, and that trade is sec 12's to
 make rather than a fix to slip in while looking at something else.

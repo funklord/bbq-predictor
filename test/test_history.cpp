@@ -28,6 +28,7 @@ private slots:
 	void the_default_archive_is_somewhere_a_person_owns();
 	void an_archive_says_which_shape_it_has();
 	void a_store_that_failed_to_open_says_it_is_shut();
+	void a_day_refetched_later_fills_its_own_gap();
 	void observations_survive_being_stored_twice();
 	void a_forecast_is_kept_once_per_bucket_not_once_per_fetch();
 	void verifying_computes_the_standard_scores_and_empties_the_queue();
@@ -1256,4 +1257,71 @@ void test_history::a_store_that_failed_to_open_says_it_is_shut() {
 	QCOMPARE(store.record_observations(QStringLiteral("ITEST1"), series), 0);
 	QVERIFY2(!store.last_error().isEmpty(),
 	         "the store failed to open and says nothing about why");
+}
+
+/*
+ * A day re-fetched after the provider catches up fills its own gap.
+ *
+ * This is the property sec 16.79 leans on, so it is asserted rather
+ * than assumed. On 2026-09-07 Weather Underground's history endpoint
+ * ran thirteen and a half hours behind its own current endpoint across
+ * three stations: the observed band returned a day that stopped at
+ * 07:24Z while the station was demonstrably reporting.
+ *
+ * Nothing is lost by that ONLY because the observed fetch asks for a
+ * whole day rather than for what has arrived since. When the endpoint
+ * catches up, the same day comes back longer, and the hours that were
+ * missing land beside the ones already stored.
+ *
+ * The neighbouring test covers the same series twice, which is
+ * idempotence. This is the other half: a SUPERSET arriving later, which
+ * is what a catch-up actually looks like and what was never asserted.
+ */
+void test_history::a_day_refetched_later_fills_its_own_gap() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY2(store.open(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(store.last_error()));
+
+	const qint64 midnight = 1780000000;
+	const auto day_up_to = [&](int rows) {
+		std::vector<bbq_sample> samples;
+		for (int i = 0; i < rows; ++i) {
+			bbq_sample sample;
+			sample.start_utc = midnight + i * 300;
+			sample.duration_s = 300;
+			sample.temperature = 10.0 + i * 0.1;
+			samples.push_back(sample);
+		}
+		bbq_series series(bbq_band::observed, QStringLiteral("wunderground"));
+		series.set_samples(samples);
+		return series;
+	};
+
+	/* The lagging endpoint: the day stops part way through. */
+	QCOMPARE(store.record_observations(QStringLiteral("ITEST1"), day_up_to(88)),
+	         88);
+	QCOMPARE(store.observation_count(QStringLiteral("ITEST1")), 88);
+
+	/* Caught up: the same day, longer. */
+	store.record_observations(QStringLiteral("ITEST1"), day_up_to(288));
+
+	QVERIFY2(store.observation_count(QStringLiteral("ITEST1")) == 288,
+	         qPrintable(QStringLiteral("the day holds %1 rows after a "
+	                                   "catch-up that should have brought "
+	                                   "it to 288")
+	                            .arg(store.observation_count(
+	                                    QStringLiteral("ITEST1")))));
+
+	/*
+	 * And the hours that were already there are still there, with their
+	 * own values -- a catch-up that replaced the morning with something
+	 * else would count the same and mean something different.
+	 */
+	const bbq_series back = store.observations(
+	        QStringLiteral("ITEST1"), midnight, midnight + 88 * 300);
+	QCOMPARE(static_cast<int>(back.samples().size()), 88);
+	QVERIFY(back.samples().front().temperature.has_value());
+	QVERIFY(qAbs(*back.samples().front().temperature - 10.0) < 1e-9);
+	QVERIFY(qAbs(*back.samples().back().temperature - (10.0 + 87 * 0.1)) < 1e-9);
 }
