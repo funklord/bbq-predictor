@@ -330,7 +330,8 @@ test: tests-build $(ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs style-signals style-man style-palette style-exits style-xml style-wiring
+style: style-source style-docs style-signals style-man style-palette style-exits style-xml style-wiring \
+       style-setup
 
 style-source:
 	python3 tool/style_gate.py check
@@ -351,6 +352,12 @@ style-xml:
 
 style-wiring:
 	python3 tool/build_wiring.py
+
+# Calls that must happen once and whose absence nothing else notices: the
+# program builds, the suite passes, and a platform nobody tests here
+# misbehaves for somebody else (sec 16.71.2).
+style-setup:
+	python3 tool/setup_calls.py
 
 style-exits:
 	python3 tool/exit_codes.py
@@ -541,6 +548,6 @@ help:
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
-        style-wiring \
+        style-wiring style-setup \
         android android-aab \
         install uninstall clean veryclean distclean help

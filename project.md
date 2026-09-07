@@ -11442,3 +11442,47 @@ It said `--probe` "runs before any widget is built, so it works
 headless". True premise, false conclusion, and the conclusion is what a
 reader acts on. It names the application object now, and lists the
 other six options that share the property.
+
+
+## 16.72 A gate for the calls whose loss is silent
+
+Sec 16.71.2 deleted `bbq_install_accessibility_workaround()` in a bulk
+edit and nothing noticed. Re-run deliberately, with the call removed
+again:
+
+    make        rc=0
+    make test   rc=0, 198 passing
+    every existing gate   green
+
+**No test can catch it**, and that is not a gap in the suite. The
+function stays correct and what is gone is its only caller, which is
+`evidence.md`'s "a correct function is not a working feature" in the
+form where there is nothing left to assert against.
+
+`tool/setup_calls.py` names the calls whose absence is invisible, how
+many sites must have them, and the measured reason each is there. With
+the call removed it says so and gives the reason:
+
+    src/main.cpp: bbq_install_accessibility_workaround is called 0
+    time(s), expected at least 1
+    setup-calls:   Qt Widgets aborts on Android whenever a secondary
+    window opens while an accessibility service is running (sec 10.6)
+
+### 16.72.1 Two entries, and why not more
+
+**This is not a list of everything `main` does.** It is the list of
+things whose loss is silent, which is a much shorter one -- most setup
+failures announce themselves by the program not working.
+
+- `bbq_install_accessibility_workaround`, one site. The abort it
+  prevents happens on Android, with an accessibility service running,
+  which is nobody's development machine and everybody's phone.
+- `bbq_ensure_tls_backend`, **two** sites. The backend does not load
+  itself on Android and every provider is HTTPS. Two is the point: the
+  service entry is the half nobody runs by hand, so losing that one
+  alone would surface as a timer that quietly fetches nothing.
+
+Adding an entry is a decision rather than a sweep. A gate that grew to
+cover every call in `main` would be a second copy of `main`, and the
+first false finding would earn it an ignore list, which is how a gate
+gets switched off by instalments.

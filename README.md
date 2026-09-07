@@ -228,8 +228,9 @@ gates: indentation, `project.md` against the tree, every signal having a
 listener, the manual page against the options the program accepts,
 palette contrast in both schemes and over every wash the plot lays down,
 the fetch exit codes against the systemd unit that forgives one of them,
-every XML file parsing, and every header and test project being named
-where the build can see it. `make check` adds the tests.
+every XML file parsing, every header and test project being named where
+the build can see it, and the handful of setup calls whose absence
+nothing else would notice. `make check` adds the tests.
 
 No number here on purpose. It said "six" while the Makefile ran eight,
 because two were added without this line being touched -- a count in
