@@ -38,6 +38,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PROJECT_FILES = ("*.pro", "test/*.pro", "test/*.pri")
 
 NAMES_A_HEADER = re.compile(r"[A-Za-z0-9_./$]*src/([A-Za-z0-9_/]+\.h)")
+NAMES_A_SOURCE = re.compile(r"[A-Za-z0-9_./$]*src/([A-Za-z0-9_/]+\.cpp)")
+INCLUDES_A_HEADER = re.compile(
+        r'^\s*#\s*include\s+"([A-Za-z0-9_/]+\.h)"', re.M)
 
 
 def named_headers():
@@ -52,6 +55,49 @@ def named_headers():
 
 def missing(headers, named):
 	return sorted(h for h in headers if h not in named)
+
+
+def project_units():
+	"""Each project as qmake sees it: a .pro plus the .pri it includes.
+
+	The UNIT is what matters and reading a .pro alone gets it wrong.
+	test_common.pri names the sources and headers every suite shares, so
+	a test project read on its own appears to include a dozen headers it
+	never names, and every one of those would be a false finding.
+	"""
+	shared = ROOT / "test" / "test_common.pri"
+	shared_text = shared.read_text(encoding="utf-8") if shared.is_file() else ""
+
+	units = [("bbq-predictor.pro",
+	          (ROOT / "bbq-predictor.pro").read_text(encoding="utf-8"))]
+
+	for path in sorted((ROOT / "test").glob("test_*.pro")):
+		units.append((path.relative_to(ROOT).as_posix(),
+		              path.read_text(encoding="utf-8") + "\n" + shared_text))
+
+	return units
+
+
+def needed_by(text):
+	"""Headers the sources THIS unit lists include directly.
+
+	Direct includes only. Following them transitively would report
+	headers qmake does not need named either, since a header pulled in
+	by another is rebuilt through the one that names it.
+	"""
+	found = set()
+
+	for match in NAMES_A_SOURCE.finditer(text):
+		source = ROOT / "src" / match.group(1)
+		if not source.is_file():
+			continue
+
+		for include in INCLUDES_A_HEADER.findall(
+		        source.read_text(encoding="utf-8")):
+			if (ROOT / "src" / include).is_file():
+				found.add(include)
+
+	return found
 
 
 def registered_tests():
@@ -113,6 +159,46 @@ def main():
 		      % (len(absent), len(headers)), file=sys.stderr)
 		return 1
 
+	# NAMED SOMEWHERE IS NOT NAMED HERE (sec 16.62).
+	#
+	# The check above asks whether any project file names a header. That
+	# is the question that catches a header named nowhere, and it misses
+	# the one named by a DIFFERENT project than the one compiling it: a
+	# header listed only in a test project still rebuilds that test,
+	# while the application it is also compiled into tracks nothing and
+	# links a stale object. Same fault as sec 16.39.1, one project file
+	# along.
+	#
+	# Measured when this was added: zero across all fourteen units, so it
+	# guards a state the tree is already in rather than asking anybody to
+	# reach one.
+	units = project_units()
+	stale = []
+	needed_anywhere = 0
+
+	for name, text in units:
+		needed = needed_by(text)
+		needed_anywhere += len(needed)
+		here = {match.group(1) for match in NAMES_A_HEADER.finditer(text)}
+		for header in missing(sorted(needed), here):
+			stale.append((name, header))
+
+	if not needed_anywhere:
+		print("build-wiring: no project unit includes any header of its "
+		      "own, so the include pattern has stopped matching",
+		      file=sys.stderr)
+		return 2
+
+	if stale:
+		for name, header in stale:
+			print("%s: compiles a source that includes src/%s and does not "
+			      "name it, so qmake tracks no dependency for THIS project"
+			      % (name, header), file=sys.stderr)
+		print("build-wiring: %d header(s) named by another project but not "
+		      "the one compiling them" % len(stale), file=sys.stderr)
+		return 1
+
+
 	projects = sorted(
 	        p.name for p in (ROOT / "test").glob("test_*.pro"))
 	built = registered_tests()
@@ -136,9 +222,10 @@ def main():
 		      % (len(unbuilt), len(projects)), file=sys.stderr)
 		return 1
 
-	print("build-wiring: %d header(s) named in project files and %d test "
+	print("build-wiring: %d header(s) named in project files, each named "
+	      "by every one of %d project unit(s) that compiles it, and %d test "
 	      "project(s) in tests.pro, so a change to each rebuilds and runs"
-	      % (len(headers), len(projects)))
+	      % (len(headers), len(units), len(projects)))
 	return 0
 
 

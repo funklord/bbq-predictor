@@ -10865,3 +10865,69 @@ at its own default level. It is left alone -- silencing Qt's network
 warnings to tidy a diagnostic would hide the next real one -- but it
 reads as a contradiction of the `OK` line beside it, so it is recorded
 here rather than rediscovered.
+
+
+## 16.62 Eight gates, one plant each, and a harness wrong three times
+
+`make style` runs eight gates. Each was written with a reason and some
+carry their own controls, but they had never been asked the question
+this workspace asks of everything else: **make it fail, and watch.**
+
+Done in a CLONE rather than in the tree, because another session is
+committing here and planting faults in shared files to revert them is
+how somebody else's work gets lost.
+
+    style-source    a space-indented line in C++              CAUGHT
+    style-xml       a double dash inside an XML comment       CAUGHT
+    style-exits     an undocumented exit code                 CAUGHT
+    style-palette   a curve colour that fails the floor       CAUGHT
+    style-signals   a signal nothing listens to               CAUGHT
+    style-docs      a markdown link to a missing file         MISSED
+    style-man       an option in usage() and not the manual   MISSED
+    style-wiring    a header dropped from the project file    MISSED
+
+### 16.62.1 All three misses were the harness
+
+**Not one gate was at fault.** Each plant had been aimed at what the
+gate's NAME suggested rather than at what it checks:
+
+- **style-docs** checks backticked paths in TABLE ROWS only, and says
+  why: prose names `main.c` as an example, and checking it produced
+  dozens of findings across every project with none of them real. A
+  markdown link in prose is outside its remit by design. Re-planted as
+  a table row: CAUGHT.
+- **style-man** reads `option_value(...)` CALL SITES, not the usage
+  text -- the source of truth for "an option this program accepts" is
+  the code that reads it. Re-planted as a real call: CAUGHT.
+- **style-wiring** was planted twice more before it was aimed right.
+  First on a header that turned out to be named in `test_window.pro`
+  as well, then on one genuinely named nowhere else: CAUGHT.
+
+`evidence.md` says that when a result surprises you the apparatus is
+usually where the error is. Three for three, against eight gates that
+were all correct.
+
+### 16.62.2 One real gap, found by a plant that was wrong
+
+The first `style-wiring` plant removed `src/cli/options.h` from
+`bbq-predictor.pro` while `test_cli.pro` still named it, and the gate
+stayed green -- correctly, by its own question, which is whether a
+header is named in ANY project file.
+
+**That question misses the header named by a DIFFERENT project than the
+one compiling it.** A header listed only in a test project rebuilds
+that test; the application compiling the same source tracks nothing and
+links a stale object. It is sec 16.39.1's fault exactly, one project
+file along -- and that one cost a sabotage run that silently passed.
+
+The gate now asks per unit, where a unit is a `.pro` plus the `.pri` it
+includes. **The `.pri` is what makes the unit the right grain**: read
+alone, every test project appears to include a dozen headers it never
+names, and all of them would be false.
+
+Measured before it was added: **zero across all fourteen units**, so it
+guards a state the tree is already in. Then proved able to speak, on
+the plant that started it:
+
+    bbq-predictor.pro: compiles a source that includes src/cli/options.h
+    and does not name it, so qmake tracks no dependency for THIS project
