@@ -1,5 +1,7 @@
 #include <QDir>
 #include <QFile>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -24,6 +26,7 @@ private slots:
 	void the_three_scores_are_told_apart_by_the_fixture();
 	void one_archive_is_recognised_however_it_is_spelled();
 	void the_default_archive_is_somewhere_a_person_owns();
+	void an_archive_says_which_shape_it_has();
 	void observations_survive_being_stored_twice();
 	void a_forecast_is_kept_once_per_bucket_not_once_per_fetch();
 	void verifying_computes_the_standard_scores_and_empties_the_queue();
@@ -1130,4 +1133,74 @@ void test_history::the_default_archive_is_somewhere_a_person_owns() {
 
 	/* And it is the file the seeding guard refuses, by every spelling. */
 	QVERIFY(bbq_history_is_same_file(path, bbq_history_default_path()));
+}
+
+/*
+ * The archive records its own shape.
+ *
+ * Sec 12 keeps observations FOREVER and sizes the file for a decade, and
+ * the schema is created with CREATE TABLE IF NOT EXISTS -- a no-op
+ * against a file that already has the tables. So the day a column is
+ * added, an existing archive silently does not get it.
+ *
+ * This asserts only that the version is knowable, which is the half
+ * that cannot be added later: a file written without a stamp cannot be
+ * told apart from one written with a different schema, however careful
+ * anybody is afterwards. What to DO when the versions differ is a
+ * policy with real choices in it and is deliberately not decided here.
+ */
+void test_history::an_archive_says_which_shape_it_has() {
+	QTemporaryDir directory;
+	const QString path = directory.filePath(QStringLiteral("h.sqlite"));
+
+	{
+		bbq_history fresh;
+		QVERIFY2(fresh.open(path), qPrintable(fresh.last_error()));
+		QCOMPARE(fresh.schema_version(),
+		         bbq_history::current_schema_version());
+		QVERIFY2(bbq_history::current_schema_version() > 0,
+		         "version zero is the unstamped state, so it cannot also "
+		         "be a real version");
+	}
+
+	/*
+	 * AND IT SURVIVES A REOPEN, which is the case that matters: the
+	 * stamp is written once and read by every later run.
+	 */
+	{
+		bbq_history again;
+		QVERIFY2(again.open(path), qPrintable(again.last_error()));
+		QCOMPARE(again.schema_version(),
+		         bbq_history::current_schema_version());
+	}
+
+	/*
+	 * An archive written before the stamp existed reads zero, and is
+	 * adopted rather than refused -- the schema has not changed since,
+	 * so those files really are version 1.
+	 */
+	const QString older = directory.filePath(QStringLiteral("older.sqlite"));
+	{
+		/* Scoped, because the destructor is what closes it. */
+		bbq_history made;
+		QVERIFY(made.open(older));
+	}
+
+	{
+		QSqlDatabase unstamp = QSqlDatabase::addDatabase(
+		        QStringLiteral("QSQLITE"), QStringLiteral("unstamp"));
+		unstamp.setDatabaseName(older);
+		QVERIFY(unstamp.open());
+		QSqlQuery(unstamp).exec(QStringLiteral("PRAGMA user_version = 0"));
+		unstamp.close();
+	}
+	QSqlDatabase::removeDatabase(QStringLiteral("unstamp"));
+
+	bbq_history adopted;
+	QVERIFY2(adopted.open(older), qPrintable(adopted.last_error()));
+	QVERIFY2(adopted.schema_version() == bbq_history::current_schema_version(),
+	         qPrintable(QStringLiteral("an unstamped archive reads %1, so a "
+	                                   "file written before the stamp would "
+	                                   "stay unidentifiable")
+	                            .arg(adopted.schema_version())));
 }

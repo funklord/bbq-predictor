@@ -180,6 +180,31 @@ public:
 	bool open(const QString &path = QString());
 
 	/*
+	 * WHICH SHAPE THIS ARCHIVE HAS, so a later one can tell (sec 16.75).
+	 *
+	 * The schema is created with CREATE TABLE IF NOT EXISTS, which is a
+	 * no-op against a file that already has the tables -- so the day a
+	 * column is added, an existing archive silently does not get it and
+	 * every query naming it fails. Sec 12 says observations are kept
+	 * FOREVER and sizes the file for a decade, which is exactly how long
+	 * that archive has to remain openable.
+	 *
+	 * This records nothing about what to DO when the versions differ.
+	 * That is a policy with real choices in it -- migrate, refuse, or
+	 * copy aside -- and it is not decided here. What is decided is that
+	 * the answer will be knowable, because a version nobody stamped
+	 * cannot be recovered afterwards by any amount of care later.
+	 *
+	 * Zero means an archive written before this existed. It is adopted
+	 * as version 1 on open, which is honest: the schema has not changed
+	 * since, so those files ARE version 1.
+	 */
+	int schema_version() const;
+
+	/* The shape this build creates and understands. */
+	static int current_schema_version();
+
+	/*
 	 * Fold the write-ahead log back into the database file.
 	 *
 	 * WAL means a committed row can live entirely in `history.sqlite-wal`

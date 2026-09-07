@@ -287,7 +287,37 @@ bool bbq_history::open(const QString &path) {
 	exec(QStringLiteral("PRAGMA journal_mode = WAL"));
 	exec(QStringLiteral("PRAGMA synchronous = NORMAL"));
 
-	return create_schema();
+	if (!create_schema()) {
+		return false;
+	}
+
+	/*
+	 * Stamped after the tables exist, so a half-created file is never
+	 * marked as a whole one.
+	 */
+	if (schema_version() == 0) {
+		exec(QStringLiteral("PRAGMA user_version = %1")
+		             .arg(current_schema_version()));
+	}
+
+	return true;
+}
+
+int bbq_history::current_schema_version() {
+	return 1;
+}
+
+int bbq_history::schema_version() const {
+	if (!m_open) {
+		return 0;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	if (!query.exec(QStringLiteral("PRAGMA user_version")) || !query.next()) {
+		return 0;
+	}
+
+	return query.value(0).toInt();
 }
 
 bool bbq_history::create_schema() {

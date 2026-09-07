@@ -11637,3 +11637,45 @@ Sabotaged separately, each speaks:
 Sec 16.63.3's lesson arriving a second time in one day: **a test with
 two assertions has one witness per sabotage run**, and proving both
 means breaking them one at a time.
+
+
+## 16.75 The archive now says which shape it has
+
+Sec 12 keeps observations **forever** and sizes the file for a decade.
+The schema is created with `CREATE TABLE IF NOT EXISTS`, which is a
+no-op against a file that already has the tables -- so the day a column
+is added, an existing archive silently does not get it and every query
+naming it fails. There was no version stamp and no way to tell an old
+file from a new one.
+
+**A version nobody stamped cannot be recovered afterwards by any amount
+of care later**, which is why this is the half that could not wait. The
+migration itself can be written whenever it is needed; the identifier it
+will read has to have been there all along.
+
+    PRAGMA user_version = 1
+
+### 16.75.1 What this deliberately does not decide
+
+**Nothing about what to DO when the versions differ.** Migrate in place,
+refuse to open, copy aside and rebuild -- those are real choices with
+different costs, and picking one while adding a stamp would be deciding
+a policy in passing. Recorded as open.
+
+Zero is defined as "written before the stamp existed" and is adopted as
+version 1 on open rather than refused, which is honest: the schema has
+not changed since, so those files really are version 1.
+
+### 16.75.2 Verified on the real archive, not only a fixture
+
+The test builds an archive, reopens it, and then deliberately clears the
+stamp with a raw `PRAGMA` to make the pre-stamp case -- because a
+simulated old file is the only kind a fixture can make. The live archive
+was the genuine article:
+
+    before: user_version=0  observation rows=2771
+    after:  user_version=1  observation rows=2771
+    PRAGMA integrity_check: ok
+
+Adopted, with nothing else touched. Sabotaged by never writing the
+stamp, the test fails.
