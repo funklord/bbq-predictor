@@ -119,6 +119,9 @@ so a tree anybody has built in offers two of each metaobject.
 
 The build is `-Os`; `make DEBUG=1` gives an unoptimised, symbol-rich
 one, and `make SANITIZE=1` adds ASan and UBSan independently of it.
+`make DEBUG_INFO=1` is a third and different thing: still `-Os`, still a
+release build, but carrying debug info, which is what the package build
+uses so its `-dbgsym` has something in it.
 Build output goes to `build/` and the location is settable:
 
     make BUILD_DIR=/tmp/bbq-asan SANITIZE=1

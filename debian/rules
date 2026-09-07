@@ -5,6 +5,14 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@
 
+# The -dbgsym package is built whether or not anything generated debug
+# info, so without this it ships a build-id link and no symbols --
+# lintian's debug-file-with-no-debug-symbols. The release build does not
+# carry -g on its own; DEBUG_INFO adds it without making this a debug
+# build, and dh_strip moves the result out of the shipped binary.
+override_dh_auto_build:
+	$(MAKE) DEBUG_INFO=1
+
 # PREFIX is /usr/local by default, which is right for a hand-built copy
 # and wrong for a package.
 override_dh_auto_install:

@@ -48,6 +48,21 @@ CONFIG -= app_bundle
 # signing flags beerssh lost that way, and just as invisible in the output.
 QMAKE_CXXFLAGS_RELEASE -= -O2
 QMAKE_CXXFLAGS_RELEASE += -Os
+
+# AND THE SAME AGAIN FOR THE DEBUG-INFO VARIANT, which is a different
+# qmake variable and not a modifier of the one above.
+#
+# `CONFIG+=force_debug_info` does not add -g to the release flags: it
+# switches qmake to QMAKE_CXXFLAGS_RELEASE_WITH_DEBUGINFO, which
+# defaults to `-O2 -g`. Patching only the line above therefore left the
+# packaged build at -O2 -- the global rule to optimise for size,
+# silently reverted by a switch whose name says nothing about
+# optimisation.
+#
+# Measured when it happened: the shipped binary went from 388,784 to
+# 478,896 bytes, 23% larger, with a green lintian and no other sign.
+QMAKE_CXXFLAGS_RELEASE_WITH_DEBUGINFO -= -O2
+QMAKE_CXXFLAGS_RELEASE_WITH_DEBUGINFO += -Os
 QMAKE_CFLAGS_RELEASE   -= -O2
 QMAKE_CFLAGS_RELEASE   += -Os
 

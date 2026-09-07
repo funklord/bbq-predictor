@@ -117,6 +117,21 @@ ifdef SANITIZE
                     QMAKE_LFLAGS+=-fsanitize=address,undefined
 endif
 
+# Debug info WITHOUT a debug build, which is what packaging wants.
+#
+# The shipped binary is unaffected: dh_strip moves the debug sections out
+# into the -dbgsym package and strips what it leaves behind, so this
+# costs build time and the size of a package nobody installs by accident,
+# and buys a backtrace from a crash on somebody else's machine.
+#
+# Without it that package is built anyway and holds nothing, which
+# lintian reports as debug-file-with-no-debug-symbols -- a package
+# promising symbols and shipping a build-id link. `force_debug_info` is
+# qmake's own switch for this and adds -g to a release build.
+ifdef DEBUG_INFO
+    QMAKE_CONFIG += CONFIG+=force_debug_info
+endif
+
 # Stated before the include, and load-bearing.
 #
 # `include` is where make FIRST sees a target, so a fragment pulled in ahead

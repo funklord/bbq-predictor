@@ -10755,3 +10755,56 @@ sabotaging the match to `contains` fails it.
 The query is a plain string built by concatenation at this point, not a
 `QUrlQuery`, so a string scan is reading what is actually there rather
 than reconstructing it.
+
+
+## 16.60 A debug package with nothing in it, and the fix that cost 90 KB
+
+A from-clean verification pass -- `veryclean`, build, `make -j12
+tests-build`, the suite, `make deb`, lintian -- after a day of changes
+that added a source directory, a thirteenth test binary and three
+project files. Everything held: no warnings, 13 binaries under `-j12`
+with no undefined-symbol race, 194 tests, nothing left in the parent.
+
+Lintian reported one thing that was not the known
+`initial-upload-closes-no-bugs`:
+
+    W: bbq-predictor-dbgsym: debug-file-with-no-debug-symbols
+
+The release build carries no `-g`, so `dh_strip` built a `-dbgsym`
+package out of nothing: a build-id link and no symbols, 24 KB
+promising a backtrace it could not give. `DEBUG_INFO=1` adds qmake's
+`force_debug_info`, and `debian/rules` asks for it.
+
+### 16.60.1 The switch silently reverted the size rule
+
+**`force_debug_info` does not add `-g` to the release flags.** It
+switches qmake to `QMAKE_CXXFLAGS_RELEASE_WITH_DEBUGINFO`, a different
+variable that defaults to `-O2 -g` -- and this project patches
+`QMAKE_CXXFLAGS_RELEASE` only. So the packaged build went to **-O2**,
+against the global rule to optimise for size, by way of a switch whose
+name says nothing about optimisation.
+
+    CXXFLAGS = -pipe -O2 -g -std=gnu++1z ...
+
+Both `.pro` files patch the debug-info variant now, and the same run
+reads `-pipe -g -Os`.
+
+### 16.60.2 What caught it was measuring the artifact
+
+**Lintian went green on the broken version.** The warning it was
+raised for was gone, the dbgsym was full of real symbols, and the
+shipped binary was correctly stripped -- every check that had been
+asked for, passing.
+
+What did not fit was the shipped `.deb` growing 25 KB. Following it to
+the binary inside: **388,784 bytes to 478,896, up 23%**, for a change
+that was supposed to leave it untouched -- and a comment had just been
+written in the Makefile saying it did.
+
+Corrected, it is 388,784 again, byte-for-byte the size of the build
+before any of this. The dbgsym is 4.6 MB and holds four debug sections;
+the shipped binary holds none.
+
+**A green gate answered the question it was given.** The size was not
+in that question, and nothing would have raised it -- the number came
+from a listing printed on the way past.
