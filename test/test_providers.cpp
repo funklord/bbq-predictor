@@ -19,6 +19,7 @@ class test_providers : public QObject {
 
 private slots:
 	void met_converts_wind_from_metres_per_second();
+	void an_unreadable_timestamp_discards_the_band();
 	void met_keeps_its_rain_rate();
 	void met_reads_zulu_time_as_utc();
 	void openmeteo_reads_local_time_through_the_named_zone();
@@ -164,3 +165,77 @@ void test_providers::openmeteo_keeps_wind_that_is_already_kph() {
 
 QTEST_APPLESS_MAIN(test_providers)
 #include "test_providers.moc"
+
+/*
+ * One bad timestamp discards the band, in the two parsers where nothing
+ * had said so.
+ *
+ * The WU readers have had this asserted since a null became a sample at
+ * the epoch (sec 12.13). met.no and Open-Meteo both guard it too, and
+ * both cite the WU readers' reason in a comment -- a series short by an
+ * arbitrary sample from its middle draws a gap that means nothing. What
+ * neither had was a test, so the guards were correct and unprotected:
+ * exactly the shape that let a call be deleted from main this same day
+ * with everything still green (sec 16.71.2).
+ *
+ * ONE BAD STAMP AMONG GOOD ONES, not a wholly broken document. A parser
+ * that rejects nonsense outright would pass a test made of nonsense
+ * while still admitting the case that matters.
+ */
+void test_providers::an_unreadable_timestamp_discards_the_band() {
+	const QJsonDocument met = QJsonDocument::fromJson(R"({
+		"properties": {
+			"timeseries": [
+				{
+					"time": "2026-08-07T12:00:00Z",
+					"data": {"instant": {"details": {"air_temperature": 19}}}
+				},
+				{
+					"time": "not a timestamp",
+					"data": {"instant": {"details": {"air_temperature": 20}}}
+				}
+			]
+		}
+	})");
+
+	QVERIFY2(bbq_met_read_nowcast(met).is_empty(),
+	         "met.no kept a band whose second timestamp is unreadable, so "
+	         "the series is short by a sample nobody can see");
+
+	const QJsonDocument open = QJsonDocument::fromJson(R"({
+		"timezone": "Europe/Stockholm",
+		"hourly": {
+			"time": ["2026-08-07T12:00", "not a timestamp"],
+			"temperature_2m": [19, 20],
+			"precipitation": [0, 0],
+			"wind_speed_10m": [5, 5]
+		}
+	})");
+
+	QVERIFY2(bbq_openmeteo_read(open).is_empty(),
+	         "Open-Meteo kept a band whose second timestamp is unreadable");
+
+	/*
+	 * And the control: the same documents with both stamps good must
+	 * NOT come back empty, or the assertions above would pass against a
+	 * parser that rejects everything.
+	 */
+	const QJsonDocument met_good = QJsonDocument::fromJson(R"({
+		"properties": {
+			"timeseries": [
+				{
+					"time": "2026-08-07T12:00:00Z",
+					"data": {"instant": {"details": {"air_temperature": 19}}}
+				},
+				{
+					"time": "2026-08-07T12:05:00Z",
+					"data": {"instant": {"details": {"air_temperature": 20}}}
+				}
+			]
+		}
+	})");
+
+	QVERIFY2(!bbq_met_read_nowcast(met_good).is_empty(),
+	         "the met.no control came back empty, so the assertion above "
+	         "proves nothing about the timestamp");
+}

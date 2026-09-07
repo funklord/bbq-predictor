@@ -11596,3 +11596,44 @@ Sabotaged exactly that way:
     'directory != QStringLiteral("/") && directory.length() > 1'
     returned FALSE. (the archive would sit in / -- an empty data
     location derives the filesystem root)
+
+
+## 16.74 Two correct guards that nothing protected
+
+The three parsers all discard a band on one unreadable timestamp, and
+all three say why in a comment: a series short by an arbitrary sample
+from its middle draws a gap that means nothing. **Only the WU readers
+had a test for it**, written after a null became a sample at the epoch
+(sec 12.13).
+
+met.no's guard and Open-Meteo's were correct and unprotected -- which is
+the shape that let a call disappear from `main` this same day with the
+build and every test still green (sec 16.71.2). A guard nothing asserts
+is a guard the next refactor can delete for free.
+
+### 16.74.1 One bad stamp among good ones
+
+The fixture matters more than the assertion. A wholly broken document
+would be rejected by a parser that rejects everything, so the test would
+pass against code that had lost the property entirely. Each document
+here has **one good timestamp and one bad**, which is the case the guard
+exists for -- and a control with both good asserts the band is NOT empty,
+so the two assertions cannot both be satisfied by a parser that refuses
+its input.
+
+### 16.74.2 Sabotaged one at a time, because QVERIFY2 aborts
+
+Removing both guards at once proved only the first assertion: the
+function stops at the first failure, so Open-Meteo's half never ran.
+Sabotaged separately, each speaks:
+
+    'bbq_met_read_nowcast(met).is_empty()' returned FALSE. (met.no kept
+    a band whose second timestamp is unreadable, so the series is short
+    by a sample nobody can see)
+
+    'bbq_openmeteo_read(open).is_empty()' returned FALSE. (Open-Meteo
+    kept a band whose second timestamp is unreadable)
+
+Sec 16.63.3's lesson arriving a second time in one day: **a test with
+two assertions has one witness per sabotage run**, and proving both
+means breaking them one at a time.
