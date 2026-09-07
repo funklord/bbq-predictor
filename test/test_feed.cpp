@@ -23,6 +23,7 @@ class test_feed : public QObject {
 
 private slots:
 	void a_derived_coordinate_does_not_survive_the_station_changing();
+	void a_clock_that_moved_back_does_not_stall_a_band();
 	void a_finished_day_is_told_from_one_still_running();
 	void a_band_never_asked_for_is_not_a_band_that_answered();
 	void a_pinned_coordinate_does();
@@ -1109,4 +1110,51 @@ void test_feed::a_finished_day_is_told_from_one_still_running() {
 	 */
 	QVERIFY(!bbq_observed_day_has_ended(today_began, today_began));
 	QVERIFY(bbq_observed_day_has_ended(today_began - 1, today_began));
+}
+
+/*
+ * A stamp in the future is a moved clock, not a recent fetch.
+ *
+ * Freshness is `now - last >= interval`, and that subtraction alone
+ * stalls: a stamp ahead of the clock makes it negative, so the band is
+ * never due until the clock catches up past it -- hours, if the jump
+ * was hours.
+ *
+ * Not contrived on the platform this runs on. Android restores the RTC
+ * at boot and the network corrects it afterwards, so a stamp written
+ * between the two is ahead of the clock that follows it. The applet
+ * would sit there refreshing nothing, with a staleness line measuring
+ * from a future moment.
+ *
+ * Asked through `due`, which is what the scheduler actually calls.
+ */
+void test_feed::a_clock_that_moved_back_does_not_stall_a_band() {
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("ITEST1"));
+
+	const qint64 now = 1780000000;
+	const int product = static_cast<int>(bbq_wu_product::observed);
+
+	/* Never attempted is due, which is the case the guard already had. */
+	QVERIFY(feed.due(bbq_wu_product::observed, now));
+
+	/* Attempted a moment ago is not due, or nothing would ever wait. */
+	feed.m_attempted.insert(product, now - 5);
+	QVERIFY2(!feed.due(bbq_wu_product::observed, now),
+	         "a band fetched five seconds ago is due again, so nothing "
+	         "throttles the provider");
+
+	/*
+	 * And the clock moved back an hour under it. The stamp is now in
+	 * the future, which cannot mean the band is fresh -- nothing can
+	 * have been fetched at a moment that has not happened.
+	 */
+	feed.m_attempted.insert(product, now + 3600);
+	QVERIFY2(feed.due(bbq_wu_product::observed, now),
+	         "a stamp an hour in the future reads as a recent fetch, so the "
+	         "band stalls until the clock catches up to it");
+
+	/* Far enough back to be due the ordinary way, still due. */
+	feed.m_attempted.insert(product, now - 24 * 3600);
+	QVERIFY(feed.due(bbq_wu_product::observed, now));
 }

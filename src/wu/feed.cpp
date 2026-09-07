@@ -182,7 +182,21 @@ const int station_quiet_s = 45 * 60;
  * one thing they all have to agree about is written once.
  */
 bool overdue(qint64 last_utc, int interval_s, qint64 now_utc) {
-	return last_utc == 0 || now_utc - last_utc >= interval_s;
+	/*
+	 * A CLOCK THAT MOVED BACKWARDS IS NOT A RECENT FETCH (sec 16.81).
+	 *
+	 * The subtraction alone stalls: a stamp in the future makes
+	 * `now - last` negative, so the band is never due until the clock
+	 * catches up past it, which can be hours. That is not a contrived
+	 * case on the platform this program runs on -- Android restores
+	 * the RTC at boot and the network corrects it afterwards, so a
+	 * stamp written in between is ahead of the clock that follows.
+	 *
+	 * A stamp we cannot have written yet says the clock moved, not that
+	 * the band is fresh, and the honest answer to "is it due" is yes.
+	 */
+	return last_utc == 0 || now_utc < last_utc ||
+	       now_utc - last_utc >= interval_s;
 }
 
 bbq_series read_for(bbq_wu_product product, const QJsonDocument &document) {
