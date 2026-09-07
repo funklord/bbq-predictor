@@ -3,6 +3,7 @@
 #include "model/grill.h"
 
 #include <QDir>
+#include <QFileInfo>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -223,20 +224,46 @@ bool bbq_history::exec(const QString &statement) {
 	return false;
 }
 
+QString bbq_history_default_path() {
+	/*
+	 * AppDataLocation, not AppConfigLocation. The INI is a preference a
+	 * person edits; this is measurement, and putting megabytes of it in
+	 * a config directory would be filing it under the wrong thing
+	 * (sec 12.2).
+	 */
+	const QString directory =
+	        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+
+	return directory + QStringLiteral("/history.sqlite");
+}
+
+
+bool bbq_history_is_same_file(const QString &left, const QString &right) {
+	if (left.isEmpty() || right.isEmpty()) {
+		return false;
+	}
+
+	const QFileInfo one(left);
+	const QFileInfo two(right);
+
+	/*
+	 * Canonical resolves symlinks and `..`, and returns empty for a
+	 * path that does not exist -- so it is used only when both do.
+	 */
+	if (one.exists() && two.exists()) {
+		return one.canonicalFilePath() == two.canonicalFilePath();
+	}
+
+	return one.absoluteFilePath() == two.absoluteFilePath();
+}
+
+
 bool bbq_history::open(const QString &path) {
 	m_path = path;
 
 	if (m_path.isEmpty()) {
-		/*
-		 * AppDataLocation, not AppConfigLocation. The INI is a
-		 * preference a person edits; this is measurement, and putting
-		 * megabytes of it in a config directory would be filing it
-		 * under the wrong thing (sec 12.2).
-		 */
-		const QString directory = QStandardPaths::writableLocation(
-		        QStandardPaths::AppDataLocation);
-		QDir().mkpath(directory);
-		m_path = directory + QStringLiteral("/history.sqlite");
+		m_path = bbq_history_default_path();
+		QDir().mkpath(QFileInfo(m_path).path());
 	}
 
 	QSqlDatabase database =

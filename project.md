@@ -11129,3 +11129,51 @@ zero where the correction is applied, and the comment there says why --
 "there is no negative wind", the same clamp sec 3.11.2 puts on the
 drawn curve. Checked because the wind bias made it reachable for the
 first time, and found already closed.
+
+
+## 16.66 The refusal said more than it enforced
+
+`--seed-verification` writes invented statistics so the correction and
+the record line can be exercised without waiting weeks for real ones.
+It printed:
+
+    seed: refusing to write invented statistics to the real archive.
+    seed:   give --history-path with a scratch file.
+
+**What it enforced was that SOME path had been given.** Naming the real
+archive outright went straight through, and so did any other spelling
+of it. The message and the check were two different sentences, and the
+message is the one anybody reads.
+
+That mattered little while the archive held six observations for a dead
+station. It matters now: sec 16.65 has real measurements in it, and
+invented rows mixed into them would not be distinguishable afterwards
+-- the seeding tool's own output says "THESE ARE INVENTED", which is
+true of what it prints and not of what it stores.
+
+### 16.66.1 A string compare would have been the same guard again
+
+One file has many spellings. `bbq_history_is_same_file` resolves both
+sides -- canonical where both exist, so a symlink and a `./` path are
+recognised, absolute otherwise, because a scratch file that does not
+exist yet is the ordinary case and still has to compare.
+
+`bbq_history_default_path` came out of `bbq_history::open`, which
+derived it inline. Two callers need it now and only one of them opens
+anything, and a second copy of the derivation would be a second thing
+to be wrong.
+
+### 16.66.2 Tried against the real archive, which did not move
+
+    no --history-path            refused
+    the real archive by name     refused, and named it back
+    ./history.sqlite from its
+      own directory              refused
+
+    archive: 1093632 bytes before, 1093632 bytes after
+
+And the legitimate use still works: 504 synthetic rows into a scratch
+file, which is what the tool is for.
+
+Sabotaged to a string compare, the dotted-path case fails -- the
+spelling a person would most plausibly type from inside the directory.

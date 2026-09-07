@@ -20,6 +20,7 @@ class test_history : public QObject {
 
 private slots:
 	void lead_times_bucket_by_their_upper_bound();
+	void one_archive_is_recognised_however_it_is_spelled();
 	void observations_survive_being_stored_twice();
 	void a_forecast_is_kept_once_per_bucket_not_once_per_fetch();
 	void verifying_computes_the_standard_scores_and_empties_the_queue();
@@ -881,3 +882,54 @@ void test_history::rain_is_still_scored_through_a_dry_spell() {
 
 QTEST_GUILESS_MAIN(test_history)
 #include "test_history.moc"
+
+/*
+ * Whether two paths name the same archive.
+ *
+ * The seeding diagnostic writes invented statistics and must refuse the
+ * real archive (sec 16.66). It used to enforce that by requiring SOME
+ * --history-path, which is a different sentence from the one its
+ * message printed: naming the real archive outright walked through it.
+ *
+ * A string compare would be no better. The same file has many
+ * spellings, and a guard that any of them defeats is a guard that reads
+ * as one without being one.
+ */
+void test_history::one_archive_is_recognised_however_it_is_spelled() {
+	QTemporaryDir scratch;
+	QVERIFY(scratch.isValid());
+
+	const QString real = scratch.filePath(QStringLiteral("history.sqlite"));
+	QFile made(real);
+	QVERIFY(made.open(QIODevice::WriteOnly));
+	made.write("not really a database");
+	made.close();
+
+	/* The plain case, and the one that must NOT match. */
+	QVERIFY(bbq_history_is_same_file(real, real));
+	QVERIFY(!bbq_history_is_same_file(
+	        real, scratch.filePath(QStringLiteral("other.sqlite"))));
+
+	/* A dotted path, and a symlink: both name the file the guard protects. */
+	QVERIFY(bbq_history_is_same_file(
+	        real, scratch.filePath(QStringLiteral("./history.sqlite"))));
+
+	const QString link = scratch.filePath(QStringLiteral("link.sqlite"));
+	if (QFile::link(real, link)) {
+		QVERIFY2(bbq_history_is_same_file(real, link),
+		         "a symlink to the archive was not recognised as it, so "
+		         "invented statistics could be written through one");
+	}
+
+	/*
+	 * A file that does not exist yet still compares, because a scratch
+	 * path names nothing until it is written and is the ordinary case.
+	 */
+	const QString absent = scratch.filePath(QStringLiteral("absent.sqlite"));
+	QVERIFY(bbq_history_is_same_file(absent, absent));
+	QVERIFY(!bbq_history_is_same_file(absent, real));
+
+	/* An empty path names nothing and matches nothing. */
+	QVERIFY(!bbq_history_is_same_file(QString(), real));
+	QVERIFY(!bbq_history_is_same_file(real, QString()));
+}

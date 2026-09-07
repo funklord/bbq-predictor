@@ -383,10 +383,29 @@ int main(int argc, char *argv[]) {
 	if (!seed.isEmpty()) {
 		QTextStream report(stdout);
 
+		/*
+		 * TWO REFUSALS, because the message claims more than an
+		 * empty-path check delivers (sec 16.66).
+		 *
+		 * "Refusing to write invented statistics to the real archive"
+		 * was enforced by requiring SOME path, which is a different
+		 * sentence: naming the real archive explicitly walked straight
+		 * through it, and the archive is worth more now that it has
+		 * something in it.
+		 */
 		if (history_path.isEmpty()) {
 			report << "seed: refusing to write invented statistics to the "
 			       << "real archive.\n";
 			report << "seed:   give --history-path with a scratch file.\n";
+			return 1;
+		}
+
+		if (bbq_history_is_same_file(history_path,
+		                             bbq_history_default_path())) {
+			report << "seed: that IS the real archive: "
+			       << bbq_history_default_path() << "\n";
+			report << "seed:   invented statistics go in a scratch file, "
+			       << "not there.\n";
 			return 1;
 		}
 

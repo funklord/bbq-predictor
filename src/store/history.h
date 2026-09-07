@@ -40,6 +40,27 @@ enum class bbq_lead_bucket {
 	beyond,
 };
 
+/*
+ * Where the archive lives when nobody names a file.
+ *
+ * Out here because two callers need it and only one of them opens
+ * anything: `bbq_history::open` falls back to it, and the seeding
+ * diagnostic has to REFUSE it (sec 16.66). A second copy of the
+ * derivation would be a second thing to be wrong.
+ */
+QString bbq_history_default_path();
+
+/*
+ * Whether two paths name the same archive.
+ *
+ * Not a string compare. A relative path, a trailing `/.`, a symlink and
+ * the absolute path all name one file, and the guard this exists for is
+ * worth nothing if any spelling walks past it. Canonical where both
+ * exist, absolute otherwise -- because a file that does not exist yet
+ * has no canonical form and is still worth comparing.
+ */
+bool bbq_history_is_same_file(const QString &left, const QString &right);
+
 bbq_lead_bucket bbq_lead_bucket_for(qint64 lead_s);
 const char *bbq_lead_bucket_name(bbq_lead_bucket bucket);
 
