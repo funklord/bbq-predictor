@@ -20,6 +20,7 @@
 #include "store/history.h"
 #include "ui/layout.h"
 #include "ui/flow_layout.h"
+#include "ui/locator.h"
 #include "ui/main_window.h"
 #include "ui/tray_icon.h"
 #include "wu/feed.h"
@@ -61,6 +62,7 @@ class test_window : public QObject {
 
 private slots:
 	void initTestCase();
+	void a_fix_is_answered_exactly_once();
 	void a_label_is_not_stored_as_a_station_id();
 
 	/*
@@ -1682,4 +1684,72 @@ void test_window::the_tray_tip_says_an_age_in_units_a_reader_thinks_in() {
 	                 !tip.contains(QStringLiteral("1332 min")),
 	         qPrintable(QStringLiteral("the raw minutes are still there: %1")
 	                            .arg(tip)));
+}
+
+/*
+ * One question, one answer.
+ *
+ * `bbq_locator`'s header promises that a caller "never has to guard
+ * against being told twice", and until now nothing checked it: the file
+ * measured 1.8% executed across the whole suite (sec 16.73). Every
+ * failure it can meet -- no source compiled in, none on the machine,
+ * permission refused, no fix before the deadline -- ends in the same
+ * pair of signals, so the COUNT is the property whatever this machine
+ * happens to have, and the reason is only printed when it goes wrong.
+ *
+ * A SHORT DEADLINE, so the case where nothing answers is reached in
+ * milliseconds rather than twenty seconds.
+ *
+ * WHAT THIS DOES NOT CATCH, measured rather than assumed. Deleting the
+ * answered-once guard in `answer_unavailable` leaves this test GREEN.
+ * On this machine the positioning plugins exist, so a source is made,
+ * nothing produces a fix in fifty milliseconds, and the deadline is the
+ * only thing that ever answers -- one answer either way. Discriminating
+ * the guard needs two things to answer the same request, which needs a
+ * source that fails fast, and a test conditioned on geoclue's mood
+ * would report the environment rather than the code.
+ *
+ * So this asserts the count on the path this machine takes, and the
+ * guard itself is argued rather than tested. Said here because a test
+ * whose limits are unwritten gets quoted for guarantees it never made.
+ */
+void test_window::a_fix_is_answered_exactly_once() {
+	bbq_locator locator;
+
+	int located = 0;
+	int unavailable = 0;
+	QString said;
+
+	connect(&locator, &bbq_locator::located, &locator,
+	        [&located](double, double) { ++located; });
+	connect(&locator, &bbq_locator::unavailable, &locator,
+	        [&unavailable, &said](const QString &reason) {
+		++unavailable;
+		said = reason;
+	});
+
+	locator.locate_once(50);
+
+	QTRY_VERIFY_WITH_TIMEOUT(located + unavailable >= 1, 4000);
+	QCOMPARE(located + unavailable, 1);
+
+	/*
+	 * And it STAYS at one. The deadline is still outstanding when an
+	 * answer arrives early, and nothing cancels it -- so this waits
+	 * past it deliberately.
+	 */
+	QTest::qWait(300);
+	QVERIFY2(located + unavailable == 1,
+	         qPrintable(QStringLiteral("%1 located and %2 unavailable "
+	                                   "answers for one request (%3)")
+	                            .arg(located)
+	                            .arg(unavailable)
+	                            .arg(said)));
+
+	/* A second question is a second answer, and exactly one of them. */
+	locator.locate_once(50);
+
+	QTRY_VERIFY_WITH_TIMEOUT(located + unavailable >= 2, 4000);
+	QTest::qWait(300);
+	QCOMPARE(located + unavailable, 2);
 }

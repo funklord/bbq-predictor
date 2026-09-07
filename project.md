@@ -11486,3 +11486,68 @@ Adding an entry is a decision rather than a sweep. A gate that grew to
 cover every call in `main` would be a second copy of `main`, and the
 first false finding would earn it an ignore list, which is how a gate
 gets switched off by instalments.
+
+
+## 16.73 What the suite never runs, measured
+
+gcov over the whole suite, built into a scratch directory so the tree
+was untouched. Thirteen binaries, 210 coverage files, best-case line
+coverage per source file:
+
+    src/ui/locator.cpp          55 lines     1.8%
+    src/wu/feed.cpp            440 lines    41.8%
+    src/wu/client.cpp          132 lines    49.2%
+    src/met/nowcast.cpp         75 lines    57.3%
+    src/wu/reader.cpp          220 lines    57.7%
+    src/openmeteo/forecast.cpp  76 lines    57.9%
+    src/graph/forecast_graph.cpp 897 lines  74.9%
+    src/store/history.cpp      554 lines    75.6%
+    src/ui/main_window.cpp     524 lines    79.4%
+
+**A percentage is not a verdict**, and this project has its own evidence
+for that: sec 16.67 and sec 16.68 both found covered code whose test
+could not discriminate the value it asserted. What the numbers are good
+for is the other direction -- naming what is never run at all.
+
+`src/ui/locator.cpp` is that: 1.8%, a recent feature, and the file whose
+header makes the sharpest promise in the tree.
+
+### 16.73.1 A promise nothing checked
+
+> Answers exactly once with `located` or `unavailable`, whichever comes
+> first, and never both -- a caller that has to guard against being told
+> twice is a caller that will eventually forget to.
+
+`m_answered` keeps that within one request. Across two it did not:
+`locate_once` clears the flag and the previous call's deadline is still
+outstanding, so it would fire into the NEW request and answer it "no
+position within the time allowed" before that request had had its own
+time. One call site exists today -- once, at startup -- so it is a
+hazard rather than a fault, and the promise is not one to keep only
+while nobody asks twice. A generation counter now says which request a
+deadline belongs to.
+
+### 16.73.2 The test's limit, found by sabotage rather than claimed
+
+`a_fix_is_answered_exactly_once` asserts the count, and **deleting the
+answered-once guard leaves it green.** This machine has the positioning
+plugins, so a source is made, nothing produces a fix in fifty
+milliseconds, and the deadline is the only thing that ever answers --
+one answer with the guard or without it.
+
+Discriminating it needs two things answering the same request, which
+needs a source that fails fast; a test conditioned on geoclue's mood
+would report the environment rather than the code. **So the count is
+tested and the guard is argued**, and the test says so, because a test
+whose limits are unwritten gets quoted for guarantees it never made.
+
+### 16.73.3 Two things this cost, both mine
+
+An edit anchored on `if (fresh) {` re-indented from the wrong one of
+two identical anchors and corrupted the function -- `evidence.md`'s
+rule that an anchor unique when written stops being unique, met while
+adding a second copy of the same line. Reverted and redone.
+
+And a `make style` checked with `| head -3` reported rc=0 from `head`
+while make had exited 2. The rule against reducing a check's output
+before knowing it passed, broken in the act of checking a gate.

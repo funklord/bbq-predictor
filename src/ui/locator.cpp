@@ -28,6 +28,7 @@ void bbq_locator::answer_unavailable(const QString &reason) {
 
 void bbq_locator::locate_once(int timeout_ms) {
 	m_answered = false;
+	++m_generation;
 
 	/*
 	 * ASK FIRST (sec 14.3.2).
@@ -144,7 +145,16 @@ void bbq_locator::start_source(int timeout_ms) {
 	 * which reads as a broken program rather than as a phone that
 	 * cannot see the sky.
 	 */
-	QTimer::singleShot(timeout_ms, this, [this]() {
+	const int mine = m_generation;
+	QTimer::singleShot(timeout_ms, this, [this, mine]() {
+		/*
+		 * A later request owns the answer now, and this deadline is
+		 * about a question that has already been asked and answered.
+		 */
+		if (mine != m_generation) {
+			return;
+		}
+
 		answer_unavailable(tr("no position within the time allowed"));
 	});
 

@@ -59,6 +59,19 @@ private:
 
 	QGeoPositionInfoSource *m_source = nullptr;
 	bool m_answered = false;
+
+	/*
+	 * Which request a deadline belongs to (sec 16.73).
+	 *
+	 * `locate_once` clears `m_answered`, and the previous call's
+	 * timeout is still outstanding: it would fire into the NEW request
+	 * and answer it "no position within the time allowed" before that
+	 * request had had its own time. One call site exists today, so this
+	 * is a hazard rather than a fault -- and the promise above is that
+	 * a caller never has to guard against being told twice, which is
+	 * not a promise to keep only while nobody asks twice.
+	 */
+	int m_generation = 0;
 };
 
 #endif
