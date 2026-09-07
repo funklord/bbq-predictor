@@ -10992,6 +10992,23 @@ predates the start of today is a day that has ENDED, so
 `bbq_observed_day_has_ended` decides it and the member is gone -- no
 shared state, no ordering to get right.
 
+### 16.63.5 The rest of that class, swept
+
+One member correlating two in-flight replies is a shape, so the
+population was enumerated rather than left to turn up again:
+
+- **observed and its backfill** -- the fault above, now decided from the
+  reply's own data.
+- **the pinned queue** -- correct, and the pattern was sitting in the
+  same file: `dispatch_pinned` refuses while `m_pinned_in_flight` is
+  set, takes one at a time, and clears the slot on BOTH the success and
+  the failure path.
+- **met.no, Open-Meteo and the WU client** -- no members at all; each
+  reply handler captures its own reply, so there is nothing to share.
+
+Five instances, one broken. **The right answer was already in the file
+that had the wrong one.**
+
 Confirmed on a live station whose backfill fires: IENSKE4 returned 399
 samples spanning yesterday and today, and said nothing at all.
 
@@ -11977,3 +11994,45 @@ asserted explicitly -- and it is the one the sabotage broke:
 
 Out of the reply handler as a free function, because a message is worth
 testing and staging a network failure to test one is not.
+
+
+## 16.81 A clock that moved backwards stalled every band
+
+Freshness is `now - last >= interval`, and the subtraction alone
+stalls. A stamp AHEAD of the clock makes it negative, so the band is
+never due until the clock catches up past it -- hours, if the jump was
+hours.
+
+Not a contrived case on the platform this runs on. **Android restores
+the RTC at boot and the network corrects it afterwards**, so a stamp
+written between the two is ahead of the clock that follows it. The
+applet would sit refreshing nothing, with a staleness line measuring
+from a moment that has not happened.
+
+A stamp we cannot have written yet says the clock moved, not that the
+band is fresh, so the honest answer to "is it due" is yes.
+
+The test asks `due` -- what the scheduler actually calls -- and pins the
+case that must NOT change with it: a band fetched five seconds ago stays
+not due, or nothing throttles the provider. Sabotaged, the guard's own
+case is what fails:
+
+    'feed.due(bbq_wu_product::observed, now)' returned FALSE. (a stamp
+    an hour in the future reads as a recent fetch, so the band stalls
+    until the clock catches up to it)
+
+Found by reading `feed.cpp`, which sec 16.73 measured at 41.8% executed
+-- the largest file in the tree the suite runs least of.
+
+### 16.81.1 The commit before this one claimed the record it did not make
+
+Its message says "Also records the sweep of the class sec 16.63
+opened". It did not: the script that was to write both sections aborted
+on a mismatched anchor and wrote nothing, while the code and the test
+were staged by name and committed anyway.
+
+**A commit message is a claim like any other**, and that one was false
+for as long as it took to notice. Recorded here rather than by
+rewriting it, because the history is pushed and another session is
+working in this tree -- amending under them is worse than a message
+that has to be read with its successor.
