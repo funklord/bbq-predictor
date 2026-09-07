@@ -51,7 +51,14 @@ IN_SOURCE = re.compile(
 		# the program accepted twenty-two, which is the exact failure
 		# it exists to prevent, arriving through a shape nobody had
 		# thought of.
-		r'|qstrcmp\s*\(\s*argv\[[a-z]\]\s*,\s*)'
+		r'|qstrcmp\s*\(\s*argv\[[a-z]\]\s*,\s*'
+		# And the helper those raw reads went through once there were
+		# three of them. The same shape one indirection along: the
+		# literal moved from the qstrcmp to its callers, and this gate
+		# went from finding twenty-two options to nineteen without the
+		# program changing what it accepts. It reported all three,
+		# which is the whole of why the form above was added.
+		r'|has_flag\s*\(\s*argc\s*,\s*argv\s*,\s*)'
 		r'"(--[a-z][a-z-]*)"')
 
 # roff spells a literal hyphen \- so it is not confused with a line break.

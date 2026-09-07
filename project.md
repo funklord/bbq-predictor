@@ -11317,3 +11317,70 @@ That last one's limit is worth stating: it catches a suite that was
 built and did not run, not one deleted outright, since then both sides
 fall together. `build_wiring` covers the other half by refusing a
 `test_*.pro` that `tests.pro` does not name.
+
+
+## 16.70 The first CI run found a defect in seventy seconds
+
+`--version` and `--help` sat below `QApplication app(argc, argv)`, under
+a comment saying they were "answered before anything is constructed, so
+both work without a display -- which is what makes them usable from a
+build chroot or a CI job that has no X or Wayland session."
+
+**The premise was about WIDGETS and the fault is the APPLICATION
+object.** Constructing a QApplication loads a platform plugin, and where
+none can be loaded it does not fail, it ABORTS. So the two options every
+tool is expected to answer anywhere died with SIGABRT on exactly the
+machine the comment named -- and the machine that found it was a CI job
+with no X or Wayland session, sixty-eight seconds into the first run
+this repository has ever had.
+
+    X The build produced a binary that runs      exit code 134
+
+Reproduced locally by denying it a display, which is the only reason it
+had gone unseen: every command in this session set
+`QT_QPA_PLATFORM=offscreen` out of habit.
+
+They are answered from raw argv now, above the application object, and
+need nothing from Qt but a QTextStream.
+
+### 16.70.1 It is not only those two
+
+Measured, with no display and no offscreen platform:
+
+    --version    SIGABRT      fixed
+    --help       SIGABRT      fixed
+    --probe      SIGABRT      OPEN
+    --history    SIGABRT      OPEN
+    --stations   SIGABRT      OPEN
+
+**The manual says `--probe` "Runs before any widget is built, so it
+works headless"**, and sec 11.6's comment in the source says it runs
+"anywhere -- including on a phone". Both are false for the same reason
+the other comment was, and `--probe` is the one a person reaches for
+over ssh when nothing else works.
+
+The packaged service does not hit this because its unit sets
+`Environment=QT_QPA_PLATFORM=offscreen` -- a workaround that has been
+holding the defect out of sight.
+
+**The fix is choosing the application class from argv**, as the Android
+service entry already does: a QCoreApplication where nothing draws, a
+QApplication where something does. The diagnostics all return before a
+window is built, so they would run under either. It is a change through
+the middle of a 910-line `main`, and it is worth doing deliberately
+rather than in passing -- recorded here rather than half-done.
+
+### 16.70.2 The gate caught its own blind spot immediately
+
+Lifting the two reads into a `has_flag(argc, argv, ...)` helper moved
+the literals one indirection along, out of the `qstrcmp` form
+`man_options` knows. It went from twenty-two options to nineteen
+without the program changing what it accepts, and said so:
+
+    man-options: --version is documented but not accepted
+
+That form was itself added after the same failure -- twenty-one
+reported against twenty-two accepted, when the Android service entry
+first read a flag from raw argv. **The gate has now been wrong in the
+same way twice and caught it both times**, which is what a gate whose
+question is "what does the program actually accept" is for.

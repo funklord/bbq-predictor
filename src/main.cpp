@@ -86,14 +86,18 @@ void print_usage(QTextStream &out) {
  * QStringList that only exists once an application object does -- and
  * constructing one is the very thing being decided.
  */
-bool wants_service(int argc, char *argv[]) {
+bool has_flag(int argc, char *argv[], const char *name) {
 	for (int i = 1; i < argc; ++i) {
-		if (qstrcmp(argv[i], "--android-service") == 0) {
+		if (qstrcmp(argv[i], name) == 0) {
 			return true;
 		}
 	}
 
 	return false;
+}
+
+bool wants_service(int argc, char *argv[]) {
+	return has_flag(argc, argv, "--android-service");
 }
 
 int main(int argc, char *argv[]) {
@@ -165,6 +169,52 @@ int main(int argc, char *argv[]) {
 		return outcome;
 	}
 
+	/*
+	 * ANSWERED FROM RAW ARGV, ABOVE THE APPLICATION OBJECT (sec 16.70).
+	 *
+	 * These two sat below `QApplication app(...)`, under a comment
+	 * saying they were "answered before anything is constructed, so
+	 * both work without a display -- which is what makes them usable
+	 * from a build chroot or a CI job that has no X or Wayland
+	 * session."
+	 *
+	 * The premise was about WIDGETS and the fault is the APPLICATION
+	 * object. Constructing a QApplication loads a platform plugin, and
+	 * where none can be loaded it does not fail, it ABORTS -- so
+	 * --version and --help died with SIGABRT on exactly the machine the
+	 * comment named. The first CI run this project ever had found it in
+	 * seventy seconds, which is the argument for having one.
+	 *
+	 * Nothing here needs Qt beyond a QTextStream, which needs no
+	 * application at all.
+	 */
+	if (has_flag(argc, argv, "--version")) {
+		QTextStream version(stdout);
+		version << "bbq-predictor " << BBQ_VERSION_STRING << "\n";
+
+		/*
+		 * ATTRIBUTION, not a licence (sec 8.2).
+		 *
+		 * Naming the holder is a statement of fact: authorship vests
+		 * automatically, saying who wrote something grants nothing, and
+		 * this creates no obligation to add a LICENSE. Sec 8 records
+		 * that this project deliberately has none, and that stays true
+		 * with this line here.
+		 *
+		 * One of the two surfaces a person actually looks at for it,
+		 * the other being the README. Deliberately NOT a per-file
+		 * banner.
+		 */
+		version << "Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>\n";
+		return 0;
+	}
+
+	if (has_flag(argc, argv, "--help")) {
+		QTextStream usage(stdout);
+		print_usage(usage);
+		return 0;
+	}
+
 	QApplication app(argc, argv);
 	QApplication::setApplicationName(QStringLiteral("bbq-predictor"));
 
@@ -182,38 +232,8 @@ int main(int argc, char *argv[]) {
 	bbq_ensure_tls_backend();
 	QApplication::setApplicationVersion(QStringLiteral(BBQ_VERSION_STRING));
 
-	/*
-	 * Answered before anything is constructed, so both work without a
-	 * display -- which is what makes them usable from a build chroot or a
-	 * CI job that has no X or Wayland session.
-	 */
 	QTextStream out(stdout);
 	const QStringList arguments = QApplication::arguments();
-
-	if (arguments.contains(QStringLiteral("--version"))) {
-		out << "bbq-predictor " << BBQ_VERSION_STRING << "\n";
-
-		/*
-		 * ATTRIBUTION, not a licence (sec 8.2).
-		 *
-		 * Naming the holder is a statement of fact: authorship vests
-		 * automatically, saying who wrote something grants nothing, and
-		 * this creates no obligation to add a LICENSE. Sec 8 records
-		 * that this project deliberately has none, and that stays true
-		 * with this line here.
-		 *
-		 * One of the two surfaces a person actually looks at for it,
-		 * the other being the README. Deliberately NOT a per-file
-		 * banner.
-		 */
-		out << "Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>\n";
-		return 0;
-	}
-
-	if (arguments.contains(QStringLiteral("--help"))) {
-		print_usage(out);
-		return 0;
-	}
 
 	/*
 	 * Answered before any widget is built, so it runs headless -- in a
