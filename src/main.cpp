@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <memory>
 #include <QCoreApplication>
 #include <QPixmap>
 #include <QTimer>
@@ -98,6 +99,40 @@ bool has_flag(int argc, char *argv[], const char *name) {
 
 bool wants_service(int argc, char *argv[]) {
 	return has_flag(argc, argv, "--android-service");
+}
+
+/*
+ * The runs that draw nothing, read from raw argv because the answer
+ * decides which application object gets built (sec 16.70.1).
+ *
+ * Every one of these reports and exits. They ran under a QApplication
+ * before, so each of them aborted on a machine with no display -- and
+ * `--probe` is the one somebody reaches for over ssh precisely when
+ * nothing else works, while its manual page promised it "works
+ * headless".
+ *
+ * `--history-path` is not in this list and must not be: it is a value
+ * for the others, and a `--shot` aimed at a scratch archive still
+ * draws. The test is exact, so it cannot match it by prefix either.
+ */
+bool wants_headless(int argc, char *argv[]) {
+	static const char *const quiet[] = {
+		"--probe",
+		"--fetch-once",
+		"--seed-verification",
+		"--search",
+		"--discover",
+		"--stations",
+		"--history",
+	};
+
+	for (const char *name : quiet) {
+		if (has_flag(argc, argv, name)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 int main(int argc, char *argv[]) {
@@ -215,14 +250,26 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	QApplication app(argc, argv);
-	QApplication::setApplicationName(QStringLiteral("bbq-predictor"));
-
 	/*
-	 * Before any widget exists, so no accessible interface is cached
-	 * from Qt's own factory first (sec 10.6).
+	 * WHICH APPLICATION OBJECT, DECIDED FROM ARGV (sec 16.70.1).
+	 *
+	 * A QApplication loads a platform plugin, and where none can be
+	 * loaded it does not fail, it ABORTS -- so building one
+	 * unconditionally made every diagnostic in this file require a
+	 * display it has no use for. The Android service entry above
+	 * already decides this way and for the same reason; this is that
+	 * decision applied to the rest.
 	 */
-	bbq_install_accessibility_workaround();
+	const bool draws = !wants_headless(argc, argv);
+
+	std::unique_ptr<QCoreApplication> app;
+	if (draws) {
+		app = std::make_unique<QApplication>(argc, argv);
+	} else {
+		app = std::make_unique<QCoreApplication>(argc, argv);
+	}
+
+	QCoreApplication::setApplicationName(QStringLiteral("bbq-predictor"));
 
 	/*
 	 * Before anything reaches the network, including the diagnostics
@@ -230,10 +277,10 @@ int main(int argc, char *argv[]) {
 	 * every provider here is HTTPS (sec 11.6).
 	 */
 	bbq_ensure_tls_backend();
-	QApplication::setApplicationVersion(QStringLiteral(BBQ_VERSION_STRING));
+	QCoreApplication::setApplicationVersion(QStringLiteral(BBQ_VERSION_STRING));
 
 	QTextStream out(stdout);
-	const QStringList arguments = QApplication::arguments();
+	const QStringList arguments = QCoreApplication::arguments();
 
 	/*
 	 * Answered before any widget is built, so it runs headless -- in a
@@ -242,9 +289,13 @@ int main(int argc, char *argv[]) {
 	 */
 	/*
 	 * What can this machine actually reach, and what did its TLS resolve
-	 * to (sec 11.6). Answered before any widget exists, so it runs
-	 * anywhere -- including on a phone, where it is the only way to get
-	 * the answer off the device.
+	 * to (sec 11.6). Runs under a QCoreApplication, so it works
+	 * anywhere -- including over ssh with no display, and on a phone,
+	 * where it is the only way to get the answer off the device.
+	 *
+	 * It said "before any widget exists" until sec 16.70.1, which was
+	 * true and was not the reason: a QApplication was built above it
+	 * either way, and building one without a platform plugin aborts.
 	 */
 	/*
 	 * A marker file asks for the same thing, because on Android there is
@@ -278,103 +329,12 @@ int main(int argc, char *argv[]) {
 		        bbq_option_value(arguments, QStringLiteral("--history-path")));
 	}
 
-	/*
-	 * A tray applet must not exit when its window is closed -- closing
-	 * the window is how it gets put away, not how it is quit.
-	 *
-	 * That holds only where there IS a tray. Without one the window is
-	 * the entire user interface, and keeping the process alive after it
-	 * closes leaves something running with no way to see it, reach it or
-	 * quit it short of kill. So the answer follows the tray (sec 4.1),
-	 * and is decided before the window is shown.
-	 */
-	QApplication::setQuitOnLastWindowClosed(!bbq_tray_icon::is_available());
 
 	const QString station =
 	        bbq_option_value(arguments, QStringLiteral("--station"));
 	const QString geocode =
 	        bbq_option_value(arguments, QStringLiteral("--geocode"));
 
-	bbq_main_window window;
-	bbq_tray_icon tray;
-
-	QObject::connect(&tray, &bbq_tray_icon::toggle_requested,
-	                 &window, &bbq_main_window::toggle_visibility);
-
-	/*
-	 * The tray follows the data. Updated on a failure as well as a
-	 * success, because sec 2.4's point is that a refresh which stopped
-	 * working must show somewhere, and the tray is where a glance
-	 * lands.
-	 */
-	const auto refresh_tray = [&tray, &window]() {
-		tray.show_state(window.feed()->composite(), window.verdict());
-	};
-
-	QObject::connect(window.feed(), &bbq_wu_feed::updated, &window, refresh_tray);
-	QObject::connect(window.feed(), &bbq_wu_feed::settled, &window, refresh_tray);
-
-	/*
-	 * Said out loud on the session that cannot show a tray, rather than
-	 * discovered as an icon that never appears (project.md sec 4.1). With
-	 * no tray and no window there would be no way back to the program at
-	 * all, so the window is shown in that case instead of hidden.
-	 */
-	if (bbq_tray_icon::is_available()) {
-		tray.show();
-		window.show();
-	} else {
-		QTextStream error(stderr);
-		error << "bbq-predictor: no system tray on this session.\n";
-		error << "bbq-predictor:   On GNOME this needs a StatusNotifierItem\n";
-		error << "bbq-predictor:   shell extension. Running as a plain window.\n";
-		window.show();
-	}
-
-	/*
-	 * Pick the curve for a shot, so four renderings can be compared
-	 * side by side. The window's drop-down is the real control.
-	 */
-	const QString interp =
-	        bbq_option_value(arguments, QStringLiteral("--interp"));
-	if (interp == QStringLiteral("step")) {
-		window.set_interpolation(bbq_interpolation::step);
-	} else if (interp == QStringLiteral("linear")) {
-		window.set_interpolation(bbq_interpolation::linear);
-	} else if (interp == QStringLiteral("akima")) {
-		window.set_interpolation(bbq_interpolation::akima);
-	} else if (interp == QStringLiteral("makima")) {
-		window.set_interpolation(bbq_interpolation::makima);
-	} else if (interp == QStringLiteral("natural")) {
-		window.set_interpolation(bbq_interpolation::natural);
-	} else if (interp == QStringLiteral("catmull")) {
-		window.set_interpolation(bbq_interpolation::catmull);
-	} else if (interp == QStringLiteral("monotone")) {
-		window.set_interpolation(bbq_interpolation::monotone);
-	}
-
-	const QString want_layout =
-	        bbq_option_value(arguments, QStringLiteral("--layout"));
-	if (!want_layout.isEmpty()) {
-		window.set_layout(bbq_layout_resolve(want_layout));
-	}
-
-	const QString smooth =
-	        bbq_option_value(arguments, QStringLiteral("--smooth"));
-	if (!smooth.isEmpty()) {
-		window.set_smoothing(smooth.toInt());
-	}
-
-	/*
-	 * The view, for looking at a zoom or a pan without a mouse
-	 * (project.md sec 13). "span" alone, or "span,from" to place the
-	 * left edge at an absolute moment.
-	 *
-	 * Interaction is the one thing a screenshot cannot exercise by
-	 * itself, so this is how a zoomed graph gets checked the same way
-	 * every other layout question in this project has been: by rendering
-	 * it and looking.
-	 */
 	/*
 	 * What the store actually holds (project.md sec 12). Opens, reports
 	 * and exits without fetching anything -- the same shape as the other
@@ -776,6 +736,106 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
+	/*
+	 * Before any widget exists, so no accessible interface is cached
+	 * from Qt's own factory first (sec 10.6) -- and only where widgets
+	 * will exist at all, since a headless run installs a factory for
+	 * nothing.
+	 */
+	bbq_install_accessibility_workaround();
+
+	/*
+	 * A tray applet must not exit when its window is closed -- closing
+	 * the window is how it gets put away, not how it is quit.
+	 *
+	 * That holds only where there IS a tray. Without one the window is
+	 * the entire user interface, and keeping the process alive after it
+	 * closes leaves something running with no way to see it, reach it or
+	 * quit it short of kill. So the answer follows the tray (sec 4.1),
+	 * and is decided before the window is shown.
+	 */
+	QApplication::setQuitOnLastWindowClosed(!bbq_tray_icon::is_available());
+
+	bbq_main_window window;
+	bbq_tray_icon tray;
+
+	QObject::connect(&tray, &bbq_tray_icon::toggle_requested,
+	                 &window, &bbq_main_window::toggle_visibility);
+
+	/*
+	 * The tray follows the data. Updated on a failure as well as a
+	 * success, because sec 2.4's point is that a refresh which stopped
+	 * working must show somewhere, and the tray is where a glance
+	 * lands.
+	 */
+	const auto refresh_tray = [&tray, &window]() {
+		tray.show_state(window.feed()->composite(), window.verdict());
+	};
+
+	QObject::connect(window.feed(), &bbq_wu_feed::updated, &window, refresh_tray);
+	QObject::connect(window.feed(), &bbq_wu_feed::settled, &window, refresh_tray);
+
+	/*
+	 * Said out loud on the session that cannot show a tray, rather than
+	 * discovered as an icon that never appears (project.md sec 4.1). With
+	 * no tray and no window there would be no way back to the program at
+	 * all, so the window is shown in that case instead of hidden.
+	 */
+	if (bbq_tray_icon::is_available()) {
+		tray.show();
+		window.show();
+	} else {
+		QTextStream error(stderr);
+		error << "bbq-predictor: no system tray on this session.\n";
+		error << "bbq-predictor:   On GNOME this needs a StatusNotifierItem\n";
+		error << "bbq-predictor:   shell extension. Running as a plain window.\n";
+		window.show();
+	}
+
+	/*
+	 * Pick the curve for a shot, so four renderings can be compared
+	 * side by side. The window's drop-down is the real control.
+	 */
+	const QString interp =
+	        bbq_option_value(arguments, QStringLiteral("--interp"));
+	if (interp == QStringLiteral("step")) {
+		window.set_interpolation(bbq_interpolation::step);
+	} else if (interp == QStringLiteral("linear")) {
+		window.set_interpolation(bbq_interpolation::linear);
+	} else if (interp == QStringLiteral("akima")) {
+		window.set_interpolation(bbq_interpolation::akima);
+	} else if (interp == QStringLiteral("makima")) {
+		window.set_interpolation(bbq_interpolation::makima);
+	} else if (interp == QStringLiteral("natural")) {
+		window.set_interpolation(bbq_interpolation::natural);
+	} else if (interp == QStringLiteral("catmull")) {
+		window.set_interpolation(bbq_interpolation::catmull);
+	} else if (interp == QStringLiteral("monotone")) {
+		window.set_interpolation(bbq_interpolation::monotone);
+	}
+
+	const QString want_layout =
+	        bbq_option_value(arguments, QStringLiteral("--layout"));
+	if (!want_layout.isEmpty()) {
+		window.set_layout(bbq_layout_resolve(want_layout));
+	}
+
+	const QString smooth =
+	        bbq_option_value(arguments, QStringLiteral("--smooth"));
+	if (!smooth.isEmpty()) {
+		window.set_smoothing(smooth.toInt());
+	}
+
+	/*
+	 * The view, for looking at a zoom or a pan without a mouse
+	 * (project.md sec 13). "span" alone, or "span,from" to place the
+	 * left edge at an absolute moment.
+	 *
+	 * Interaction is the one thing a screenshot cannot exercise by
+	 * itself, so this is how a zoomed graph gets checked the same way
+	 * every other layout question in this project has been: by rendering
+	 * it and looking.
+	 */
 	const QString view = bbq_option_value(arguments, QStringLiteral("--view"));
 	if (!view.isEmpty()) {
 		const QStringList parts = view.split(QLatin1Char(','));
@@ -945,5 +1005,5 @@ int main(int argc, char *argv[]) {
 		QTimer::singleShot(30000, &window, take);
 	}
 
-	return app.exec();
+	return app->exec();
 }

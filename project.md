@@ -11363,12 +11363,8 @@ The packaged service does not hit this because its unit sets
 `Environment=QT_QPA_PLATFORM=offscreen` -- a workaround that has been
 holding the defect out of sight.
 
-**The fix is choosing the application class from argv**, as the Android
-service entry already does: a QCoreApplication where nothing draws, a
-QApplication where something does. The diagnostics all return before a
-window is built, so they would run under either. It is a change through
-the middle of a 910-line `main`, and it is worth doing deliberately
-rather than in passing -- recorded here rather than half-done.
+**~~The fix is choosing the application class from argv.~~ Done, sec
+16.71.**
 
 ### 16.70.2 The gate caught its own blind spot immediately
 
@@ -11384,3 +11380,65 @@ reported against twenty-two accepted, when the Android service entry
 first read a flag from raw argv. **The gate has now been wrong in the
 same way twice and caught it both times**, which is what a gate whose
 question is "what does the program actually accept" is for.
+
+
+## 16.71 Every diagnostic runs without a display now
+
+Sec 16.70 fixed `--version` and `--help` and recorded the rest as open.
+The rest are done, and the shape is the one the Android service entry
+has used all along: **decide from raw argv, then build the application
+object that suits the answer.**
+
+    --probe    --fetch-once    --seed-verification
+    --search   --discover      --stations           --history
+
+get a `QCoreApplication`; anything that draws -- the window, `--shot`,
+`--tray-icon` -- gets a `QApplication`. Measured against a shell with
+`DISPLAY` and `WAYLAND_DISPLAY` unset and the platform left at `xcb`:
+all of them exit 0 and print their reports, where every one of them
+aborted before.
+
+`--history-path` is deliberately NOT in that list. It is a value for
+the others, and a `--shot` aimed at a scratch archive still draws; the
+flag test is exact, so it cannot match by prefix either.
+
+### 16.71.1 The diagnostics had to move above the window
+
+They sat AFTER `bbq_main_window window;`, which is why they needed a
+display however the application object was chosen -- constructing a
+QWidget needs one on its own. None of them touches `window` or `tray`,
+asserted before the move and again after, so they lift cleanly to just
+below where the options are read.
+
+`setQuitOnLastWindowClosed` and the accessibility factory went the
+other way, down into the drawing path: the first is a QApplication
+static that also asks the tray whether it exists, and the second
+installs an interface factory for widgets that a headless run never
+makes.
+
+### 16.71.2 A call this restructure deleted, caught by an assertion
+### written for something else
+
+The first edit's match text ran from `QApplication app(argc, argv)`
+through `bbq_install_accessibility_workaround();`, and its replacement
+did not put that call back. **The build stayed green**, because nothing
+tests that `main` calls it -- `evidence.md`'s "a correct function is not
+a working feature", with the function correct and its only caller gone.
+
+What caught it was `assert s.count(old) == 1` in the NEXT edit, looking
+for a comment block that no longer existed. The accessibility
+workaround exists for a real crash: a Qt Widgets application on Android
+aborting whenever it opens a secondary window while an accessibility
+service is running, which is to say for the people who most need the
+screen described to them.
+
+**A mechanical edit needs its invariant checked even when the invariant
+is "this line still exists".** The assertion that saved it was written
+to locate text, not to protect anything.
+
+### 16.71.3 The manual now gives the right reason
+
+It said `--probe` "runs before any widget is built, so it works
+headless". True premise, false conclusion, and the conclusion is what a
+reader acts on. It names the application object now, and lists the
+other six options that share the property.

@@ -89,7 +89,15 @@ is the same fetch with a report.
 .TP
 .B \-\-probe
 Report what this machine can reach and what its TLS resolved to, then
-exit. Runs before any widget is built, so it works headless. On Android,
+exit. No application object that needs a display is built for it, so it
+works headless \-\- over ssh, in a build chroot, or anywhere without an
+X or Wayland session. The same holds for
+.BR \-\-fetch\-once ,
+.BR \-\-history ,
+.BR \-\-stations ,
+.B \-\-discover
+and
+.BR \-\-search . On Android,
 where there is no command line, touching
 .I files/run\-probe
 in the application's data directory asks for the same thing; the marker
