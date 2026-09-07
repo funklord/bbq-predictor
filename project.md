@@ -11072,3 +11072,60 @@ three. Proved by renaming the option in the unit:
 **It does not check the other direction**, and that is deliberate: the
 program accepts twenty-two options and a unit is expected to pass three.
 An absence there is a fact about packaging, not a defect.
+
+
+## 16.65 The whole chain ran, for the first time
+
+Switching the watched station to one that reports turned the project's
+central sequence on end to end: observe, verify, correct, and say so.
+Recorded because it had never happened before, and because the numbers
+are the first real measurements this archive has produced.
+
+**The record line, which had read "record: none yet" for as long as it
+has existed:**
+
+    record: hourly @2d bias -0.5 C, MAE 0.7, rain skill -0.28,
+            verdict +/-0.07 (n=29)
+
+It agrees with the archive, which is the point of it: `--history`
+reports `hourly at 2d: n=29 bias=-0.48 MAE=0.69`.
+
+**And the bias-corrected overlay is drawn**, in a week-wide view, for
+the first time. `bbq_correction_minimum` is 20 comparisons per bucket
+and several buckets now clear it.
+
+### 16.65.1 The correction tracks the measurement rather than offsetting
+
+Worth checking rather than assuming, since a constant offset and a
+per-bucket correction look alike at a glance. Temperature bias by lead,
+for the band that feeds the forward curve:
+
+    hourly at 1d    n=5   bias -0.40
+    hourly at 2d    n=29  bias -0.48
+    hourly at 4d    n=33  bias -1.39
+    hourly at 7d    n=23  bias +0.17
+    hourly at 7d+   n=62  bias -0.11
+
+The drawn gap follows it: narrow across Tue and Wed, widest around Fri,
+which is four days out. A single offset would have been uniform.
+
+### 16.65.2 What the first numbers say
+
+- **Wind is biased high by a lot.** +4.2, +7.4, +5.9, +5.7 and +11.0
+  km/h across the lead buckets, consistently one direction. That is the
+  expected shape for a sheltered garden station measured against a model
+  for open terrain, and it is the largest signal in the archive.
+- **Rain skill is negative at most leads** -- -0.14 at 1d, -0.28 at 2d,
+  -1.69 at 7d+ -- because the bands say 10-40% on days that stay dry.
+  Honest, and the reason a Brier baseline is reported beside it.
+- **Sample counts are small**, 5 to 62, all from one day's worth of
+  verification. Nothing here is a conclusion about a provider yet.
+
+### 16.65.3 The negative-wind hazard was already handled
+
+An 11 km/h downward correction applied to an 8 km/h forecast would give
+a negative wind speed. It cannot: rain and wind are both floored at
+zero where the correction is applied, and the comment there says why --
+"there is no negative wind", the same clamp sec 3.11.2 puts on the
+drawn curve. Checked because the wind bias made it reachable for the
+first time, and found already closed.
