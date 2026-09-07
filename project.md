@@ -12024,6 +12024,35 @@ case is what fails:
 Found by reading `feed.cpp`, which sec 16.73 measured at 41.8% executed
 -- the largest file in the tree the suite runs least of.
 
+### 16.81.2 The rest of that class, swept, and two more found
+
+Eleven places subtract from "now". Most cannot care: a view's left edge,
+a drawn x-coordinate, a label. Two could, and both were wrong in the way
+the band was.
+
+**Discovery skipped itself.** `ran != 0 && now - ran < stale` is the
+same sentence as `overdue` with the future case missing, so a stamp
+ahead of the clock stopped stations being discovered until the clock
+caught up. It asks `overdue` now -- whose own comment says it exists so
+that "the one thing they all have to agree about is written once". This
+is what not using it costs, in the same file, a few hundred lines down.
+
+**The tray called old data fresh, which is the worse polarity.** The
+band stall merely stopped working; this reassures -- on the surface its
+own test calls "the likelier place for a stale number to be believed",
+because it is glanced at rather than read. `(now - oldest) > threshold`
+is false for a negative difference, so a clock that moved back under a
+stored stamp made two-hour-old data read as current.
+
+    'tray.toolTip().contains("STALE")' returned FALSE. (a stamp three
+    hours in the future reads as fresh)
+
+The others are benign and were checked rather than assumed: the
+staleness warning and the expiry cutoff both fail SAFE under a backwards
+jump -- no false alarm, nothing deleted early -- and
+`bbq_describe_duration` already answers "no time at all" for a negative
+span, deliberately.
+
 ### 16.81.1 The commit before this one claimed the record it did not make
 
 Its message says "Also records the sweep of the class sec 16.63

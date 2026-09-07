@@ -63,6 +63,7 @@ class test_window : public QObject {
 private slots:
 	void initTestCase();
 	void a_fix_is_answered_exactly_once();
+	void the_tray_does_not_call_a_future_stamp_fresh();
 	void a_label_is_not_stored_as_a_station_id();
 
 	/*
@@ -1752,4 +1753,51 @@ void test_window::a_fix_is_answered_exactly_once() {
 	QTRY_VERIFY_WITH_TIMEOUT(located + unavailable >= 2, 4000);
 	QTest::qWait(300);
 	QCOMPARE(located + unavailable, 2);
+}
+
+/*
+ * A fetch stamp from the future is not a fresh one.
+ *
+ * The tray's staleness is `(now - oldest) > threshold`, and that goes
+ * negative when the clock has moved back under a stored stamp --
+ * negative is not greater than the threshold, so the tray called old
+ * data fresh.
+ *
+ * THE WORSE POLARITY of the pair found together. The band stall of sec
+ * 16.81 merely stopped working; this one reassures, on the surface its
+ * own comment calls the likelier place for a stale number to be
+ * believed because it is glanced at rather than read.
+ *
+ * Android restores the RTC at boot and the network corrects it after,
+ * so a stamp written in between is ahead of the clock that follows it.
+ */
+void test_window::the_tray_does_not_call_a_future_stamp_fresh() {
+	bbq_tray_icon tray;
+
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	bbq_series ahead = bandful(bbq_band::observed, now - 3600, 4);
+	ahead.set_fetched_utc(now + 3 * 3600);
+
+	bbq_composite future;
+	future.set_series(ahead);
+	tray.show_state(future, QString());
+
+	QVERIFY2(tray.toolTip().contains(QStringLiteral("STALE")),
+	         qPrintable(QStringLiteral("a stamp three hours in the future "
+	                                   "reads as fresh: %1")
+	                            .arg(tray.toolTip())));
+
+	/*
+	 * And a stamp from a moment ago still reads fresh, or this is a
+	 * guard that calls everything stale.
+	 */
+	bbq_series just_now = bandful(bbq_band::observed, now - 3600, 4);
+	just_now.set_fetched_utc(now - 60);
+
+	bbq_composite recent;
+	recent.set_series(just_now);
+	tray.show_state(recent, QString());
+	QVERIFY2(!tray.toolTip().contains(QStringLiteral("STALE")),
+	         qPrintable(QStringLiteral("a fetch a minute ago reads as stale: "
+	                                   "%1").arg(tray.toolTip())));
 }

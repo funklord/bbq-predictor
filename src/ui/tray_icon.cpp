@@ -106,7 +106,17 @@ void bbq_tray_icon::show_state(const bbq_composite &composite,
                                const QString &verdict) {
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
 	const qint64 oldest = composite.oldest_fetch_utc();
-	const bool stale = oldest == 0 || (now - oldest) > stale_after_s;
+	/*
+	 * A FETCH STAMP FROM THE FUTURE IS NOT A FRESH ONE (sec 16.81.2).
+	 *
+	 * `now - oldest` goes negative when the clock has moved back under
+	 * a stored stamp, and negative is not greater than the threshold --
+	 * so the tray called old data fresh. That is the worse polarity of
+	 * the two: the band stall this came from merely stopped working,
+	 * while this reassures.
+	 */
+	const bool stale = oldest == 0 || now < oldest ||
+	                   (now - oldest) > stale_after_s;
 
 	/*
 	 * The OWNER of this instant, not the finest band covering it

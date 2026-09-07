@@ -943,7 +943,18 @@ bool bbq_wu_feed::discover_stations_if_moved(double latitude,
 		const qint64 ran = m_history.discovery_ran_utc();
 		const qint64 now = QDateTime::currentSecsSinceEpoch();
 
-		if (ran != 0 && now - ran < discovery_stale_s) {
+		/*
+		 * ASKED THROUGH `overdue`, which is where this rule lives
+		 * (sec 16.81.2). This was `ran != 0 && now - ran < stale`,
+		 * which is the same sentence with the future case missing: a
+		 * stamp ahead of the clock made the difference negative, so
+		 * discovery was skipped until the clock caught up to it.
+		 *
+		 * The helper's own comment says it exists so the one thing
+		 * every band has to agree about is written once. This is what
+		 * not using it costs.
+		 */
+		if (!overdue(ran, discovery_stale_s, now)) {
 			return false;
 		}
 	}
