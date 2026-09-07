@@ -23,6 +23,7 @@ private slots:
 	void a_bin_counts_the_wet_ones_apart_from_the_total();
 	void the_three_scores_are_told_apart_by_the_fixture();
 	void one_archive_is_recognised_however_it_is_spelled();
+	void the_default_archive_is_somewhere_a_person_owns();
 	void observations_survive_being_stored_twice();
 	void a_forecast_is_kept_once_per_bucket_not_once_per_fetch();
 	void verifying_computes_the_standard_scores_and_empties_the_queue();
@@ -1090,4 +1091,43 @@ void test_history::a_bin_counts_the_wet_ones_apart_from_the_total() {
 
 	/* The nominal side of the pair, which the diagonal is read against. */
 	QVERIFY(qAbs(bin.forecast() - 0.7) < 1e-9);
+}
+
+/*
+ * Where the archive lives when nobody names a file.
+ *
+ * Never executed by any suite until now (sec 16.73): every test opens an
+ * explicit path, so the branch that derives the default was reached only
+ * by the running program. It decides where a person's measurements go,
+ * and the seeding guard compares against it -- a wrong answer there
+ * protects the wrong file.
+ *
+ * The hazard is a data location that comes back EMPTY, which is not
+ * hypothetical on a stripped-down system: the derivation is a directory
+ * plus "/history.sqlite", so an empty directory yields "/history.sqlite"
+ * and the archive is aimed at the filesystem root.
+ */
+void test_history::the_default_archive_is_somewhere_a_person_owns() {
+	const QString path = bbq_history_default_path();
+
+	QVERIFY2(!path.isEmpty(), "the default archive path is empty");
+
+	QVERIFY2(path.endsWith(QStringLiteral("history.sqlite")),
+	         qPrintable(QStringLiteral("the default archive is %1").arg(path)));
+
+	const QFileInfo about(path);
+	QVERIFY2(about.isAbsolute(),
+	         qPrintable(QStringLiteral("%1 is relative, so where it lands "
+	                                   "depends on the working directory")
+	                            .arg(path)));
+
+	const QString directory = about.path();
+	QVERIFY2(directory != QStringLiteral("/") && directory.length() > 1,
+	         qPrintable(QStringLiteral("the archive would sit in %1 -- an "
+	                                   "empty data location derives the "
+	                                   "filesystem root")
+	                            .arg(directory)));
+
+	/* And it is the file the seeding guard refuses, by every spelling. */
+	QVERIFY(bbq_history_is_same_file(path, bbq_history_default_path()));
 }

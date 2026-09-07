@@ -11551,3 +11551,48 @@ adding a second copy of the same line. Reverted and redone.
 And a `make style` checked with `| head -3` reported rc=0 from `head`
 while make had exited 2. The rule against reducing a check's output
 before knowing it passed, broken in the act of checking a gate.
+
+
+### 16.73.4 Per function, which is the useful half of the measurement
+
+The percentages named a file. Asking gcov which FUNCTIONS never execute
+named 233 of this project's own, and reading them is what turns a number
+into work.
+
+**Most are not gaps.** Sorted by why:
+
+- **Network paths** -- every `fetch_*`, and the `ready`/`failed`
+  signals of all three clients. The suite is offline on purpose; the CI
+  job is called "build and offline suites" for the same reason.
+- **Android-only code.** `bbq_write_widget_picture` reads 0% because
+  its whole body is inside `#ifdef Q_OS_ANDROID` and compiles to
+  nothing here. That is platform gating, not an untested function, and
+  a coverage report cannot tell the difference on its own.
+- **GUI lifecycle** -- `toggle_visibility`, `is_available`, the window
+  constructor's lambdas.
+- **Settings accessors**, which write a real `QSettings` file that
+  tests are right not to touch.
+
+**And the data was already stale when it was read**: every `bbq_locator`
+function appears in the never-run list, and sec 16.73's own test now
+runs them. A coverage snapshot is a measurement of a moment, like every
+other measurement of a tree somebody is working in.
+
+### 16.73.5 One real gap, and it was a day old
+
+`bbq_history_default_path()` -- added earlier the same day for the
+seeding guard, and executed by nothing. Every test opens an explicit
+path, so the branch deriving the default is reached only by the running
+program.
+
+It decides where a person's measurements go, and the guard that refuses
+to write invented statistics compares against it: a wrong answer there
+protects the wrong file. The hazard is a data location that comes back
+EMPTY, since the derivation is a directory plus `/history.sqlite` --
+so an empty one aims the archive at the filesystem root.
+
+Sabotaged exactly that way:
+
+    'directory != QStringLiteral("/") && directory.length() > 1'
+    returned FALSE. (the archive would sit in / -- an empty data
+    location derives the filesystem root)
