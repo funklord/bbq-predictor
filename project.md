@@ -4106,8 +4106,15 @@ also the only part that cannot be re-fetched.
 **Kept forever**: every measurement. The `observed` band's station rows
 and the `current` band's instantaneous readings are both measurements of
 the real world, so both are archived. A station reporting every five
-minutes produces about 105,000 rows a year, which is a few megabytes --
-a decade fits in a file nobody will notice.
+minutes produces about 105,000 rows a year.
+
+**Measured rather than estimated (sec 16.76): that is 9.0 MB, about 90
+bytes a row including the primary-key index, so a decade is roughly 90
+MB.** The sentence here said "a few megabytes" until somebody inserted
+105,000 rows and looked. It is still a file a desktop will not notice
+and still bounded, which is what the rule is for -- but a phone is the
+other half of this program's life, and 90 MB there is a number worth
+having been told rather than discovered.
 
 **Kept until checked**: forecast samples, in a pending queue. A forecast
 sample is held until the observation for the time it predicted arrives,
@@ -11679,3 +11686,37 @@ was the genuine article:
 
 Adopted, with nothing else touched. Sabotaged by never writing the
 stamp, the test fails.
+
+
+## 16.76 What a decade of weather actually weighs
+
+Sec 12.1 sized the archive from a row count and an estimate. Re-derived
+by making one:
+
+    empty archive, schema only                53,248 bytes
+    plus 105,000 observations, one year     9,412,608 bytes
+
+**About 90 bytes a row**, index included, so 9.0 MB a year and roughly
+90 MB a decade. The document said "a few megabytes" for the year, which
+is out by two or three times.
+
+The method, since a number without one has a shelf life: create an
+archive with `--history-path`, insert 105,000 rows with a recursive CTE
+at a five-minute stride, and read the file size. It takes seconds and it
+is the only way that sentence stops being an estimate.
+
+### 16.76.1 The churn does not accumulate, checked rather than assumed
+
+The pending queue is written and deleted every round for ever, and
+SQLite does not return freed pages to the filesystem without
+`auto_vacuum` or an explicit `VACUUM`. So the question is whether a
+decade of churn leaves a file mostly holes.
+
+Measured on the live archive:
+
+    page_size 4096, page_count 267, freelist 14 pages, auto_vacuum 0
+
+**Five per cent free, and reused.** The file holds its high-water mark
+rather than growing, and the mark is set by the observations -- which
+grow monotonically anyway and are the thing being kept. Nothing to fix,
+and worth knowing it was looked at.
