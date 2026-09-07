@@ -23,6 +23,7 @@ class test_feed : public QObject {
 
 private slots:
 	void a_derived_coordinate_does_not_survive_the_station_changing();
+	void a_finished_day_is_told_from_one_still_running();
 	void a_band_never_asked_for_is_not_a_band_that_answered();
 	void a_pinned_coordinate_does();
 	void resetting_the_same_station_changes_nothing();
@@ -554,7 +555,6 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	bbq_series full(bbq_band::observed, QStringLiteral("wunderground"));
 	full.set_samples(whole);
 
-	feed.m_backfill_day = day;
 	feed.check_day_is_whole(full);
 	QCOMPARE(complaints.count(), 0);
 
@@ -566,7 +566,6 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	bbq_series stale(bbq_band::observed, QStringLiteral("wunderground"));
 	stale.set_samples(cut);
 
-	feed.m_backfill_day = day;
 	feed.check_day_is_whole(stale);
 
 	QCOMPARE(complaints.count(), 1);
@@ -574,14 +573,18 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	         "the complaint does not say what is wrong");
 
 	/*
-	 * And the DAY complaint fires once: the day is cleared when it is
-	 * checked, so one request cannot complain twice about it.
+	 * THE SAME SERIES, JUDGED AGAIN, GETS THE SAME ANSWER (sec 16.63).
 	 *
-	 * A second call is judged as today's fetch instead, and this
-	 * fixture's rows are long past, so it draws the quiet-station
-	 * complaint of sec 12.13.3. That is the correct reading of a
-	 * response carrying nothing recent, and it is why the count alone
-	 * is not asserted here.
+	 * This asserted the opposite until the swap was found: the day was
+	 * remembered in a member and cleared when it was read, so a second
+	 * call fell through to the staleness branch instead -- and the
+	 * comment here called that correct. It was the bug, written down as
+	 * intended behaviour.
+	 *
+	 * There is no member now. Which question a reply answers comes out
+	 * of the reply, so asking twice cannot change the answer, and two
+	 * short days really do earn two complaints because in a real round
+	 * they are two replies.
 	 */
 	feed.check_day_is_whole(stale);
 
@@ -592,7 +595,8 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 		}
 	}
 
-	QCOMPARE(holes, 1);
+	QCOMPARE(holes, 2);
+	QCOMPARE(complaints.count(), 2);
 }
 
 void test_feed::a_store_that_takes_fewer_rows_than_given_says_so() {
@@ -687,7 +691,12 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 	const qint64 midday =
 	        QDateTime(yesterday, QTime(12, 0)).toSecsSinceEpoch();
 
-	feed.m_backfill_day = yesterday;
+	/*
+	 * NOTHING IS ARRANGED FOR IT HERE, and that is the change worth
+	 * noticing. This test named the fault exactly -- and set the member
+	 * by hand first, so it was asking whether the check works when its
+	 * caller gets the day right. The caller was what got it wrong.
+	 */
 	feed.check_day_is_whole(reporting_until(midday));
 	QCOMPARE(complaints.count(), 2);
 	QVERIFY2(complaints.at(1).at(1).toString().contains(QStringLiteral("hole")),
@@ -1050,4 +1059,54 @@ void test_feed::a_band_never_asked_for_is_not_a_band_that_answered() {
 	         bbq_fetch_outcome::partial);
 	QCOMPARE(bbq_fetch_verdict(0, true, true, false),
 	         bbq_fetch_outcome::useless);
+}
+
+/*
+ * Which question a fetched observation series answers.
+ *
+ * The observed band issues two requests per round and both replies
+ * arrive in one handler carrying the same product. This used to be
+ * decided by a member naming the day that had been asked for, and one
+ * member cannot answer for two requests in flight: whichever reply
+ * landed first consumed it, so the checks were swapped. A COMPLETE
+ * backfill day went to the staleness branch and was announced as a
+ * station that had stopped reporting.
+ *
+ * The numbers below are the reproduction, not invented ones. ILIDIN21
+ * returned 288 rows -- a whole day at a five-minute cadence -- whose
+ * newest sample sat SEVEN SECONDS before the local day it belonged to
+ * ended, and that was reported as nine and a half hours of silence.
+ */
+void test_feed::a_finished_day_is_told_from_one_still_running() {
+	/* Local midnight on 2026-09-07 in Stockholm, which is 22:00Z. */
+	const qint64 today_began =
+	        QDateTime::fromString(QStringLiteral("2026-09-06T22:00:00Z"),
+	                              Qt::ISODate)
+	                .toSecsSinceEpoch();
+
+	const qint64 backfill_newest =
+	        QDateTime::fromString(QStringLiteral("2026-09-06T21:59:53Z"),
+	                              Qt::ISODate)
+	                .toSecsSinceEpoch();
+
+	const qint64 today_newest =
+	        QDateTime::fromString(QStringLiteral("2026-09-07T07:19:59Z"),
+	                              Qt::ISODate)
+	                .toSecsSinceEpoch();
+
+	QVERIFY2(bbq_observed_day_has_ended(backfill_newest, today_began),
+	         "a complete backfill day read as still running, so it would be "
+	         "judged for staleness and its station called silent");
+
+	QVERIFY2(!bbq_observed_day_has_ended(today_newest, today_began),
+	         "today's part-day read as finished, so it would be judged for "
+	         "completeness -- a test it cannot fail, since it has not ended");
+
+	/*
+	 * THE BOUNDARY ITSELF, which is where a swap would hide. The first
+	 * instant of a day belongs to the day in progress; the instant
+	 * before it does not.
+	 */
+	QVERIFY(!bbq_observed_day_has_ended(today_began, today_began));
+	QVERIFY(bbq_observed_day_has_ended(today_began - 1, today_began));
 }

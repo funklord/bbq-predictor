@@ -10931,3 +10931,97 @@ the plant that started it:
 
     bbq-predictor.pro: compiles a source that includes src/cli/options.h
     and does not name it, so qmake tracks no dependency for THIS project
+
+
+## 16.63 The two observed checks were swapped, and a test said so
+
+`--history` reports the archive: **6 observations, earliest 2026-08-08,
+and 1534 forecasts awaiting a check.** The verification half of this
+project -- its whole reason to exist -- has produced nothing in a month.
+
+Chasing that turned up two separate things. The station is one and
+belongs to the holder. The other is a defect here.
+
+### 16.63.1 The symptom: a healthy station called silent
+
+Fetching a station for the first time reported:
+
+    observed   FAIL  ILIDIN21 has not reported for 9 h 25 min
+
+Two live stations reported **the same 9 h 21 min** in one round, which
+cannot be a property of either. Instrumented in a clone rather than in
+this tree, because another session is committing here:
+
+    PROBE station=ILIDIN21 backfill_valid=0 rows=288
+          first=2026-09-05T22:04:59Z newest=2026-09-06T21:59:53Z
+          now=2026-09-07T07:25:24Z behind=33931s
+
+**288 rows is a whole day at a five-minute cadence, ending seven
+seconds before its day did.** A perfect backfill reply, announced as a
+station that had stopped reporting.
+
+### 16.63.2 One member for two requests in flight
+
+The observed band issues two requests a round -- the day in progress
+and the backfill behind it -- and both replies arrive in one handler
+carrying `bbq_wu_product::observed`. Which was which came from
+`m_backfill_day`, set just before the backfill went out and cleared
+when read.
+
+**One slot cannot answer for two outstanding requests.** Whichever
+reply landed first consumed it, so the checks were SWAPPED:
+
+- today's part-day was measured against yesterday's end, where it
+  cannot be short, so that check always passed;
+- yesterday's complete day went to the staleness branch and was called
+  silent.
+
+The second is the visible half. The first is the expensive one: **the
+truncated-day check that sec 12.13.1 cost an archive and several hours
+to write never ran on a backfill at all.**
+
+The reply knows which day it holds. A series whose newest sample
+predates the start of today is a day that has ENDED, so
+`bbq_observed_day_has_ended` decides it and the member is gone -- no
+shared state, no ordering to get right.
+
+Confirmed on a live station whose backfill fires: IENSKE4 returned 399
+samples spanning yesterday and today, and said nothing at all.
+
+### 16.63.3 A test named the fault and could not see it
+
+This was already in `test_feed`, word for word:
+
+> And a BACKFILL is not judged this way. Yesterday's newest observation
+> is a day old by definition, so the same series would be called quiet
+> on every single backfill **if the two checks were confused**.
+
+It then set `feed.m_backfill_day = yesterday` by hand and called the
+check. **So it asked whether the check works when its caller gets the
+day right, and the caller was the thing that got it wrong.** It is
+`evidence.md`'s rule exactly: a test that arranges the state its caller
+fails to arrange cannot see a wrong caller. It arranges nothing now,
+and fails under sabotage.
+
+A second test had encoded the bug as intended behaviour -- "a second
+call is judged as today's fetch instead ... that is the correct reading"
+-- describing the member being cleared. It asserts the stronger
+property now: the same reply judged twice gets the same answer, because
+nothing is remembered between calls.
+
+### 16.63.4 The station is the holder's to decide
+
+Not a defect, and the numbers are worth having. The configured station
+is `ISTOCK822`, set on 2026-08-28. Asked directly it answers HTTP 204
+for today, for yesterday and for the current reading: no data at all.
+It is also **not among the ten stations the archive has discovered
+nearby**, the closest of which is 0.1 km away.
+
+    ISTOCK822   204 for every request
+    ISTOCK877   688 samples, 09-04 22:04Z..09-07 07:24Z, reporting now
+    IJOHAN69    398 samples, reporting now
+
+That is why 1534 forecasts sit unverified: a forecast is only checked
+once the hour it predicted has been observed, and nothing is being
+observed. **Which station to watch is the holder's choice**, so it is
+recorded here rather than changed.

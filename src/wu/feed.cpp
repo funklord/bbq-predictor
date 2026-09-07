@@ -1016,6 +1016,10 @@ void bbq_wu_feed::note_partial_store(int given, int stored) {
 	                         .arg(m_history.last_error()));
 }
 
+bool bbq_observed_day_has_ended(qint64 newest_utc, qint64 today_began_utc) {
+	return newest_utc < today_began_utc;
+}
+
 void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 	/*
 	 * A SHORT ANSWER IS NOT AN ERROR, and that is the problem
@@ -1042,7 +1046,33 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 		return;
 	}
 
-	if (!m_backfill_day.isValid()) {
+	/*
+	 * WHICH DAY THIS IS, ASKED OF THE DATA (sec 16.63).
+	 *
+	 * It used to be asked of `m_backfill_day`, a member set just before
+	 * the backfill request went out. Two observed requests are in
+	 * flight at once -- today's and the backfill's -- both arrive in
+	 * this same handler, and one member cannot say which reply is
+	 * which. Whichever landed first consumed it, so the two checks were
+	 * SWAPPED: today's part-day was measured against yesterday's end,
+	 * where it cannot be short and so always passed, and yesterday's
+	 * complete day went to the staleness branch and was reported as a
+	 * station that had stopped reporting.
+	 *
+	 * Measured on a station fetched for the first time, which is when
+	 * the backfill runs: 288 rows, a whole day at a five-minute
+	 * cadence, ending 53 seconds before its day did -- announced as
+	 * "ILIDIN21 has not reported for 9 h 25 min".
+	 *
+	 * The reply knows which day it holds, and a series that ends before
+	 * today began is a day that has ENDED. No member, so nothing to
+	 * share and no ordering to get right.
+	 */
+	const qint64 today_began =
+	        QDateTime(QDate::currentDate(), QTime(0, 0)).toSecsSinceEpoch();
+	const qint64 newest_seen = measured.samples().back().start_utc;
+
+	if (!bbq_observed_day_has_ended(newest_seen, today_began)) {
 		/*
 		 * TODAY'S fetch, where the question is different (sec 12.13.3).
 		 *
@@ -1055,8 +1085,8 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 		 * FETCH", which stays healthy while a quiet station is fetched
 		 * faithfully and returns the same rows every time.
 		 */
-		const qint64 newest = measured.samples().back().start_utc;
-		const qint64 behind = QDateTime::currentSecsSinceEpoch() - newest;
+		const qint64 behind =
+		        QDateTime::currentSecsSinceEpoch() - newest_seen;
 
 		if (behind > station_quiet_s) {
 			emit band_failed(
@@ -1069,11 +1099,15 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 		return;
 	}
 
-	const QDate asked = m_backfill_day;
-	m_backfill_day = QDate();
+	/*
+	 * The day this reply actually covers, taken from its own newest
+	 * sample rather than from what was asked for -- so a reply is
+	 * checked against the day it holds even if two are outstanding.
+	 */
+	const QDate asked =
+	        QDateTime::fromSecsSinceEpoch(newest_seen).date();
 
-	const qint64 last = measured.samples().back().start_utc;
-	const qint64 short_by = day_short_by(last, asked);
+	const qint64 short_by = day_short_by(newest_seen, asked);
 
 	if (short_by <= backfill_short_s) {
 		return;
@@ -1188,12 +1222,13 @@ void bbq_wu_feed::attempt_backfill(qint64 now_utc) {
 	const QDate day = wanted;
 
 	/*
-	 * Remembered so the answer can be checked against the question
-	 * (sec 12.13.1). A day that has ENDED should be answered with
-	 * observations reaching its end, and nothing else knows which day
-	 * was asked for by the time the reply arrives.
+	 * Nothing is remembered about which day was asked for.
+	 *
+	 * It used to be, and one member could not hold the answer for two
+	 * observed requests in flight at once (sec 16.63). The reply says
+	 * which day it covers, so check_day_is_whole asks it rather than
+	 * asking what was sent.
 	 */
-	m_backfill_day = day;
 	m_client->fetch_observed(m_station_id, day.toString(stamp));
 }
 

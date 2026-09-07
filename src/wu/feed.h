@@ -32,6 +32,25 @@ class bbq_openmeteo_client;
  * suppress the forecast bands, and an absent band is reported by name
  * rather than left as a hole.
  */
+/*
+ * Whether a fetched observation series covers a day that has ENDED.
+ *
+ * The observed band issues two requests per round -- the day in
+ * progress and a backfill for the one behind it -- and both replies
+ * arrive in the same handler carrying the same product. A member
+ * naming the day that was asked for cannot say which reply is which:
+ * whichever landed first consumed it, and the two checks were swapped
+ * (sec 16.63). A complete backfill day was then reported as a station
+ * that had stopped reporting, and the truncated-day check that cost
+ * sec 12.13.1 never ran on a backfill at all.
+ *
+ * The reply knows. A series whose newest sample predates the start of
+ * today is a day that has finished, and should be judged on whether it
+ * reaches its end; one that does not is still running, and should be
+ * judged on whether the station is still speaking.
+ */
+bool bbq_observed_day_has_ended(qint64 newest_utc, qint64 today_began_utc);
+
 class bbq_wu_feed : public QObject {
 	Q_OBJECT
 
@@ -327,7 +346,6 @@ private:
 	bool m_discovery_outstanding = false;
 
 	/* Which day the outstanding backfill asked for (sec 12.13.1). */
-	QDate m_backfill_day;
 
 	QStringList m_pinned_queue;
 	QString m_pinned_in_flight;
