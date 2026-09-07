@@ -11786,3 +11786,29 @@ would not have if a heading had been dropped.
 
 Placeholders in between, because renaming 10.5 to 10.6 while a 10.6
 still exists is how a mechanical edit eats its own output.
+
+### 16.77.3 The number is unambiguous now, and the parent still misleads
+
+Found while establishing who owned the `16.N` series, and NOT acted on.
+Those sections use two heading levels:
+
+    ## 16.NN    66 sections
+    ### 16.NN  142 sections
+
+`16.1` to `16.13` are `###` and are genuinely the widget's children --
+"It draws a picture the application rendered". From `16.14` they are
+`##`, siblings of `## 16.` rather than children of it, and the topics
+left the widget behind long ago: `16.30` is about dashed window edges,
+`16.63` about two observed checks being swapped.
+
+So a reader following `16.30` back to a parent now finds one section
+rather than two, which is what the renumber fixed -- and that parent is
+"The home-screen widget", which has nothing to do with it. **The
+ambiguity is gone; the wrong answer is still there.**
+
+Not fixed here, and the reason is the same one that decided which
+duplicate to move: `16.N` is cited by number throughout this file and
+from source comments, so renaming the series is a change to hundreds of
+references to improve an appearance. It is recorded for whoever decides
+how this document is shaped, which is not a call to make while repairing
+something else.
