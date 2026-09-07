@@ -20,6 +20,7 @@ class test_history : public QObject {
 
 private slots:
 	void lead_times_bucket_by_their_upper_bound();
+	void the_three_scores_are_told_apart_by_the_fixture();
 	void one_archive_is_recognised_however_it_is_spelled();
 	void observations_survive_being_stored_twice();
 	void a_forecast_is_kept_once_per_bucket_not_once_per_fetch();
@@ -932,4 +933,76 @@ void test_history::one_archive_is_recognised_however_it_is_spelled() {
 	/* An empty path names nothing and matches nothing. */
 	QVERIFY(!bbq_history_is_same_file(QString(), real));
 	QVERIFY(!bbq_history_is_same_file(real, QString()));
+}
+
+/*
+ * Bias, MAE and RMSE, on errors that make all three DIFFERENT.
+ *
+ * The fixture above uses +10 and -10, which is exactly right for what
+ * it tests -- a forecast that looks perfect by bias alone -- and it
+ * leaves MAE and RMSE both at 10. Two numbers that agree cannot
+ * separate the columns they came from, so anything deriving one from
+ * the other's sum passes it.
+ *
+ * +2 and -4 pull them apart: bias -1, MAE 3, RMSE sqrt(10). Computed by
+ * hand rather than from the code, which is the only way this is a
+ * second witness rather than the same one twice.
+ */
+void test_history::the_three_scores_are_told_apart_by_the_fixture() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const qint64 issued = 1000000;
+	const qint64 valid = issued + 1800;
+
+	bbq_sample high;
+	high.start_utc = valid;
+	high.duration_s = 3600;
+	high.temperature = 22.0; /* observed 20 -> error +2 */
+
+	bbq_sample low;
+	low.start_utc = valid + 600;
+	low.duration_s = 3600;
+	low.temperature = 16.0; /* observed 20 -> error -4 */
+
+	bbq_series forecast(bbq_band::hourly, QStringLiteral("test"));
+	forecast.set_samples({high, low});
+	store.record_forecast(QStringLiteral("ITEST1"), forecast, issued);
+
+	std::vector<bbq_sample> truth;
+	for (int i = 0; i < 2; ++i) {
+		bbq_sample sample;
+		sample.start_utc = valid + i * 600;
+		sample.duration_s = 300;
+		sample.temperature = 20.0;
+		truth.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(truth);
+	store.record_observations(QStringLiteral("ITEST1"), observed);
+
+	QCOMPARE(store.verify(QStringLiteral("ITEST1")), 2);
+
+	const bbq_verification score = store.verification(
+	        QStringLiteral("ITEST1"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+
+	QCOMPARE(score.count, 2);
+	QCOMPARE(score.bias, -1.0);
+	QCOMPARE(score.mean_absolute_error, 3.0);
+	QVERIFY2(std::abs(score.root_mean_square_error - std::sqrt(10.0)) < 1e-9,
+	         qPrintable(QStringLiteral("RMSE is %1, and sqrt(10) = %2 -- if "
+	                                   "it equals the MAE of 3 it was taken "
+	                                   "from the wrong sum")
+	                            .arg(score.root_mean_square_error)
+	                            .arg(std::sqrt(10.0))));
+
+	/*
+	 * And the inequalities that must hold whatever the numbers are.
+	 * Checked against the live archive too, where all 111 rows held.
+	 */
+	QVERIFY(score.mean_absolute_error >= std::abs(score.bias));
+	QVERIFY(score.root_mean_square_error >= score.mean_absolute_error);
 }

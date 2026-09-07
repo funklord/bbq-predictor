@@ -11177,3 +11177,44 @@ file, which is what the tool is for.
 
 Sabotaged to a string compare, the dotted-path case fails -- the
 spelling a person would most plausibly type from inside the directory.
+
+
+## 16.67 Two numbers that agree cannot separate the columns they came from
+
+The archive's statistics were pinned by a fixture using errors of +10
+and -10. It exists to show what sec 12.3 says -- a forecast that looks
+perfect by bias alone -- and for that it is exactly right: bias 0
+against MAE 10 is the whole point.
+
+**But +10 and -10 also make MAE and RMSE both 10.** Two numbers that
+agree cannot separate the columns they were read from.
+
+Measured on the live archive first, which is what prompted looking. All
+111 verification rows satisfy `MAE >= |bias|` and `RMSE >= MAE`, and one
+row re-derived by hand from its stored sums -- extended, 7d, count 23 --
+gives bias -1.03, MAE 1.67, RMSE 2.37, matching what `--history` prints.
+The store is consistent and the display agrees with it. Neither fact
+says the right COLUMN is being read.
+
+### 16.67.1 The fixture that separates them
+
+Errors of +2 and -4: bias -1, MAE 3, RMSE sqrt(10). All three distinct,
+and computed by hand rather than from the code, which is what makes it a
+second witness rather than the same one twice.
+
+Sabotaged by reading RMSE from the absolute-error column -- a plausible
+slip, since the two are adjacent in the same SELECT:
+
+    'std::abs(score.root_mean_square_error - std::sqrt(10.0)) < 1e-9'
+    returned FALSE. (RMSE is 3, and sqrt(10) = 3.16228 -- if it equals
+    the MAE of 3 it was taken from the wrong sum)
+
+**Exactly one test failed.** The other 196, the +10/-10 fixture among
+them, passed against code reading the wrong column. That is the
+measurement this entry is for: not that the new test works, but that
+the suite was green while the statistic was wrong.
+
+**A first sabotage attempt did not compile**, which is the same as no
+sabotage at all -- a broken build and a check that cannot fail are
+indistinguishable from the output. The second was written to compile
+and be wrong, which is the only kind that proves anything.
