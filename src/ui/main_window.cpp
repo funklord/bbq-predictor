@@ -192,7 +192,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * A floor low enough for a phone. The old minimum was set for a
 	 * desktop row and became a lower bound on the whole window: on a
 	 * narrow screen it pushed the controls wider than the display, and
-	 * everything to its right was clipped (sec 10.5.1).
+	 * everything to its right was clipped (sec 10.6.1).
 	 */
 	m_station_box->setMinimumWidth(90);
 	m_station_box->setMaximumWidth(230);
@@ -207,7 +207,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * its floor showing ":K877  50 m": the station this program is
 	 * watching, with the part that names it cut off.
 	 *
-	 * The floor stays 90 for the phone (sec 10.5.1), and the ceiling
+	 * The floor stays 90 for the phone (sec 10.6.1), and the ceiling
 	 * stays 230 so one long name cannot push the row wider than the
 	 * window. What changes is only that the box asks for what it holds
 	 * rather than for what it held before it held anything.
@@ -386,7 +386,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	/*
 	 * The theme. Beside the layout box because they are the same kind of
 	 * choice: a compiled-in default, overridable, with "auto" meaning
-	 * the device's own answer (sec 10.3).
+	 * the device's own answer (sec 10.4).
 	 */
 	m_theme_box = new QComboBox(this);
 	m_theme_box->addItem(tr("Auto"), QStringLiteral("auto"));
@@ -429,7 +429,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	layout->addWidget(m_graph, 1);
 	/*
 	 * The controls go inside a scroll area, and that is what stops them
-	 * starving the plot (sec 10.6).
+	 * starving the plot (sec 10.8).
 	 *
 	 * A QScrollArea's minimum height is its own, not its child's, so
 	 * the layout is free to give the graph -- which has the stretch --
@@ -453,7 +453,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	                                QSizePolicy::Maximum);
 
 	/*
-	 * A FINGER has to be able to scroll it (sec 10.6).
+	 * A FINGER has to be able to scroll it (sec 10.8).
 	 *
 	 * A QScrollArea scrolls by its scrollbar and by the wheel, and by
 	 * nothing else -- dragging its contents does nothing. On a desktop
@@ -665,7 +665,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 }
 
 /*
- * WHICH SHAPE, asked of the WINDOW rather than of the device (sec 10.6).
+ * WHICH SHAPE, asked of the WINDOW rather than of the device (sec 10.8).
  *
  * `stack_controls` answers "is this a phone", and a phone does not stop
  * being one when it is turned sideways or unfolded. Asking it alone left
@@ -714,7 +714,7 @@ void bbq_main_window::cap_control_height() {
 	}
 
 	/*
-	 * A FRACTION of the window, not a fixed number of rows (sec 10.6).
+	 * A FRACTION of the window, not a fixed number of rows (sec 10.8).
 	 *
 	 * The plot is the program, so it keeps the majority of the height
 	 * on any screen; the controls get the rest and scroll for whatever
@@ -780,7 +780,7 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 	/*
 	 * Kept, because the safe-area code needs to know which shape it is
 	 * padding: the mobile one gives its horizontal margins to the plot
-	 * (sec 10.4), and that decision is made where the margins are set
+	 * (sec 10.5), and that decision is made where the margins are set
 	 * rather than duplicated here.
 	 */
 	m_metrics = metrics;
@@ -896,7 +896,7 @@ void bbq_main_window::set_layout(bbq_layout layout) {
 
 	/*
 	 * The controls assert their own height, so the scroll area SCROLLS
-	 * instead of squashing them (sec 10.6).
+	 * instead of squashing them (sec 10.8).
 	 *
 	 * `setWidgetResizable` sizes the child to the viewport, and a
 	 * viewport shorter than the child compressed the grid rows until
@@ -1144,7 +1144,7 @@ void bbq_main_window::apply_safe_area() {
 	}
 
 	/*
-	 * On mobile the graph runs to the screen edges (sec 10.4).
+	 * On mobile the graph runs to the screen edges (sec 10.5).
 	 *
 	 * A phone screen is narrow enough that a margin either side is not
 	 * breathing room, it is lost plot: those pixels are the difference

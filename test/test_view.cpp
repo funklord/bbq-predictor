@@ -689,7 +689,7 @@ int main(int argc, char *argv[]) {
  * A Trinity or KDE 3 session exposes no Qt 6 platform theme, so the
  * hint answers Unknown and `automatic` falls to light -- a white
  * rectangle at night on a desktop that has said, in the only place it
- * says it, that it is dark. That is precisely what sec 10.3 added a
+ * says it, that it is dark. That is precisely what sec 10.4 added a
  * dark mode to stop: not a style choice somebody made, a torch.
  *
  * The values are the real ones, measured on the desktop that prompted

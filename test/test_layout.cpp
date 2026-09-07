@@ -203,7 +203,7 @@ void test_layout::the_plot_runs_to_the_edge_and_the_controls_do_not() {
 	 *
 	 * On mobile the root layout runs edge to edge, and that is right for
 	 * the plot: a margin either side is lost plot rather than breathing
-	 * room, which sec 10.4 argued and this project has measured. The
+	 * room, which sec 10.5 argued and this project has measured. The
 	 * controls inherited it and they are not plot -- a label starting at
 	 * column zero has its first glyph shaved by the screen edge, which
 	 * is how "Station:" came to read as "tation:" on a device.

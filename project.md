@@ -1977,7 +1977,7 @@ changed here. It is bold, since it has to be findable at a glance among
 the hour labels along the bottom, which are quiet on purpose.
 
 The colour is per scheme rather than shared, for the reason the rest of
-the furniture is (sec 10.3): the measured data colours stay put across
+the furniture is (sec 10.4): the measured data colours stay put across
 light and dark, and only the ground and the furniture move.
 
 ### 3.16 The rain scale is fixed, so light rain looks light
@@ -3154,7 +3154,7 @@ window in the shot path rather than in the layout.
   second guess. It is measured from the widest string it has to hold
   now, the same way the tray icon's digits are (sec 4.2.1).
 
-### 10.3 Light, dark, or the device's answer
+### 10.4 Light, dark, or the device's answer
 
 **This reverses sec 3.8.3**, which fixed the graph's palette to Weather
 Underground's measured colours on a white plot and refused to follow the
@@ -3197,7 +3197,7 @@ Three things were decided while building it:
 - **The whole window follows, not only the graph.** The controls are
   what the eye lands on first on a phone.
 
-### 10.4 On mobile there is no frame at all, and the numbers sit on the plot
+### 10.5 On mobile there is no frame at all, and the numbers sit on the plot
 
 A gutter is a frame by another name. The left margin and the measured
 right one together take about a tenth of a phone screen to hold four
@@ -3224,7 +3224,7 @@ shape silently kept its margins on the one platform where they could be
 looked at. The shape must not depend on the Qt version; only the safe
 area does.
 
-### 10.5 Three defects a narrow screen found, and the flag that found them
+### 10.6 Three defects a narrow screen found, and the flag that found them
 
 The Fold's cover screen clipped the controls: the station field ran past
 the right edge and the gutter labels were cut mid-character, `rain %`
@@ -3254,7 +3254,7 @@ whole window, so a narrow screen pushed the controls wider than the
 display and clipped whatever was on the right. The value column takes
 the slack now and the floor is low enough for a phone.
 
-#### 10.5.1 The same fault again, in the widget nobody looked at
+#### 10.6.1 The same fault again, in the widget nobody looked at
 
 The cover screen clipped again, months later and in the same way: every
 control on the right lost its border and the rain label `10 mm/h` was
@@ -3283,7 +3283,7 @@ next widget with a minimum in it. When a fix is "this floor was too
 high", the question to ask before closing it is which other floors
 there are.
 
-### 10.6 A slider crashes the program on Android
+### 10.7 A slider crashes the program on Android
 
 Tapping anything in the window killed the process:
 
@@ -3350,7 +3350,7 @@ when Qt carries the version guard. It is written as a platform
 conditional rather than a layout one for that reason: the fault follows
 the operating system, not the shape of the window.
 
-### 10.6 The mobile layout gives the plot too little, and one attempt failed
+### 10.8 The mobile layout gives the plot too little, and one attempt failed
 
 **The complaint is real and measured.** On the Fold's cover screen the
 controls are nine label-and-control rows at finger height, and the plot
@@ -6151,7 +6151,7 @@ the holder's decision because it is theirs and nobody else's.
   one, or become readers. That decides whether sec 12's store stays the
   centre of the program or becomes a cache.
 
-## 16. Three gates that can report success having checked nothing
+## 18. Three gates that can report success having checked nothing
 
 Reported from claude-guidelines 2026-09-03, from a sweep of all seventeen
 trees for that one shape. Recorded rather than fixed; each is this
@@ -6203,7 +6203,7 @@ About 43 candidates were read here. The rest were sound, and the negative is
 worth as much as the hits: the Qt test targets, the Android build guards and
 the style gates all refuse rather than pass.
 
-## 17. Two messages that name a cause the code never tested
+## 19. Two messages that name a cause the code never tested
 
 Reported from claude-guidelines 2026-09-03, from a second sweep of all
 seventeen trees. Recorded, not fixed. Section 16 has this project's three
@@ -7129,7 +7129,7 @@ its first glyph was shaved by a pixel or so. **A downscaled screenshot
 read by eye had produced a fourteen-pixel shift that did not exist.**
 
 **The real fault is two questions that looked like one.**
-`apply_safe_area` zeroes the horizontal margins on mobile, and sec 10.4
+`apply_safe_area` zeroes the horizontal margins on mobile, and sec 10.5
 argues that correctly: a margin either side of the plot is lost plot
 rather than breathing room. The CONTROLS sit in the same root layout and
 inherited it, and a label is not plot -- there is nothing to gain by
@@ -7301,7 +7301,7 @@ better argument for stating the principle in the metric's own comment.
 
 At the default 820 pixels the desktop row overflowed and `Wind`,
 `Steady scale`, `Layout` and `Theme` were past the right edge. The
-pane's horizontal scrolling is off -- deliberately, sec 10.6 -- so there
+pane's horizontal scrolling is off -- deliberately, sec 10.8 -- so there
 was nothing to scroll to them with: four controls simply gone until
 somebody widened the window, with nothing saying so.
 
@@ -8394,7 +8394,7 @@ moved.
 ### 16.25.2 It is off in the window, and that is the whole doctrine
 
 Weather Underground's red is a measurement of their chart rather than a
-decoration (sec 3.8.2), and sec 10.3 kept the measured colours in both
+decoration (sec 3.8.2), and sec 10.4 kept the measured colours in both
 schemes on purpose. Clamping them would undo that.
 
 So `set_contrast_ground` takes an invalid colour as "off", which is the
@@ -9585,7 +9585,7 @@ checking.**
 
 ## 16.39 The daemon's exit code, and the band it never asked for
 
-sec 16's first item, reported in 2026-09-03 and recorded rather than
+sec 18's first item, reported in 2026-09-03 and recorded rather than
 fixed. It is the exit status the packaged systemd timer reads, so it
 was worth fixing rather than knowing about.
 
@@ -10078,7 +10078,7 @@ minutes after sec 16.47 said the tool finds layout defects, it found
 one.
 
 **The cause is not the width.** `setMinimumWidth(90)` is deliberate --
-sec 10.5.1 lowered it because a desktop-sized floor became a lower bound
+sec 10.6.1 lowered it because a desktop-sized floor became a lower bound
 on the whole window and clipped everything to its right on a phone.
 Raising it would break that again.
 
@@ -11473,7 +11473,7 @@ the call removed it says so and gives the reason:
     src/main.cpp: bbq_install_accessibility_workaround is called 0
     time(s), expected at least 1
     setup-calls:   Qt Widgets aborts on Android whenever a secondary
-    window opens while an accessibility service is running (sec 10.6)
+    window opens while an accessibility service is running (sec 10.7)
 
 ### 16.72.1 Two entries, and why not more
 
@@ -11720,3 +11720,69 @@ Measured on the live archive:
 rather than growing, and the mark is set by the observations -- which
 grow monotonically anyway and are the thing being kept. Nothing to fix,
 and worth knowing it was looked at.
+
+
+## 16.77 Four section numbers that resolved to two places each
+
+Reported from claude-guidelines, whose session found it after picking a
+section number three times in one afternoon and having it taken from
+under them between reading the file and writing it. That is a race whose
+losing side is silent, so they went looking for whether it had already
+happened unnoticed: six times across three trees, four of them here.
+
+    ### 10.3   3142 Three things a look found, that reading did not
+    ### 10.3   3157 Light, dark, or the device's answer
+    ### 10.6   3286 A slider crashes the program on Android
+    ### 10.6   3353 The mobile layout gives the plot too little
+    ## 16.     6154 Three gates that can report success having checked nothing
+    ## 16.     6996 The home-screen widget
+    ## 17.     6206 Two messages that name a cause the code never tested
+    ## 17.     7870 The Android background fetch
+
+**`sec 10.6` was the live one.** Twelve citations, split by meaning: four
+mean the accessibility crash and eight the layout. A reader following any
+of them landed on one of two sections, and which one decided what they
+thought it said.
+
+### 16.77.1 Which one moves is decided by what cites it
+
+The peer's warning, from fuzznet doing the same repair: pick by
+citation, not by position. Their uncited duplicate looked obviously
+misplaced and their cited one looked like it belonged, so a reader
+trusting appearance would have broken five citations to fix a look.
+
+Checked here rather than assumed, and position and citation happened to
+agree -- which is only knowable after asking:
+
+- **The later `## 16.` owns the series.** `16.1` to `16.13` are widget
+  topics -- "It draws a picture the application rendered", "A stale
+  picture must not look current" -- and `widget_picture.h` cites it.
+- **The early one is cited once**, by sec 16.39's prose: "sec 16's first
+  item, reported in 2026-09-03". Its first item is the `fetch_once`
+  finding that sec 16.39 goes on to fix. It moved to **18**, and that
+  citation with it.
+- **The early `## 17.` is cited by nothing**; `17.1` to `17.4` are the
+  Android fetch's, and `main.cpp`'s service entry cites the later one.
+  It moved to **19**.
+- **Section 10 cascades**, because both duplicates are ADJACENT pairs
+  where the second should simply have been the next number. Trailing
+  numbers would have left a section numbered after its neighbours.
+
+### 16.77.2 The proof, which is not that the diff looked right
+
+Thirty-three citations moved across eleven files. The invariant is not
+"the numbers changed" but **every citation resolves to the same TEXT it
+did before**, so the check resolves each one against the headings
+afterwards and prints what it lands on:
+
+    sec 10.4  -> Light, dark, or the device's answer          8 cites
+    sec 10.7  -> A slider crashes the program on Android      4 cites
+    sec 10.8  -> The mobile layout gives the plot too little  8 cites
+    sec 18    -> Three gates that can report success ...       1 cite
+
+The diff is **38 insertions against 38 deletions**: a substitution with
+no line added or removed, which is the shape a renumber should have and
+would not have if a heading had been dropped.
+
+Placeholders in between, because renaming 10.5 to 10.6 while a 10.6
+still exists is how a mechanical edit eats its own output.

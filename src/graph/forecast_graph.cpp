@@ -635,7 +635,7 @@ QDateTime local_time(qint64 when_utc, const QTimeZone &zone) {
 
 
 /*
- * The palette, per colour scheme (project.md sec 10.3).
+ * The palette, per colour scheme (project.md sec 10.4).
  *
  * The DATA colours are identical in both. They are measurements of
  * Weather Underground's own chart (sec 3.8.2), and a measurement does
@@ -838,7 +838,7 @@ std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
 
 bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	/*
-	 * 240, and the width is the part that matters (sec 10.5).
+	 * 240, and the width is the part that matters (sec 10.6).
 	 *
 	 * It was 360, which is wider than some screens this runs on. A
 	 * widget minimum is a floor under the WINDOW, so on a display
@@ -1327,7 +1327,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	                        gutter.horizontalAdvance(tr("rain %")));
 	/*
 	 * On mobile the plot takes the whole width and the axis numbers are
-	 * drawn ON TOP of it (project.md sec 10.4).
+	 * drawn ON TOP of it (project.md sec 10.5).
 	 *
 	 * A gutter is a frame by another name. On a phone the left margin
 	 * and the measured right one together take a tenth of the screen to

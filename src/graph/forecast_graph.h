@@ -229,7 +229,7 @@ public:
 	 * imposed on a plot that already carries three quantities.
 	 */
 	/*
-	 * Light, dark, or the device's answer (sec 10.3). Repaints, so the
+	 * Light, dark, or the device's answer (sec 10.4). Repaints, so the
 	 * choice is answerable by looking.
 	 */
 	/*

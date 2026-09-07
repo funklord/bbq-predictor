@@ -33,7 +33,7 @@ REQUIRED = (
 		"bbq_install_accessibility_workaround",
 		1,
 		"Qt Widgets aborts on Android whenever a secondary window opens "
-		"while an accessibility service is running (sec 10.6) -- which is "
+		"while an accessibility service is running (sec 10.7) -- which is "
 		"to say, for the people who most need the screen described.",
 	),
 	(

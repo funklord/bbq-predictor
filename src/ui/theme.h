@@ -7,7 +7,7 @@
 #include <Qt>
 
 /*
- * Light, dark, or whatever the device says (project.md sec 10.3).
+ * Light, dark, or whatever the device says (project.md sec 10.4).
  *
  * This reverses sec 3.8.3, which fixed the graph's palette to Weather
  * Underground's measured colours on a white plot and deliberately
@@ -63,7 +63,7 @@ QStringList bbq_scheme_sources();
  * desktop exposes no Qt 6 platform theme and runs no XDG portal, so the
  * hint answers Unknown -- and the applet then defaults to light and
  * shows a white rectangle on a dark desktop at night, which is the exact
- * thing sec 10.3 added a dark mode to stop.
+ * thing sec 10.4 added a dark mode to stop.
  *
  * THE COLOURS DECIDE, NEVER THE SCHEME NAME. `colorScheme=DarkBlue.kcsrc`
  * contains "Dark" by luck; plenty of dark schemes do not, and a name is

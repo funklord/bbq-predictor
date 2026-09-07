@@ -738,7 +738,7 @@ int main(int argc, char *argv[]) {
 
 	/*
 	 * Before any widget exists, so no accessible interface is cached
-	 * from Qt's own factory first (sec 10.6) -- and only where widgets
+	 * from Qt's own factory first (sec 10.7) -- and only where widgets
 	 * will exist at all, since a headless run installs a factory for
 	 * nothing.
 	 */

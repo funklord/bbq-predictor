@@ -2,7 +2,7 @@
 #define BBQ_UI_ACCESSIBILITY_H
 
 /*
- * Keep Qt from describing a widget's VALUE to Android (sec 10.6).
+ * Keep Qt from describing a widget's VALUE to Android (sec 10.7).
  *
  * Qt's Android accessibility bridge builds an AccessibilityNodeInfo
  * RangeInfo for any widget exposing a value interface, using a

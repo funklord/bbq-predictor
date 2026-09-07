@@ -79,7 +79,7 @@ protected:
 	 */
 	void resizeEvent(class QResizeEvent *event) override;
 
-	/* Keep the controls to a fraction of the window (sec 10.6). */
+	/* Keep the controls to a fraction of the window (sec 10.8). */
 	void cap_control_height();
 
 public:
@@ -137,7 +137,7 @@ private:
 
 	/*
 	 * The controls SCROLL rather than push the plot off the screen
-	 * (sec 10.6). Their minimum height is nine finger-height rows,
+	 * (sec 10.8). Their minimum height is nine finger-height rows,
 	 * which on a tall narrow phone left the graph a fifth of the
 	 * display -- the program's whole point, smallest thing on screen.
 	 */
