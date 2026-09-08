@@ -180,6 +180,24 @@ QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
                                int knot_count, bool wide,
                                const QTimeZone &zone);
 
+/*
+ * The sample dot, rendered once per vertical subpixel offset
+ * (project.md sec 16.92, sec 16.99).
+ *
+ * A free function because the property that matters is not observable
+ * through the widget: every stamp must carry the RATIO it was rendered
+ * at, and a test can only see that by holding one. Inferring it from a
+ * render was tried and each attempt measured something else -- the
+ * difference image contains the curve as well, and the dot's fill is
+ * the curve's own colour.
+ *
+ * `ratio` is device pixels per logical pixel. The stamps are sized in
+ * device pixels and told the ratio, so the caller draws them in logical
+ * coordinates and gets the same dot at any resolution.
+ */
+std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
+                                    double radius, double ratio);
+
 class bbq_forecast_graph : public QWidget {
 	Q_OBJECT
 
@@ -295,7 +313,7 @@ public:
 	 * old one when the composite is replaced. A cache that never
 	 * invalidates passes the first half.
 	 */
-	void build_dot_stamps() const;
+	void build_dot_stamps(double ratio) const;
 	const std::vector<bbq_window> &grill_windows() const;
 
 	void set_show_wind(bool show);
@@ -384,6 +402,13 @@ private:
 	 * at integer columns, so x never needs one.
 	 */
 	mutable std::vector<QPixmap> m_dot_stamps;
+
+	/*
+	 * The device pixel ratio the stamps were rendered at, so a move to a
+	 * screen with a different one rebuilds them rather than scaling
+	 * them (sec 16.99). Zero means "none built".
+	 */
+	mutable double m_dot_stamp_ratio = 0.0;
 	bbq_series m_corrected;
 	/*
 	 * The DEFAULT visible window, as offsets from now in seconds --

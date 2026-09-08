@@ -58,6 +58,7 @@ class test_view : public QObject {
 private slots:
 	void bbq_flatten_matches_qt();
 	void the_sample_dots_follow_a_theme_change();
+	void a_dot_stamp_carries_the_ratio_it_was_rendered_at();
 	void bbq_simplify_keeps_every_point_within_tolerance();
 	void bbq_simplify_keeps_what_a_curve_needs();
 	void a_fresh_graph_follows_the_clock();
@@ -2051,4 +2052,74 @@ void test_view::the_sample_dots_follow_a_theme_change() {
 		                       "rebuilt")
 		                .arg(stale)));
 	}
+}
+
+/*
+ * Every stamp must carry the device pixel ratio it was rendered at, and
+ * be sized in device pixels to match (project.md sec 16.99).
+ *
+ * A QPixmap defaults to a ratio of 1 and is then drawn at its PIXEL size
+ * whatever surface it lands on -- so on a HiDPI screen the sample dots
+ * came out about half the size they should be. That shipped in sec
+ * 16.92 and no test could see it, because every offscreen render this
+ * project makes runs at a ratio of 1.
+ *
+ * Asserted on the stamps rather than on a render, after three attempts
+ * to infer it from one measured something else each time: the difference
+ * between a marked and unmarked render contains the curve as well, and
+ * the dot's fill is drawn in the curve's own colour, so pixels where
+ * they coincide are invisible to it. The property is a property of the
+ * pixmap, so the test holds the pixmap.
+ */
+void test_view::a_dot_stamp_carries_the_ratio_it_was_rendered_at() {
+	const QColor ring(20, 22, 26);
+	const QColor fill(213, 32, 42);
+	const double radius = 3.0;
+
+	int checked = 0;
+
+	for (double ratio : {1.0, 1.5, 2.0, 3.0}) {
+		const std::vector<QPixmap> stamps =
+		        bbq_dot_stamps(ring, fill, radius, ratio);
+
+		QVERIFY2(!stamps.empty(), "no stamps were rendered");
+
+		const QSize logical = stamps.front().deviceIndependentSize().toSize();
+
+		for (const QPixmap &stamp : stamps) {
+			QCOMPARE(stamp.devicePixelRatio(), ratio);
+
+			/*
+			 * The claim that matters: the same LOGICAL size at every
+			 * ratio, with the pixels to back it. A stamp left at ratio
+			 * 1 has the right pixel count and the wrong logical size,
+			 * which is exactly the defect.
+			 */
+			QCOMPARE(stamp.deviceIndependentSize().toSize(), logical);
+			QCOMPARE(stamp.width(), int(std::lround(logical.width() * ratio)));
+
+			QVERIFY2(!stamp.isNull(), "a stamp came back null");
+			++checked;
+		}
+	}
+
+	QCOMPARE(checked, 4 * 8);
+
+	/*
+	 * The control: the logical size must be the same across ratios, so
+	 * compare one against another rather than each against itself. Two
+	 * runs agreeing that a stamp equals its own size would pass however
+	 * wrong both were.
+	 */
+	const QSize at_one =
+	        bbq_dot_stamps(ring, fill, radius, 1.0).front()
+	                .deviceIndependentSize().toSize();
+	const QSize at_three =
+	        bbq_dot_stamps(ring, fill, radius, 3.0).front()
+	                .deviceIndependentSize().toSize();
+	QCOMPARE(at_three, at_one);
+
+	/* And the pixels really are there, rather than the ratio alone. */
+	QCOMPARE(bbq_dot_stamps(ring, fill, radius, 3.0).front().width(),
+	         at_one.width() * 3);
 }

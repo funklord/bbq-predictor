@@ -928,8 +928,9 @@ void bbq_forecast_graph::set_composite(bbq_composite composite) {
  * an opaque interior and an antialiased edge that blends with whatever
  * the dot lands on.
  */
-void bbq_forecast_graph::build_dot_stamps() const {
-	const double outer = m_metrics.sample_radius + dot_ring_grow;
+std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
+                                    double radius, double ratio) {
+	const double outer = radius + dot_ring_grow;
 
 	/*
 	 * Even, so that half of it is a whole pixel and the blit lands on an
@@ -941,11 +942,21 @@ void bbq_forecast_graph::build_dot_stamps() const {
 		++side;
 	}
 
-	m_dot_stamps.clear();
-	m_dot_stamps.reserve(size_t(dot_stamp_offsets));
+	std::vector<QPixmap> stamps;
+	stamps.reserve(size_t(dot_stamp_offsets));
 
 	for (int at = 0; at < dot_stamp_offsets; ++at) {
-		QPixmap stamp(side, side);
+		/*
+		 * Sized in DEVICE pixels and told the ratio, so the painter
+		 * below works in logical coordinates and rasterises against the
+		 * finer grid (sec 16.99). A pixmap left at the default ratio of
+		 * 1 is drawn at its pixel size whatever surface it lands on,
+		 * which on a HiDPI screen makes the dots about half the size
+		 * they should be.
+		 */
+		QPixmap stamp(int(std::lround(side * ratio)),
+		              int(std::lround(side * ratio)));
+		stamp.setDevicePixelRatio(ratio);
 		stamp.fill(Qt::transparent);
 
 		QPainter into(&stamp);
@@ -956,14 +967,21 @@ void bbq_forecast_graph::build_dot_stamps() const {
 		                     side / 2.0 +
 		                             double(at) / double(dot_stamp_offsets));
 
-		into.setBrush(m_palette.background);
+		into.setBrush(ring);
 		into.drawEllipse(middle, outer, outer);
-		into.setBrush(m_palette.temperature);
-		into.drawEllipse(middle, m_metrics.sample_radius,
-		                 m_metrics.sample_radius);
+		into.setBrush(fill);
+		into.drawEllipse(middle, radius, radius);
 
-		m_dot_stamps.push_back(stamp);
+		stamps.push_back(stamp);
 	}
+
+	return stamps;
+}
+
+void bbq_forecast_graph::build_dot_stamps(double ratio) const {
+	m_dot_stamps = bbq_dot_stamps(m_palette.background, m_palette.temperature,
+	                              m_metrics.sample_radius, ratio);
+	m_dot_stamp_ratio = ratio;
 }
 
 const std::vector<bbq_window> &bbq_forecast_graph::grill_windows() const {
@@ -2358,8 +2376,41 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		 */
 		painter.setPen(Qt::NoPen);
 
-		if (m_dot_stamps.empty()) {
-			build_dot_stamps();
+		/*
+		 * Rebuilt when the screen changes under the window as well as
+		 * when the palette does: a stamp carries the ratio it was drawn
+		 * at, and dragging a window between a HiDPI screen and an
+		 * ordinary one changes that without touching either setter.
+		 */
+		/*
+		 * THE RATIO COMES FROM THE DEVICE TRANSFORM (sec 16.99).
+		 *
+		 * Measured, after two wrong guesses. Painting this widget into
+		 * an image with a device pixel ratio of 2:
+		 *
+		 *     painter.deviceTransform().m11()   2.00
+		 *     painter.device()->devicePixelRatioF()   1.00
+		 *     painter.transform().m11()         1.00
+		 *     this->devicePixelRatioF()         1.00
+		 *
+		 * During QWidget::render the painter's DEVICE is the widget
+		 * rather than the target, so it reports the screen's ratio and
+		 * not the surface's, and the user transform is identity because
+		 * nobody set one. The scaling is applied in the device
+		 * transform, which is the only one of the four that knows how
+		 * many real pixels a logical one covers -- which is exactly the
+		 * question a stamp has to answer.
+		 *
+		 * It follows a user transform too, if a caller ever sets one.
+		 * That is right rather than incidental: a stamp should be
+		 * rendered for the resolution it will be drawn at.
+		 */
+		const double ratio =
+		        std::max(0.25, painter.deviceTransform().m11());
+
+		if (m_dot_stamps.empty() ||
+		    !qFuzzyCompare(m_dot_stamp_ratio, ratio)) {
+			build_dot_stamps(ratio);
 		}
 
 		/*

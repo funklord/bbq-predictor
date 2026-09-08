@@ -13343,3 +13343,78 @@ Extending the seed to write a dry bucket would close that, and it would
 also change what every existing use of the diagnostic produces. Left
 alone deliberately, and written down so the gap is visible rather than
 assumed covered.
+
+## 16.99 The stamped dots were half size on the phone
+
+Sec 16.92 replaced `drawEllipse` with a cached pixmap and made the paint
+a quarter faster. The pixmap was built with `QPixmap(side, side)`, which
+carries a device pixel ratio of **1**.
+
+A pixmap is drawn at its logical size, and for a ratio-1 pixmap that is
+its pixel count. On a HiDPI surface it therefore covers half as many
+logical pixels as it should. Measured at a ratio of 2, the dots covered
+**1537 device pixels against 5432** once fixed -- so the marks were
+about half the diameter they were drawn at before the optimisation.
+
+**On the phone, and nowhere else.** Every offscreen render this project
+makes runs at a ratio of 1, so the six-image before-and-after comparison
+in sec 16.92 was structurally incapable of seeing it, and said the
+picture was unchanged. It was, on the machine doing the comparing.
+
+### 16.99.1 The ratio is in the device transform, and only there
+
+Three sources were tried and measured before one was right. Painting the
+widget into an image with a ratio of 2:
+
+    painter.deviceTransform().m11()          2.00
+    painter.device()->devicePixelRatioF()    1.00
+    painter.transform().m11()                1.00
+    widget->devicePixelRatioF()              1.00
+
+During `QWidget::render` the painter's DEVICE is the widget rather than
+the target, so it reports the screen's ratio and not the surface's, and
+the user transform is identity because nobody set one. Only the device
+transform knows how many real pixels a logical one covers, which is the
+question a stamp has to answer.
+
+Following the user transform as well is right rather than incidental: a
+stamp should be rendered for the resolution it will be drawn at,
+whatever put that resolution there.
+
+### 16.99.2 Three tests that measured something else
+
+The first test rendered the view with the marks on and off, took the
+difference as "the dots", and checked whether aligned 2x2 blocks varied.
+It passed against the bug. So did the second, which tightened the block
+to require all four pixels to be dot pixels. The third counted dot
+coverage against ratio, expecting it to grow as the square, and got
+12.4x and 30.6x instead of 4x and 9x.
+
+Every one of them was measuring the difference image, and **the
+difference image is not the dots**: the curve runs under them and the
+dot's fill is the curve's own colour, so wherever they coincide the
+difference is empty. The widest-run metric then picked up whole rows
+rather than a single mark.
+
+What worked was to stop inferring. `bbq_dot_stamps` is a free function
+now -- palette colours, radius, ratio in, a vector of pixmaps out -- and
+the test holds a stamp and asks it. **A property of a pixmap is tested by
+holding the pixmap.** Sabotaged back to `QPixmap(side, side)`, it fails
+on the first ratio that is not 1.
+
+The refactor is worth having on its own: the widget caches what the
+function returns, and the thing that has to be right is now a value
+somebody can hold rather than a private member.
+
+### 16.99.3 What this says about the sec 16.92 evidence
+
+That section's proof was six rendered images compared pixel by pixel,
+and it was honest about what it showed. It could not show this, and
+nothing in it said so.
+
+**A render comparison is evidence about the configuration it renders
+in.** Every one here runs offscreen at a ratio of 1 because that is what
+an offscreen QPA platform gives, so a whole class of defect -- anything
+that depends on the resolution of the surface -- is invisible to the
+entire method. That is worth knowing before the next change is proved
+the same way.
