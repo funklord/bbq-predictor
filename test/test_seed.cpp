@@ -28,6 +28,7 @@ private slots:
 	void initTestCase();
 	void seeding_the_real_archive_is_refused();
 	void seeding_a_scratch_file_works();
+	void every_scored_band_reaches_the_report();
 	void the_version_names_the_copyright_holder();
 	void the_usage_points_at_the_manual_page();
 
@@ -217,6 +218,78 @@ void test_seed::the_usage_points_at_the_manual_page() {
 	         qPrintable(QStringLiteral("--help does not point at the manual "
 	                                   "page it is a summary of: %1")
 	                            .arg(said)));
+}
+
+
+/*
+ * Whatever the seeding diagnostic writes, the report reads back
+ * (project.md sec 16.96).
+ *
+ * There were two lists of "the bands that carry a score" -- one the
+ * report walked and one seeding wrote -- in separate arrays kept in step
+ * by somebody noticing. A band in one and not the other is invisible:
+ * seeding writes a score the report never prints, or the report looks
+ * for one seeding never wrote, and both read as "nothing has been
+ * checked yet".
+ *
+ * They are one array now, so this cannot drift by construction. The test
+ * is here anyway because the array is not the claim -- the claim is that
+ * a score written for a band comes back out of the diagnostic, which
+ * also covers bbq_band_name losing a case and the report filtering rows
+ * it should print.
+ *
+ * corrected is the one that was missing from both, and it is the band
+ * whose whole purpose is to be compared against what it corrects.
+ */
+void test_seed::every_scored_band_reaches_the_report() {
+	QTemporaryDir home;
+	QVERIFY(home.isValid());
+
+	const QString scratch = home.filePath(QStringLiteral("report.sqlite"));
+
+	QProcess seeding;
+	QStringList seed;
+	seed << QStringLiteral("--seed-verification") << QStringLiteral("0.5")
+	     << QStringLiteral("--history-path") << scratch
+	     << QStringLiteral("--station") << QStringLiteral("ITEST1");
+	run(seeding, home, seed);
+	QVERIFY2(seeding.exitCode() == 0,
+	         qPrintable(QString::fromLocal8Bit(seeding.readAll())));
+
+	QProcess reading;
+	QStringList history;
+	history << QStringLiteral("--history") << QStringLiteral("--history-path")
+	        << scratch << QStringLiteral("--station")
+	        << QStringLiteral("ITEST1");
+	run(reading, home, history);
+
+	const QString told = QString::fromLocal8Bit(reading.readAll());
+	QVERIFY2(reading.exitCode() == 0, qPrintable(told));
+
+	const QStringList expected = {
+		QStringLiteral("radar"),
+		QStringLiteral("nowcast"),
+		QStringLiteral("hourly"),
+		QStringLiteral("extended"),
+		QStringLiteral("corrected"),
+	};
+
+	for (const QString &band : expected) {
+		if (!told.contains(band + QStringLiteral(" at "))) {
+			QFAIL(qPrintable(QStringLiteral(
+			        "the report never named the %1 band, though seeding "
+			        "wrote scores for it:\n%2").arg(band, told)));
+		}
+	}
+
+	/*
+	 * The control. Every name above is a word that could appear in the
+	 * report's prose, so a test that only looked for them would pass
+	 * against a report that printed no rows at all. A band NOT scored
+	 * must be absent, which no amount of surrounding text supplies.
+	 */
+	QVERIFY2(!told.contains(QStringLiteral("observed at ")),
+	         "a measurement was reported as though it were a forecast");
 }
 
 QTEST_GUILESS_MAIN(test_seed)

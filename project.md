@@ -13104,3 +13104,99 @@ either is classified wrongly, so its silence cannot come from a checker
 that has stopped working. Sabotaged: an offender gives exit 1 and names
 it, a broken checker gives exit 2 and says no result means anything, and
 a clean tree gives 0.
+
+## 16.96 The band that exists to be compared was not in the comparison
+
+`--history` walked four bands. The archive scores five: `corrected` has
+been accumulating alongside the others and the diagnostic never printed
+it.
+
+That is the one band whose whole purpose is the comparison. Sec 12.5
+makes it this program's stated opinion about somebody else's forecast --
+drawn in its own colour, never allowed to stand in for a number anybody
+reported -- so whether it beats what it corrects is the only question it
+raises, and the archive could answer it while the program could not.
+Every reading of it so far has been a hand-written SQL query.
+
+### 16.96.1 What it says, now that it can be read
+
+On the live archive, wind, against the band it corrects:
+
+    lead    hourly bias / MAE     corrected bias / MAE
+    3h        3.33 / 3.33            0.08 / 1.46
+    6h        3.15 / 3.46            0.38 / 2.12
+    12h       4.62 / 4.71           -1.32 / 2.57
+    1d        5.24 / 5.24           -1.51 / 1.81
+    7d+       8.63 / 8.72
+
+Temperature, the same comparison:
+
+    lead    hourly MAE    corrected MAE
+    3h        0.83           1.20
+    12h       0.71           1.08
+    1d        0.55           0.77
+    2d        0.68           0.77
+    4d        1.30           1.42
+
+**The correction is a large win on wind and a small loss on
+temperature**, which matches what sec 16.86 found by hand in a second
+archive and now falls out of the program's own output.
+
+### 16.96.2 Why, and it follows from sec 16.94
+
+The wind forecast carries a bias of three to nine kph. The observations
+are quantised to whole kph, so that bias is several grid steps wide:
+removing it is worth far more than the quantisation costs, and the
+corrected band halves or better the error at every lead.
+
+The temperature forecast does not. Its measured bias runs 0.0 to 0.9 --
+**smaller than one grid step**, and at several leads it is exactly 0.00
+because the errors are integers that cancel. Correcting by a fraction of
+a degree then makes things worse in a specific and mechanical way: the
+raw forecast and the observation sit on the same integer grid, so a
+large share of raw errors are EXACTLY zero, and adding a fractional
+offset to an exactly-right forecast moves it off the answer.
+
+Take `hourly at 1d`: n=29, MAE 0.55, sum of absolute errors 16.0. With
+integer errors that is about 13 samples at zero and 16 at one. A
+correction of 0.2 costs 0.2 on each of the 13 that were already right
+and saves nothing systematic on the rest, because the bias it is
+removing is 0.00.
+
+**So a correction pays when the bias it removes is wide compared with
+the observation's grid, and costs when it is narrow.** That is a
+statement about the instrument rather than about either provider, and it
+is the same quantisation that sec 16.94 found putting a floor under
+every figure in the report.
+
+### 16.96.3 What is NOT claimed
+
+The corrected band and the band it corrects have **different sample
+counts at the same lead** -- 18 against 12, 34 against 13, 5 against 33
+-- because sec 12.5 gates the correction behind a minimum number of
+comparisons. So these are not paired measurements and the temperature
+differences, 0.05 to 0.37, are not large against that mismatch.
+
+The wind result is big enough to survive it. The temperature result is
+a direction, not a quantity.
+
+### 16.96.4 One list, because there were two
+
+The bands were listed twice in `main.cpp`: once for the report and once
+for what `--seed-verification` writes. A band added to one and not the
+other is invisible -- seeding writes a score nothing prints, or the
+report looks for one nothing wrote, and both read as "nothing has been
+checked yet".
+
+They are one array now, so they cannot drift. `every_scored_band_reaches
+_the_report` in test_seed seeds a scratch archive and reads it back
+through the real binary, which is a claim about the OUTPUT rather than
+about the array: it also covers `bbq_band_name` losing a case and the
+report filtering a row it should print. Sabotaged by dropping
+`corrected` from the list, it names that band exactly.
+
+It carries a control, because every band name is a word that could
+appear in the report's prose and a test that only searched for them
+would pass against a report printing no rows at all: `observed` must be
+ABSENT, which no amount of surrounding text supplies. Pointing the list
+at `observed` makes the report print it and the test says so.

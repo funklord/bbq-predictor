@@ -135,6 +135,36 @@ bool wants_headless(int argc, char *argv[]) {
 	return false;
 }
 
+/*
+ * THE BANDS THAT CARRY A SCORE (project.md sec 16.96).
+ *
+ * One list, because there were two: the report read four bands and the
+ * seeding diagnostic wrote the same four, in separate arrays that had to
+ * be kept in step by somebody noticing. A band added to one and not the
+ * other is invisible -- seeding would write a score the report never
+ * shows, or the report would look for one seeding never wrote, and
+ * either reads as "no data yet".
+ *
+ * `corrected` is in it now and was in neither. The archive has been
+ * scoring that band all along -- it is this program's own opinion about
+ * somebody else's forecast (sec 12.5), so whether it beats what it
+ * corrects is the one question it exists to answer -- and the diagnostic
+ * could not show it. On the live archive it is dramatically better on
+ * wind and slightly worse on temperature, which is sec 16.96's finding
+ * and was reachable only by querying the database by hand.
+ *
+ * Not `observed` or `current`: those are measurements rather than
+ * predictions, and scoring a measurement against itself is not a
+ * question.
+ */
+static const bbq_band bbq_scored_bands[] = {
+	bbq_band::nowcast_fine,
+	bbq_band::nowcast,
+	bbq_band::hourly,
+	bbq_band::extended,
+	bbq_band::corrected,
+};
+
 int main(int argc, char *argv[]) {
 	if (wants_service(argc, argv)) {
 		/*
@@ -399,9 +429,6 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 
-		const bbq_band bands[] = {
-			bbq_band::nowcast_fine, bbq_band::nowcast,
-			bbq_band::hourly, bbq_band::extended};
 		const bbq_lead_bucket buckets[] = {
 			bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
 			bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
@@ -415,7 +442,7 @@ int main(int argc, char *argv[]) {
 		for (bbq_lead_bucket bucket : buckets) {
 			++bucket_index;
 
-			for (bbq_band band : bands) {
+			for (bbq_band band : bbq_scored_bands) {
 				/*
 				 * Growing with lead time, because that is the shape real
 				 * forecast error has: a one-hour prediction is nearly
@@ -665,9 +692,6 @@ int main(int argc, char *argv[]) {
 		report << "forecasts awaiting a check: " << store.pending_count(wanted)
 		       << "\n";
 
-		const bbq_band bands[] = {
-			bbq_band::nowcast_fine, bbq_band::nowcast,
-			bbq_band::hourly, bbq_band::extended};
 		const bbq_lead_bucket buckets[] = {
 			bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
 			bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
@@ -685,7 +709,7 @@ int main(int argc, char *argv[]) {
 		for (const QString &quantity : quantities) {
 			report << "\n" << quantity << " error, by band and lead time:\n";
 
-			for (bbq_band band : bands) {
+			for (bbq_band band : bbq_scored_bands) {
 				for (bbq_lead_bucket bucket : buckets) {
 					const bbq_verification score =
 					        store.verification(wanted, band, quantity, bucket);
@@ -717,7 +741,7 @@ int main(int argc, char *argv[]) {
 		 */
 		report << "\nrain chance (Brier, lower is better):\n";
 
-		for (bbq_band band : bands) {
+		for (bbq_band band : bbq_scored_bands) {
 			for (bbq_lead_bucket bucket : buckets) {
 				const bbq_brier score = store.brier(wanted, band, bucket);
 				if (score.count == 0) {
