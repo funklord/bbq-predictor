@@ -12109,3 +12109,57 @@ for as long as it took to notice. Recorded here rather than by
 rewriting it, because the history is pushed and another session is
 working in this tree -- amending under them is worse than a message
 that has to be read with its successor.
+
+
+## 16.82 The verdict is measurably pessimistic, and the archive says so
+
+The archive was built to score forecasts. It now has enough to score
+**this program's own answer**, which is stored as the `grill` quantity,
+and every bucket points the same way:
+
+    band4 bucket8  n=87  bias -0.107  MAE 0.173
+    band6 bucket8  n=87  bias -0.063  MAE 0.110
+    band3 bucket2  n=50  bias -0.088  MAE 0.126
+    band3 bucket1  n=46  bias -0.076  MAE 0.095
+    band6 bucket6  n=53  bias -0.057  MAE 0.063
+    band4 bucket6  n=53  bias -0.011  MAE 0.054
+
+**Six of six negative.** A negative bias means the verdict rates an
+afternoon WORSE than it turned out. The score runs 0 to 1 and
+`good_enough` is 0.5, so -0.107 is a fifth of the threshold the whole
+recommendation turns on: an afternoon that really scores 0.55 can be
+forecast at 0.44 and never offered at all.
+
+### 16.82.1 Where it comes from is measured too
+
+Wind, over-forecast at this station by every provider:
+
+    wind_kph band6 bucket8  n=87  bias +8.63  MAE 8.72
+    wind_kph band4 bucket5  n=41  bias +8.21  MAE 8.21
+    wind_kph band6 bucket5  n=41  bias +6.76  MAE 6.76
+
+**`bias` equals `MAE` in three of those**, which means every single
+error ran the same direction -- 41 and 87 samples without one exception.
+That is a systematic offset, not noise, and the shape expected of a
+sheltered garden station measured against a model for open terrain.
+
+`bbq_grill_weather_score` multiplies by `ramp_down(wind, ...)`, so wind
+forecast too high pushes the verdict down. The two measurements agree
+about direction and about which leads are worst.
+
+### 16.82.2 What is NOT decided here
+
+The correction exists and the verdict does not use it. That follows from
+sec 12.5, which settled that a correction is drawn as its own band
+rather than edited into the data, because "a number nobody reported does
+not get to look like one that was".
+
+**That reasoning may not reach the verdict, and this is the holder's to
+say.** The verdict is not a provider's number being dressed up -- it is
+this program's own opinion, already labelled as such. Feeding it the
+program's own best estimate of wind rather than a forecast known to run
+eight km/h high would not make anything pretend to be a measurement.
+
+Recorded with the numbers rather than acted on. The archive was built
+to answer questions like this one, and it has: the answer is that the
+recommendation is biased toward saying no.
