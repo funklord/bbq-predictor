@@ -12124,11 +12124,16 @@ and every bucket points the same way:
     band6 bucket6  n=53  bias -0.057  MAE 0.063
     band4 bucket6  n=53  bias -0.011  MAE 0.054
 
-**Six of six negative.** A negative bias means the verdict rates an
-afternoon WORSE than it turned out. The score runs 0 to 1 and
-`good_enough` is 0.5, so -0.107 is a fifth of the threshold the whole
-recommendation turns on: an afternoon that really scores 0.55 can be
-forecast at 0.44 and never offered at all.
+**Six of six negative** on this archive. A negative bias means the
+verdict rates an afternoon WORSE than it turned out, and the score runs
+0 to 1 with `good_enough` at 0.5, so -0.107 would be a fifth of the
+threshold the recommendation turns on.
+
+> **THIS DID NOT REPLICATE, and the claim above is withdrawn. See sec
+> 16.87.** A second archive, on the phone, for the same station and the
+> same band and bucket, reads near zero on four times the samples. What
+> is written here is what one archive said; what it is EVIDENCE of is
+> nothing yet.
 
 ### 16.82.1 Where it comes from is measured too
 
@@ -12418,3 +12423,59 @@ independent archives rather than reasoned from one.
 
 Still the holder's. But the evidence has stopped being an argument about
 what the correction ought to do.
+
+
+## 16.87 The verdict finding did not replicate, and it was mine
+
+Sec 16.82 said the verdict is measurably pessimistic. **One archive said
+that.** The phone keeps its own, fetched independently, and for the same
+station -- both verification tables hold ISTOCK877 and nothing else,
+checked rather than assumed -- it does not agree:
+
+    band 6 (hourly), verdict bias per lead bucket
+
+    bucket   desktop n / bias      phone n / bias
+    0          7  -0.056            30  -0.014
+    1         12  -0.063            41  +0.012
+    2         13  -0.109            50  -0.015
+    3         21  -0.031            68  -0.017
+    8         87  -0.063            84  +0.009
+
+Same station, same band, same quantity. The desktop is negative in every
+bucket; the phone sits at zero and crosses it twice, on a larger sample
+in all but the last row.
+
+**The phone's archive is older and four times the size.** 3769
+observations against 1864, and its verification has been accumulating
+since long before today. The desktop's was empty this morning -- sec
+16.65 records the first row landing -- so what sec 16.82 measured is one
+short period, in one place, and the second witness says that period was
+not typical.
+
+### 16.87.1 What survives and what does not
+
+**Replicated, strongly:** the wind bias itself. +6.63 desktop against
++7.69 phone on the extended band, +6.22 against +7.55 on hourly, and the
+corrected band flat on both (sec 16.86). Two archives, one answer.
+
+**Not established:** that it moves the verdict. The mechanism is real
+and the effect on the output is not shown, which are different claims
+and I ran them together.
+
+### 16.87.2 The error was structural, not arithmetic
+
+Every number in sec 16.82 is correct. The archive was queried properly,
+the invariants held, the thresholds were read out of the source. What
+was wrong is that **a single archive was treated as the world** --
+`evidence.md`'s first rule, met by the session that had spent the day
+citing it.
+
+The tell was available and I did not look for it: the desktop's
+verification was hours old and every bucket had n under 90. A
+measurement whose whole population arrived this morning is a measurement
+of this morning.
+
+**The second archive existed the entire time**, four feet away on a
+phone, and was pulled for an unrelated reason -- to see what the widget
+was drawing. Corroboration was cheap and I did not go and get it until
+something else took me there.
