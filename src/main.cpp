@@ -189,6 +189,31 @@ static const bbq_scored_quantity bbq_scored_quantities[] = {
 	{"wind_kph", 2.0, 1.0},
 };
 
+/*
+ * THE LEAD BUCKETS A SCORE IS STRATIFIED BY (project.md sec 16.104).
+ *
+ * The third dimension of the same loop, and the third list that was
+ * written out twice -- once for the report and once for the seeding
+ * diagnostic. Sec 16.96 unified the bands after one had gone missing
+ * from both and sec 16.103 the quantities after a fourth had; this one
+ * had not drifted yet, and is here so it cannot.
+ *
+ * Every value of the enum, in order, which
+ * a_bucket_added_to_the_enum_reaches_the_report holds it to: an eye
+ * over two lists is what let the other two dimensions go wrong.
+ */
+static const bbq_lead_bucket bbq_scored_buckets[] = {
+	bbq_lead_bucket::hour,
+	bbq_lead_bucket::three_hours,
+	bbq_lead_bucket::six_hours,
+	bbq_lead_bucket::twelve_hours,
+	bbq_lead_bucket::day,
+	bbq_lead_bucket::two_days,
+	bbq_lead_bucket::four_days,
+	bbq_lead_bucket::week,
+	bbq_lead_bucket::beyond,
+};
+
 static const bbq_band bbq_scored_bands[] = {
 	bbq_band::nowcast_fine,
 	bbq_band::nowcast,
@@ -461,17 +486,11 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 
-		const bbq_lead_bucket buckets[] = {
-			bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
-			bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
-			bbq_lead_bucket::day, bbq_lead_bucket::two_days,
-			bbq_lead_bucket::four_days, bbq_lead_bucket::week,
-			bbq_lead_bucket::beyond};
 
 		int written = 0;
 		int bucket_index = 0;
 
-		for (bbq_lead_bucket bucket : buckets) {
+		for (bbq_lead_bucket bucket : bbq_scored_buckets) {
 			++bucket_index;
 
 			for (bbq_band band : bbq_scored_bands) {
@@ -748,12 +767,6 @@ int main(int argc, char *argv[]) {
 		report << "forecasts awaiting a check: " << store.pending_count(wanted)
 		       << "\n";
 
-		const bbq_lead_bucket buckets[] = {
-			bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
-			bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours,
-			bbq_lead_bucket::day, bbq_lead_bucket::two_days,
-			bbq_lead_bucket::four_days, bbq_lead_bucket::week,
-			bbq_lead_bucket::beyond};
 
 		bool any = false;
 
@@ -762,7 +775,7 @@ int main(int argc, char *argv[]) {
 			report << "\n" << quantity << " error, by band and lead time:\n";
 
 			for (bbq_band band : bbq_scored_bands) {
-				for (bbq_lead_bucket bucket : buckets) {
+				for (bbq_lead_bucket bucket : bbq_scored_buckets) {
 					const bbq_verification score =
 					        store.verification(wanted, band, quantity, bucket);
 
@@ -794,7 +807,7 @@ int main(int argc, char *argv[]) {
 		report << "\nrain chance (Brier, lower is better):\n";
 
 		for (bbq_band band : bbq_scored_bands) {
-			for (bbq_lead_bucket bucket : buckets) {
+			for (bbq_lead_bucket bucket : bbq_scored_buckets) {
 				const bbq_brier score = store.brier(wanted, band, bucket);
 				if (score.count == 0) {
 					continue;

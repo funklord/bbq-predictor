@@ -13689,3 +13689,74 @@ all.
 
 Sabotaged by dropping `grill` from the shared list, it names that
 quantity exactly.
+
+## 16.104 The third list, unified before it drifted
+
+Sec 16.96 found a band the report did not walk and sec 16.103 a
+quantity, both because the same list was written out twice -- once for
+`--history` and once for `--seed-verification`. The loop has a third
+dimension, the lead buckets, and it was written out twice as well.
+
+It had not drifted yet. It is one list now so it cannot, which is the
+cheapest moment to do it: the other two cost a band and a quantity going
+unreported for days before anybody noticed.
+
+**What the guard covers, measured rather than claimed.** The test
+asserts the whole SET of buckets in the report, so it fails when one is
+dropped from the shared list -- "missing [4d]" -- and when one is added
+to the list but not to the test.
+
+**It does not catch a bucket added to the ENUM and not to the list.**
+Grown the enum by one, added its name, left the list alone: the report
+never prints it, the test never expects it, and the two agree about its
+absence. The test passed.
+
+That is the direction a new lead time would actually go wrong in, and
+the comment on the test said it was covered until the experiment said
+otherwise. What stands against it is the compiler --
+`bbq_lead_bucket_name` switches without a default, so a new value warns
+there, and whoever silences that warning is one grep from the list.
+
+## 16.105 A test that failed for seventy-eight minutes a day
+
+`a_station_that_stops_reporting_is_named` failed at 00:59, on nothing to
+do with the change being made at the time.
+
+A station is quiet when its newest sample is TODAY'S and more than
+forty-five minutes old. In the first forty-five minutes after midnight
+no sample can be both, and this test looks back seventy-eight -- so the
+scenario is unrepresentable before 01:18. **The suite was wrong for
+seventy-eight minutes of every day**, which is five percent of the time,
+and had been since it was written.
+
+Found because a session ran past midnight. Nothing else would have
+surfaced it: a run at any other hour is green, and a run in the window
+looks exactly like a real regression in whatever was being changed --
+which is how it presented, and cost the change under it a diversion.
+
+### 16.105.1 The fix is a moment, not an offset
+
+`check_day_is_whole` and `report_observed_staleness` take an optional
+`now_utc`, nought meaning "ask the clock", which is what the program
+always passes. The test names half past midday, so every offset it uses
+stays inside its own day whatever hour the suite runs at.
+
+**Injecting it into one half was not enough, and passing at midnight
+hid that.** The first version anchored the staleness measurement and let
+the reporting step read the clock -- so at 00:59 the fixture's current
+reading sat in the FUTURE, the freshness came out negative, and the
+comparison went the right way for the wrong reason. In the afternoon the
+same test would have failed. Both halves take the same moment now, and
+the reason is written where the parameter is.
+
+### 16.105.2 Checked against clocks rather than reasoned about
+
+Reading the code says the injected path takes no clock. That is what the
+previous version's comment said too. So the suite is run under six
+timezones spanning UTC+14 to UTC-11 -- Kiritimati, Niue, Kathmandu, Sao
+Paulo, Stockholm and UTC -- which moves local midnight and therefore
+which day every offset falls in, without touching the system clock.
+
+All 217 pass in each. That is a property of the whole suite worth having
+and not only of this test: a fixture that quietly depends on the hour is
+invisible until the hour comes round.

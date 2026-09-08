@@ -303,7 +303,19 @@ private:
 
 	void attempt_backfill(qint64 now_utc);
 
-	void check_day_is_whole(const bbq_series &measured);
+	/*
+	 * `now_utc` is nought for "ask the clock", which is what the
+	 * program always passes (project.md sec 16.105).
+	 *
+	 * It exists because the scenario this decides on is not
+	 * representable at every hour: a station is quiet when its newest
+	 * sample is TODAY'S and more than 45 minutes old, and in the first
+	 * 45 minutes after midnight no sample can be both. A test using the
+	 * real clock therefore fails in a window each night, which is what
+	 * it did at 00:59 -- for 78 minutes a day, on nothing to do with
+	 * the code.
+	 */
+	void check_day_is_whole(const bbq_series &measured, qint64 now_utc = 0);
 
 	/*
 	 * Say so when the store wrote fewer rows than it was handed
@@ -324,7 +336,7 @@ private:
 	void attempt_radar(qint64 now_utc);
 	void attempt_extended(qint64 now_utc);
 	void finish_one();
-	void report_observed_staleness();
+	void report_observed_staleness(qint64 now_utc = 0);
 	void tick();
 	bool due(bbq_wu_product product, qint64 now_utc) const;
 	void attempt(bbq_wu_product product, qint64 now_utc);

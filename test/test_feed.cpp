@@ -653,7 +653,20 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 
 	QSignalSpy complaints(&feed, &bbq_wu_feed::band_failed);
 
-	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	/*
+	 * A NAMED MOMENT, NOT THE CLOCK (sec 16.105).
+	 *
+	 * A station is quiet when its newest sample is TODAY'S and more
+	 * than 45 minutes old, and in the first 45 minutes after midnight
+	 * no sample can be both -- so this test, which looks back 78
+	 * minutes, cannot be satisfied before 01:18. It failed at 00:59 on
+	 * nothing to do with the code, which is 78 minutes of every day.
+	 *
+	 * Half past midday, so every offset below stays inside its own day
+	 * whatever hour the suite runs at.
+	 */
+	const qint64 now =
+	        QDateTime(QDate::currentDate(), QTime(12, 30)).toSecsSinceEpoch();
 
 	const auto reporting_until = [](qint64 last) {
 		std::vector<bbq_sample> rows;
@@ -679,13 +692,13 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 	 * present to name the cause. Driving only the first step here would
 	 * assert that nothing is said, which is true and is not the claim.
 	 */
-	feed.check_day_is_whole(reporting_until(now - 300));
-	feed.report_observed_staleness();
+	feed.check_day_is_whole(reporting_until(now - 300), now);
+	feed.report_observed_staleness(now);
 	QCOMPARE(complaints.count(), 0);
 
 	/* Quiet: the gap that went unremarked. */
-	feed.check_day_is_whole(reporting_until(now - 78 * 60));
-	feed.report_observed_staleness();
+	feed.check_day_is_whole(reporting_until(now - 78 * 60), now);
+	feed.report_observed_staleness(now);
 	QCOMPARE(complaints.count(), 1);
 
 	const QString said = complaints.at(0).at(1).toString();
@@ -709,8 +722,8 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 	 * by hand first, so it was asking whether the check works when its
 	 * caller gets the day right. The caller was what got it wrong.
 	 */
-	feed.check_day_is_whole(reporting_until(midday));
-	feed.report_observed_staleness();
+	feed.check_day_is_whole(reporting_until(midday), now);
+	feed.report_observed_staleness(now);
 	QCOMPARE(complaints.count(), 2);
 	QVERIFY2(complaints.at(1).at(1).toString().contains(QStringLiteral("hole")),
 	         "a backfill was judged as a quiet station rather than as a day");
@@ -733,8 +746,8 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 	live.set_samples({fresh});
 	feed.m_composite.set_series(std::move(live));
 
-	feed.check_day_is_whole(reporting_until(now - 78 * 60));
-	feed.report_observed_staleness();
+	feed.check_day_is_whole(reporting_until(now - 78 * 60), now);
+	feed.report_observed_staleness(now);
 	QCOMPARE(complaints.count(), 3);
 
 	const QString blamed = complaints.at(2).at(1).toString();

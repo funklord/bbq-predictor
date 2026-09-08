@@ -864,7 +864,7 @@ int bbq_wu_feed::verify_all() {
  * for "is the archive advancing" either way -- what differs is who it
  * accuses.
  */
-void bbq_wu_feed::report_observed_staleness() {
+void bbq_wu_feed::report_observed_staleness(qint64 now_utc) {
 	const qint64 behind = m_observed_behind_s;
 	m_observed_behind_s = 0;
 
@@ -873,7 +873,16 @@ void bbq_wu_feed::report_observed_staleness() {
 	}
 
 	const bbq_series *live = m_composite.band(bbq_band::current);
-	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	/*
+	 * The same moment the staleness was measured against, when a caller
+	 * names one (sec 16.105). Reading the clock again here would let a
+	 * test anchor one half of the comparison and not the other, which
+	 * is how the first version of this passed at midnight for a reason
+	 * that would have failed in the afternoon.
+	 */
+	const qint64 now =
+	        now_utc > 0 ? now_utc : QDateTime::currentSecsSinceEpoch();
 
 	if (live != nullptr && !live->is_empty()) {
 		const qint64 reported = live->samples().back().start_utc;
@@ -1134,7 +1143,8 @@ bool bbq_history_is_behind(qint64 behind_s, qint64 reported_utc,
 	return now_utc - reported_utc < behind_s;
 }
 
-void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
+void bbq_wu_feed::check_day_is_whole(const bbq_series &measured,
+                                     qint64 now_utc) {
 	/*
 	 * A SHORT ANSWER IS NOT AN ERROR, and that is the problem
 	 * (sec 12.13.1).
@@ -1182,8 +1192,18 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 	 * today began is a day that has ENDED. No member, so nothing to
 	 * share and no ordering to get right.
 	 */
+	const qint64 now =
+	        now_utc > 0 ? now_utc : QDateTime::currentSecsSinceEpoch();
+
+	/*
+	 * Midnight of the day `now` falls in, in local time, rather than of
+	 * the day the clock says. The two are the same whenever the caller
+	 * asked the clock, and only differ for a test that named its own
+	 * moment.
+	 */
 	const qint64 today_began =
-	        QDateTime(QDate::currentDate(), QTime(0, 0)).toSecsSinceEpoch();
+	        QDateTime(QDateTime::fromSecsSinceEpoch(now).date(), QTime(0, 0))
+	                .toSecsSinceEpoch();
 	const qint64 newest_seen = measured.samples().back().start_utc;
 
 	if (!bbq_observed_day_has_ended(newest_seen, today_began)) {
@@ -1199,8 +1219,7 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 		 * FETCH", which stays healthy while a quiet station is fetched
 		 * faithfully and returns the same rows every time.
 		 */
-		const qint64 behind =
-		        QDateTime::currentSecsSinceEpoch() - newest_seen;
+		const qint64 behind = now - newest_seen;
 
 		if (behind > station_quiet_s) {
 			/*

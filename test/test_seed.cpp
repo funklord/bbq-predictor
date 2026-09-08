@@ -1,6 +1,8 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QProcess>
+#include <QRegularExpression>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -317,6 +319,60 @@ void test_seed::every_scored_band_reaches_the_report() {
 	/* And the same for a quantity nothing scores. */
 	QVERIFY2(!told.contains(QStringLiteral("humidity error")),
 	         "a quantity this program does not score was reported");
+
+	/*
+	 * AND THE LEAD BUCKETS, WHICH ARE THE THIRD DIMENSION OF THE SAME
+	 * LOOP (sec 16.104).
+	 *
+	 * Asserted as the whole SET rather than as a presence check, so it
+	 * fails in both the directions it can see: a bucket dropped from
+	 * the shared list is reported missing, and one added to the list
+	 * without being added here is reported unexpected.
+	 *
+	 * WHAT IT DOES NOT CATCH, tested rather than assumed: a bucket
+	 * added to the enum and to bbq_lead_bucket_name but NOT to the
+	 * shared list. The report then never prints it, this set never
+	 * expects it, and the two agree about its absence. Grown the enum by
+	 * one and left the list alone, and this test passed.
+	 *
+	 * That gap is the one worth knowing, because it is the direction a
+	 * new lead time would actually go wrong in. What stands against it
+	 * is the compiler: bbq_lead_bucket_name switches without a default,
+	 * so a new value warns there and whoever silences the warning is
+	 * one grep from this list.
+	 *
+	 * The names are bbq_lead_bucket_name's, which this binary cannot
+	 * call -- it links no part of the program, only runs it -- so they
+	 * are written out, and this comment is the reason a new one has to
+	 * be added here too.
+	 */
+	QSet<QString> seen;
+	static const QRegularExpression at(QStringLiteral(" at ([0-9a-z+]+):"));
+	QRegularExpressionMatchIterator found = at.globalMatch(told);
+	while (found.hasNext()) {
+		seen.insert(found.next().captured(1));
+	}
+
+	const QSet<QString> want = {
+		QStringLiteral("1h"),  QStringLiteral("3h"),
+		QStringLiteral("6h"),  QStringLiteral("12h"),
+		QStringLiteral("1d"),  QStringLiteral("2d"),
+		QStringLiteral("4d"),  QStringLiteral("7d"),
+		QStringLiteral("7d+"),
+	};
+
+	if (seen != want) {
+		const QStringList missing = QStringList(
+		        QList<QString>((want - seen).begin(), (want - seen).end()));
+		const QStringList extra = QStringList(
+		        QList<QString>((seen - want).begin(), (seen - want).end()));
+
+		QFAIL(qPrintable(
+		        QStringLiteral("the report's lead buckets do not match the "
+		                       "expected set -- missing [%1], unexpected [%2]")
+		                .arg(missing.join(QStringLiteral(", ")),
+		                     extra.join(QStringLiteral(", ")))));
+	}
 }
 
 QTEST_GUILESS_MAIN(test_seed)
