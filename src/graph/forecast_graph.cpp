@@ -13,7 +13,7 @@
 #include <QWheelEvent>
 #include <QPaintEvent>
 #include <QPainter>
-#include <QPainterPath>
+
 #include <QPen>
 #include <QPolygonF>
 #include <QRect>
@@ -1307,6 +1307,29 @@ void bbq_forecast_graph::set_opaque_background(bool opaque) {
 
 void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	QPainter painter(this);
+
+	/*
+	 * ANTIALIASED THROUGHOUT, WHICH IS NOT FREE AND IS WORTH IT
+	 * (sec 16.89).
+	 *
+	 * Measured with an interleaved A/B inside one process, in CPU time
+	 * so machine load cannot reach it: turning the hint off for the
+	 * whole paint saved a THIRD of it -- 26.5ms against 17.7ms -- and
+	 * nearly all of that was bought back for nothing, because most of
+	 * this chart is axis-aligned and an antialiased vertical rule is a
+	 * vertical rule with coverage arithmetic run over it.
+	 *
+	 * It is on anyway, and the reason is that the saving evaporated
+	 * once the shapes underneath were fixed. The expensive antialiased
+	 * things were a dashed rule stroked per window, a translucent
+	 * rectangle stroked per column and a line stroked per column of
+	 * ribbon; with those drawn as the fills they always were, the hint
+	 * costs about a tenth of the paint rather than a third. A tenth is
+	 * not worth changing how the drawing looks -- thin rules would go
+	 * from soft and half-strength to crisp and full-strength, which is
+	 * a decision about appearance and not one a speed pass gets to
+	 * make in passing.
+	 */
 	painter.setRenderHint(QPainter::Antialiasing);
 	if (m_opaque_background) {
 		painter.fillRect(event->rect(), m_palette.background);
@@ -1385,6 +1408,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		                 tr("No forecast data yet."));
 		return;
 	}
+
 
 	/* One pass over the columns; every later pass reads this. */
 	std::vector<column> columns;
@@ -1606,6 +1630,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * over it. A recommendation should be the background a reading is
 	 * seen against, not something covering it up.
 	 */
+
 	if (m_show_windows) {
 		/*
 		 * SCORED OVER THE DATA, NOT OVER THE VIEWPORT (sec 16.30.1).
@@ -1658,7 +1683,24 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			        qRound(cap * (1.0 + 2.0 * window.rank) / 3.0));
 
 			const double tall = chance_plot.bottom() - plot.top();
-			painter.fillRect(QRectF(left, plot.top(), right - left, tall), shade);
+			/*
+			 * FLATTENED WHERE THE GROUND IS KNOWN (sec 16.89).
+			 *
+			 * Nothing is under this but the background fill: the only
+			 * other draw above it returns first, on an empty
+			 * composite. So where the background is opaque the blend
+			 * has one possible answer and is computed once per window
+			 * instead of once per pixel.
+			 *
+			 * Worth 4.4ms of a 17.8ms paint at a sixteen-day view.
+			 * Where the background is NOT opaque -- the home-screen
+			 * picture, which lets a wallpaper through -- there is no
+			 * known ground and the translucent fill stands.
+			 */
+			painter.fillRect(QRectF(left, plot.top(), right - left, tall),
+			                 m_opaque_background
+			                         ? bbq_flatten_over(shade, m_palette.background)
+			                         : shade);
 
 			/*
 			 * THE EDGES, at full strength (sec 16.29).
@@ -1692,18 +1734,48 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			const double thick = 2.0;
 			const double bottom = plot.top() + tall;
 
-			QPen edge_pen(edge, thick, Qt::DashLine);
-			edge_pen.setCapStyle(Qt::FlatCap);
-			painter.setPen(edge_pen);
+			/*
+			 * THE DASHES ARE FILLED, NOT STROKED (sec 16.89).
+			 *
+			 * Qt::DashLine sends the line through the dash generator,
+			 * which turns one rule into a polygon per dash and hands
+			 * each to the rasteriser. A window edge is about five
+			 * hundred pixels of a twelve-pixel period, so that is
+			 * forty-odd polygons per edge and eighty per window --
+			 * and at a sixteen-day view this block was 13.5ms of a
+			 * 30ms paint, the largest single item in it.
+			 *
+			 * Every one of those polygons is an upright rectangle two
+			 * pixels wide, which is the raster engine's fastest path
+			 * when it is asked for directly. So ask for it directly.
+			 *
+			 * The pattern is Qt's own for DashLine -- {4, 2} in units
+			 * of pen width, so 8 on and 4 off at width 2 -- and
+			 * FlatCap is what makes a dash exactly its own length
+			 * rather than its length plus a cap at each end. Both are
+			 * reproduced here rather than approximated, because the
+			 * point of the change is that nothing about it is visible.
+			 */
+			const double dash = 4.0 * thick;
+			const double gap = 2.0 * thick;
+			const auto dashed_rule = [&](double x) {
+				for (double y = plot.top(); y < bottom; y += dash + gap) {
+					const double end = std::min(y + dash, bottom);
+					painter.fillRect(
+					        QRectF(x - thick / 2.0, y, thick, end - y),
+					        edge);
+				}
+			};
 
 			if (x0 >= plot.left()) {
-				painter.drawLine(QLineF(x0, plot.top(), x0, bottom));
+				dashed_rule(x0);
 			}
 			if (x1 <= plot.right()) {
-				painter.drawLine(QLineF(x1, plot.top(), x1, bottom));
+				dashed_rule(x1);
 			}
 		}
 	}
+
 
 	/* --- grid and time axis ------------------------------------------- */
 	painter.setPen(QPen(m_palette.grid, 1, Qt::DotLine));
@@ -1971,6 +2043,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		                                  m_metrics.ribbon_height + 2));
 	}
 
+
 	/* --- rain chance, under everything it might otherwise hide -------- */
 	/*
 	 * FIRST of the series, because it is an area and the others are
@@ -1999,9 +2072,40 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	painter.setPen(Qt::NoPen);
 	painter.setBrush(chance_fill);
 
+	/*
+	 * ONE POLYGON PER RUN, NOT ONE RECTANGLE PER COLUMN (sec 16.89).
+	 *
+	 * This drew a rectangle a single pixel wide for every column across
+	 * the plot. A one-pixel-wide translucent fill is the worst shape
+	 * Qt's raster engine has: measured on this machine, narrow
+	 * translucent strips cost 18 ns per pixel where the same area drawn
+	 * as a wide band costs 1.3, because a short span amortises none of
+	 * the blend's per-span setup.
+	 *
+	 * Adjacent covered columns are contiguous, so the wash is really a
+	 * skyline -- one area with a stepped top edge. Drawn that way the
+	 * spans the rasteriser produces are as wide as the run, which is
+	 * the case that goes fast, and the picture is the same picture
+	 * because the steps are the same steps.
+	 *
+	 * A polygon per RUN rather than one for the whole width, because a
+	 * gap in coverage has to stay a gap: joining across it would wash
+	 * hours that have no chance to report.
+	 */
+	QPolygonF wash;
+
+	const auto flush_wash = [&]() {
+		if (wash.size() >= 4) {
+			wash << QPointF(wash.last().x(), chance_plot.bottom());
+			painter.drawPolygon(wash);
+		}
+		wash.clear();
+	};
+
 	for (int x = 0; x < plot.width(); ++x) {
 		const column &c = columns[x];
 		if (!c.covered || !c.has_chance) {
+			flush_wash();
 			continue;
 		}
 
@@ -2011,46 +2115,82 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		 * would make a dry day's five percent look like a downpour.
 		 */
 		const double h = chance_plot.height() * (c.chance / 100.0);
-		painter.drawRect(QRectF(chance_plot.left() + x,
-		                        chance_plot.bottom() - h, 1.0, h));
+		const double left = chance_plot.left() + x;
+		const double top = chance_plot.bottom() - h;
+
+		if (wash.isEmpty()) {
+			wash << QPointF(left, chance_plot.bottom());
+		}
+
+		wash << QPointF(left, top) << QPointF(left + 1.0, top);
 	}
+
+	flush_wash();
 
 	painter.setBrush(Qt::NoBrush);
 
 
+
 	/* --- rain, drawn first so the temperature line sits over it -------- */
-	QPainterPath rain_path;
-	bool rain_open = false;
+	/*
+	 * A POLYGON PER RUN RATHER THAN ONE QPainterPath (sec 16.89).
+	 *
+	 * The shape is unchanged -- one point per column along the top of
+	 * the trace, dropped to the baseline at each end of a run -- but it
+	 * is built as a QPolygonF and handed to drawPolygon.
+	 *
+	 * QPainterPath is the expensive way to say this: it carries an
+	 * element type per point and a painter path's worth of bookkeeping,
+	 * and drawPath converts it to polygons before the rasteriser sees
+	 * it. A QPolygonF is the same points and none of that.
+	 *
+	 * IT IS NOT WHY THIS SECTION LOOKED SLOW, and the wrong version of
+	 * this comment said it was. The 4.4ms attributed to "rain" was the
+	 * sample-dot loop below, which shared a timing mark with it; rain
+	 * itself is 76us, because the fixture measured has no rain and the
+	 * path enclosed a bounding box ZERO PIXELS TALL. A layer that draws
+	 * nothing cannot cost a sixth of a paint, and reading that as a
+	 * property of the path rather than of the mark is what sent the
+	 * first attempt at this comment wrong.
+	 *
+	 * So this is a tidying rather than a fix, kept because the shape is
+	 * simpler and matches the wash above.
+	 */
+	QColor rain_fill = m_palette.rain;
+	rain_fill.setAlpha(120);
+	painter.setPen(Qt::NoPen);
+	painter.setBrush(rain_fill);
+
+	QPolygonF rain_run;
+
+	const auto flush_rain = [&](double edge_x) {
+		if (rain_run.size() >= 2) {
+			rain_run << QPointF(edge_x, plot.bottom());
+			painter.drawPolygon(rain_run);
+		}
+		rain_run.clear();
+	};
 
 	for (int x = 0; x < plot.width(); ++x) {
 		const column &c = columns[x];
 		const double px = plot.left() + x;
 
 		if (!c.covered || !c.has_rain) {
-			if (rain_open) {
-				rain_path.lineTo(px, plot.bottom());
-				rain_open = false;
-			}
+			flush_rain(px);
 			continue;
 		}
 
-		if (!rain_open) {
-			rain_path.moveTo(px, plot.bottom());
-			rain_open = true;
+		if (rain_run.isEmpty()) {
+			rain_run << QPointF(px, plot.bottom());
 		}
 
-		rain_path.lineTo(px, y_for_rain(c.rain));
+		rain_run << QPointF(px, y_for_rain(c.rain));
 	}
 
-	if (rain_open) {
-		rain_path.lineTo(plot.right(), plot.bottom());
-	}
+	flush_rain(plot.right());
 
-	QColor rain_fill = m_palette.rain;
-	rain_fill.setAlpha(120);
-	painter.setPen(Qt::NoPen);
-	painter.setBrush(rain_fill);
-	painter.drawPath(rain_path);
+
+
 
 	/*
 	 * Wind: context for the grilling score rather than a headline, so
@@ -2102,6 +2242,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * wrong while looking fine. Absent dots say "zoomed out"; smeared
 	 * dots say something false.
 	 */
+
 	int knot_total = 0;
 	for (const column &c : columns) {
 		knot_total += c.knot_count;
@@ -2161,6 +2302,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 		painter.setBrush(Qt::NoBrush);
 	}
+
 
 	/* --- temperature, broken wherever no band covers a column --------- */
 	painter.setBrush(Qt::NoBrush);
@@ -2402,6 +2544,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		}
 	}
 
+
 	/* --- the hour marks, over the series so rain cannot bury them ----- */
 	/*
 	 * EVERY hour, not only the labelled ones (sec 3.20).
@@ -2465,16 +2608,39 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 */
 
 
+
 	/* --- the provenance ribbon (sec 3.4) ------------------------------ */
 	for (int x = 0; x < plot.width(); ++x) {
 		if (!columns[x].covered) {
 			continue;
 		}
 
-		painter.setPen(band_colour(m_palette, columns[x].band));
-		const double px = plot.left() + x;
-		painter.drawLine(QPointF(px, chance_plot.bottom() + 2),
-		                 QPointF(px, chance_plot.bottom() + 2 + m_metrics.ribbon_height));
+		/*
+		 * FILLED PER COLUMN, and the run of equal bands coalesced
+		 * (sec 16.89).
+		 *
+		 * This set a pen and stroked a one-pixel line for every column
+		 * across the plot -- nine hundred pen changes and nine hundred
+		 * strokes per paint, for a strip six pixels tall. Setting a pen
+		 * is not free: it discards the stroker's state, so the loop
+		 * paid for that nine hundred times over as well.
+		 *
+		 * The ribbon is a run-length encoding of the band by
+		 * construction -- provenance changes a handful of times across
+		 * a view, not once per pixel -- so it is drawn as the few
+		 * rectangles it really is.
+		 */
+		const QColor ink = band_colour(m_palette, columns[x].band);
+		int end = x + 1;
+		while (end < plot.width() && columns[end].covered &&
+		       band_colour(m_palette, columns[end].band) == ink) {
+			++end;
+		}
+
+		painter.fillRect(QRectF(plot.left() + x, chance_plot.bottom() + 2,
+		                        end - x, m_metrics.ribbon_height),
+		                 ink);
+		x = end - 1;
 	}
 
 	/*
@@ -2504,11 +2670,40 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 */
 			painter.setFont(day_font);
 
+			/*
+			 * NAMED IN THE LABEL COLOUR, SAID OUT LOUD (sec 16.90).
+			 *
+			 * edge_label draws with whatever pen the caller left --
+			 * deliberately, because one of its callers wants the wind
+			 * colour -- and this call site never set one. So the day
+			 * names took whichever pen the previous block happened to
+			 * finish with, which was the ribbon's, which is the LAST
+			 * PROVENANCE BAND IN VIEW: the colour of "Mon 14" was a
+			 * property of the weather data.
+			 *
+			 * It went unseen because the accident was plausible. The
+			 * band colours are greys of about the right weight, so the
+			 * names looked like labels rather than like a fault, and
+			 * nothing in the picture said the colour had come from
+			 * anywhere.
+			 *
+			 * Found only because the ribbon stopped setting a pen when
+			 * it stopped stroking one line per column for speed, at
+			 * which point the names inherited the GRID colour instead
+			 * and went visibly dim. The overlay path -- the phone and
+			 * the home-screen picture -- sets axis_text inside
+			 * edge_label and was right all along, so this makes the
+			 * desktop agree with the phone rather than inventing an
+			 * answer.
+			 */
+			painter.setPen(m_palette.axis_text);
+
 			edge_label(x + 4, plot.top() + 2, 56, Qt::AlignLeft, name);
 
 			painter.setFont(label_font);
 		}
 	}
+
 
 	/* --- now ---------------------------------------------------------- */
 	const double now_x = plot.left() + (now - from) / seconds_per_pixel;
@@ -2677,6 +2872,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			painter.setBrush(Qt::NoBrush);
 		}
 	}
+
 
 	/* --- axis labels --------------------------------------------------- */
 	painter.setPen(m_palette.axis_text);

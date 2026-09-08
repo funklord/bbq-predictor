@@ -51,6 +51,7 @@ class test_view : public QObject {
 	Q_OBJECT
 
 private slots:
+	void bbq_flatten_matches_qt();
 	void a_fresh_graph_follows_the_clock();
 	void the_span_is_bounded_at_both_ends();
 	void zooming_holds_the_moment_under_the_cursor();
@@ -1758,4 +1759,88 @@ void test_view::the_window_scan_is_kept_and_forgotten_with_the_composite() {
 
 	QCOMPARE(graph.grill_windows().front().start_utc,
 	         wanted_second.front().start_utc);
+}
+
+/*
+ * The graph swaps a translucent fill for an opaque one over a known
+ * ground and calls the result unchanged. That is the claim tested here,
+ * and it is deliberately not "does bbq_flatten_over reproduce Qt's
+ * rounding" -- that function asks Qt for the blend, so such a test would
+ * be Qt agreeing with itself, which sec 16.89 records as the reason this
+ * one is shaped the way it is.
+ *
+ * What is checked instead is the substitution: fill an area with the
+ * ground and blend the translucent colour over it, fill a second area
+ * with the ground and paint the flattened colour opaquely, and require
+ * the two IMAGES to be identical. That would fail if the blend were not
+ * uniform across the area, if it depended on position, or if an opaque
+ * fill took a path that landed anywhere else -- none of which the
+ * one-pixel probe inside bbq_flatten_over can see on its own.
+ *
+ * Every alpha rather than a few, because rounding is where this breaks
+ * and it will not break at 0, 128 and 255.
+ */
+void test_view::bbq_flatten_matches_qt() {
+	const QList<QColor> grounds = {
+		QColor(0, 0, 0),
+		QColor(255, 255, 255),
+		QColor(18, 20, 24),
+		QColor(240, 238, 233),
+		QColor(90, 30, 130),
+		QColor(7, 199, 61),
+	};
+	const QList<QColor> inks = {
+		QColor(255, 160, 60),
+		QColor(0, 0, 0),
+		QColor(255, 255, 255),
+		QColor(45, 111, 181),
+		QColor(3, 250, 128),
+	};
+
+	/*
+	 * Narrow and tall, which is the shape the window shades are and the
+	 * shape the whole change is about.
+	 */
+	const QRect area(1, 0, 5, 40);
+
+	int checked = 0;
+
+	for (const QColor &ground : grounds) {
+		for (const QColor &ink : inks) {
+			for (int alpha = 0; alpha <= 255; ++alpha) {
+				QColor src = ink;
+				src.setAlpha(alpha);
+
+				QImage blended(8, 40, QImage::Format_ARGB32_Premultiplied);
+				blended.fill(ground);
+				{
+					QPainter painter(&blended);
+					painter.fillRect(area, src);
+				}
+
+				QImage flattened(8, 40, QImage::Format_ARGB32_Premultiplied);
+				flattened.fill(ground);
+				{
+					QPainter painter(&flattened);
+					painter.fillRect(area, bbq_flatten_over(src, ground));
+				}
+
+				if (blended != flattened) {
+					QFAIL(qPrintable(
+					        QStringLiteral("ground %1 ink %2 alpha %3: blended "
+					                       "%4, flattened %5")
+					                .arg(ground.name(), ink.name())
+					                .arg(alpha)
+					                .arg(blended.pixelColor(3, 20).name(),
+					                     flattened.pixelColor(3, 20).name())));
+				}
+				++checked;
+			}
+		}
+	}
+
+	/*
+	 * The sweep is evidence only if it ran over what it says it did.
+	 */
+	QCOMPARE(checked, int(grounds.size() * inks.size()) * 256);
 }

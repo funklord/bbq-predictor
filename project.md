@@ -12537,6 +12537,12 @@ code rather than a description of the afternoon.
 
 ### 16.88.2 What is left, and what is not yet known
 
+*Settled by sec 16.89, which measured it. Both candidates named here
+were wrong: `reduce()`'s binary searches are 0.8% of the paint, and
+antialiasing was a third of it before the real faults were fixed and is
+a tenth after. The answer was neither -- it was the SHAPE of four fills.
+The width scaling recorded above is real and is explained there.*
+
 Within a single run the cost scales roughly with plot WIDTH -- 16.6,
 28.3 and 39.0 ms at 400, 900 and 1600 pixels -- so what remains is
 per-column work and rasterisation, not anything that scales with the
@@ -12548,3 +12554,186 @@ column where a single forward cursor would do. **That is a candidate and
 not a diagnosis**: the alternative explanation is Qt's raster engine
 filling antialiased paths, and nothing here separates them yet.
 Measuring which before changing either.
+
+## 16.89 Narrow and translucent is the expensive shape
+
+The paint is **7.0x faster at the default view** and 2.7x faster at the
+widest, and every part of the win came from changing the SHAPE handed to
+the rasteriser rather than from drawing less.
+
+Measured back to back against a worktree at the pre-change commit, three
+rounds, on the same loaded machine:
+
+    view      before      after     speedup
+    1 day     72.8-81.8   10.5-10.9   7.0x
+    3 day     62.3-73.4   13.3-14.0   4.8x
+    16 day    74.8-85.4   27.7-29.2   2.7x
+
+### 16.89.1 The fixture was measuring the wrong program
+
+The first day of this went into attributing a 30 ms paint. The number
+was real and the program it described was not the one on the phone:
+`grillable_days` sets `precip_rate`, `precip_chance` and `wind_kph` to
+**zero for every sample**, so the rain path enclosed no pixels, the
+chance wash drew nothing and the wind block cost 1 microsecond.
+
+Three of the seven drawing layers were inert, and they were three of the
+four expensive ones. On a fixture carrying rain, chance and wind the
+same commit costs **60 to 85 ms**, not 30.
+
+The tell was available and was read past: the section timed as "rain"
+cost 4.4 ms while its path had a bounding box **zero pixels tall**. A
+layer that draws nothing cannot cost a sixth of the paint, and asking
+how it could turned the investigation around.
+
+It could because **the mark spanned more than its name**. Between the
+rain fill and the next mark sat the wind block and the sample-dot loop,
+so three layers were being reported as one. Split, rain is 76 us, wind
+is 1 us and the dots are the rest. **A timing label is a claim about
+where a mark was put**, and the first version of the comment in
+`forecast_graph.cpp` believed the label and blamed QPainterPath for a
+cost that was never its.
+
+**A fixture built to exercise one thing is silent about the rest, and
+its silence reads as a measurement.** The grilling-window fixture was
+written to test window scoring, where rain and wind are exactly what you
+leave out.
+
+### 16.89.2 The mechanism, measured rather than reasoned about
+
+Qt's raster engine blends a *wide* rectangle at about 2 ns per pixel and
+a *narrow tall* one at about 18. Same total area, same colour, same
+device: only the shape differs.
+
+    17 strips 24x556, translucent    18.0 ns/px   4074 us
+    same area, one wide rect          2.0 ns/px    470 us
+    17 strips, OPAQUE                 1.3 ns/px    300 us
+    17 wide short bands, translucent  1.3 ns/px    300 us
+
+**Narrow and translucent together are the expensive case; either alone
+is fine.** A short span amortises none of the blend's per-span setup,
+while an opaque fill is a memory fill with almost none to amortise.
+
+Batching does not rescue it. The same seventeen strips as one
+QPainterPath cost 21.3 ns/px and as one `drawRects` call 16.3 -- both
+worse than seventeen separate `fillRect`s.
+
+### 16.89.3 The four fills, and what each was worth
+
+Each is the same defect in a different layer: something drawn per column
+or per window that is really one wide shape.
+
+- **The grilling-window shade**, 4.4 ms of a 17.8 ms paint. Seventeen
+  translucent strips over the plot. Nothing is under them but the
+  background fill -- the only earlier draw returns first, on an empty
+  composite -- so where the background is opaque the blend has one
+  possible answer. Computed once per window with `bbq_flatten_over` and
+  filled opaque: **4391 -> 787 us**.
+- **The chance wash**, one `drawRect` a single pixel wide per column.
+  Adjacent covered columns are contiguous, so it is really a skyline
+  with a stepped top edge. Drawn as one polygon per covered run:
+  **2218 -> 248 us**.
+- **The provenance ribbon**, a `setPen` and a stroked line per column --
+  nine hundred pen changes a frame, each of which discards the stroker's
+  state. It is a run-length encoding by construction; drawn as the few
+  filled rectangles it really is: **2301 -> 1100 us**.
+- **The window edges**, two `Qt::DashLine` rules per window, which the
+  dash generator turns into forty-odd polygons each. Filled directly as
+  the upright rectangles they are, reproducing Qt's own {4, 2} pattern
+  at flat caps: **13467 -> 5760 us** for the block.
+
+### 16.89.4 What was not the problem
+
+Recorded because each was checked and each looked plausible:
+
+- **`reduce()`'s per-column binary searches**, sec 16.88.2's candidate
+  and this pass's first suspect: **76 to 225 us, under 1% of the
+  paint.**
+- **Antialiasing.** A third of the paint before the fills were fixed
+  (26.5 ms against 17.7), which is why it looked like the answer -- and
+  a tenth afterwards, because what it was expensive ON was the dashed
+  rules and the per-column strokes. It stays on. Turning it off is worth
+  about 10% and would make every thin rule crisp and full-strength
+  instead of soft and half-strength, which is a decision about how the
+  program looks and not one a speed pass makes in passing.
+- **The paint device's format.** ARGB32 premultiplied, plain ARGB32,
+  RGB32 and the QPixmap that `grab()` renders into all blend within
+  10% of each other, so the fixture was not on a slow path.
+- **Rectangle alignment.** Rounding the shade to integer pixels changed
+  4361 us to 4325.
+
+### 16.89.5 Measuring at all, on a machine somebody else is using
+
+Wall clock was unusable: identical configurations measured 12.6 ms and
+40.8 ms as load swung between 6.8 and 48.7. Three things made the
+numbers mean something, and the third is the one that mattered.
+
+`clock_gettime(CLOCK_PROCESS_CPUTIME_ID)` rather than elapsed time, so
+another session's build is not in the figure. The minimum of fifteen
+batches of ten rather than the mean, per sec 16.88.1. And **both arms
+measured in the same process, alternating**, because CPU time still
+drifts with cache pressure and clock speed -- the same code measured
+12.9 ms and 8.5 ms an hour apart in this pass.
+
+**Only ratios within one run survive that, so every figure above is
+paired with the thing it is being compared against.**
+
+### 16.89.6 Proving the picture did not change
+
+A speed change that alters the drawing is a different change. The proof
+is a worktree at the pre-change commit with the same shot-dumping test
+patched into both trees, rendering six images -- dark and light, at one,
+three and sixteen days -- and comparing them pixel by pixel.
+
+Two differences survive, and both are wanted:
+
+- **The day names**, which is sec 16.90 and a fault this pass found
+  rather than caused.
+- **The ribbon**, about 5400 pixels of a 7-pixel strip. It was stroked
+  with a one-pixel pen at integer coordinates with antialiasing on,
+  which spreads every column across two at partial coverage and blurs
+  neighbouring band colours into each other. It is now the exact colour
+  per column. Visually the two are indistinguishable at 3x.
+
+Everything else is identical.
+
+`bbq_flatten_over` gets its own proof, because substituting an opaque
+fill for a translucent one is a claim about pixels: the test fills an
+area both ways over six grounds and five inks at **every alpha from 0 to
+255** and requires the images to be equal.
+
+The first version of that function did the blend arithmetic itself and
+was wrong by one on the blue channel at alpha 29 -- caught on the
+sweep's first run. It asks Qt for the blend now, on a single pixel, so
+it is bit-exact on every platform rather than on the ones whose rounding
+somebody checked. **Matching an x86 desktop's SSE2 rounding by hand is
+no evidence at all about the phone's NEON**, and the phone is the
+machine this was written for.
+
+## 16.90 The day names were coloured by the weather
+
+`edge_label` draws with whatever pen the caller left set. That is
+deliberate -- one caller wants the wind colour for the wind label -- and
+the day-name call site never set one.
+
+So the pen it got was whichever the previous block happened to finish
+with. That block was the ribbon, which sets a pen per column, so **the
+colour of "Mon 14" was the last provenance band in view**: a property of
+the weather data.
+
+It survived because the accident was plausible. The band colours are
+greys of about the right weight, so the names looked like labels rather
+than like a fault, and nothing in the picture said the colour had come
+from anywhere.
+
+It was found only when the ribbon stopped setting a pen -- it fills
+rectangles now, per sec 16.89.3 -- at which point the names inherited
+the GRID colour instead and went visibly dim in the before-and-after
+comparison. **A performance change surfaced it by removing the accident
+that was hiding it.**
+
+The overlay path was right all along: `edge_label` sets `axis_text`
+itself when labels are drawn over the plot, which is what the phone and
+the home-screen picture do. So the desktop was the only surface with the
+fault, and the fix makes it agree with the phone rather than inventing
+an answer.

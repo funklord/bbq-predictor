@@ -114,6 +114,33 @@ QColor bbq_ensure_contrast(const QColor &ink, const QColor &ground,
                            double floor);
 
 /*
+ * Composite a translucent `src` onto an OPAQUE `dst`, giving the opaque
+ * colour that painting src over dst would produce (sec 16.89).
+ *
+ * For a caller that knows what is underneath. Qt's raster engine fills
+ * an opaque colour with a memory fill and a translucent one through the
+ * blend path, and the gap between them is not small where the shape is
+ * narrow: measured on this machine, seventeen strips 24 pixels wide and
+ * 556 tall cost 18.0 ns per pixel blended and 1.3 ns per pixel opaque,
+ * FOURTEEN TIMES, because a 24-pixel span amortises none of the blend's
+ * per-span setup while a memory fill has almost none to amortise. The
+ * same area as one wide rectangle blends at 1.3 ns/px, so it is the
+ * combination of narrow and translucent that is expensive, not either
+ * on its own.
+ *
+ * The blend is done by Qt on a single pixel and read back, rather than
+ * reproduced here, so the answer is bit-exact on every platform instead
+ * of on the ones whose rounding somebody checked -- see theme.cpp for
+ * what that cost when it was tried the other way. The substitution the
+ * caller relies on is held by bbq_flatten_matches_qt in test_view.
+ *
+ * `dst` is required to be opaque. Blending onto something translucent
+ * is a different sum and this does not do it -- the caller that cannot
+ * promise an opaque ground keeps painting translucent.
+ */
+QColor bbq_flatten_over(const QColor &src, const QColor &dst);
+
+/*
  * Apply to the whole application, so the widgets around the graph agree
  * with it. `automatic` releases the override rather than pinning the
  * current answer, which is what makes the device's own setting keep

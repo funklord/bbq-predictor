@@ -6,6 +6,8 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QImage>
+#include <QPainter>
 #include <QPalette>
 #include <QStyleHints>
 #include <QTextStream>
@@ -418,4 +420,41 @@ QColor bbq_ensure_contrast(const QColor &ink, const QColor &ground,
 	}
 
 	return reached;
+}
+
+QColor bbq_flatten_over(const QColor &src, const QColor &dst) {
+	Q_ASSERT(dst.alpha() == 255);
+
+	/*
+	 * ASK QT FOR THE BLEND RATHER THAN REPRODUCING IT.
+	 *
+	 * The first version of this did the arithmetic here -- premultiply
+	 * the source, add the destination scaled by the inverse alpha, with
+	 * the rounding division by 255 that Qt's BYTE_MUL uses. It was
+	 * wrong by one on the blue channel at alpha 29, which the sweep in
+	 * bbq_flatten_matches_qt found on its first run, and the interesting
+	 * part is not the off-by-one but what fixing it would have cost.
+	 *
+	 * The rounding is not one function. Qt has a scalar path, an SSE2
+	 * path and a NEON path, and matching whichever one an x86 desktop
+	 * happens to take is no evidence at all about the phone, which is
+	 * the machine this optimisation was written for and the one where a
+	 * mismatch would show as a seam nobody could reproduce here.
+	 *
+	 * So the blend is done by the thing whose answer has to be matched,
+	 * on a single pixel, and the answer is read back. That is bit-exact
+	 * on every platform by construction rather than by agreement, and it
+	 * leaves the test asserting something worth asserting: not that this
+	 * arithmetic matches Qt's, which would now be Qt compared with
+	 * itself, but that filling opaque with what comes back really does
+	 * reproduce the translucent fill over the same ground.
+	 */
+	QImage one(1, 1, QImage::Format_ARGB32_Premultiplied);
+	one.fill(dst);
+
+	QPainter painter(&one);
+	painter.fillRect(QRect(0, 0, 1, 1), src);
+	painter.end();
+
+	return one.pixelColor(0, 0);
 }
