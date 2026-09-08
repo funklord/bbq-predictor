@@ -12325,3 +12325,46 @@ The rest hold: the band cadences and horizons were checked against a
 live fetch (sec 16.53), "the other two providers" is right because one
 of the three needs a key, and the storage figures are sec 16.76's own
 measurements.
+
+
+## 16.85 The widget's number sits on top of a day name
+
+Looked at on the device rather than reasoned about. The phone was
+attached for the first time since these changes, a widget is placed, and
+`files/widget.png` is what the home screen is showing:
+
+    the big current temperature, centred at the top
+    a day-name plate, drawn at its midnight, in the same strip
+
+They collide. Enlarged, the fragments of "Tue" are legible around and
+behind the digits -- **the number is fine and the day name is ruined**,
+which is the wrong way round for a label that exists to answer "which
+day is this".
+
+It is a positional coincidence rather than a constant fault: the name is
+drawn where its midnight falls, the number is centred, and they overlap
+only when a day boundary lands near the middle. That is also why it has
+not been noticed -- it depends on the hour the picture happens to be
+drawn at.
+
+**Not fixed here, because the reasonable answers disagree.** The name
+loop already skips one that would fall off the right edge, so skipping
+one that falls under the reading is the same shape -- but the graph does
+not know where the reading goes, since `draw_reading` paints after it
+and from a different file. Moving the number to a corner is a layout
+decision the centred placement was chosen against, deliberately (sec
+16.20). Dropping day names from the widget entirely is a third answer,
+and the divider line would still mark the boundary.
+
+Recorded with the picture rather than decided.
+
+### 16.85.1 A false finding avoided by not truncating
+
+The first listing of `files/` used `head -6` and showed no `widget.png`,
+which would have been a live defect -- a widget placed and nothing drawn
+for it. The file is there, 73 kB, written the same minute as the
+archive; it is alphabetically last and the truncation cut it off.
+
+Fourth time today that reducing output before reading it produced a
+wrong answer, and the first where the wrong answer would have been a bug
+report about somebody else's device.
