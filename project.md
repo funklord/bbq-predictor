@@ -12281,3 +12281,27 @@ The sanitized binaries are the OFFLINE suite. Nothing here exercises a
 live fetch, the Android paths, or the GUI event loop beyond what the
 tests drive -- so a clean run says the code the suite reaches is clean
 under these two sanitizers, which is narrower than "the program is".
+
+
+## 16.84 The same stale count, fifty lines from the one I fixed
+
+Sec 16.53 removed "six gates" from the README because the Makefile ran
+eight, and said why: a count in prose is a fact about the tree that
+nothing re-derives. **Fifty lines below it, "every option, not the eight
+`--help` lists" was wrong the same way.** `--help` lists ten.
+
+The sweep that morning missed it, and the reason is worth more than the
+fix. It matched a number followed by one of a few nouns -- gates,
+suites, tests, headers, files -- because those were the counts I was
+thinking of. Here the noun is `--help`.
+
+**A detector built from the instance in hand finds that instance's
+shape.** Sec 16.46 says the same thing about a count inheriting its
+query; this is it happening to the person who wrote that down, in the
+same file, on the same day.
+
+Swept properly since -- every number in the README, filtered by hand.
+The rest hold: the band cadences and horizons were checked against a
+live fetch (sec 16.53), "the other two providers" is right because one
+of the three needs a key, and the storage figures are sec 16.76's own
+measurements.

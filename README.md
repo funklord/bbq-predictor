@@ -182,7 +182,7 @@ scratch work. All of them run headless.
 ## Installing it
 
     make install                  # binary, desktop entry, icon, manual page
-    man bbq-predictor             # every option, not the eight --help lists
+    man bbq-predictor             # every option, not just what --help lists
 
 Or as a Debian package, which is what a machine that should keep
 fetching wants:
