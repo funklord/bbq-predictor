@@ -12368,3 +12368,53 @@ archive; it is alphabetically last and the truncation cut it off.
 Fourth time today that reducing output before reading it produced a
 wrong answer, and the first where the wrong answer would have been a bug
 report about somebody else's device.
+
+
+## 16.86 A second archive, and what it says about the correction
+
+The phone keeps its own archive, fetched on its own schedule from its
+own network. That makes it a genuinely independent witness rather than
+the same measurement read twice, which is the distinction
+`evidence.md` opens with -- and it was pulled off the device rather
+than assumed.
+
+**Wind, per band, both archives:**
+
+    band                  desktop (n)      phone (n)
+    3  nowcast (WU)       +3.69 (146)     +5.72 (633)
+    4  extended (O-M)     +6.63 (296)     +7.69 (734)
+    6  hourly (WU)        +6.22 (296)     +7.55 (734)
+    5  CORRECTED          -0.26 (200)     +0.48 (515)
+
+Two devices agree that every raw band over-forecasts wind by four to
+eight km/h, and that **the corrected band does not.** That is the
+correction doing exactly what sec 12.5 built it for, measured rather
+than argued, on data neither archive shared with the other.
+
+### 16.86.1 And it does not help the other two
+
+    temperature   raw -0.04..+0.53   corrected  +0.12 desktop, -0.88 phone
+    precip_rate   raw -0.13..+0.21   corrected  +0.21 desktop, +0.28 phone
+
+**On the phone the corrected temperature is worse than any raw band**,
+and rain is slightly worse on both. That is not a fault so much as the
+shape of the thing: subtracting a bias measured over tens of samples
+helps when the bias dwarfs its own uncertainty, as wind's does, and adds
+noise when it does not. `bbq_correction_minimum` of 20 keeps the
+correction off the wildest noise; it does not make a 0.3 C estimate
+precise.
+
+**Not like-for-like, and the caveat is load-bearing**: the corrected
+band has its own sample count and its own span, so these are two
+populations compared, not one population before and after.
+
+### 16.86.2 What it means for the decision sec 16.82 leaves open
+
+Feeding the verdict the corrected band would remove the wind error --
+the term that reaches 37% of hours and moves the score most -- and would
+do nothing reliable for temperature or rain. That is a better-shaped
+answer than "correct everything", and it is now measured on two
+independent archives rather than reasoned from one.
+
+Still the holder's. But the evidence has stopped being an argument about
+what the correction ought to do.
