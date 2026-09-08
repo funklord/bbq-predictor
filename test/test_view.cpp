@@ -478,6 +478,26 @@ void test_view::a_slider_reports_no_value_to_accessibility() {
 	 */
 	QVERIFY2(bbq_accessible_without_value(QString(), &label) == nullptr,
 	         "the factory answered for a widget it has no business with");
+
+	/*
+	 * HANDED TO THEIR OWNER, which is not the same as deleted.
+	 *
+	 * In the running program Qt's accessibility cache owns whatever a
+	 * factory returns. This test calls the factory directly and
+	 * registered nothing, so the two interfaces were nobody's -- leaked
+	 * until a sanitizer run said so: 240 bytes in 8 allocations, the
+	 * two objects and what QAccessibleWidget hangs off them.
+	 *
+	 * `delete` does not compile here, and that is Qt being explicit
+	 * rather than awkward: `~QAccessibleInterface` is PROTECTED, which
+	 * says the cache destroys these and a caller does not. So they are
+	 * registered and released through the same door they would take in
+	 * the application.
+	 */
+	QAccessible::deleteAccessibleInterface(
+	        QAccessible::registerAccessibleInterface(from_slider));
+	QAccessible::deleteAccessibleInterface(
+	        QAccessible::registerAccessibleInterface(from_bar));
 }
 
 /*

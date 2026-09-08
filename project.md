@@ -12208,3 +12208,49 @@ eight km/h high would not make anything pretend to be a measurement.
 Recorded with the numbers rather than acted on. The archive was built
 to answer questions like this one, and it has: the answer is that the
 recommendation is biased toward saying no.
+
+
+## 16.83 The suite under ASan and UBSan
+
+Run once the machine was quiet enough to do it politely -- niced,
+single-threaded, so one core rather than twelve while another session
+waited on load for a measurement of its own.
+
+**Thirteen binaries, all exit 0. No memory error and no undefined
+behaviour anywhere.** For a Qt program of this size that is the result
+worth having, and it is the first time anybody has asked.
+
+Two leak reports, under 500 bytes between them:
+
+    256 bytes, 16 allocations   QScroller::grabGesture, inside Qt
+    240 bytes,  8 allocations   bbq_accessible_without_value, ours
+
+The first is Qt registering a gesture recogniser that lives as long as
+the process. Not a defect and not ours.
+
+### 16.83.1 The second was the test, and `delete` was the wrong fix
+
+`a_slider_reports_no_value_to_accessibility` asks the factory for two
+interfaces and registered neither. In the running program Qt's
+accessibility cache owns whatever a factory returns; here they were
+nobody's.
+
+The obvious repair does not compile: **`~QAccessibleInterface` is
+protected**, which is Qt saying the cache destroys these and a caller
+does not. So the fix is not to delete them but to hand them to their
+owner --
+`QAccessible::deleteAccessibleInterface(registerAccessibleInterface(x))`
+-- which is the door they would go through in the application.
+
+A compiler error that names the ownership rule is a better answer than
+a leak-free test that had guessed.
+
+Confirmed by rebuilding and re-running that binary alone: no report
+file at all, where there had been one.
+
+### 16.83.2 What this does not cover
+
+The sanitized binaries are the OFFLINE suite. Nothing here exercises a
+live fetch, the Android paths, or the GUI event loop beyond what the
+tests drive -- so a clean run says the code the suite reaches is clean
+under these two sanitizers, which is narrower than "the program is".
