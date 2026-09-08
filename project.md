@@ -12053,6 +12053,28 @@ jump -- no false alarm, nothing deleted early -- and
 `bbq_describe_duration` already answers "no time at all" for a negative
 span, deliberately.
 
+### 16.81.3 And the fix left the tooltip arguing with itself
+
+Teaching the tray to say STALE was half of it. The age beside it comes
+from the same subtraction, and `bbq_describe_duration` answers "no time
+at all" for a negative span -- deliberately, because "-3 min" about how
+long something has been quiet is worse than the vaguer true thing.
+
+**Correct in isolation, and in this sentence it reads as freshly
+fetched:**
+
+    Oldest band no time at all old   STALE
+
+A reader glancing at that learns nothing except that the program is
+confused. The clock is the thing that is wrong, so it says so now --
+"Oldest band is stamped ahead of the clock" -- and the test asserts
+both halves, because the flag being right while the sentence contradicts
+it is exactly what one assertion would have missed.
+
+**A fix that produces a self-contradicting message is not finished**,
+and the way to notice is to read the whole surface it lands on rather
+than the field that was changed.
+
 ### 16.81.1 The commit before this one claimed the record it did not make
 
 Its message says "Also records the sweep of the class sec 16.63

@@ -169,9 +169,26 @@ void bbq_tray_icon::show_state(const bbq_composite &composite,
 		 * min old" -- the same fault as the status line and the hole
 		 * report, in the third place it lives.
 		 */
-		tip += tr("Oldest band ");
-		tip += bbq_describe_duration(now - oldest);
-		tip += tr(" old");
+		if (now < oldest) {
+			/*
+			 * A STAMP FROM THE FUTURE HAS NO AGE (sec 16.81.3).
+			 *
+			 * bbq_describe_duration answers "no time at all" for a
+			 * negative span, deliberately -- saying "-3 min" about how
+			 * long something has been quiet is worse than the vaguer
+			 * true thing. In THIS sentence that vagueness reads as
+			 * freshly fetched, so a tooltip that had just been taught
+			 * to say STALE said "no time at all old" beside it and
+			 * contradicted itself.
+			 *
+			 * The clock is the thing that is wrong, so it says that.
+			 */
+			tip += tr("Oldest band is stamped ahead of the clock");
+		} else {
+			tip += tr("Oldest band ");
+			tip += bbq_describe_duration(now - oldest);
+			tip += tr(" old");
+		}
 		if (stale) {
 			tip += tr("  -- STALE");
 		}

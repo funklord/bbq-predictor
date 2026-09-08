@@ -1788,6 +1788,17 @@ void test_window::the_tray_does_not_call_a_future_stamp_fresh() {
 	                            .arg(tray.toolTip())));
 
 	/*
+	 * AND IT DOES NOT CONTRADICT ITSELF. The age comes from the same
+	 * subtraction, and bbq_describe_duration answers "no time at all"
+	 * for a negative span -- correct in isolation, and in this sentence
+	 * it reads as freshly fetched, right beside the word STALE.
+	 */
+	QVERIFY2(!tray.toolTip().contains(QStringLiteral("no time at all")),
+	         qPrintable(QStringLiteral("the tooltip says STALE and no time "
+	                                   "at all old together: %1")
+	                            .arg(tray.toolTip())));
+
+	/*
 	 * And a stamp from a moment ago still reads fresh, or this is a
 	 * guard that calls everything stale.
 	 */
