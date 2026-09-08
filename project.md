@@ -12147,6 +12147,21 @@ sheltered garden station measured against a model for open terrain.
 forecast too high pushes the verdict down. The two measurements agree
 about direction and about which leads are worst.
 
+**And the threshold is where it bites.** The ramp is fine at 15 km/h and
+ruins at 45, so it spans 30 and an 8 km/h offset costs 0.27 of that
+factor -- but only for hours whose wind lands INSIDE the ramp. Measured
+over 1864 observations at this station:
+
+    true wind averages 5.0 km/h, and never exceeded 21.0
+     2.0% of hours have a true wind above 15
+    39.3% of hours have a forecast wind above 15, once its +8.2 is added
+
+**The wind at this station almost never matters, and the forecast says
+it matters on two hours in five.** That is the whole mechanism: a factor
+that should sit at 1.0 is pulled below it on about 37% of hours, which
+is the right order to produce the -0.011 to -0.107 measured on the
+verdict itself.
+
 ### 16.82.2 What is NOT decided here
 
 The correction exists and the verdict does not use it. That follows from
