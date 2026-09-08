@@ -157,6 +157,38 @@ bool wants_headless(int argc, char *argv[]) {
  * predictions, and scoring a measurement against itself is not a
  * question.
  */
+/*
+ * THE QUANTITIES THAT CARRY A SCORE (project.md sec 16.103).
+ *
+ * One list, for the reason bbq_scored_bands is one: the report walked
+ * three and the seeding diagnostic wrote the same three, in separate
+ * places, and `grill` was added to the store by sec 12.20 without
+ * reaching either.
+ *
+ * So the archive has been scoring the verdict since 2026-09-04 -- the
+ * thing this program exists to answer, and what main_window calls "the
+ * first thing a reader actually wants" -- and the diagnostic for
+ * reading the archive showed the three ingredients and not the answer.
+ *
+ * The scale is here because the seeding needs it and the report does
+ * not: a degree, a tenth of a millimetre an hour, a few km/h and a
+ * fraction of a verdict are different sizes, and a fixture that used
+ * one number for all four would not look like anything the store
+ * holds.
+ */
+struct bbq_scored_quantity {
+	const char *name;
+	double scale;
+	double spread;
+};
+
+static const bbq_scored_quantity bbq_scored_quantities[] = {
+	{"grill", 0.05, 0.02},
+	{"temperature", 1.0, 0.5},
+	{"precip_rate", 0.1, 0.05},
+	{"wind_kph", 2.0, 1.0},
+};
+
 static const bbq_band bbq_scored_bands[] = {
 	bbq_band::nowcast_fine,
 	bbq_band::nowcast,
@@ -453,32 +485,24 @@ int main(int argc, char *argv[]) {
 				 */
 				const double scaled = bias * bucket_index;
 
-				if (store.set_verification(wanted, band,
-				                           QStringLiteral("temperature"), bucket,
-				                           50, scaled, qAbs(scaled) + 0.5,
-				                           qAbs(scaled) + 0.8)) {
-					++written;
-				}
-
 				/*
-				 * Rain in mm/h, so a tenth of the temperature figure --
-				 * a band over-forecasting rain by half a degree's worth
-				 * would be a downpour.
+				 * Each in its own units. Rain is a tenth of the
+				 * temperature figure, because a band over-forecasting
+				 * rain by half a degree's worth would be a downpour;
+				 * wind is a few times it; the verdict is a fraction,
+				 * being a score between nought and one.
 				 */
-				if (store.set_verification(wanted, band,
-				                           QStringLiteral("precip_rate"), bucket,
-				                           50, scaled / 10.0,
-				                           qAbs(scaled / 10.0) + 0.05,
-				                           qAbs(scaled / 10.0) + 0.08)) {
-					++written;
-				}
+				for (const bbq_scored_quantity &quantity :
+				     bbq_scored_quantities) {
+					const double error = scaled * quantity.scale;
 
-				/* Wind in km/h, so a few times the temperature figure. */
-				if (store.set_verification(wanted, band,
-				                           QStringLiteral("wind_kph"), bucket, 50,
-				                           scaled * 2.0, qAbs(scaled * 2.0) + 1.0,
-				                           qAbs(scaled * 2.0) + 1.5)) {
-					++written;
+					if (store.set_verification(
+					            wanted, band,
+					            QString::fromLatin1(quantity.name), bucket, 50,
+					            error, qAbs(error) + quantity.spread,
+					            qAbs(error) + quantity.spread * 1.6)) {
+						++written;
+					}
 				}
 
 				/*
@@ -731,14 +755,10 @@ int main(int argc, char *argv[]) {
 			bbq_lead_bucket::four_days, bbq_lead_bucket::week,
 			bbq_lead_bucket::beyond};
 
-		const QString quantities[] = {
-			QStringLiteral("temperature"),
-			QStringLiteral("precip_rate"),
-			QStringLiteral("wind_kph")};
-
 		bool any = false;
 
-		for (const QString &quantity : quantities) {
+		for (const bbq_scored_quantity &scored : bbq_scored_quantities) {
+			const QString quantity = QString::fromLatin1(scored.name);
 			report << "\n" << quantity << " error, by band and lead time:\n";
 
 			for (bbq_band band : bbq_scored_bands) {

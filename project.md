@@ -13633,3 +13633,59 @@ in the direction that gets noticed.
 
 Sabotaged back to the discarded return, it fails with the old sentence
 quoted in the message.
+
+## 16.103 The archive scored the verdict and the report showed the
+## ingredients
+
+Sec 12.20 added a fourth quantity, `grill`, on 2026-09-04: the verdict
+itself, scored beside the temperature, rain and wind it is made of. The
+store has been accumulating it ever since -- **789 samples across 28
+buckets** on the live archive.
+
+`--history` walked three quantities. The verdict was not one of them.
+
+The window already had this right, and says why in its own comment: the
+verdict "is the last thing added to the store and the first thing a
+reader actually wants -- the three ingredients say whether the numbers
+were right, and this says whether the ANSWER was." The diagnostic for
+reading the archive reported the numbers and not the answer.
+
+It reports it now, first, ahead of what it is made of:
+
+    grill error, by band and lead time:
+      hourly at 1d:     n=29  bias=-0.04  MAE=0.06
+      corrected at 1d:  n=24  bias=-0.06  MAE=0.07
+
+Which is a useful thing to have been unable to see: on a nought-to-one
+scale, the grilling verdict at a day out is within about 0.06.
+
+### 16.103.1 The same fault as sec 16.96, on the other axis
+
+That section found a BAND the report did not walk and made the two lists
+one so they could not drift. This is the same fault in the QUANTITY
+dimension, and it had drifted the same way -- the report's three and the
+seeding diagnostic's three, in separate places, neither reached when a
+fourth was added to the store.
+
+So the quantities are one list now as well, and it carries the scale
+each needs, because the seeding does and the report does not: a degree,
+a tenth of a millimetre an hour, a few km/h and a fraction of a verdict
+are different sizes, and a fixture using one number for all four would
+not resemble anything the store holds.
+
+**Finding the first should have found the second.** Sec 16.96 fixed the
+band list and did not ask whether the loop's other dimension had the
+same problem, when the answer was one grep away and the fault was
+already three days old.
+
+### 16.103.2 The guard covers both dimensions now
+
+`every_scored_band_reaches_the_report` seeds a scratch archive, reads it
+back through the real binary, and required every band to appear. It
+requires every quantity to have a section too, and keeps a control for
+each: a band nothing scores must be absent, and so must a quantity --
+without those it would pass against a report that printed no rows at
+all.
+
+Sabotaged by dropping `grill` from the shared list, it names that
+quantity exactly.

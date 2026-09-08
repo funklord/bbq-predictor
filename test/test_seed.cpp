@@ -284,6 +284,28 @@ void test_seed::every_scored_band_reaches_the_report() {
 	}
 
 	/*
+	 * AND EVERY QUANTITY, for the same reason and by the same fault
+	 * (sec 16.103). `grill` was added to the store by sec 12.20 and
+	 * reached neither the seeding nor the report -- so the archive
+	 * scored the verdict, which is the thing this program exists to
+	 * answer, and the diagnostic showed only its three ingredients.
+	 */
+	const QStringList scored = {
+		QStringLiteral("grill"),
+		QStringLiteral("temperature"),
+		QStringLiteral("precip_rate"),
+		QStringLiteral("wind_kph"),
+	};
+
+	for (const QString &quantity : scored) {
+		if (!told.contains(quantity + QStringLiteral(" error, by band"))) {
+			QFAIL(qPrintable(QStringLiteral(
+			        "the report has no section for %1, though seeding wrote "
+			        "scores for it:\n%2").arg(quantity, told)));
+		}
+	}
+
+	/*
 	 * The control. Every name above is a word that could appear in the
 	 * report's prose, so a test that only looked for them would pass
 	 * against a report that printed no rows at all. A band NOT scored
@@ -291,6 +313,10 @@ void test_seed::every_scored_band_reaches_the_report() {
 	 */
 	QVERIFY2(!told.contains(QStringLiteral("observed at ")),
 	         "a measurement was reported as though it were a forecast");
+
+	/* And the same for a quantity nothing scores. */
+	QVERIFY2(!told.contains(QStringLiteral("humidity error")),
+	         "a quantity this program does not score was reported");
 }
 
 QTEST_GUILESS_MAIN(test_seed)
