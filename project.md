@@ -12162,6 +12162,36 @@ that should sit at 1.0 is pulled below it on about 37% of hours, which
 is the right order to produce the -0.011 to -0.107 measured on the
 verdict itself.
 
+### 16.82.3 Rain is a second source, and the archive cannot say how often
+
+The rain term is `ramp_down(rain, 0.0, rain_ruins_mm_h)` -- **zero, not
+a threshold**, so ANY forecast rain costs something, linearly to nothing
+at 2 mm/h. Rain is over-forecast here too:
+
+    precip_rate band5 bucket5  n=12  bias +0.375
+    precip_rate band5 bucket4  n=24  bias +0.327
+    precip_rate band3 bucket1  n=36  bias +0.275
+
+and 99.1% of observed hours had no rain at all. So the same shape as
+wind: a factor that should sit at 1.0, pulled below it by a forecast of
+weather that did not arrive.
+
+**What cannot be said is how often**, and the reason is the archive's
+own design. Sec 12.1 keeps sums and counts rather than the samples they
+came from -- "a fixed size" is the whole point -- so a mean error of
++0.375 over twelve comparisons is equally one hour wrong by 4.5 and
+twelve wrong by 0.375, and nothing stored distinguishes them.
+
+The wind answer was only available because the threshold is 15 km/h and
+the offset is near-constant, so observations plus a constant reproduce
+the forecast distribution. Rain has no such threshold and no such
+constancy.
+
+**A worthwhile limit to know rather than a fault**: the archive answers
+"how wrong, on average" for everything and "how often it mattered" only
+where a threshold and a steady offset let the distribution be
+reconstructed.
+
 ### 16.82.2 What is NOT decided here
 
 The correction exists and the verdict does not use it. That follows from
