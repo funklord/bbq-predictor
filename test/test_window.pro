@@ -8,6 +8,7 @@ QT += gui widgets sql positioning
 # stub out (project.md sec 14.10).
 SOURCES += test_window.cpp \
 	$$PWD/../src/graph/forecast_graph.cpp \
+	$$PWD/../src/graph/simplify.cpp \
 	$$PWD/../src/model/correction.cpp \
 	$$PWD/../src/model/settings.cpp \
 	$$PWD/../src/store/history.cpp \
@@ -24,6 +25,7 @@ SOURCES += test_window.cpp \
 
 HEADERS += \
 	$$PWD/../src/graph/forecast_graph.h \
+	$$PWD/../src/graph/simplify.h \
 	$$PWD/../src/model/correction.h \
 	$$PWD/../src/model/settings.h \
 	$$PWD/../src/store/history.h \

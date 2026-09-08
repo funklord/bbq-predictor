@@ -12737,3 +12737,104 @@ itself when labels are drawn over the plot, which is what the phone and
 the home-screen picture do. So the desktop was the only surface with the
 fault, and the fix makes it agree with the phone rather than inventing
 an answer.
+
+## 16.91 The curve was the paint, once the fixture had real weather in it
+
+Sec 16.89 fixed four fills and left the wide view at 28 ms. Re-measured
+per block on a fixture that carries rain, chance and wind -- which is
+the thing sec 16.89.1 says the old one did not -- the answer had moved:
+
+    section                1 day    3 day   16 day
+    temperature             5228     6269     9371
+    dots                     388     1070     5553
+    grid+axis                737      925     2876
+    columns+scale+windows    179      556     2453
+    rain                     449      650     1705
+    ribbon+daynames          263      395     1414
+    paintEvent total        7656    10280    23895
+
+**At the view somebody actually drags, the temperature curve is 68% of
+the paint.** The first pass never touched it, because on the old fixture
+the temperature was a two-value step and cost 1.9 ms.
+
+Split further: halo 3687 us, ink 1849. The curve carries one point per
+column and is stroked twice, and the halo pen has `Qt::RoundJoin`, which
+is an arc generated at every vertex.
+
+### 16.91.1 Douglas-Peucker, and the version of it that was wrong
+
+Simplifying the polyline before stroking takes 429 points to 69 at a
+hundredth of a pixel, and the measured effect, interleaved within one
+process and taking the minimum of three rounds each:
+
+    view      unsimplified   simplified
+    1 day        10246          5588      -45%
+    3 day        12938          9971      -23%
+    16 day       27977         27257      no measurable change
+
+**The wide view does not improve**, and that is the honest shape of it
+rather than a disappointment. More weather falls in each pixel there, so
+the curve keeps about three quarters of its points -- 506 to 174 -- and
+what is saved on stroking is spent on the simplifying, which costs about
+100 us a call. Neither is the dominant cost at that width anyway.
+
+**The first implementation was wrong and looked spectacular**, which is
+the part worth keeping. It measured each point against the segment from
+the last KEPT point to the point AFTER it. The reference line moves
+along with the point being judged, so accumulated drift never registers:
+it took the same 429-point curve to **7** and would have drawn a polygon
+where the weather was.
+
+The number was seven times better than the correct answer and arrived
+first. What caught it was not review but arithmetic -- a half-sine two
+hundred pixels tall cannot be seven points within a tenth of a pixel, so
+either the algorithm or the claim was wrong. **A simplifier that cannot
+state its error bound is not a simplifier**, and the bound is the whole
+reason it is safe to do this behind the reader's back.
+
+### 16.91.2 Choosing the tolerance by what it does to the pixels
+
+Rendered against the unsimplified output, worst channel difference on an
+antialiased edge:
+
+    tolerance   worst delta   vertices kept (of 429)
+    0.02              6/255        69
+    0.05             13/255        50
+    0.1              26/255        32
+    0.25            57/255         32
+
+A hundredth of a pixel was not chosen for being conservative. It is the
+one whose worst pixel is under what a screen will show, and it still
+drops five vertices in six -- because what is being removed is not
+detail but the same straight line said hundreds of times.
+
+### 16.91.3 Two tests, because one of them is vacuous alone
+
+The bound is asserted as a bound: every input point lies within the
+tolerance of the polyline that survived, measured against the SEGMENTS
+kept rather than the vertices, over an arc, a sawtooth, a spike, a flat
+line and a staircase at five tolerances.
+
+Sabotaged both ways, and the second is why there are two tests:
+
+- **A simplifier that drops everything** fails the bound at 0.001 with a
+  point moved 176.8, and fails the spike test.
+- **A simplifier that does nothing at all** PASSES the bound -- keeping
+  every point trivially satisfies it -- and is caught only by the second
+  test, which requires a straight line of 300 points to reduce to 2.
+
+A distance bound cannot tell a working simplifier from an inert one.
+That is this workspace's vacuous pass wearing a proof, and it took a
+deliberate sabotage to see it rather than a careful reading.
+
+### 16.91.4 The gate caught the wiring
+
+`simplify.cpp` went into the application and into `test_view.pro`, and
+`make style` refused: `test_window.pro` compiles `forecast_graph.cpp`
+too, so it includes `simplify.h` and named neither. Without that,
+changing the simplifier would not have rebuilt the largest link in the
+suite.
+
+It is in `test_view.pro` and `test_window.pro` rather than in
+`test_common.pri` because `QPolygonF` is QtGui and the shared file
+removes that module.

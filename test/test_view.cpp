@@ -1,6 +1,10 @@
 #include <QApplication>
 #include <QFile>
 #include <QImage>
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <QPainter>
 #include <QSet>
 #include <QTemporaryDir>
@@ -17,6 +21,7 @@
 #include <QSlider>
 
 #include "graph/forecast_graph.h"
+#include "graph/simplify.h"
 #include "model/composite.h"
 #include "model/grill.h"
 #include <QTimeZone>
@@ -52,6 +57,8 @@ class test_view : public QObject {
 
 private slots:
 	void bbq_flatten_matches_qt();
+	void bbq_simplify_keeps_every_point_within_tolerance();
+	void bbq_simplify_keeps_what_a_curve_needs();
 	void a_fresh_graph_follows_the_clock();
 	void the_span_is_bounded_at_both_ends();
 	void zooming_holds_the_moment_under_the_cursor();
@@ -1843,4 +1850,142 @@ void test_view::bbq_flatten_matches_qt() {
 	 * The sweep is evidence only if it ran over what it says it did.
 	 */
 	QCOMPARE(checked, int(grounds.size() * inks.size()) * 256);
+}
+
+namespace {
+
+/*
+ * The largest distance from any input point to the polyline that
+ * survived. This is the quantity Douglas-Peucker bounds, so it is the
+ * quantity to assert -- not the point count, which is a property of the
+ * data, and not the output itself, which would be this file agreeing
+ * with the implementation about a particular answer.
+ */
+double worst_departure(const QPolygonF &before, const QPolygonF &after) {
+	double worst = 0.0;
+
+	for (const QPointF &p : before) {
+		double best = std::numeric_limits<double>::max();
+
+		for (int at = 0; at + 1 < after.size(); ++at) {
+			const QPointF a = after[at];
+			const QPointF b = after[at + 1];
+			const double dx = b.x() - a.x();
+			const double dy = b.y() - a.y();
+			const double len_squared = dx * dx + dy * dy;
+
+			double t = 0.0;
+			if (len_squared > 1e-18) {
+				t = ((p.x() - a.x()) * dx + (p.y() - a.y()) * dy) /
+				    len_squared;
+				t = std::clamp(t, 0.0, 1.0);
+			}
+
+			best = std::min(best, std::hypot(p.x() - (a.x() + t * dx),
+			                                 p.y() - (a.y() + t * dy)));
+		}
+
+		worst = std::max(worst, best);
+	}
+
+	return worst;
+}
+
+} // namespace
+
+/*
+ * The guarantee the drawing relies on: nothing moves further than the
+ * tolerance. The graph simplifies the temperature curve before stroking
+ * it and calls the picture unchanged, which is only honest if this
+ * holds -- so it is checked against the SEGMENTS that survive rather
+ * than against the vertices, since a dropped point is judged by how far
+ * it sits from the line now drawn in its place.
+ *
+ * The inputs are chosen to be hostile rather than representative. A
+ * smooth arc is the easy case and the one the optimisation was measured
+ * on; a sawtooth, a step and a spike are what would expose a simplifier
+ * that walks past accumulated drift -- which the first attempt at this
+ * did, reducing a 429-point arc to 7.
+ */
+void test_view::bbq_simplify_keeps_every_point_within_tolerance() {
+	const QList<double> tolerances = {0.001, 0.02, 0.1, 1.0, 5.0};
+
+	QList<QPolygonF> shapes;
+
+	QPolygonF arc;
+	QPolygonF sawtooth;
+	QPolygonF spike;
+	QPolygonF flat;
+	QPolygonF staircase;
+
+	for (int at = 0; at < 400; ++at) {
+		const double x = at;
+		arc << QPointF(x, 200.0 + 150.0 * std::sin(at / 61.0));
+		sawtooth << QPointF(x, at % 7 < 4 ? 100.0 : 140.0);
+		spike << QPointF(x, at == 200 ? 10.0 : 300.0);
+		flat << QPointF(x, 123.0);
+		staircase << QPointF(x, 50.0 + 10.0 * (at / 40));
+	}
+
+	shapes << arc << sawtooth << spike << flat << staircase;
+
+	int checked = 0;
+
+	for (const QPolygonF &shape : shapes) {
+		for (double tolerance : tolerances) {
+			const QPolygonF kept = bbq_simplify_polyline(shape, tolerance);
+
+			QVERIFY2(kept.size() >= 2, "a polyline must keep its ends");
+			QCOMPARE(kept.first(), shape.first());
+			QCOMPARE(kept.last(), shape.last());
+			QVERIFY2(kept.size() <= shape.size(),
+			         "simplifying cannot add vertices");
+
+			const double worst = worst_departure(shape, kept);
+			if (worst > tolerance + 1e-9) {
+				QFAIL(qPrintable(
+				        QStringLiteral("tolerance %1: a point moved %2")
+				                .arg(tolerance)
+				                .arg(worst)));
+			}
+
+			++checked;
+		}
+	}
+
+	QCOMPARE(checked, int(shapes.size() * tolerances.size()));
+}
+
+/*
+ * The bound above is satisfied by a simplifier that removes NOTHING, so
+ * on its own it cannot tell a working one from an inert one -- the
+ * vacuous pass of the guidelines, wearing a proof.
+ *
+ * These are the two ends. A straight line has no vertex worth keeping
+ * whatever the tolerance, and a spike is exactly what a tolerance below
+ * its height must not lose. A simplifier that fails either is broken in
+ * a way the distance bound is blind to.
+ */
+void test_view::bbq_simplify_keeps_what_a_curve_needs() {
+	QPolygonF straight;
+	for (int at = 0; at < 300; ++at) {
+		straight << QPointF(at, 7.0 + 0.25 * at);
+	}
+	QCOMPARE(bbq_simplify_polyline(straight, 0.02).size(), 2);
+
+	QPolygonF spike;
+	for (int at = 0; at < 300; ++at) {
+		spike << QPointF(at, at == 150 ? 0.0 : 200.0);
+	}
+	const QPolygonF kept = bbq_simplify_polyline(spike, 0.02);
+	QVERIFY2(kept.contains(QPointF(150, 0.0)),
+	         "a spike far outside the tolerance was dropped");
+
+	/* And a tolerance wider than the spike is allowed to lose it. */
+	QCOMPARE(bbq_simplify_polyline(spike, 400.0).size(), 2);
+
+	/* Degenerate inputs must not divide by a zero-length segment. */
+	QPolygonF same;
+	same << QPointF(5.0, 5.0) << QPointF(5.0, 5.0) << QPointF(5.0, 5.0);
+	QCOMPARE(bbq_simplify_polyline(same, 0.02).size(), 2);
 }
