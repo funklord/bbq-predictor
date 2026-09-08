@@ -1331,7 +1331,7 @@ QString bbq_main_window::verification_note(const bbq_composite &composite,
 		 * Rare until sec 16.12 started scoring rain through dry spells,
 		 * and routine after it, so the case is said instead of scored.
 		 */
-		if (rain.baseline > 0.0) {
+		if (rain.has_skill()) {
 			note += QStringLiteral(", rain skill %1")
 			                .arg(rain.skill(), 0, 'f', 2);
 		} else {

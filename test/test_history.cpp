@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include <QDir>
 #include <QFile>
 #include <QSqlDatabase>
@@ -22,6 +24,7 @@ class test_history : public QObject {
 
 private slots:
 	void the_archive_reports_its_resolution();
+	void a_dry_spell_has_no_skill_to_report();
 	void lead_times_bucket_by_their_upper_bound();
 	void a_bin_counts_the_wet_ones_apart_from_the_total();
 	void the_three_scores_are_told_apart_by_the_fixture();
@@ -930,6 +933,69 @@ void test_history::the_archive_reports_its_resolution() {
 
 	/* A station with nothing stored is zero, not the other station's. */
 	QCOMPARE(store.whole_degree_observations(QStringLiteral("IRES2")), 0);
+}
+
+
+/*
+ * A dry spell leaves skill undefined, and the difference between
+ * undefined and zero is the whole point (project.md sec 16.98).
+ *
+ * skill() answers 0.0 when it cannot divide, and 0.0 is a perfectly
+ * good skill score meaning "no better than knowing nothing". So the
+ * value alone cannot tell a band that knew nothing from a band that
+ * correctly said it would stay dry every time -- only has_skill() can,
+ * and a caller that prints the number without asking reports the second
+ * as the first.
+ *
+ * Asserted as the RELATIONSHIP between the two rather than as either
+ * value: skill is reportable exactly when there is a baseline to beat.
+ * That survives someone changing what skill() returns in the undefined
+ * case, which a test pinning 0.0 would not.
+ */
+void test_history::a_dry_spell_has_no_skill_to_report() {
+	bbq_brier dry;
+	dry.count = 30;
+	dry.score = 0.122;
+	dry.baseline = 0.0;
+	dry.base_rate = 0.0;
+
+	QVERIFY2(!dry.has_skill(),
+	         "a baseline of zero was reported as something to beat");
+
+	/*
+	 * The trap named: the number it answers is indistinguishable from a
+	 * real result, which is why the predicate has to be asked first.
+	 */
+	QCOMPARE(dry.skill(), 0.0);
+
+	bbq_brier wet;
+	wet.count = 50;
+	wet.score = 0.108;
+	wet.baseline = 0.038;
+	wet.base_rate = 0.04;
+
+	QVERIFY2(wet.has_skill(), "a real baseline was reported as nothing to beat");
+	QVERIFY(wet.skill() < 0.0);
+
+	/*
+	 * And the two agree about which case they are in, over the whole
+	 * range rather than at the two points above -- a baseline is either
+	 * something to beat or it is not, and skill() must never divide by
+	 * one that is not.
+	 */
+	int checked = 0;
+	for (int at = 0; at <= 100; ++at) {
+		bbq_brier probe;
+		probe.count = 10;
+		probe.score = 0.2;
+		probe.baseline = at / 100.0;
+
+		QCOMPARE(probe.has_skill(), probe.baseline > 0.0);
+		QVERIFY(std::isfinite(probe.skill()));
+		++checked;
+	}
+
+	QCOMPARE(checked, 101);
 }
 
 QTEST_GUILESS_MAIN(test_history)

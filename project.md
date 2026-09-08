@@ -13286,3 +13286,60 @@ the pairs are deleted as they are scored, so the corrected band cannot
 be re-scored under a different rule without collecting again. What can
 be said is what is above -- the current rule produces a band that is wet
 in every hour it covers beyond two days, on a fortnight that was dry.
+
+## 16.98 The same measurement, described two ways
+
+Sec 16.19 settled what to say when it never rained: skill is measured
+against always predicting the observed base rate, and with no rain that
+baseline scores a perfect zero. There is nothing to be better than, so
+the quantity is **undefined rather than bad**, and the window says "no
+rain in 30" instead of printing a number.
+
+`--history` printed `skill=0.00`.
+
+Same archive, same rows, and a band that correctly said it would stay
+dry every time reported as one that knew nothing -- depending on which
+surface a reader happened to be looking at. On the live archive that was
+five of the rows in the chance section.
+
+### 16.98.1 The trap is that the wrong answer is a valid one
+
+`skill()` answers 0.0 where it cannot divide, and **0.0 is a perfectly
+good skill score** -- it is exactly the value for a forecast no better
+than climatology. So the number carries no sign that it is a
+placeholder, and nothing downstream can recover the difference.
+
+That is what makes this worse than a division by zero would have been. A
+NaN propagates and gets noticed; a plausible zero does not.
+
+### 16.98.2 One condition, not two spellings and an omission
+
+The window asked `rain.baseline > 0.0` written out at its call site. The
+report did not ask at all. Nothing named the question, so there was
+nothing for a second caller to find and reuse -- which is the shape sec
+16.90 already recorded for the day names, a helper whose behaviour
+depends on something each caller has to remember.
+
+`bbq_brier::has_skill()` names it, `skill()` is defined in terms of it,
+and both callers ask it. The report says `skill=n/a (nothing to beat)`
+rather than borrowing the window's sentence, because a diagnostic and a
+status line are different registers -- what they must share is the
+DECISION, not the wording.
+
+### 16.98.3 The fixture cannot reach this case, and that is recorded
+rather than fixed
+
+`--seed-verification` writes reliability bins as `happened = said -
+drift`, so some bin always rained and the base rate is never zero. The
+seeded archive therefore cannot produce a dry bucket, and this branch
+has no end-to-end test through the binary the way sec 16.96's does.
+
+It is covered by a unit test on `bbq_brier` instead, which asserts the
+RELATIONSHIP -- skill is reportable exactly when there is a baseline to
+beat, swept over 101 baselines -- rather than pinning the 0.0, so it
+survives somebody changing what the undefined case returns.
+
+Extending the seed to write a dry bucket would close that, and it would
+also change what every existing use of the diagnostic produces. Left
+alone deliberately, and written down so the gap is visible rather than
+assumed covered.

@@ -161,8 +161,28 @@ struct bbq_brier {
 	double baseline = 0.0;
 	double base_rate = 0.0;
 
+	/*
+	 * Whether skill is a QUESTION here, before it is an answer
+	 * (sec 16.98).
+	 *
+	 * With no rain at all the baseline scores a perfect zero: there is
+	 * nothing to be better than, so skill is undefined rather than bad.
+	 * skill() answers 0.0 to avoid dividing by it, and 0.0 is a
+	 * perfectly good skill score meaning "no better than knowing
+	 * nothing" -- so a caller that prints it without asking this first
+	 * reports a band that correctly stayed dry every time as one that
+	 * knew nothing.
+	 *
+	 * The window asked, as a bare `baseline > 0.0` written out at the
+	 * call site. The --history report did not ask at all, so the same
+	 * measurement described a band two ways depending on which surface
+	 * a reader was looking at. Named here so there is one condition
+	 * rather than two spellings and an omission.
+	 */
+	bool has_skill() const { return baseline > 0.0; }
+
 	double skill() const {
-		return baseline > 0.0 ? 1.0 - (score / baseline) : 0.0;
+		return has_skill() ? 1.0 - (score / baseline) : 0.0;
 	}
 };
 

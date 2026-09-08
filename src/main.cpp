@@ -752,9 +752,36 @@ int main(int argc, char *argv[]) {
 				report << "  " << bbq_band_name(band) << " at "
 				       << bbq_lead_bucket_name(bucket) << ": n=" << score.count
 				       << " Brier=" << QString::number(score.score, 'f', 3)
-				       << " baseline=" << QString::number(score.baseline, 'f', 3)
-				       << " skill=" << QString::number(score.skill(), 'f', 2)
-				       << " (rained " << QString::number(score.base_rate * 100.0, 'f', 0)
+				       << " baseline=" << QString::number(score.baseline, 'f', 3);
+
+				/*
+				 * NO SKILL NUMBER WHERE THERE IS NO SKILL TO MEASURE
+				 * (sec 16.19, and sec 16.98 for why it is said twice).
+				 *
+				 * Skill is measured against always predicting the
+				 * observed base rate, and with no rain at all that
+				 * baseline scores a perfect zero. There is nothing to
+				 * be better than, so the quantity is undefined rather
+				 * than bad -- and skill() answers 0.0 to avoid dividing
+				 * by it, which printed here as "skill=0.00" and reads
+				 * as a band no better than knowing nothing. A band that
+				 * correctly said it would stay dry every time had
+				 * earned the opposite sentence.
+				 *
+				 * The window already says this. The diagnostic did not,
+				 * so the same measurement described a band two ways
+				 * depending on which surface a reader happened to be
+				 * looking at.
+				 */
+				if (score.has_skill()) {
+					report << " skill="
+					       << QString::number(score.skill(), 'f', 2);
+				} else {
+					report << " skill=n/a (nothing to beat)";
+				}
+
+				report << " (rained "
+				       << QString::number(score.base_rate * 100.0, 'f', 0)
 				       << "% of the time)\n";
 
 				const std::vector<bbq_reliability_bin> bins =
