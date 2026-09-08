@@ -13419,6 +13419,39 @@ that depends on the resolution of the surface -- is invisible to the
 entire method. That is worth knowing before the next change is proved
 the same way.
 
+### 16.99.4 And the obvious guard for that is INVERTED
+
+The fix this invites is a cross-resolution comparison: render at a ratio
+of 2, scale the result down, and require it to match the ratio-1 render.
+That is what resolution independence sounds like, and it is wrong.
+
+Measured, against the very bug above:
+
+    render at 2, downscaled, vs render at 1
+                          mean    worst   pixels over 32
+    with the bug          0.31      163       679
+    fixed                 0.82      233      1504
+
+**The broken version scores better on every column.** A threshold on
+this would have rewarded drawing the dots at half size.
+
+The reason is not a flaw in the arithmetic. A higher-resolution render
+is SUPPOSED to contain detail the lower one cannot hold -- finer
+antialiasing, hinted text laid out on a finer grid, a circle whose edge
+has twice the steps -- so the difference between them grows with
+correctness rather than shrinking. Drawing the dots smaller made the 2x
+render carry less of what the 1x render lacks, and the metric read that
+as agreement.
+
+So resolution independence cannot be tested by comparing renders across
+resolutions. It has to be asked of the objects that carry a resolution,
+which is what `a_dot_stamp_carries_the_ratio_it_was_rendered_at` does --
+it holds a pixmap and asks its ratio and its logical size.
+
+Recorded because the paragraph above invites the wrong fix, and somebody
+acting on it would add a guard that passes the defect it was written
+for.
+
 ## 16.100 A sanitized suite that is always red is one nobody reads
 
 `make SANITIZE=1 test` exits 1, and has since sec 16.83, for a single
