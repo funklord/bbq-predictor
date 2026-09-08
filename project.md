@@ -13580,3 +13580,56 @@ It drives both steps now, and gained the case that prompted all this: the
 same staleness with the station answering must name the endpoint. Without
 that, the test would have passed on a program that had lost the ability
 to tell the two apart.
+
+## 16.102 Discovery threw away what it found and called it nothing
+
+`--discover` looks up the stations near a point and REMEMBERS them --
+`remember_station` and `set_discovery_origin`, both writes. It opened
+the archive and discarded the result.
+
+With the store shut it looked the stations up, threw them away, and
+said:
+
+    discover: remembered 0 station(s) near 59.33,18.07
+
+exiting 0. Which is the sentence a genuinely empty sky produces, so the
+failure is indistinguishable from the answer.
+
+Reproduced by pointing `--history-path` at a path that cannot be opened,
+and the same run with a usable one says `remembered 10 station(s)`.
+
+### 16.102.1 One surface of three
+
+`open_history` has three callers. `fetch_once` prints "history
+unavailable" and carries on; the window puts the same thing in its error
+line and draws anyway, because sec 12 says the applet still works
+without an archive. Both were right and both said so.
+
+`--discover` was the third, and the only one that could not carry on
+without the store, since the count it prints IS the number of rows it
+wrote. It was also the only one that said nothing.
+
+That is the shape this project keeps meeting: a value with several
+consumers where one is not wired, and the unwired one is invisible
+because the others are right. Found by asking which status-returning
+calls discard their result, which `evidence.md` names as a lens and sec
+12.13.2 already paid for once with `record_observations`.
+
+It refuses now, non-zero, before looking anything up.
+
+### 16.102.2 The test needs no network, by construction
+
+The store is opened before anything is fetched, so the refusal happens
+first and the whole path is reachable in a suite that blocks the
+network. A test that needed the lookup could not live there at all.
+
+Its control is that the old output must not be producible: the message
+must not carry the count's own phrasing. **The first version of that
+control was wrong in the strict direction** -- it forbade the word
+"remembered" anywhere, and the refusal itself uses it in explaining that
+nothing could be remembered, so the test failed against the fix. A
+control stricter than the claim is still a broken control; it just fails
+in the direction that gets noticed.
+
+Sabotaged back to the discarded return, it fails with the old sentence
+quoted in the message.

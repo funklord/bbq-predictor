@@ -578,7 +578,39 @@ int main(int argc, char *argv[]) {
 		}
 
 		bbq_wu_feed feed;
-		feed.open_history(history_path);
+
+		/*
+		 * REMEMBERING IS THE WHOLE JOB, so an archive that will not
+		 * open is a failure rather than a footnote (sec 16.102).
+		 *
+		 * This discarded the result. Discovery writes what it finds --
+		 * remember_station and set_discovery_origin -- so with the
+		 * store shut it looked up the stations, threw them away, and
+		 * reported:
+		 *
+		 *     discover: remembered 0 station(s) near 59.33,18.07
+		 *
+		 * and exited 0. Which reads as "there is nothing near you", the
+		 * opposite of what happened, and is the same sentence a genuine
+		 * empty answer produces.
+		 *
+		 * The other two callers of open_history already say so --
+		 * fetch-once prints "history unavailable" and the window puts
+		 * it in its error line -- so this was the one surface of three
+		 * that stayed quiet.
+		 *
+		 * Non-zero and no lookup, unlike those two, because they have
+		 * something left to do without the archive and this has
+		 * nothing: the count it prints IS the number of rows it wrote.
+		 */
+		if (!feed.open_history(history_path)) {
+			report << "discover: history unavailable: " << feed.history_error()
+			       << "\n";
+			report << "discover:   nothing found could be remembered, so "
+			          "nothing was looked up\n";
+			return 1;
+		}
+
 		feed.set_geocode(parts.at(0).toDouble(), parts.at(1).toDouble(), true);
 
 		QEventLoop loop;

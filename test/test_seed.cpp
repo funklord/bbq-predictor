@@ -29,6 +29,7 @@ private slots:
 	void seeding_the_real_archive_is_refused();
 	void seeding_a_scratch_file_works();
 	void every_scored_band_reaches_the_report();
+	void discovery_refuses_an_archive_it_cannot_open();
 	void the_version_names_the_copyright_holder();
 	void the_usage_points_at_the_manual_page();
 
@@ -294,3 +295,59 @@ void test_seed::every_scored_band_reaches_the_report() {
 
 QTEST_GUILESS_MAIN(test_seed)
 #include "test_seed.moc"
+
+/*
+ * Discovery exists to REMEMBER what it finds, so an archive that will
+ * not open is a failure rather than a footnote (project.md sec 16.102).
+ *
+ * It used to discard the result of opening the store, look the stations
+ * up, throw them away and report "remembered 0 station(s)" with an exit
+ * of 0 -- the same sentence a genuinely empty answer gives, and the
+ * opposite of what happened.
+ *
+ * No network is needed to check this and that is by construction: the
+ * archive is opened before anything is looked up, so the refusal
+ * happens first. A test that needed the lookup could not live in this
+ * suite at all.
+ */
+void test_seed::discovery_refuses_an_archive_it_cannot_open() {
+	QTemporaryDir home;
+	QVERIFY(home.isValid());
+
+	QProcess process;
+	QStringList arguments;
+	arguments << QStringLiteral("--discover") << QStringLiteral("--geocode")
+	          << QStringLiteral("59.33,18.07")
+	          << QStringLiteral("--history-path")
+	          << QStringLiteral("/proc/nope/x.sqlite");
+
+	run(process, home, arguments);
+
+	const QString told = QString::fromLocal8Bit(process.readAll());
+
+	QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+	QVERIFY2(process.exitCode() != 0,
+	         qPrintable(QStringLiteral("an unusable archive exited 0: %1")
+	                            .arg(told)));
+
+	QVERIFY2(told.contains(QStringLiteral("history unavailable")),
+	         qPrintable(QStringLiteral("the archive was not blamed: %1")
+	                            .arg(told)));
+
+	/*
+	 * The control, and the reason this test is worth having: the old
+	 * behaviour must not be able to pass it. "remembered 0 station(s)"
+	 * is what a working program says when the sky is empty, so a test
+	 * that only looked for an error string would still pass against a
+	 * program that printed both.
+	 *
+	 * Matched on the count's own phrasing rather than on the word
+	 * "remembered", which the refusal itself uses -- the first version
+	 * forbade the word and failed against the fix, which is the control
+	 * being stricter than the claim.
+	 */
+	QVERIFY2(!told.contains(QStringLiteral("station(s) near")),
+	         qPrintable(QStringLiteral("it still reported a count of stations "
+	                                   "it had remembered: %1").arg(told)));
+}
+
