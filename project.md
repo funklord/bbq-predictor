@@ -11958,6 +11958,28 @@ It also fails `a_day_with_a_hole_in_it_is_still_asked_for` in the feed,
 which is the same property one layer up -- so the pair of them are what
 keeps sec 16.79's "nothing is lost" true.
 
+### 16.79.3 And then it happened, which is better evidence than the test
+
+The endpoint caught up overnight. One fetch, 2026-09-08 08:0xZ:
+
+    before  1567 rows, newest 2026-09-07 07:19:59Z
+    after   1864 rows, newest 2026-09-08 08:03:53Z
+
+**297 rows in one fetch**, which is the whole twenty-five hours that had
+been missing, arriving because the observed fetch asks for a day rather
+than for what has come in since. Checked for holes rather than trusted:
+312 intervals since 06:00Z the day before, largest gap 360 s, none over
+fifteen minutes. Nothing was lost and nothing was papered over.
+
+Verification felt it the same round -- `nowcast at 1h` went from n=17 to
+n=30, `hourly at 2d` from 29 to 41.
+
+**The unit test proves the mechanism; this proves the premise.** The
+test can only show that a superset arriving later lands correctly. What
+it cannot show is that the provider ever sends one, and that was the
+half sec 16.79 had to leave as an assumption about somebody else's
+system. It held.
+
 Recorded, not fixed. Archiving `current` would trade a real hole for a
 band that lies about its own duration, and that trade is sec 12's to
 make rather than a fix to slip in while looking at something else.
