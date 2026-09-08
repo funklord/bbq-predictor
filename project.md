@@ -13200,3 +13200,89 @@ appear in the report's prose and a test that only searched for them
 would pass against a report printing no rows at all: `observed` must be
 ABSENT, which no amount of surrounding text supplies. Pointing the list
 at `observed` makes the report print it and the test says so.
+
+## 16.97 The corrected band forecasts drizzle every hour for a week
+
+**The rain correction adds rain to hours the forecast said were dry**,
+wherever the measured bias is negative -- and at the long leads it is.
+
+Measured on the live archive, the corrected band's own stored forecasts:
+
+    lead bucket   rows   dry   lowest rate
+    3h              15    15      0
+    6h              12    12      0
+    2d              48     0      0.069
+    7d             101     0      0.0201
+    7d+            101     0      0.0501
+
+**Zero dry hours at 2d and beyond**, and the lowest rate at 7d+ is
+0.0501, which is exactly the `-0.0501` bias that bucket subtracts. The
+commonest non-zero value in the whole band is a constant 0.1713,
+repeated 53 times: a flat offset laid over hours that had none.
+
+The observations for the same station are dry in **1847 of 1864
+readings, 99.1%**. So for most of its span the corrected band predicts
+light rain, every hour, while the truth is almost always none. Its
+measured error says the same: at one day, corrected rain MAE is 0.33
+against the 0.15 of the band it corrects.
+
+### 16.97.1 Sec 12.10 reasoned about the other sign
+
+That section considered this and got the case that does not bite:
+
+> On a dry forecast the raw rate is zero, a positive bias corrects it
+> below zero, and the clamp puts it back at zero -- an honest dashed
+> line lying flat along the baseline.
+
+True, and it is the harmless half. `std::max(0.0, rate)` only ever
+raises a value, so it protects the direction where the correction would
+go negative and does nothing in the direction where it goes UP. A
+negative bias -- a band that has been under-forecasting rain -- turns
+every dry hour into a wet one, and no clamp stands in the way.
+
+The rule 12.10 states is that an overlay with no rain in it is not
+drawn, because a flat line still has to be read before it can be
+dismissed. **This one has rain in it, so it is drawn** -- and what it
+draws is not nothing but something false.
+
+### 16.97.2 The real problem is the shape of the quantity
+
+Rain is zero-inflated: dry 99.1% of the time here, with the rest
+concentrated in a few wet hours. A MEAN error is a poor summary of that,
+and correcting by it is worse -- adding a constant to a distribution
+that is almost entirely a point mass at zero moves the whole point mass
+off zero, which is wrong in 99 hours to be less wrong in one.
+
+Temperature does not have this shape and neither does wind, which is why
+the same additive correction is a large win on wind (sec 16.96) and a
+disaster here.
+
+Note this is a SEPARATE cause from sec 16.94's quantisation. That one is
+about the observation's grid and applies to temperature and wind; this
+one is about the forecast quantity's distribution and applies to rain.
+Both make an additive mean-bias correction the wrong instrument, for
+different reasons.
+
+### 16.97.3 The options, and whose call it is
+
+Not fixed here, because every fix is a decision about what the corrected
+band means and sec 12.10 owns that.
+
+- **Floor the BIAS at zero rather than the rate.** One line: never let
+  the correction add rain. Keeps the win where a band over-forecasts,
+  gives up the case where it genuinely under-forecasts, and cannot make
+  a dry hour wet. Cheapest, and asymmetric on purpose.
+- **Correct only where the raw rate is non-zero.** Leaves dry hours
+  alone and scales the wet ones. Closer to what a zero-inflated variable
+  wants, and it changes the correction from additive to conditional.
+- **Correct rain multiplicatively**, by a measured ratio rather than a
+  difference. Right in shape, and it needs a different accumulation in
+  the archive -- the verification table stores sums of differences.
+- **Stop correcting rain**, and say why. The archive would still score
+  it, so the decision stays reviewable.
+
+The measurement that would settle it is not available from this archive:
+the pairs are deleted as they are scored, so the corrected band cannot
+be re-scored under a different rule without collecting again. What can
+be said is what is above -- the current rule produces a band that is wet
+in every hour it covers beyond two days, on a fortnight that was dry.
