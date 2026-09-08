@@ -356,6 +356,26 @@ public:
 	int observation_count(const QString &station) const;
 
 	/*
+	 * How many of those observations sit on a whole degree
+	 * (project.md sec 16.94).
+	 *
+	 * Asked because it bounds every error statistic the archive
+	 * reports and nothing else says so. Weather Underground rounds the
+	 * metric conversion, so the observations arrive quantised to 1 C --
+	 * measured here, 3067 of 3067 -- and a forecast cannot be scored
+	 * finer than the grid it is scored against. The mean distance from
+	 * a uniformly distributed value to the nearest whole number is
+	 * 0.25, so a mean absolute error anywhere near that is reporting
+	 * the rounding rather than the forecast.
+	 *
+	 * A count rather than a flag, because it is a property of the DATA
+	 * that arrived and not of the provider this program believes it is
+	 * talking to. A station that starts reporting tenths changes the
+	 * number and says so.
+	 */
+	int whole_degree_observations(const QString &station) const;
+
+	/*
 	 * How many scored samples this station has, across every band, lead
 	 * and quantity.
 	 *

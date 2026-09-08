@@ -12980,3 +12980,127 @@ the edit was correct but that it EXISTS. The habit now is to grep for a
 marker after patching and to make the experiment print something -- the
 rect experiment announced "563 rect(s)" before any timing was believed,
 which is also where its own explanation came from.
+
+## 16.94 Every error statistic has a floor, and nothing said so
+
+The archive exists to say which band forecasts better, and the numbers
+it reports for that had an unstated bound.
+
+**The observations arrive on whole degrees.** Measured on the live
+archive: 3067 of 3067, and the wind too at 3068 of 3068, while the
+precipitation rate is fractional. That is Weather Underground rounding
+its metric conversion, not this program truncating -- `reader.cpp`
+rounds nothing, and the fractional precipitation from the same rows
+proves the path can carry a fraction.
+
+A forecast cannot be scored finer than the grid it is scored against.
+The mean distance from a uniformly distributed value to the nearest
+whole number is 0.25, **so a mean absolute error anywhere near 0.25 is
+reporting the rounding rather than the forecast** -- and several of the
+short leads are at 0.55 to 0.75.
+
+### 16.94.1 How it surfaced: four zeros that were too clean
+
+Reading the report, four bands showed `bias=0.00` exactly. Rounding to
+two places can do that, so the stored sums were read at full precision:
+`sum_error` was **exactly 0.0** over 30, 29, 12 and 7 samples, while the
+absolute errors summed to 28.0, 16.0, 10.0 and 8.0.
+
+Thirty real-valued signed errors cancelling to exactly zero does not
+happen. What does happen is integers cancelling, and the rest of those
+two rows are integers too. Which is the tell: **the whole of bands 3 and
+6 is integer-valued and the whole of bands 2, 4 and 5 is not.**
+
+Bands 3 and 6 are `nowcast` and `hourly`, both Weather Underground.
+Bands 4 and 5 are `extended`, which is Open-Meteo, and `corrected`.
+
+### 16.94.2 The consequence, which is a question rather than a fix
+
+WU's forecasts are already on the same integer grid as WU's
+observations. Open-Meteo's are not, so they carry the observation's
+rounding on top of their own error.
+
+Suppose the true temperature is 14.3 and the observation reports 14. A
+fractional forecast of 14.3 -- exactly right -- scores an error of 0.3.
+An integer forecast of 14 scores 0. **Rounding a forecast to the
+observation's own grid is a free improvement in its measured skill, and
+only one provider gets it.**
+
+It is not obvious how large that is in the current figures, and this
+entry deliberately does not claim a size. The pairs are gone: the
+verification table keeps sums, and `forecast_pending` rows are deleted
+as they are scored, so there is nothing left to re-measure against. What
+can be said is that the effect is bounded by about 0.25 and that the
+smallest measured MAEs are 0.55 to 0.75, so it is a material fraction of
+exactly the comparisons that are closest.
+
+**Whether to score every band on the observation's grid is the
+copyright holder's decision, not a defect to fix in passing.** Rounding
+each forecast before scoring would put every provider on the same
+footing and would measure the finest question the data can answer --
+"did it predict the right whole degree" -- but it changes what every
+number in the archive means, and there are two weeks of figures
+accumulated under the present rule.
+
+### 16.94.3 What was done instead
+
+`--history` now prints the resolution it measured:
+
+    temperature resolution: whole degrees in 1864 of 1864
+      so a mean absolute error near 0.25 is the rounding, not the forecast
+
+A count of what arrived rather than a statement about the provider, so a
+station that starts reporting tenths says so by itself. `evidence.md`
+asks for the method beside the fact; this is the bound beside the
+figures it bounds.
+
+## 16.95 A test that compiled, linked, and never ran
+
+The test for the above was called
+`the_resolution_is_counted_from_the_data`. It never ran, and the suite
+reported "all passed" without it.
+
+**QtTest reads a slot ending in `_data` as the DATA PROVIDER for a test
+of the same name without the suffix.** So that method was taken to be
+the data function for `the_resolution_is_counted_from_the`, which does
+not exist -- and a data function with no test is not listed, not
+counted, and never called.
+
+### 16.95.1 Why it took so long to see
+
+Every artifact said the method was there. The generated moc declared 25
+methods with the correct slot row. The object file carried the name. The
+binary's string table carried it. `strings`, `grep` and a from-scratch
+rebuild of the target all agreed.
+
+**Only the runtime metaobject disagreed**, and the instrument that
+finally said so was a diff: the 24 slots the header declares against the
+23 `-functions` reports, which named the missing one exactly.
+
+The search went through the toolchain first -- stale moc, stale object,
+wrong build directory, a second `.moc` on the include path, a duplicate
+metaobject in another object file -- and every one of those was checked
+and cleared before the name was suspected. **What settled it was a
+control**: a slot called `zzz_probe()` added beside it registered
+immediately, which meant the problem was not the build but that
+declaration. Renaming it to `the_archive_reports_its_resolution` fixed
+it at once.
+
+That is the lesson worth keeping. Five careful toolchain checks each
+came back clean and none of them was evidence about the cause; one
+two-line control was.
+
+### 16.95.2 The gate
+
+`tool/test_slots.py`, wired into `make style` as `style-tests`. It
+refuses a slot ending in `_data` when the slot it would feed does not
+exist. The rule is exact rather than heuristic, so there is nothing for
+anybody to suppress: a real data function has its test and passes.
+
+The tree has **no instances**, which is the honest state of it -- this
+is a tripwire, not a cleanup. It carries a positive control that builds
+both shapes in a temporary directory and refuses to report anything if
+either is classified wrongly, so its silence cannot come from a checker
+that has stopped working. Sabotaged: an offender gives exit 1 and names
+it, a broken checker gives exit 2 and says no result means anything, and
+a clean tree gives 0.

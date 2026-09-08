@@ -1384,6 +1384,32 @@ qint64 bbq_history::newest_observation(const QString &station, qint64 from,
 	return query.value(0).toLongLong();
 }
 
+int bbq_history::whole_degree_observations(const QString &station) const {
+	if (!m_open) {
+		return 0;
+	}
+
+	/*
+	 * Compared against its own truncation rather than tested with a
+	 * modulo, because the column is REAL and a modulo on a floating
+	 * value is a different question with a different answer at the
+	 * edges.
+	 */
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "SELECT COUNT(*) FROM observation WHERE station = ? "
+	        "AND temperature IS NOT NULL "
+	        "AND temperature = CAST(temperature AS INTEGER)"));
+	query.addBindValue(station);
+
+	if (!query.exec() || !query.next()) {
+		m_last_error = query.lastError().text();
+		return 0;
+	}
+
+	return query.value(0).toInt();
+}
+
 int bbq_history::verified_count(const QString &station) const {
 	if (!m_open) {
 		return 0;

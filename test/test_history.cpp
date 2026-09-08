@@ -21,6 +21,7 @@ class test_history : public QObject {
 	Q_OBJECT
 
 private slots:
+	void the_archive_reports_its_resolution();
 	void lead_times_bucket_by_their_upper_bound();
 	void a_bin_counts_the_wet_ones_apart_from_the_total();
 	void the_three_scores_are_told_apart_by_the_fixture();
@@ -886,6 +887,49 @@ void test_history::rain_is_still_scored_through_a_dry_spell() {
 	        QStringLiteral("ITEST1"), bbq_band::hourly,
 	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
 	QVERIFY(warmth.count > 0);
+}
+
+
+/*
+ * The archive reports how many observations sit on a whole degree,
+ * because that bounds every error statistic below it (sec 16.94) and
+ * nothing else in the output says so.
+ *
+ * Mixed deliberately. A test storing only whole degrees would pass
+ * against a query that counted every row, and one storing only tenths
+ * would pass against a query that counted none -- both are the answer
+ * being right for the wrong reason. Seven of ten separates them, and
+ * only a query that actually looks at the value can produce it.
+ */
+void test_history::the_archive_reports_its_resolution() {
+	QTemporaryDir directory;
+	QVERIFY(directory.isValid());
+
+	bbq_history store;
+	QVERIFY2(store.open(directory.filePath(QStringLiteral("r.sqlite"))),
+	         qPrintable(store.last_error()));
+
+	std::vector<bbq_sample> samples;
+	const double values[] = {12.0, 12.5, 13.0, 14.0, 14.25,
+	                         15.0, 16.0, 17.0, 17.75, 18.0};
+
+	for (int at = 0; at < 10; ++at) {
+		bbq_sample sample;
+		sample.start_utc = 2000000 + at * 300;
+		sample.duration_s = 300;
+		sample.temperature = values[at];
+		samples.push_back(sample);
+	}
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("wunderground"));
+	observed.set_samples(samples);
+	store.record_observations(QStringLiteral("IRES1"), observed);
+
+	QCOMPARE(store.observation_count(QStringLiteral("IRES1")), 10);
+	QCOMPARE(store.whole_degree_observations(QStringLiteral("IRES1")), 7);
+
+	/* A station with nothing stored is zero, not the other station's. */
+	QCOMPARE(store.whole_degree_observations(QStringLiteral("IRES2")), 0);
 }
 
 QTEST_GUILESS_MAIN(test_history)

@@ -640,6 +640,28 @@ int main(int argc, char *argv[]) {
 			report << "earliest: " << first.toString(Qt::ISODate) << "\n";
 		}
 
+		if (observations > 0) {
+			/*
+			 * THE RESOLUTION, BECAUSE IT BOUNDS EVERY NUMBER BELOW
+			 * (sec 16.94).
+			 *
+			 * Weather Underground rounds its metric conversion, so
+			 * the observations arrive on whole degrees and a forecast
+			 * cannot be scored finer than the grid it is scored
+			 * against. Printed as a count of what actually arrived
+			 * rather than as a statement about the provider, so a
+			 * station that reports tenths says so by itself.
+			 */
+			const int whole = store.whole_degree_observations(wanted);
+			report << "temperature resolution: whole degrees in " << whole
+			       << " of " << observations << "\n";
+
+			if (whole == observations) {
+				report << "  so a mean absolute error near 0.25 is the "
+				          "rounding, not the forecast\n";
+			}
+		}
+
 		report << "forecasts awaiting a check: " << store.pending_count(wanted)
 		       << "\n";
 
