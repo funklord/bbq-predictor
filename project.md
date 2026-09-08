@@ -12192,6 +12192,33 @@ constancy.
 where a threshold and a steady offset let the distribution be
 reconstructed.
 
+### 16.82.4 All three inputs push the same way, and they multiply
+
+Temperature is the third, and it reaches the verdict most reliably of
+the lot. The ramp is `ramp_up(temp, 5, 25)`, and at this station:
+
+    temperature band4 bucket8  n=87  bias -1.53
+    temperature band6 bucket8  n=87  bias -0.91
+    temperature band6 bucket6  n=53  bias -0.85
+
+    observed range 8.0 to 24.0 C, mean 15.0
+    100% of hours inside the 5-25 ramp, none saturated at either end
+
+**Forecast too cold, on a ramp nothing ever escapes.** A 1.53 C shortfall
+is 0.077 of a factor that applies to every single hour -- where wind
+applies to 37% of them and rain to an unknown share.
+
+`bbq_grill_weather_score` MULTIPLIES the three, so the errors compound
+rather than average out. At 15 C the true temperature factor is 0.5 and
+a forecast 1.53 colder gives 0.425 -- the factor is 85% of what it
+should be, before wind takes its turn on two hours in five.
+
+**Three independent quantities, three providers, one direction.** That
+is what makes it a station property rather than a provider's fault: a
+sheltered garden thermometer reads warmer than the model, a sheltered
+anemometer reads calmer, and both differences push the verdict the same
+way.
+
 ### 16.82.2 What is NOT decided here
 
 The correction exists and the verdict does not use it. That follows from
