@@ -25,6 +25,7 @@ private slots:
 	void a_derived_coordinate_does_not_survive_the_station_changing();
 	void a_clock_that_moved_back_does_not_stall_a_band();
 	void a_finished_day_is_told_from_one_still_running();
+	void a_late_endpoint_is_told_from_a_quiet_station();
 	void a_band_never_asked_for_is_not_a_band_that_answered();
 	void a_pinned_coordinate_does();
 	void resetting_the_same_station_changes_nothing();
@@ -669,12 +670,22 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 		return made;
 	};
 
-	/* Current: five minutes behind the clock is an ordinary station. */
+	/*
+	 * TWO STEPS, because the verdict waits for the round (sec 16.101).
+	 *
+	 * check_day_is_whole measures how far behind the observed band is
+	 * and records it; report_observed_staleness says so once the round
+	 * has settled, which is the first moment the current band is
+	 * present to name the cause. Driving only the first step here would
+	 * assert that nothing is said, which is true and is not the claim.
+	 */
 	feed.check_day_is_whole(reporting_until(now - 300));
+	feed.report_observed_staleness();
 	QCOMPARE(complaints.count(), 0);
 
 	/* Quiet: the gap that went unremarked. */
 	feed.check_day_is_whole(reporting_until(now - 78 * 60));
+	feed.report_observed_staleness();
 	QCOMPARE(complaints.count(), 1);
 
 	const QString said = complaints.at(0).at(1).toString();
@@ -699,9 +710,40 @@ void test_feed::a_station_that_stops_reporting_is_named() {
 	 * caller gets the day right. The caller was what got it wrong.
 	 */
 	feed.check_day_is_whole(reporting_until(midday));
+	feed.report_observed_staleness();
 	QCOMPARE(complaints.count(), 2);
 	QVERIFY2(complaints.at(1).at(1).toString().contains(QStringLiteral("hole")),
 	         "a backfill was judged as a quiet station rather than as a day");
+
+	/*
+	 * AND THE SAME STALENESS, WITH THE STATION ANSWERING, NAMES THE
+	 * ENDPOINT INSTEAD (sec 16.101).
+	 *
+	 * This is the case that cost a reader an hour: the observed band
+	 * half a day behind while the station's own current endpoint had a
+	 * reading minutes old. Same measurement, different culprit, and the
+	 * sentence has to say which.
+	 */
+	bbq_sample fresh;
+	fresh.start_utc = now - 120;
+	fresh.duration_s = 300;
+	fresh.temperature = 15.0;
+
+	bbq_series live(bbq_band::current, QStringLiteral("wunderground"));
+	live.set_samples({fresh});
+	feed.m_composite.set_series(std::move(live));
+
+	feed.check_day_is_whole(reporting_until(now - 78 * 60));
+	feed.report_observed_staleness();
+	QCOMPARE(complaints.count(), 3);
+
+	const QString blamed = complaints.at(2).at(1).toString();
+	QVERIFY2(blamed.contains(QStringLiteral("history endpoint")),
+	         qPrintable(QStringLiteral("a live station was still called quiet: "
+	                                   "%1").arg(blamed)));
+	QVERIFY2(blamed.contains(QStringLiteral("ITESTQUIET")),
+	         qPrintable(QStringLiteral("the complaint stopped naming the "
+	                                   "station: %1").arg(blamed)));
 }
 
 /*
@@ -1158,3 +1200,75 @@ void test_feed::a_clock_that_moved_back_does_not_stall_a_band() {
 	feed.m_attempted.insert(product, now - 24 * 3600);
 	QVERIFY(feed.due(bbq_wu_product::observed, now));
 }
+
+/*
+ * A stale observed band has two causes and they want opposite
+ * sentences (project.md sec 16.101).
+ *
+ * The station may have gone quiet, or Weather Underground's history
+ * endpoint may be running behind its own current one -- which sec 16.79
+ * measured at thirteen and a half hours across three stations at once,
+ * so it is the provider rather than any station. The program said the
+ * first whatever the cause, and a reader had to go to the provider by
+ * hand to find out which.
+ *
+ * The station's own current reading tells them apart, and it is fetched
+ * in the same round. Tested as a free function for the reason
+ * bbq_observed_day_has_ended is one: this suite blocks the network, so
+ * a decision only reachable through a reply is one nothing can test.
+ */
+void test_feed::a_late_endpoint_is_told_from_a_quiet_station() {
+	const qint64 now = 1800000000;
+	const qint64 half_a_day = 12 * 3600;
+
+	/* Answering minutes ago while its history is half a day behind. */
+	QVERIFY2(bbq_history_is_behind(half_a_day, now - 300, now),
+	         "a station answering now was called quiet");
+
+	/* Silent on both endpoints: the station really is quiet. */
+	QVERIFY2(!bbq_history_is_behind(half_a_day, now - half_a_day, now),
+	         "a genuinely quiet station was blamed on the provider");
+
+	/*
+	 * Both endpoints behind the same cache, to the second. Not evidence
+	 * against the history endpoint, and the station keeps the benefit of
+	 * the doubt it had before this existed.
+	 */
+	QVERIFY2(!bbq_history_is_behind(half_a_day, now - half_a_day, now),
+	         "an equally stale current reading was read as evidence");
+
+	/*
+	 * No current reading at all, which arrives as nought. Held here
+	 * knowing it passes on the arithmetic rather than on a guard --
+	 * nought is further from now than any staleness this is asked about
+	 * -- because the behaviour is what the caller depends on and it
+	 * should not become wrong quietly.
+	 */
+	QVERIFY2(!bbq_history_is_behind(half_a_day, 0, now),
+	         "a round with no current reading still named the provider");
+
+	/* And a clock that moved backwards is further still. */
+	QVERIFY2(!bbq_history_is_behind(half_a_day, -5000, now),
+	         "a negative timestamp named the provider");
+
+	/*
+	 * The boundary, swept rather than sampled: the verdict must turn
+	 * exactly where the current reading becomes fresher than the
+	 * observed band is stale, and nowhere else.
+	 */
+	int checked = 0;
+	for (qint64 fresh = 0; fresh <= 2 * half_a_day; fresh += 600) {
+		const bool expected = fresh < half_a_day;
+		if (bbq_history_is_behind(half_a_day, now - fresh, now) != expected) {
+			QFAIL(qPrintable(
+			        QStringLiteral("a current reading %1 s old gave the wrong "
+			                       "verdict against a band %2 s behind")
+			                .arg(fresh)
+			                .arg(half_a_day)));
+		}
+		++checked;
+	}
+
+	QCOMPARE(checked, 145);
+}
+

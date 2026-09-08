@@ -855,6 +855,66 @@ int bbq_wu_feed::verify_all() {
 	return checked;
 }
 
+/*
+ * Say the observed band is behind, and name what is behind (sec 16.101).
+ *
+ * Called once a round has settled, so every band this round fetched is
+ * in the composite and the two cases can be told apart. Both sentences
+ * carry the SAME measured staleness, because that is the right number
+ * for "is the archive advancing" either way -- what differs is who it
+ * accuses.
+ */
+void bbq_wu_feed::report_observed_staleness() {
+	const qint64 behind = m_observed_behind_s;
+	m_observed_behind_s = 0;
+
+	if (behind <= 0) {
+		return;
+	}
+
+	const bbq_series *live = m_composite.band(bbq_band::current);
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+
+	if (live != nullptr && !live->is_empty()) {
+		const qint64 reported = live->samples().back().start_utc;
+
+		/*
+		 * The station answering more recently than its own history is
+		 * Weather Underground's history endpoint running behind its
+		 * current one, which sec 16.79 measured across three stations
+		 * at once and so is the provider rather than the station.
+		 */
+		if (bbq_history_is_behind(behind, reported, now)) {
+			/*
+			 * bbq_describe_duration answers "0 min" under a minute,
+			 * which is right for a duration and reads as a mistake in
+			 * a sentence about when something last spoke. Said in
+			 * words here rather than by changing a helper five other
+			 * messages share.
+			 */
+			const qint64 fresh = now - reported;
+			const QString when =
+			        fresh < 60
+			                ? tr("just now")
+			                : tr("%1 ago").arg(bbq_describe_duration(fresh));
+
+			emit band_failed(
+			        QStringLiteral("observed"),
+			        tr("the history endpoint is %1 behind; %2 itself "
+			           "reported %3")
+			                .arg(bbq_describe_duration(behind))
+			                .arg(m_station_id)
+			                .arg(when));
+			return;
+		}
+	}
+
+	emit band_failed(QStringLiteral("observed"),
+	                 tr("%1 has not reported for %2")
+	                         .arg(m_station_id)
+	                         .arg(bbq_describe_duration(behind)));
+}
+
 void bbq_wu_feed::finish_one() {
 	--m_outstanding;
 	if (m_outstanding <= 0) {
@@ -865,6 +925,8 @@ void bbq_wu_feed::finish_one() {
 		 * own: a round is exactly when new observations have arrived,
 		 * so it is the only moment anything new can be verifiable.
 		 */
+		report_observed_staleness();
+
 		const int checked = verify_all();
 
 		/*
@@ -1045,6 +1107,33 @@ bool bbq_observed_day_has_ended(qint64 newest_utc, qint64 today_began_utc) {
 	return newest_utc < today_began_utc;
 }
 
+bool bbq_history_is_behind(qint64 behind_s, qint64 reported_utc,
+                           qint64 now_utc) {
+	/*
+	 * No special case for "no current reading". A missing one arrives
+	 * here as nought, and nought is further from now than any staleness
+	 * this can be asked about, so the comparison below already answers
+	 * false -- the station keeps the benefit of the doubt it had before
+	 * this existed.
+	 *
+	 * The guard that used to say so is gone because it could not fail:
+	 * sabotaging it away left every case answering the same, which is a
+	 * branch that documents an intention the arithmetic already holds.
+	 *
+	 * A NEGATIVE reading, from a clock that has moved, is further still
+	 * and answers the same way.
+	 */
+
+	/*
+	 * Strictly newer, so a current endpoint serving the SAME cached
+	 * reading as the history one does not read as evidence against it.
+	 * That is the case this is most likely to meet -- both endpoints
+	 * behind the same cache -- and it is a quiet station as far as
+	 * anybody can tell from here.
+	 */
+	return now_utc - reported_utc < behind_s;
+}
+
 void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 	/*
 	 * A SHORT ANSWER IS NOT AN ERROR, and that is the problem
@@ -1114,11 +1203,50 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured) {
 		        QDateTime::currentSecsSinceEpoch() - newest_seen;
 
 		if (behind > station_quiet_s) {
-			emit band_failed(
-			        QStringLiteral("observed"),
-			        tr("%1 has not reported for %2")
-			                .arg(m_station_id)
-			                .arg(bbq_describe_duration(behind)));
+			/*
+			 * WHICH OF THE TWO IT IS, SAID OUT LOUD (sec 16.101).
+			 *
+			 * This sentence is true of the endpoint that was asked and
+			 * reads as an accusation against the station, which sec
+			 * 16.79 recorded and left. It cost a reader an hour again
+			 * on 2026-09-08: the fetch said ISTOCK877 had not reported
+			 * for 12 h 20 min while the current endpoint answered with
+			 * a reading fifteen minutes old, and finding that out meant
+			 * going to the provider by hand.
+			 *
+			 * The program already knows. `current` is fetched in the
+			 * same round and lands in the composite, so a reading much
+			 * newer than the observed band's newest row is Weather
+			 * Underground's history endpoint running behind its own
+			 * current one -- across stations, per sec 16.79 -- and not
+			 * a station gone quiet.
+			 *
+			 * Both sentences report the same measured staleness,
+			 * because that is the right number for "is the archive
+			 * advancing" either way. What differs is who it names.
+			 */
+			/*
+			 * HELD UNTIL THE ROUND SETTLES, because the evidence has
+			 * not arrived yet.
+			 *
+			 * The replies come back in whatever order the network
+			 * gives them, and on the run that prompted this the
+			 * observed reply was handled first: consulting the
+			 * composite here found no current band at all and the
+			 * message came out unchanged. The bands are only all
+			 * present once the round is done, which is where this is
+			 * now decided.
+			 *
+			 * A member, which this flow has been bitten by before --
+			 * two observed replies once shared one slot and swapped
+			 * their checks. Only the today-branch reaches this line,
+			 * since a reply holding a day that has ENDED returns by
+			 * the other path, so there is at most one writer per
+			 * round. Taken as a maximum anyway: the cost is nothing
+			 * and the alternative is trusting that argument to stay
+			 * true.
+			 */
+			m_observed_behind_s = qMax(m_observed_behind_s, behind);
 		}
 
 		return;

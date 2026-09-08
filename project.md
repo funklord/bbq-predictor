@@ -13504,3 +13504,79 @@ the wrong conclusion drawn from a control that never ran. Writing to the
 array and printing the value made it real. **A sabotage that does not
 land reads as a gate that does not fire**, which this project has now
 recorded three times in one session.
+
+## 16.101 The message accused the station of the provider's lateness
+
+Sec 16.79 measured Weather Underground's history endpoint running
+thirteen and a half hours behind its own current endpoint, across three
+stations at once, and noted what this program says while it happens:
+
+    observed   FAIL  ISTOCK877 has not reported for 13 h 28 min
+
+It called that sentence "TRUE of the endpoint that was asked" and left
+it. On 2026-09-08 it cost an hour: a fetch reported the station quiet
+for 12 h 20 min, the reading looked like a station dying the way the
+previous one had, and finding out otherwise meant going to the provider
+by hand. The current endpoint had answered in the same round, fifteen
+minutes old.
+
+**The program already knew.** It fetches `current` alongside `observed`,
+so a reading newer than the observed band's newest row is the history
+endpoint being late rather than the station being quiet. Both sentences
+now carry the same measured staleness, because that is the right number
+for "is the archive advancing" either way. What differs is who it names:
+
+    observed   FAIL  the history endpoint is 12 h 27 min behind;
+                     ISTOCK877 itself reported just now
+
+### 16.101.1 The evidence arrives after the question
+
+The first attempt read the composite where the staleness is measured,
+in the observed reply's own handler, and changed nothing. Replies come
+back in whatever order the network gives them and on that run the
+observed one was first, so there was no current band to consult.
+
+So the measurement stays where it was and the VERDICT moves to the point
+where a round settles, which is the first moment every band this round
+fetched is present. That is where verification already happens, for the
+same reason.
+
+It is held in a member between the two, which is the shape that has bitten
+this flow before -- two observed replies once shared one slot and swapped
+their checks. Only the today-branch reaches it, since a reply holding a
+day that has ENDED returns by the other path, so there is one writer per
+round. Taken as a maximum anyway, because the cost is nothing and the
+alternative is trusting that argument to stay true.
+
+### 16.101.2 A branch that could not fail, found by sabotaging it
+
+`bbq_history_is_behind` is a free function for the reason
+`bbq_observed_day_has_ended` is one: the suite blocks the network, so a
+decision only reachable through a reply is a decision nothing can test.
+
+It began with a guard returning false when there was no current reading.
+Sabotaged away, **every case still answered the same** -- a missing
+reading arrives as nought, and nought is further from now than any
+staleness this can be asked about, so the comparison already answered
+false. The guard documented an intention the arithmetic held, and could
+not be made to fail.
+
+It is gone, with a comment saying why nought needs no special case, and
+the test keeps the case: the behaviour is what the caller depends on and
+should not become wrong quietly.
+
+The two sabotages that DID fail named their case exactly -- "a station
+answering now was called quiet" and "a genuinely quiet station was
+blamed on the provider".
+
+### 16.101.3 The suite caught the timing change
+
+`a_station_that_stops_reporting_is_named` drove `check_day_is_whole` and
+expected the complaint at once. Moving the verdict to the settle point
+broke it, which is the test doing its job on a change to the flow it
+pins.
+
+It drives both steps now, and gained the case that prompted all this: the
+same staleness with the station answering must name the endpoint. Without
+that, the test would have passed on a program that had lost the ability
+to tell the two apart.

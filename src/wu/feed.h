@@ -51,6 +51,23 @@ class bbq_openmeteo_client;
  */
 bool bbq_observed_day_has_ended(qint64 newest_utc, qint64 today_began_utc);
 
+/*
+ * Whether a stale observed band is the PROVIDER's history endpoint
+ * running behind, rather than the station having gone quiet
+ * (project.md sec 16.101).
+ *
+ * `behind_s` is how far the observed band's newest row is from now, and
+ * `reported_utc` is the newest reading the station's own current
+ * endpoint gave in the same round. A station answering more recently
+ * than its own history says the history is what is late.
+ *
+ * A free function for the reason bbq_observed_day_has_ended is one: the
+ * suite blocks the network, so a decision only reachable through a
+ * reply is a decision nothing can test.
+ */
+bool bbq_history_is_behind(qint64 behind_s, qint64 reported_utc,
+                           qint64 now_utc);
+
 class bbq_wu_feed : public QObject {
 	Q_OBJECT
 
@@ -307,6 +324,7 @@ private:
 	void attempt_radar(qint64 now_utc);
 	void attempt_extended(qint64 now_utc);
 	void finish_one();
+	void report_observed_staleness();
 	void tick();
 	bool due(bbq_wu_product product, qint64 now_utc) const;
 	void attempt(bbq_wu_product product, qint64 now_utc);
@@ -328,6 +346,15 @@ private:
 	bbq_history m_history;
 	QString m_history_error;
 	qint64 m_observed_fetched_utc = 0;
+
+	/*
+	 * How far behind the observed band was when this round's reply
+	 * landed, nought for "nothing to say" (project.md sec 16.101).
+	 *
+	 * Held rather than reported at once, because naming the culprit
+	 * needs the current band and that arrives in its own time.
+	 */
+	qint64 m_observed_behind_s = 0;
 	qint64 m_view_from = 0;
 	qint64 m_view_to = 0;
 	qint64 m_loaded_from = 0;
