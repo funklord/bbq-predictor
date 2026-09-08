@@ -2157,6 +2157,21 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * A polygon per RUN rather than one for the whole width, because a
 	 * gap in coverage has to stay a gap: joining across it would wash
 	 * hours that have no chance to report.
+	 *
+	 * AND NOT RECTANGLES, WHICH IS THE OBVIOUS NEXT IDEA AND IS TEN
+	 * TIMES SLOWER (sec 16.93). Coalescing columns that share a top row
+	 * and filling those looks like the same trick the ribbon uses, and
+	 * it is not: the ribbon's band changes a handful of times across a
+	 * view, while the chance varies continuously, so 792 columns give
+	 * 563 runs -- about one and a half columns each. That is a field of
+	 * narrow tall translucent strips, which is the worst shape this
+	 * engine has and the thing sec 16.89 exists to avoid. Measured: 6.6
+	 * ms became 61.7.
+	 *
+	 * The polygon is already doing the fast thing. Its rasteriser walks
+	 * SCANLINES and emits one wide span per row, which is the axis a
+	 * hand-written decomposition has to use as well -- and there is no
+	 * reason to think a loop here would beat Qt's at it.
 	 */
 	QPolygonF wash;
 

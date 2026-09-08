@@ -12921,3 +12921,62 @@ of the points -- 859 to 785 -- and cost more than it saved. A staircase
 has a genuine corner at every step, so there is nothing for a tolerance
 to discard; the curve simplifies because it is smooth, and the wash is
 not. **The technique belongs to the shape, not to the file.**
+
+## 16.93 Where the render ended up, and the wash that would not move
+
+Measured end to end against 623ca85, the commit the slowness was
+reported on, interleaved within one session so the machine's state is
+the same for both. Minimum of three rounds, on a fixture carrying rain,
+chance and wind:
+
+    view      623ca85     now     speedup
+    1 day      63139      6556      9.6x
+    3 day      53792      9389      5.7x
+    16 day     87490     23405      3.7x
+
+Three passes got there: the fills drawn as the shapes they are
+(sec 16.89), the curve simplified before stroking (sec 16.91) and the
+sample dots stamped rather than drawn (sec 16.92).
+
+### 16.93.1 The chance wash is already doing the fast thing
+
+With the dots stamped, the wash is the largest single item at the view
+somebody drags -- roughly 2 ms of 6.6 -- so it was the obvious next
+target, and it did not move.
+
+The idea was the ribbon's: coalesce columns that share a top row and
+fill those rectangles instead of rasterising a polygon. **It is ten
+times slower. 6.6 ms became 61.7.**
+
+The reason is a difference between the two that looks like a
+similarity. The ribbon's band changes a handful of times across a view,
+so its runs are wide. The chance varies continuously, so 792 columns
+give **563 runs, about one and a half columns each** -- a field of
+narrow tall translucent strips, which sec 16.89 measured as the worst
+shape this engine has. The optimisation reintroduced, at scale, exactly
+the defect the first pass removed.
+
+**The polygon was already right and the decomposition was on the wrong
+axis.** A polygon rasteriser walks scanlines and emits one wide span per
+row; that is the horizontal decomposition, done in optimised C++, and a
+hand-written loop would have to use the same axis to be worth anything.
+
+So the wash's cost is the intrinsic cost of blending that area with
+antialiasing, and the only lever left on it is appearance -- turning the
+hint off is worth 18% of the block and hardens a large soft edge, which
+sec 16.92.3 already declined.
+
+### 16.93.2 A patch that does not apply looks exactly like a change that does nothing
+
+Three times in this work a Python patch asserted its anchor, threw, and
+never reached the write at the end -- so the file was unchanged, the
+build succeeded, the environment variable did nothing, and both arms of
+an A/B measured the same code. Twice that read as "no effect" and once
+it nearly went into a report as one.
+
+`evidence.md` already says to confirm a sabotage landed, and this is
+that rule met from the other direction: the thing to check is not that
+the edit was correct but that it EXISTS. The habit now is to grep for a
+marker after patching and to make the experiment print something -- the
+rect experiment announced "563 rect(s)" before any timing was believed,
+which is also where its own explanation came from.
