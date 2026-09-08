@@ -117,6 +117,13 @@ ifdef SANITIZE
                     QMAKE_LFLAGS+=-fsanitize=address,undefined
 endif
 
+# The leaks this project has judged, so a sanitized run that reports
+# anything else means something (project.md sec 16.100). Without it the
+# suite is red for one Qt-internal allocation and stops being read.
+ifdef SANITIZE
+    TEST_SANITIZE_ENV = LSAN_OPTIONS=suppressions=$(CURDIR)/tool/leaks.supp
+endif
+
 # Debug info WITHOUT a debug build, which is what packaging wants.
 #
 # The shipped binary is unaffected: dh_strip moves the debug sections out
@@ -318,7 +325,7 @@ test: tests-build $(ARTIFACT)
 		[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
 		ran=$$((ran + 1)); \
 		echo "--- $$binary"; \
-		BBQ_APP_BINARY="$(abspath $(ARTIFACT))" $(TEST_CRASH_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
+		BBQ_APP_BINARY="$(abspath $(ARTIFACT))" $(TEST_CRASH_ENV) $(TEST_SANITIZE_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
 	done; \
 	if [ "$$ran" -eq 0 ]; then \
 		echo "test: no test binaries were found in $(TEST_BUILD_DIR)." >&2; \

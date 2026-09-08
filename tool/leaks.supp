@@ -1,0 +1,15 @@
+# Leaks this project has judged and forgiven, so that a run reporting
+# nothing else means something (project.md sec 16.100).
+#
+# A suppression is a claim, so each one names what it forgives and why.
+# Anything not listed here still fails the run, which is the point: a
+# sanitized suite that is always red is one nobody reads, and this one
+# was always red for a single Qt-internal allocation.
+
+# QScroller::grabGesture registers a gesture recogniser that Qt keeps for
+# the life of the process. 256 bytes in 16 allocations, one per window
+# the suite builds. Judged in sec 16.83 as not ours, and re-tested in sec
+# 16.100: ungrabbing on destruction does not release it and adds two
+# allocations of its own, which is Qt saying the recogniser is not the
+# caller's to free.
+leak:QScroller::grabGesture

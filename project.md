@@ -13418,3 +13418,56 @@ an offscreen QPA platform gives, so a whole class of defect -- anything
 that depends on the resolution of the surface -- is invisible to the
 entire method. That is worth knowing before the next change is proved
 the same way.
+
+## 16.100 A sanitized suite that is always red is one nobody reads
+
+`make SANITIZE=1 test` exits 1, and has since sec 16.83, for a single
+Qt-internal allocation: `QScroller::grabGesture` registers a gesture
+recogniser that lives as long as the process, 256 bytes in 16 objects,
+one per window the suite builds.
+
+That section judged it correctly -- not a defect and not ours -- and
+left the run red. Which is the same fault this project records against a
+CI badge that always fails: a result that is red for a known reason
+trains everybody to read red as normal, and the next one arrives into a
+suite nobody looks at.
+
+### 16.100.1 It cannot be fixed from here, and that was tested
+
+Ungrabbing on destruction is the obvious repair. Measured: it takes the
+report from **256 bytes in 16 allocations to 272 in 18** -- the
+connection needed to do the ungrabbing allocates, and the recogniser is
+not released anyway, because by the time the object is destroyed the
+viewport is already going.
+
+Qt owns it. `tool/leaks.supp` says so by name, with the reason, so the
+judgement lives where the run happens rather than in a document a reader
+of the failure would have to go and find.
+
+### 16.100.2 The suppression is narrow, and that was tested too
+
+A suppression is a claim that something does not matter, and a wide one
+switches off the instrument. So the control is not "does the known leak
+stop being reported" -- it is **does a DIFFERENT leak still fail with the
+suppression active**.
+
+Planted a 256-byte allocation in a test body and ran all four cells:
+
+    suppression   planted leak   result
+    off           no             rc=1, Qt's 256 bytes reported
+    on            no             rc=0
+    off           yes            rc=1, 512 bytes in 17 allocations
+    on            yes            rc=1, 256 bytes in 1 allocation
+
+The last row is the one that matters: with the suppression active the
+planted leak still fails the run, and the report names only it. The
+instrument is intact and one allocation quieter.
+
+**And the first attempt at the plant was not detected at all.** It was
+`volatile int *deliberate = new int[64];` with no use of the value, and
+nothing was reported -- optimised away, or never treated as lost. That
+looked exactly like a suppression swallowing it, which would have been
+the wrong conclusion drawn from a control that never ran. Writing to the
+array and printing the value made it real. **A sabotage that does not
+land reads as a gate that does not fire**, which this project has now
+recorded three times in one session.
