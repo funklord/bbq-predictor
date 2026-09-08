@@ -12275,12 +12275,32 @@ a leak-free test that had guessed.
 Confirmed by rebuilding and re-running that binary alone: no report
 file at all, where there had been one.
 
-### 16.83.2 What this does not cover
+### 16.83.2 What that did not cover, and then did
 
-The sanitized binaries are the OFFLINE suite. Nothing here exercises a
-live fetch, the Android paths, or the GUI event loop beyond what the
-tests drive -- so a clean run says the code the suite reaches is clean
-under these two sanitizers, which is narrower than "the program is".
+The sanitized binaries were the OFFLINE suite, so nothing in them
+exercised a live fetch or the render. The application was built the same
+way afterwards and run on both.
+
+**A live fetch** -- network, TLS, JSON parsing, the SQLite store, into a
+scratch archive so the real one was untouched. Clean, exit 0, 409
+samples stored.
+
+**A full render** -- widgets, painting, the composite, the graph at a
+three-day view. Clean, and its PNG is the same size as the plain build's
+to within a few hundred bytes of PNG compression.
+
+The only leak in either is Qt's own, the same `QScroller::grabGesture`
+the suite showed: **16 bytes, one allocation**, a gesture recogniser
+registered for the life of the process.
+
+That leak is also why the render "failed": ASan exits non-zero when it
+reports one. Checked rather than assumed -- with `detect_leaks=0` the
+same command exits 0, and so does the unsanitized build. **An exit code
+whose cause is inferred is a fact about the inference**, and the two
+runs cost thirty seconds.
+
+**Still not covered**: the Android paths, which need a device, and the
+GUI event loop beyond what a shot drives.
 
 
 ## 16.84 The same stale count, fifty lines from the one I fixed
