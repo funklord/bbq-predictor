@@ -12504,3 +12504,47 @@ of this morning.
 phone, and was pulled for an unrelated reason -- to see what the widget
 was drawing. Corroboration was cheap and I did not go and get it until
 something else took me there.
+
+
+## 16.88 What the render actually costs, measured on a busy machine
+
+Reported from the phone: the view is too slow to drag, on a Fold.
+
+**The phone is running the build from 2026-09-06**, which predates sec
+16.57's grill-window cache. That cache took a scan out of `paintEvent`
+that runs once per frame and costs about half a millisecond per day of
+composite span.
+
+Measured properly, at a sixteen-day view on 900 pixels:
+
+    with the cache     12.6 ms per paint
+    without it         22.2 ms per paint
+
+**9.7 ms a frame, 43% of the cost**, and the phone pays it on every
+drag.
+
+### 16.88.1 The minimum, not the mean, because the machine is shared
+
+The first attempt reported 14.1 ms and then 28.3 ms for the SAME
+configuration an hour apart -- load moved from 6.8 to 14 between them,
+and a mean of that measures the other sessions.
+
+The figures above are the fastest of twelve batches of ten. The fastest
+batch is the least interrupted one, so it is the honest floor for the
+code rather than a description of the afternoon.
+
+**A timing taken once on a shared box is a claim about the box.**
+
+### 16.88.2 What is left, and what is not yet known
+
+Within a single run the cost scales roughly with plot WIDTH -- 16.6,
+28.3 and 39.0 ms at 400, 900 and 1600 pixels -- so what remains is
+per-column work and rasterisation, not anything that scales with the
+span. A Fold's screen is wide, which is the wrong direction for it.
+
+`reduce()` runs once per column and asks the composite for an owner and
+a range, so a paint does something like a dozen binary searches per
+column where a single forward cursor would do. **That is a candidate and
+not a diagnosis**: the alternative explanation is Qt's raster engine
+filling antialiased paths, and nothing here separates them yet.
+Measuring which before changing either.
