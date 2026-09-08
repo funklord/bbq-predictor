@@ -12462,6 +12462,31 @@ corrected band flat on both (sec 16.86). Two archives, one answer.
 and the effect on the output is not shown, which are different claims
 and I ran them together.
 
+### 16.87.3 And the larger archive says more than "unknown"
+
+Pooling the raw forecast bands rather than reading buckets one at a
+time:
+
+    phone    pooled verdict bias  -0.001   over n=1799
+    desktop  pooled verdict bias  -0.0525  over n=726
+
+**-0.001 on 1799 comparisons is not "no evidence", it is evidence of no
+bias.** The phone's thirty verdict rows split twenty negative to ten
+positive, which leans the same way sec 16.82 saw and carries no
+magnitude with it: the pooled figure is a thousandth of a score whose
+decision threshold is a half.
+
+So the finding is not merely unreplicated, it is contradicted by the
+better sample. The desktop's -0.0525 is one short window -- its
+verification began this morning -- and the most likely reading is that
+the weather in that window came out better than forecast, which is what
+a small sample of a variable thing does.
+
+**The wind bias remains real and remains uncorrected in the verdict.**
+What is now clear is that it does not show up as a systematic error in
+the output, which is a fact about how much slack the ramps have rather
+than a reason to stop measuring.
+
 ### 16.87.2 The error was structural, not arithmetic
 
 Every number in sec 16.82 is correct. The archive was queried properly,
