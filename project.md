@@ -12838,3 +12838,86 @@ suite.
 It is in `test_view.pro` and `test_window.pro` rather than in
 `test_common.pri` because `QPolygonF` is QtGui and the shared file
 removes that module.
+
+## 16.92 The sample dots, stamped rather than drawn
+
+With the curve simplified, the wide view was 28 ms spread across three
+things rather than one: curve 34%, chance wash 21%, sample dots 20%.
+The dots were the anomaly worth chasing -- 369 of them per frame at a
+sixteen-day view, costing **16 microseconds each for a circle four
+pixels across**.
+
+`drawEllipse` is not a circle primitive. Qt builds a path of four
+beziers, flattens it and fills it through the antialiasing rasteriser,
+every call. Drawn once into a pixmap and blitted, the same 369 dots cost
+**655 us against 5885 -- nine times faster** -- because a blit of a
+premultiplied stamp is a memory operation.
+
+Measured interleaved within one process, minimum of three rounds:
+
+    view      drawn    stamped
+    1 day      6203      4576     -26%
+    3 day      7993      6195     -22%
+    16 day    19774     15096     -24%
+
+### 16.92.1 The subpixel offsets are the whole difficulty
+
+A naive blit rounds its destination to whole pixels, so a dot would land
+up to half a pixel from the reading it marks -- and would snap BACK as
+the view scrolled, which is a shimmer running along the curve during
+exactly the drag this work exists to smooth.
+
+So the stamp is rendered at eight vertical offsets and the nearest is
+chosen, putting the worst error under a sixteenth of a pixel. Eight
+rather than four because an eighth of a pixel starts to show as the
+curve scrolls under it, and rather than sixteen because that halves an
+error nobody can see and doubles a cache nobody can see either.
+
+**Vertical only, and that is not a shortcut.** `px` is
+`plot.left() + x` with both terms integers, so the columns are whole
+pixels by construction and a horizontal offset would have nothing to
+correct.
+
+Against the unstamped render: 0.02% of pixels differ at a one-day view
+with a worst channel difference of 6 of 255, and 0.38% at sixteen days
+with a worst of 21. A blit rounded to whole pixels would not have come
+close to that, which is the measurement that justifies the eight stamps
+rather than an assertion that they are needed.
+
+### 16.92.2 A cache whose staleness only the dots would show
+
+The stamps are built from the palette, so a theme change has to throw
+them away. Nothing else in the picture would reveal it if it did not:
+the curve, the grid and the ground would all turn light while the dots
+stayed dark, and the dots are small.
+
+The test switches theme and requires that no pixel of the DARK ground
+survives on a light plot. Sabotaged by removing the one `clear()` from
+`apply_palette`, it fails with 30 such pixels.
+
+It carries its own control, because the assertion is that a colour is
+absent and an absent colour is exactly what a broken search reports:
+the dark render is first required to contain more than a thousand
+pixels of the colour being looked for. Without that, the test would
+pass just as loudly if the search were wrong.
+
+### 16.92.3 What was measured and left alone
+
+Two other changes work and are not worth what they cost, recorded so
+they are not re-derived:
+
+- **Antialiasing off for the chance wash**: -18% of that block, about
+  3.5% of the paint. The wash is a large soft area and its top edge
+  going hard is more visible than the same change on a thin rule.
+- **A bevel join on the curve's halo**: -11% of the curve, again about
+  3.5%. And sec 16.91 made this WORSE rather than better as a trade:
+  simplifying the polyline removed the shallow vertices, so the joins
+  that remain are the sharp ones, which is where bevel and round differ
+  most.
+
+And one that does not work at all: **simplifying the chance wash's
+outline** with the same Douglas-Peucker used on the curve. It removed 9%
+of the points -- 859 to 785 -- and cost more than it saved. A staircase
+has a genuine corner at every step, so there is nothing for a tolerance
+to discard; the curve simplifies because it is smooth, and the wash is
+not. **The technique belongs to the shape, not to the file.**

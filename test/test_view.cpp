@@ -57,6 +57,7 @@ class test_view : public QObject {
 
 private slots:
 	void bbq_flatten_matches_qt();
+	void the_sample_dots_follow_a_theme_change();
 	void bbq_simplify_keeps_every_point_within_tolerance();
 	void bbq_simplify_keeps_what_a_curve_needs();
 	void a_fresh_graph_follows_the_clock();
@@ -1988,4 +1989,66 @@ void test_view::bbq_simplify_keeps_what_a_curve_needs() {
 	QPolygonF same;
 	same << QPointF(5.0, 5.0) << QPointF(5.0, 5.0) << QPointF(5.0, 5.0);
 	QCOMPARE(bbq_simplify_polyline(same, 0.02).size(), 2);
+}
+
+/*
+ * The sample dots are stamped from a cache of pixmaps built from the
+ * palette (project.md sec 16.92), so a theme change has to throw that
+ * cache away. Nothing else in the picture would show it if it did not:
+ * the curve, the grid and the ground would all turn light while the
+ * dots stayed dark, and the dots are small.
+ *
+ * Checked by colour rather than by asking the widget what it cached.
+ * The dark ground is what a stale ring would be drawn in, and after a
+ * switch to light there should be none of it anywhere on the plot --
+ * which is a claim about the PICTURE, and so survives the cache being
+ * reorganised.
+ */
+void test_view::the_sample_dots_follow_a_theme_change() {
+	bbq_forecast_graph graph;
+	graph.set_composite(grillable_days(1600000000, 2));
+	graph.resize(600, 400);
+	graph.set_view(1600000000, 2 * 86400LL);
+
+	graph.set_theme(bbq_theme::dark);
+	const QColor dark_ground = graph.palette_colours().background;
+	const QImage dark_shot = graph.grab().toImage();
+
+	/*
+	 * The control: the dark render must actually CONTAIN the colour
+	 * being searched for, or the assertion below passes by finding
+	 * nothing in a picture that never had any.
+	 */
+	int dark_ground_pixels = 0;
+	for (int y = 0; y < dark_shot.height(); ++y) {
+		for (int x = 0; x < dark_shot.width(); ++x) {
+			if (dark_shot.pixelColor(x, y) == dark_ground) {
+				++dark_ground_pixels;
+			}
+		}
+	}
+	QVERIFY2(dark_ground_pixels > 1000,
+	         "the dark render does not contain its own ground colour, so "
+	         "the search below would prove nothing");
+
+	graph.set_theme(bbq_theme::light);
+	const QImage light_shot = graph.grab().toImage();
+	QVERIFY(graph.palette_colours().background != dark_ground);
+
+	int stale = 0;
+	for (int y = 0; y < light_shot.height(); ++y) {
+		for (int x = 0; x < light_shot.width(); ++x) {
+			if (light_shot.pixelColor(x, y) == dark_ground) {
+				++stale;
+			}
+		}
+	}
+
+	if (stale != 0) {
+		QFAIL(qPrintable(
+		        QStringLiteral("%1 pixel(s) of the dark ground survived a "
+		                       "switch to light -- the dot stamps were not "
+		                       "rebuilt")
+		                .arg(stale)));
+	}
 }

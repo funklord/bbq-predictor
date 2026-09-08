@@ -5,6 +5,7 @@
 #include <QSize>
 #include <QRect>
 #include <QTimeZone>
+#include <QPixmap>
 #include <QWidget>
 
 #include <vector>
@@ -294,6 +295,7 @@ public:
 	 * old one when the composite is replaced. A cache that never
 	 * invalidates passes the first half.
 	 */
+	void build_dot_stamps() const;
 	const std::vector<bbq_window> &grill_windows() const;
 
 	void set_show_wind(bool show);
@@ -372,6 +374,16 @@ private:
 	 */
 	mutable std::vector<bbq_window> m_windows;
 	mutable bool m_windows_valid = false;
+
+	/*
+	 * The sample dot, drawn once per subpixel offset and stamped
+	 * (project.md sec 16.92).
+	 *
+	 * Rebuilt when the palette or the metrics change, which is what the
+	 * two setters below invalidate. Vertical offsets only: the dots sit
+	 * at integer columns, so x never needs one.
+	 */
+	mutable std::vector<QPixmap> m_dot_stamps;
 	bbq_series m_corrected;
 	/*
 	 * The DEFAULT visible window, as offsets from now in seconds --
