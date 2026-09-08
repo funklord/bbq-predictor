@@ -331,7 +331,7 @@ test: tests-build $(ARTIFACT)
 	[ "$$failed" -eq 0 ]
 
 style: style-source style-docs style-signals style-man style-palette style-exits style-xml style-wiring \
-       style-setup
+       style-setup style-tests
 
 style-source:
 	python3 tool/style_gate.py check
@@ -358,6 +358,12 @@ style-wiring:
 # misbehaves for somebody else (sec 16.71.2).
 style-setup:
 	python3 tool/setup_calls.py
+
+# A QtTest slot whose name ends in _data is read as a DATA FUNCTION, so
+# it never runs and the suite reports the same "all passed" it would
+# report if the test were there (project.md sec 16.95).
+style-tests:
+	python3 tool/test_slots.py
 
 style-exits:
 	python3 tool/exit_codes.py
