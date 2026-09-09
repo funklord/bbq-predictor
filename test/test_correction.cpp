@@ -21,6 +21,7 @@ private slots:
 	void the_bias_is_interpolated_across_lead_time();
 	void measurements_are_never_corrected();
 	void rain_is_corrected_and_never_goes_negative();
+	void the_rain_correction_never_adds_rain();
 	void one_quantity_can_be_known_while_another_is_not();
 	void wind_is_corrected_and_never_goes_negative();
 	void a_dry_spell_teaches_the_correction_nothing_about_rain();
@@ -467,3 +468,120 @@ void test_correction::a_dry_spell_teaches_the_correction_nothing_about_rain() {
 
 QTEST_GUILESS_MAIN(test_correction)
 #include "test_correction.moc"
+
+/*
+ * A band that has been UNDER-forecasting rain does not get its dry
+ * hours made wet (project.md sec 16.97).
+ *
+ * Rain is zero-inflated -- dry in 1847 of 1864 readings on the archive
+ * this was found in -- so a mean error is a poor summary and correcting
+ * by one is worse. A negative bias subtracted from a dry forecast turns
+ * it wet, and the corrected band had ZERO dry hours at every lead
+ * beyond two days: the lowest rate at 7d+ was 0.0501, exactly the bias
+ * that bucket subtracted. It predicted drizzle every hour for a week on
+ * a fortnight that was dry.
+ *
+ * The rate clamp sec 12.10 already had guards the direction the
+ * correction goes negative and does nothing in the direction it goes
+ * up. The bias is clamped instead, and the asymmetry is deliberate:
+ * take rain away from a band that over-forecasts, never give any to one
+ * that under-forecasts.
+ */
+void test_correction::the_rain_correction_never_adds_rain() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY(store.open(directory.filePath(QStringLiteral("h.sqlite"))));
+
+	const bbq_lead_bucket every[] = {
+		bbq_lead_bucket::hour, bbq_lead_bucket::three_hours,
+		bbq_lead_bucket::six_hours, bbq_lead_bucket::twelve_hours};
+
+	/* The band UNDER-forecasts rain: a negative bias at every lead. */
+	for (bbq_lead_bucket bucket : every) {
+		store.set_verification(QStringLiteral("ITEST1"), bbq_band::hourly,
+		                       QStringLiteral("precip_rate"), bucket, 50, -0.4,
+		                       0.4, 0.4);
+	}
+
+	const qint64 now = 1000000;
+
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < 6; ++i) {
+		bbq_sample sample;
+		sample.start_utc = now + i * 3600;
+		sample.duration_s = 3600;
+
+		/* Dry hours, and one that already carries rain. */
+		sample.precip_rate = (i == 3) ? 1.0 : 0.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series series(bbq_band::hourly, QStringLiteral("wunderground"));
+	series.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(series));
+
+	const bbq_series corrected = bbq_corrected_forecast(
+	        composite, store, QStringLiteral("ITEST1"), now, now + 6 * 3600, now);
+
+	QVERIFY2(!corrected.is_empty(),
+	         "nothing was corrected, so there is nothing to judge");
+
+	int dry_in = 0;
+	int dry_out = 0;
+
+	for (const bbq_sample &sample : corrected.samples()) {
+		QVERIFY(sample.precip_rate.has_value());
+		if (*sample.precip_rate == 0.0) {
+			++dry_out;
+		}
+	}
+
+	for (const bbq_sample &sample : composite.band(bbq_band::hourly)->samples()) {
+		if (sample.precip_rate.has_value() && *sample.precip_rate == 0.0) {
+			++dry_in;
+		}
+	}
+
+	QVERIFY2(dry_in > 0, "the fixture has no dry hours to protect");
+
+	if (dry_out < dry_in) {
+		QFAIL(qPrintable(QStringLiteral(
+		        "the correction wet %1 of %2 dry hour(s): a band that "
+		        "under-forecasts rain must not be given any")
+		                         .arg(dry_in - dry_out)
+		                         .arg(dry_in)));
+	}
+
+	/*
+	 * THE CONTROL, and the reason this is not just "clamp everything to
+	 * zero": the same fixture with the bias the other way round must
+	 * still have its rain taken away. Without this a correction that
+	 * did nothing at all would pass.
+	 */
+	QTemporaryDir other;
+	bbq_history over;
+	QVERIFY(over.open(other.filePath(QStringLiteral("o.sqlite"))));
+
+	for (bbq_lead_bucket bucket : every) {
+		over.set_verification(QStringLiteral("ITEST1"), bbq_band::hourly,
+		                      QStringLiteral("precip_rate"), bucket, 50, 0.4,
+		                      0.4, 0.4);
+	}
+
+	const bbq_series reduced = bbq_corrected_forecast(
+	        composite, over, QStringLiteral("ITEST1"), now, now + 6 * 3600, now);
+
+	bool saw_reduced = false;
+	for (const bbq_sample &sample : reduced.samples()) {
+		if (sample.precip_rate.has_value() &&
+		    qAbs(*sample.precip_rate - 0.6) < 0.001) {
+			saw_reduced = true;
+		}
+	}
+
+	QVERIFY2(saw_reduced,
+	         "1.0 mm/h with a 0.4 mm/h over-forecast bias did not become 0.6");
+}
+

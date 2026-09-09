@@ -230,6 +230,40 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 		        reading.sample->precip_rate.has_value() &&
 		        bias_for(band, QStringLiteral("precip_rate"), lead, &rain_bias);
 
+		/*
+		 * THE RAIN CORRECTION NEVER ADDS RAIN (project.md sec 16.97).
+		 *
+		 * Rain is zero-inflated -- dry in 1847 of 1864 readings on the
+		 * archive this was found in -- so a mean error is a poor summary
+		 * of it, and correcting by one is worse. A NEGATIVE bias, a band
+		 * that has been under-forecasting, is subtracted from a dry
+		 * forecast and turns it wet: measured, the corrected band had
+		 * ZERO dry hours at every lead beyond two days, the lowest rate
+		 * at 7d+ being 0.0501, which is exactly the bias that bucket was
+		 * subtracting. It predicted drizzle every hour for a week, on a
+		 * fortnight that was dry.
+		 *
+		 * Sec 12.10 clamps the RATE at zero, which guards the direction
+		 * the correction goes negative and does nothing in the direction
+		 * it goes up. This clamps the BIAS instead, and the asymmetry is
+		 * the point: the correction may take rain away from a band that
+		 * over-forecasts and may never give any to one that under-
+		 * forecasts.
+		 *
+		 * What that gives up is real and is the cost the holder chose:
+		 * a band genuinely too dry stays too dry. What it buys is that
+		 * no dry hour is ever made wet, and a dry hour is the answer
+		 * about 99 per cent of the time here.
+		 *
+		 * Temperature and wind are not touched. Temperature is not
+		 * zero-inflated and has no floor to be pushed off; wind is
+		 * floored at zero as a quantity but its bias is measured in
+		 * whole km/h against a whole-km/h observation, several grid
+		 * steps wide (sec 16.96), so removing it is worth far more than
+		 * the clamp costs.
+		 */
+		rain_bias = std::max(0.0, rain_bias);
+
 		const bool know_wind =
 		        reading.sample->wind_kph.has_value() &&
 		        bias_for(band, QStringLiteral("wind_kph"), lead, &wind_bias);

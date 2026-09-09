@@ -4370,6 +4370,16 @@ Three things this turned up:
   by more than it forecast would otherwise produce negative rainfall and
   the graph would draw rain below its baseline. The same clamp sec
   3.11.2 puts on the drawn curve, for the same reason.
+- **And the rain BIAS is floored at zero, so the correction can only
+  ever take rain away** (sec 16.97, decided by the copyright holder
+  2026-09-10). The clamp above guards the direction the correction goes
+  negative and does nothing in the direction it goes up, so a band that
+  had been UNDER-forecasting had its dry hours made wet -- every hour of
+  them, past two days out. What is given up is the genuinely-too-dry
+  band, which stays too dry; what is bought is that a dry hour is never
+  made wet, and a dry hour is the answer about ninety-nine times in a
+  hundred here. The asymmetry is deliberate and is not a clamp for
+  tidiness.
 - **A rain overlay with no rain in it is not drawn.** On a dry forecast
   the raw rate is zero, a positive bias corrects it below zero, and the
   clamp puts it back at zero -- an honest dashed line lying flat along
@@ -13201,10 +13211,15 @@ would pass against a report printing no rows at all: `observed` must be
 ABSENT, which no amount of surrounding text supplies. Pointing the list
 at `observed` makes the report print it and the test says so.
 
-## 16.97 The corrected band forecasts drizzle every hour for a week
+## 16.97 The corrected band forecast drizzle every hour for a week
 
-**The rain correction adds rain to hours the forecast said were dry**,
-wherever the measured bias is negative -- and at the long leads it is.
+*Fixed 2026-09-10 by flooring the bias; sec 16.97.3 has the decision
+and sec 16.97.4 the before and after. What follows is the fault as it
+was found, because the reasoning is what chose between the remedies.*
+
+**The rain correction added rain to hours the forecast said were dry**,
+wherever the measured bias was negative -- and at the long leads it
+was.
 
 Measured on the live archive, the corrected band's own stored forecasts:
 
@@ -13263,29 +13278,51 @@ one is about the forecast quantity's distribution and applies to rain.
 Both make an additive mean-bias correction the wrong instrument, for
 different reasons.
 
-### 16.97.3 The options, and whose call it is
+### 16.97.3 Decided: floor the bias
 
-Not fixed here, because every fix is a decision about what the corrected
-band means and sec 12.10 owns that.
+**The copyright holder chose the first option on 2026-09-10** -- floor
+the BIAS at zero rather than the rate, so the correction may take rain
+away from a band that over-forecasts and may never give any to one that
+under-forecasts.
 
-- **Floor the BIAS at zero rather than the rate.** One line: never let
-  the correction add rain. Keeps the win where a band over-forecasts,
-  gives up the case where it genuinely under-forecasts, and cannot make
-  a dry hour wet. Cheapest, and asymmetric on purpose.
-- **Correct only where the raw rate is non-zero.** Leaves dry hours
-  alone and scales the wet ones. Closer to what a zero-inflated variable
-  wants, and it changes the correction from additive to conditional.
-- **Correct rain multiplicatively**, by a measured ratio rather than a
-  difference. Right in shape, and it needs a different accumulation in
-  the archive -- the verification table stores sums of differences.
-- **Stop correcting rain**, and say why. The archive would still score
-  it, so the decision stays reviewable.
+One line, in `bbq_corrected_forecast`, before the rate is computed. The
+rate clamp sec 12.10 already had stays: it guards a different direction
+and is still needed where a band over-forecasts by more than it
+forecast.
 
-The measurement that would settle it is not available from this archive:
-the pairs are deleted as they are scored, so the corrected band cannot
-be re-scored under a different rule without collecting again. What can
-be said is what is above -- the current rule produces a band that is wet
-in every hour it covers beyond two days, on a fortnight that was dry.
+**What it gives up, stated because it is real**: a band that genuinely
+under-forecasts rain stays too dry, and no correction will help it. That
+is the cost of the asymmetry and it was chosen with the cost in view.
+
+The three not taken, so they are not re-derived as improvements:
+correcting only where the raw rate is non-zero, which is the same
+asymmetry with more machinery; a multiplicative correction, which is
+right in shape and needs a different accumulation in the archive since
+the verification table stores sums of differences; and not correcting
+rain at all, which throws away the over-forecast case that works.
+
+### 16.97.4 Measured on the live archive, before and after
+
+The corrected band's own stored forecasts, by lead bucket:
+
+    bucket   before                    after
+    2d       49 rows,   0 dry, 0.069   63 rows,  14 dry, 0.0
+    7d      125 rows,   0 dry, 0.0201  139 rows,  8 dry, 0.0
+    7d+     125 rows,   0 dry, 0.0501  139 rows, 14 dry, 0.0
+
+Every bucket has dry hours again and the lowest rate is nought
+everywhere. The rows are a mix -- one forecast is kept per band, valid
+time and bucket, so what the old rule wrote for times already recorded
+stays until it expires -- and the dry hours appearing at buckets that
+had none is the new rule arriving.
+
+**The test is the pair, not the fix.** Sabotaged by removing the floor,
+it reports "the correction wet 5 of 5 dry hour(s)", which is the shipped
+defect exactly. Sabotaged the other way, by clamping the bias to nought
+always, its control reports that 1.0 mm/h with a 0.4 over-forecast bias
+did not become 0.6 -- without which a correction that did nothing at all
+would have passed.
+
 
 ## 16.98 The same measurement, described two ways
 
