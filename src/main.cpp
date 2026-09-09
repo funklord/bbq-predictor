@@ -1045,6 +1045,7 @@ int main(int argc, char *argv[]) {
 
 	if (!shot.isEmpty() || !tray_shot.isEmpty()) {
 		const auto take = [&window, &tray, shot, tray_shot, want_layout, want_size,
+		                   cursor,
 		                   &taken]() {
 			if (taken) {
 				return;
@@ -1130,6 +1131,36 @@ int main(int argc, char *argv[]) {
 				QTextStream report(stdout);
 				if (picture.save(shot)) {
 					report << "shot: wrote " << shot << "\n";
+
+					/*
+					 * A CURSOR OUTSIDE THE PLOT DREW NOTHING AND SAID
+					 * NOTHING (sec 16.108).
+					 *
+					 * The readout is drawn for every column inside the
+					 * plot and for none outside it, which is right --
+					 * but --cursor took any number and a shot with no
+					 * readout in it looks exactly like a shot of a
+					 * graph that has no readout.
+					 *
+					 * The range cannot be given in --help because it is
+					 * not fixed: the plot's width is the window's less
+					 * the gutters, and the right gutter is sized to the
+					 * widest axis label, which depends on the weather.
+					 * At 820 pixels it was 710 columns on a fixture and
+					 * fewer on live data, which is how ten minutes went
+					 * into wondering why --cursor 700 drew nothing.
+					 *
+					 * Said after the render, because that is when the
+					 * geometry exists.
+					 */
+					const int columns = window.graph()->plot_rect().width();
+					if (!cursor.isEmpty() && columns > 0 &&
+					    (cursor.toInt() < 0 || cursor.toInt() >= columns)) {
+						report << "shot:   --cursor " << cursor.toInt()
+						       << " is outside the plot, which is " << columns
+						       << " column(s) wide here -- no readout was "
+						          "drawn\n";
+					}
 				} else {
 					report << "shot: could not write " << shot << "\n";
 				}

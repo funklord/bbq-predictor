@@ -13905,3 +13905,55 @@ for everything.
 
 Sabotaged both ways: never colliding fails on the point inside, always
 colliding fails on the point above.
+
+## 16.108 A diagnostic that drew nothing and said nothing
+
+`--shot --cursor 700` produced a picture with no readout in it. Which
+looks exactly like a picture of a graph that has no readout, so the next
+ten minutes went into establishing that the readout works.
+
+It does. Swept on a fixture at 820 pixels wide, the readout draws for
+every column from 0 to 710 and for none above -- the plot is 710 columns
+there, and a cursor outside it correctly draws nothing.
+
+**The range is not fixed and cannot be put in `--help`.** The plot is
+the window less its gutters, and the right gutter is sized to the widest
+axis label, which depends on the weather: 710 columns on the fixture and
+**690 on live data in the same window**, because the rain labels were
+wider that minute.
+
+So the shot says it, after rendering, which is when the geometry exists:
+
+    shot:   --cursor 700 is outside the plot, which is 690 column(s)
+            wide here -- no readout was drawn
+
+Silent when the cursor is in range, and silent when no cursor was asked
+for.
+
+### 16.108.1 The same class as sec 16.102, found the same way
+
+`--discover` looked its stations up, threw them away and reported having
+remembered none. This drew no readout and reported success. Both are a
+diagnostic doing nothing and saying nothing, and in both the silence is
+indistinguishable from the ordinary answer.
+
+Neither was found by a sweep. Sec 16.102 came from asking which
+status-returning calls discard their result; this came from **looking at
+a picture and not understanding it**, which is what `--shot`'s own help
+text says the option is for.
+
+### 16.108.2 Not covered by the suite, and why
+
+`--shot` fetches before it renders, so a test driving the binary would
+need the network -- and test_seed, the only test that runs the program,
+exists precisely because it can check things that need no network.
+
+With no network the composite is empty, `paintEvent` returns on its
+"No forecast data yet" branch, and the plot rectangle is never set, so
+the guard sees a width of nought and says nothing. That is the right
+behaviour and it also means the message cannot be reached offline.
+
+Checked by running all three cases against live data instead: out of
+range says so with the real width, in range is silent, and no cursor at
+all is silent. Recorded rather than asserted, so the next person knows
+it rests on that.
