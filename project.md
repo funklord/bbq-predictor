@@ -13324,6 +13324,30 @@ did not become 0.6 -- without which a correction that did nothing at all
 would have passed.
 
 
+### 16.97.5 What the floor does to the drawn overlay
+
+Where the bias is floored the correction is a no-op, so the corrected
+rain equals the raw rain exactly. Measured on the archive after the
+change: at the buckets whose bias is positive every wet hour is still
+reduced -- 1h, 3h, 6h and 12h, all of them -- and at the floored ones
+some hours come back unchanged, five at 1d and six at 7d.
+
+Mixed within a view that is what it should be: the line is a real
+correction that happens to coincide in places. **A view lying entirely
+inside a floored bucket is the case to know about** -- past a week, all
+of it is `beyond`, whose bias is negative -- and there the whole
+corrected rain line traces the raw one.
+
+Sec 12.10 suppresses a corrected rain line with no rain in it, "because
+a line that says nothing on a weather graph still has to be read before
+it can be dismissed". This is a line that says nothing for a different
+reason, and by that argument it might be suppressed too. **It is not
+done here**: 12.10's rule is about an EMPTY overlay and extending it to
+an identical one is a new rule about how the correction is drawn, which
+sec 16.31.3 reserves to the holder along with the rest of that
+question. Recorded so the next reader of a flat week-out overlay knows
+why it traces the forecast exactly.
+
 ## 16.98 The same measurement, described two ways
 
 Sec 16.19 settled what to say when it never rained: skill is measured
