@@ -13957,3 +13957,69 @@ Checked by running all three cases against live data instead: out of
 range says so with the real width, in range is silent, and no cursor at
 all is silent. Recorded rather than asserted, so the next person knows
 it rests on that.
+
+## 16.109 On a light wallpaper the curve grows black warts
+
+The home-screen widget draws the graph over a scrim that is **the
+wallpaper's own colour at 0.75 alpha** (sec 16.23), so a light wallpaper
+gives a light ground. The halo under the temperature curve, and the ring
+around each sample dot, are both drawn in `m_palette.background` -- the
+dark theme's plot ground, which in a widget render is not what is
+behind them.
+
+Rendered against a pale ground and magnified, the curve is a red line
+with a black outline, and the sample dots survive as **black bumps
+protruding below it**, each with a speck of red left showing. The dots
+are drawn before the curve (sec 16.32.1, deliberately, so a ring cannot
+cut the line), so the curve's halo covers their middles and only their
+rings stick out.
+
+On the desktop's dark scheme none of this is visible: halo, ring and
+plot ground are all near-black, and the dots read as red specks on the
+line. **The defect is not in the drawing but in the assumption that the
+palette's background is the ground** -- true everywhere except the one
+surface that has no ground of its own.
+
+### 16.109.1 Not introduced by the stamping
+
+Sec 16.92 replaced `drawEllipse` with a cached stamp and sec 16.99 fixed
+its resolution. Neither changed the geometry: the stamp draws the ring
+then the fill, in the same colours and at the same radii the two
+drawEllipse calls used. The bumps predate both.
+
+### 16.109.2 It is a look, and looks belong to the holder
+
+Sec 16.31.3 settled this class already, declining to add a halo at the
+time on the grounds that it "changes how the primary data element is
+drawn, on every screenshot and in the widget, and that is a look rather
+than a bug fix". The halo arrived later; the same rule covers changing
+what colour it is.
+
+The option, its cost, and whose it is:
+
+- **Halo and ring in the CONTRAST GROUND rather than the palette's
+  background.** The graph already knows it: `set_contrast_ground` is
+  what the poser calls, so the colour is in hand and no plumbing is
+  needed. It would make the widget's curve read as it does on screen. It
+  changes the on-screen drawing too unless it is conditioned on a ground
+  having been set, and a condition like that is a second way for the
+  same element to be drawn.
+- **Leave it.** A light wallpaper is one configuration, the scrim
+  already mutes it, and the widget's job is a temperature anybody can
+  read at a glance rather than a chart anybody studies.
+
+Not decided here. What is recorded is the mechanism, the configuration
+that shows it, and that it is reproducible with
+`bbq_pose_graph_for_picture` against a pale ground -- which is how it
+was found, since no test renders that surface and the desktop cannot
+show it.
+
+### 16.109.3 The widget's graph has no rendered test at all
+
+`bbq_write_widget_picture` is entirely inside `#ifdef Q_OS_ANDROID`, so
+it does nothing on this machine and the existing tests check
+`bbq_pose_graph_for_picture` instead -- the settings it changes and puts
+back, which is the fault sec 16.35 was written for.
+
+What none of them do is LOOK at the result. The posing can be perfect
+and the picture still wrong, which is what this is.
