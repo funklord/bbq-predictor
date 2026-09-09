@@ -18,11 +18,19 @@
 #                        by nothing else, so a plain build stays fast --
 #                        which is paid for by never judging a test from a
 #                        binary this target did not rebuild.
+#   make test-clocks  -- the suite at six clock readings around midnight,
+#                        because a fixture that depends on the hour is
+#                        invisible until the hour comes round. Needs
+#                        faketime, and REFUSES rather than skipping
+#                        without it (sec 16.105)
 #   make check        -- everything that must pass before a commit
-#   make style        -- six gates: indentation, project.md against the
+#   make style        -- ten gates: indentation, project.md against the
 #                        tree, every signal has a listener, the manual
 #                        page against the options, palette contrast,
-#                        and the fetch exit codes against the unit
+#                        the fetch exit codes against the unit, the XML
+#                        files, the build wiring, the setup calls that
+#                        fail silently, and QtTest slots QtTest would
+#                        not run
 #   make hooks        -- install the commit-msg hook from tool/hooks/
 #   make install      -- install the binary, desktop entry, icon and
 #                        manual page under PREFIX
@@ -295,6 +303,56 @@ $(TEST_BUILD_DIR)/Makefile: test/tests.pro $(TEST_SOURCES)
 tests-build: $(TEST_BUILD_DIR)/Makefile
 	$(MAKE) -C $(TEST_BUILD_DIR)
 
+# The suite at hostile clock readings (project.md sec 16.105).
+#
+# A fixture that quietly depends on the hour is invisible until the hour
+# comes round. One did: a station is quiet when its newest sample is
+# TODAY'S and more than forty-five minutes old, so the case cannot be
+# built in the first forty-five minutes of a day, and the test asserting
+# it was wrong for seventy-eight minutes of every day from the day it was
+# written. It surfaced because a session ran past midnight, and inside
+# the window it reads as a regression in whatever is being changed.
+#
+# The times are chosen for the boundary rather than spread evenly: either
+# side of midnight, inside the window that was broken, and one ordinary
+# afternoon as the control that says the sweep can pass at all.
+#
+# NOT part of `check`. It runs the whole suite once per reading and is a
+# deliberate act, like the sanitized build.
+#
+# It REFUSES rather than skipping when faketime is absent. A check that
+# needs a tool it cannot find, and says nothing, is indistinguishable
+# from one that ran -- and this is exactly the class of defect that hides
+# in the difference.
+TEST_CLOCKS ?= 00:05:00 00:30:00 01:10:00 12:00:00 23:50:00 23:59:30
+
+test-clocks: tests-build $(ARTIFACT)
+	@command -v faketime >/dev/null 2>&1 || { \
+		echo "test-clocks: faketime is not installed." >&2; \
+		echo "test-clocks:   apt install faketime" >&2; \
+		echo "test-clocks:   Refusing rather than skipping: a check that" >&2; \
+		echo "test-clocks:   says nothing reads exactly like one that ran." >&2; \
+		exit 1; \
+	}
+	@today=$$(date +%Y-%m-%d); failed=0; ran=0; \
+	for at in $(TEST_CLOCKS); do \
+		echo "--- $$today $$at"; \
+		ran=$$((ran + 1)); \
+		for binary in $(TEST_BUILD_DIR)/test_*; do \
+			[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
+			BBQ_APP_BINARY="$(abspath $(ARTIFACT))" $(TEST_CRASH_ENV) \
+			        faketime "$$today $$at" \
+			        timeout $(TEST_TIMEOUT) "$$binary" >/dev/null 2>&1 \
+			        || { echo "test-clocks: $$binary failed at $$at" >&2; \
+			             failed=$$((failed + 1)); }; \
+		done; \
+	done; \
+	if [ "$$ran" -eq 0 ]; then \
+		echo "test-clocks: no clock readings were given" >&2; exit 1; \
+	fi; \
+	echo "test-clocks: $$ran reading(s), $$failed failure(s)"; \
+	[ "$$failed" -eq 0 ]
+
 # Runs every binary the suite built, and reports which one failed rather
 # than only that something did.
 #
@@ -561,6 +619,6 @@ help:
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
-        style-wiring style-setup \
+        style-wiring style-setup style-tests test-clocks \
         android android-aab \
         install uninstall clean veryclean distclean help

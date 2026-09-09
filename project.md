@@ -13760,3 +13760,38 @@ which day every offset falls in, without touching the system clock.
 All 217 pass in each. That is a property of the whole suite worth having
 and not only of this test: a fixture that quietly depends on the hour is
 invisible until the hour comes round.
+
+### 16.105.3 `make test-clocks`, and what it took to trust it
+
+Timezones move which day an offset falls in and are a proxy for the
+hour. `faketime` is on this machine and is the direct instrument, so the
+check is a target: the suite at six readings -- 00:05, 00:30, 01:10,
+12:00, 23:50 and 23:59:30 -- chosen for the boundary rather than spread
+evenly, with the afternoon one as the control that says the sweep can
+pass at all.
+
+Not part of `check`. It runs the whole suite once per reading and is a
+deliberate act, like the sanitized build.
+
+**It refuses when faketime is absent rather than skipping.** A check
+that needs a tool it cannot find and says nothing is indistinguishable
+from one that ran, and this is exactly the class that hides in that
+difference.
+
+Both halves were then tested, and the first attempt at one of them was
+wrong:
+
+- **Does it catch the defect?** Reintroducing the clock dependence fails
+  the sweep at 00:05, 00:30 and 01:10 and passes at 12:00, 23:50 and
+  23:59:30 -- the seventy-eight-minute window, drawn out by the
+  instrument.
+- **Does it refuse without faketime?** The first control prepended an
+  empty directory to `PATH` and left `/usr/bin` on it, where faketime
+  lives, so the sweep ran normally and reported success. **The control
+  was wrong and read as the guard being wrong.** Re-run against a `PATH`
+  holding symlinks to the fourteen tools the recipe needs and nothing
+  else, it refuses with exit 2 and says how to install it.
+
+The `help` text also said six gates when there are ten. Corrected while
+the file was open, which is the sort of count `evidence.md` says goes
+stale precisely because nothing re-derives it.
