@@ -75,6 +75,7 @@ private slots:
 	void the_clamp_nudges_a_colour_rather_than_redesigning_it();
 	void the_widget_render_leaves_the_parked_readout_where_it_was();
 	void the_picture_is_posed_at_now_with_no_cursor();
+	void the_posed_picture_draws_a_curve_that_clears_its_ground();
 	void a_following_window_is_still_following_after_a_render();
 	void the_server_default_tries_a_local_host_before_a_remote_one();
 	void the_tooltip_lists_every_window_the_count_promises();
@@ -1812,3 +1813,120 @@ void test_window::the_tray_does_not_call_a_future_stamp_fresh() {
 	         qPrintable(QStringLiteral("a fetch a minute ago reads as stale: "
 	                                   "%1").arg(tray.toolTip())));
 }
+
+/*
+ * The widget render is checked for its SETTINGS and never for its
+ * result (project.md sec 16.109.3).
+ *
+ * bbq_write_widget_picture is entirely inside #ifdef Q_OS_ANDROID, so
+ * nothing on a desktop can call it, and the tests around it check what
+ * bbq_pose_graph_for_picture changes and puts back. None of them looks
+ * at the picture -- and the posing can be perfect while the picture is
+ * wrong, which is how sec 16.109 went unseen.
+ *
+ * This renders the posed graph over the scrim the widget uses and asks
+ * two things of it: that the temperature curve is THERE, and that its
+ * colour clears the floor against the ground it lands on. That second
+ * is the whole point of the contrast clamp, and it is the reason the
+ * poser takes a ground at all.
+ */
+void test_window::the_posed_picture_draws_a_curve_that_clears_its_ground() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+
+	/*
+	 * Anchored to now, because the poser follows the present for the
+	 * duration of a render -- a fixture in 2020 draws an empty plot and
+	 * looks like a defect (sec 16.105 is the same trap with a clock).
+	 */
+	const qint64 begin = QDateTime::currentSecsSinceEpoch() - 12 * 3600;
+
+	std::vector<bbq_sample> samples;
+	for (int at = 0; at < 3 * 24; ++at) {
+		bbq_sample sample;
+		sample.start_utc = begin + at * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 12.0 + 9.0 * std::sin(at / 6.0);
+		sample.precip_rate = 0.0;
+		sample.wind_kph = 7.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(QTimeZone::UTC);
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	graph.set_composite(composite);
+
+	/*
+	 * A MID-LUMINANCE wallpaper, which is the hard one and not the
+	 * obvious one. A pale ground was tried first and the control
+	 * refused it: Weather Underground's red already clears #d8dce0 at
+	 * 3.74, so the clamp would have had nothing to do and this test
+	 * would have passed whether or not it ran.
+	 *
+	 * #636464 is LXQt's "Silver", which harmonization.md names as the
+	 * measured worst case for exactly this reason -- a colour tuned to
+	 * sit on near-black or near-white has nowhere to go in the middle.
+	 * The red is at 1.15 against it.
+	 */
+	const QColor ground(0x63, 0x64, 0x64);
+	const QSize shape(480, 260);
+
+	const QColor unclamped = graph.palette_colours().temperature;
+
+	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape);
+	const QColor clamped = graph.palette_colours().temperature;
+
+	/*
+	 * THE CONTROL, and without it this test means nothing: the clamp
+	 * has to have had something to do. If the unposed colour already
+	 * cleared the ground then the assertion below would hold whether or
+	 * not the clamp ran at all.
+	 */
+	QVERIFY2(bbq_contrast_ratio(unclamped, ground) < 3.0,
+	         qPrintable(QStringLiteral("the fixture's ground is not hard "
+	                                   "enough: %1 already clears it at %2")
+	                            .arg(unclamped.name())
+	                            .arg(bbq_contrast_ratio(unclamped, ground))));
+
+	QVERIFY2(bbq_contrast_ratio(clamped, ground) >= 3.0,
+	         qPrintable(QStringLiteral("the posed curve colour %1 is at %2 "
+	                                   "against its ground")
+	                            .arg(clamped.name())
+	                            .arg(bbq_contrast_ratio(clamped, ground))));
+
+	/* And it is actually drawn: the picture must carry that colour. */
+	QImage picture(shape, QImage::Format_ARGB32_Premultiplied);
+	picture.fill(bbq_widget_scrim(ground));
+	graph.render(&picture, QPoint(), QRegion(), QWidget::DrawChildren);
+
+	/*
+	 * NEAR the colour rather than equal to it. The curve is a two-pixel
+	 * antialiased line at a fractional position, so it need never cover
+	 * a whole pixel and an exact match can be nought while the curve is
+	 * plainly drawn -- which is what the first version of this
+	 * asserted, and it failed on a picture that was correct.
+	 */
+	int curve_pixels = 0;
+	for (int y = 0; y < picture.height(); ++y) {
+		for (int x = 0; x < picture.width(); ++x) {
+			const QColor at = picture.pixelColor(x, y);
+			const int away = qMax(qMax(qAbs(at.red() - clamped.red()),
+			                           qAbs(at.green() - clamped.green())),
+			                      qAbs(at.blue() - clamped.blue()));
+			if (away < 24) {
+				++curve_pixels;
+			}
+		}
+	}
+
+	QVERIFY2(curve_pixels > 50,
+	         qPrintable(QStringLiteral("only %1 pixel(s) of the posed curve "
+	                                   "colour are in the picture, so the "
+	                                   "widget would show no weather")
+	                            .arg(curve_pixels)));
+}
+

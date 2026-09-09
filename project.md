@@ -14023,3 +14023,31 @@ back, which is the fault sec 16.35 was written for.
 
 What none of them do is LOOK at the result. The posing can be perfect
 and the picture still wrong, which is what this is.
+
+### 16.109.4 One of them looks now
+
+`the_posed_picture_draws_a_curve_that_clears_its_ground` renders the
+posed graph over the scrim and asks two things: that the temperature
+curve's colour clears the floor against the ground it lands on, which is
+the whole reason the poser takes a ground, and that the curve is
+actually IN the picture.
+
+**Its control refused the first fixture.** A pale wallpaper is the
+obvious hard case and is not one: Weather Underground's red already
+clears #d8dce0 at 3.74, so the clamp would have had nothing to do and
+the test would have passed whether or not it ran. The ground is
+#636464 now -- LXQt's "Silver", which harmonization.md names as the
+measured worst case, because a colour tuned for near-black or near-white
+has nowhere to go in the middle. The red is at 1.15 against it.
+
+**And the first pixel assertion failed on a correct picture.** It looked
+for the clamped colour exactly, and found none: the curve is a
+two-pixel antialiased line at a fractional position, so it need never
+cover a whole pixel. Near the colour rather than equal to it.
+
+Sabotaged by removing the clamp from the poser, it fails naming the
+colour and the ratio: "#d5202a is at 1.15035 against its ground".
+
+This does not cover sec 16.109 itself, and cannot: the warts are a look
+that has not been decided, and a test asserting the present appearance
+would pin the thing under discussion.
