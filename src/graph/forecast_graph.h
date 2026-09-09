@@ -198,6 +198,23 @@ QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
 std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
                                     double radius, double ratio);
 
+/*
+ * Whether any vertex of `line` falls inside `box`
+ * (project.md sec 16.107).
+ *
+ * Used to place the "bias-corrected" caption clear of the lines it sits
+ * among. A free function because the placement rule is worth testing on
+ * its own: the caption and the line it labels are drawn in the SAME
+ * colour, so a pixel test cannot tell one from the other, and the thing
+ * that has to be right is the decision rather than the drawing.
+ *
+ * Vertices rather than segments, because both lines carry a vertex per
+ * column and the box is a hundred and twenty of them wide -- a segment
+ * that crosses the box without a vertex inside it would have to span
+ * the whole caption, which at one point per pixel cannot happen.
+ */
+bool bbq_box_meets_polyline(const QRectF &box, const QPolygonF &line);
+
 class bbq_forecast_graph : public QWidget {
 	Q_OBJECT
 

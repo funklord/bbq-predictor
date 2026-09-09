@@ -13852,3 +13852,56 @@ current band in the composite, must not carry the reassurance.
 Sabotaged to claim the hole heals unconditionally, that control fails by
 name -- without it the test would pass against a program that told
 everybody their archive was self-healing whatever the evidence.
+
+## 16.107 The caption was moved off one line onto the other
+
+Sec 3.19.2 found the "bias-corrected" caption drawn through the
+temperature trace and fixed it by choosing the side from that trace's
+position: above the head normally, below it when the correction runs
+below the forecast.
+
+It says nothing about the corrected line itself. That line STARTS at the
+caption's anchor and runs to the right underneath it, so wherever the
+correction climbs, it climbs through its own label.
+
+Seen by rendering the mobile layout, whose plot is taller and narrower,
+so the same rise covers more vertical distance across the caption's
+hundred and twenty pixels. The desktop shot of the same minute has it
+clear, which is why nothing had noticed.
+
+Both lines are consulted now, and the side that collides gives way. If
+both collide the original rule stands: something has to be chosen, and
+the trace sec 3.19.2 was written for is the more important of the two to
+stay off.
+
+### 16.107.1 The fix for one collision nearly caused the other
+
+The first version checked only the corrected run. That is enough to move
+the caption off the line it labels, and it moves it exactly where sec
+3.19.2 had moved it away from -- the temperature trace. **A fix that
+undoes a previous fix passes every test either of them left behind**,
+because each was written about its own line.
+
+So the check asks about both, through one helper, with the temperature
+trace built as a polyline across the caption's span rather than looped
+over separately. Two questions with one answer, which is also what made
+it testable.
+
+### 16.107.2 A pixel test could not have done this
+
+The caption and the line it labels are drawn in the SAME colour --
+`palette.corrected` for both -- so nothing about a rendered image
+distinguishes the two. A test that counted coloured pixels inside the
+caption's box would pass on a picture where the line ran straight
+through the text.
+
+`bbq_box_meets_polyline` is the decision, and the test asks it directly:
+a point inside, points on each edge, points outside on four sides, an
+empty line, and the case that prompted it -- a run starting level with
+the box and climbing through it, which a helper looking only at the
+first vertex would miss. Its control is the same rise moved below the
+box, without which the test would pass against a helper answering true
+for everything.
+
+Sabotaged both ways: never colliding fails on the point inside, always
+colliding fails on the point above.

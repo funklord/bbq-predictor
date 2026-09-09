@@ -928,6 +928,20 @@ void bbq_forecast_graph::set_composite(bbq_composite composite) {
  * an opaque interior and an antialiased edge that blends with whatever
  * the dot lands on.
  */
+bool bbq_box_meets_polyline(const QRectF &box, const QPolygonF &line) {
+	for (const QPointF &point : line) {
+		if (point.x() < box.left() || point.x() > box.right()) {
+			continue;
+		}
+
+		if (point.y() >= box.top() && point.y() <= box.bottom()) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
                                     double radius, double ratio) {
 	const double outer = radius + dot_ring_grow;
@@ -2708,6 +2722,65 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 					if (under.covered && under.has_temperature &&
 					    head.y() > y_for_temperature(under.temperature)) {
 						offset = 4.0;
+					}
+
+					/*
+					 * AND CLEAR OF THE LINE IT LABELS (sec 16.107).
+					 *
+					 * The rule above picks the side away from the
+					 * TEMPERATURE trace, which is the line the label
+					 * used to be drawn through. It says nothing about
+					 * the corrected line itself, and that one starts at
+					 * the head and runs to the right underneath the
+					 * caption: where the correction climbs, it climbs
+					 * through its own label.
+					 *
+					 * Seen on the mobile layout, whose plot is taller
+					 * and narrower, so the same rise covers more
+					 * vertical distance inside the label's 120 pixels.
+					 * The desktop shot of the same minute has the
+					 * caption clear.
+					 *
+					 * So the run is asked where it goes across the
+					 * caption's own span, and the side that collides
+					 * gives way. If both collide the first rule stands
+					 * -- something has to be chosen, and the trace it
+					 * was written for is the more important of the two
+					 * to stay off.
+					 */
+					/*
+					 * The temperature trace across the caption's span,
+					 * as a polyline, so one helper answers for both
+					 * lines. Moving off one and onto the other is the
+					 * collision sec 3.19.2 fixed, reintroduced by the
+					 * fix for its neighbour.
+					 */
+					QPolygonF trace;
+					for (double x = head.x(); x <= head.x() + 128.0;
+					     x += 1.0) {
+						const int column_at = int(x) - plot.left();
+						if (column_at < 0 ||
+						    column_at >= int(columns.size())) {
+							continue;
+						}
+
+						const column &c = columns[size_t(column_at)];
+						if (c.covered && c.has_temperature) {
+							trace << QPointF(
+							        x, y_for_temperature(c.temperature));
+						}
+					}
+
+					const auto collides = [&](double at_offset) {
+						const QRectF box(head.x() + 4, head.y() + at_offset,
+						                 120, 14);
+
+						return bbq_box_meets_polyline(box, corrected_run) ||
+						       bbq_box_meets_polyline(box, trace);
+					};
+
+					if (collides(offset) && !collides(-offset - 12.0)) {
+						offset = -offset - 12.0;
 					}
 
 					const QRectF where(head.x() + 4, head.y() + offset, 120, 14);

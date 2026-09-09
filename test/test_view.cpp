@@ -59,6 +59,7 @@ private slots:
 	void bbq_flatten_matches_qt();
 	void the_sample_dots_follow_a_theme_change();
 	void a_dot_stamp_carries_the_ratio_it_was_rendered_at();
+	void a_caption_box_knows_when_a_line_crosses_it();
 	void bbq_simplify_keeps_every_point_within_tolerance();
 	void bbq_simplify_keeps_what_a_curve_needs();
 	void a_fresh_graph_follows_the_clock();
@@ -2123,3 +2124,67 @@ void test_view::a_dot_stamp_carries_the_ratio_it_was_rendered_at() {
 	QCOMPARE(bbq_dot_stamps(ring, fill, radius, 3.0).front().width(),
 	         at_one.width() * 3);
 }
+
+/*
+ * The caption placement asks whether a line crosses a box, and this is
+ * that question (project.md sec 16.107).
+ *
+ * Sec 3.19.2 moved the "bias-corrected" caption off the TEMPERATURE
+ * trace by choosing the side from that trace's position. It said
+ * nothing about the corrected line itself, which starts at the
+ * caption's anchor and runs right underneath it -- so where the
+ * correction climbs, it climbs through its own label. Seen on the
+ * mobile layout, whose plot is taller and narrower, so the same rise
+ * covers more vertical distance across the caption's hundred and twenty
+ * pixels.
+ *
+ * Tested here rather than on the rendered pixels because the caption
+ * and the line it labels are drawn in the SAME colour: a pixel test
+ * cannot tell which is which, and would pass on a picture where they
+ * sat on top of each other.
+ */
+void test_view::a_caption_box_knows_when_a_line_crosses_it() {
+	const QRectF box(100.0, 50.0, 120.0, 14.0);
+
+	/* Well above, well below, and to either side: all clear. */
+	QVERIFY(!bbq_box_meets_polyline(box, QPolygonF({QPointF(150, 10)})));
+	QVERIFY(!bbq_box_meets_polyline(box, QPolygonF({QPointF(150, 200)})));
+	QVERIFY(!bbq_box_meets_polyline(box, QPolygonF({QPointF(10, 55)})));
+	QVERIFY(!bbq_box_meets_polyline(box, QPolygonF({QPointF(400, 55)})));
+
+	/* Inside. */
+	QVERIFY(bbq_box_meets_polyline(box, QPolygonF({QPointF(150, 55)})));
+
+	/* The edges belong to the box, so a line grazing it counts. */
+	QVERIFY(bbq_box_meets_polyline(box, QPolygonF({QPointF(100, 50)})));
+	QVERIFY(bbq_box_meets_polyline(box, QPolygonF({QPointF(220, 64)})));
+
+	/* An empty line meets nothing, which is the no-correction case. */
+	QVERIFY(!bbq_box_meets_polyline(box, QPolygonF()));
+
+	/*
+	 * THE CASE THAT PROMPTED IT: a run that starts level with the box
+	 * and climbs through it. One point inside is enough, and the
+	 * question is whether a rising line is caught at all -- a helper
+	 * that only looked at the first vertex would say no.
+	 */
+	QPolygonF climbing;
+	for (int at = 0; at < 130; ++at) {
+		climbing << QPointF(100.0 + at, 80.0 - at * 0.4);
+	}
+	QVERIFY2(bbq_box_meets_polyline(box, climbing),
+	         "a line rising through the caption was not noticed");
+
+	/*
+	 * And the control: the same rise, moved down so it passes below.
+	 * Without this the test would pass against a helper that answered
+	 * true for everything.
+	 */
+	QPolygonF below;
+	for (int at = 0; at < 130; ++at) {
+		below << QPointF(100.0 + at, 300.0 - at * 0.4);
+	}
+	QVERIFY2(!bbq_box_meets_polyline(box, below),
+	         "a line well below the caption was called a collision");
+}
+
