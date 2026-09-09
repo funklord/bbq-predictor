@@ -866,9 +866,11 @@ int bbq_wu_feed::verify_all() {
  */
 void bbq_wu_feed::report_observed_staleness(qint64 now_utc) {
 	const qint64 behind = m_observed_behind_s;
+	const QString short_day = m_observed_short_day;
 	m_observed_behind_s = 0;
+	m_observed_short_day.clear();
 
-	if (behind <= 0) {
+	if (behind <= 0 && short_day.isEmpty()) {
 		return;
 	}
 
@@ -883,6 +885,29 @@ void bbq_wu_feed::report_observed_staleness(qint64 now_utc) {
 	 */
 	const qint64 now =
 	        now_utc > 0 ? now_utc : QDateTime::currentSecsSinceEpoch();
+
+	const bool station_is_answering =
+	        live != nullptr && !live->is_empty() &&
+	        now - live->samples().back().start_utc < 3600;
+
+	if (!short_day.isEmpty()) {
+		/*
+		 * The same complaint either way, with the cause appended where
+		 * it is known. A hole somebody can expect to close is a
+		 * different thing to read than one nobody has explained.
+		 */
+		emit band_failed(
+		        QStringLiteral("observed"),
+		        station_is_answering
+		                ? tr("%1; the station is answering, so this is the "
+		                     "provider's history endpoint lagging and should "
+		                     "fill in").arg(short_day)
+		                : short_day);
+	}
+
+	if (behind <= 0) {
+		return;
+	}
 
 	if (live != nullptr && !live->is_empty()) {
 		const qint64 reported = live->samples().back().start_utc;
@@ -918,10 +943,12 @@ void bbq_wu_feed::report_observed_staleness(qint64 now_utc) {
 		}
 	}
 
-	emit band_failed(QStringLiteral("observed"),
-	                 tr("%1 has not reported for %2")
-	                         .arg(m_station_id)
-	                         .arg(bbq_describe_duration(behind)));
+	if (behind > 0) {
+		emit band_failed(QStringLiteral("observed"),
+		                 tr("%1 has not reported for %2")
+		                         .arg(m_station_id)
+		                         .arg(bbq_describe_duration(behind)));
+	}
 }
 
 void bbq_wu_feed::finish_one() {
@@ -1285,12 +1312,23 @@ void bbq_wu_feed::check_day_is_whole(const bbq_series &measured,
 		return;
 	}
 
-	emit band_failed(QStringLiteral("observed"),
-	                 tr("%1 returned only %2 rows, ending %3 before the "
-	                    "day did -- the archive has a hole in it")
-	                         .arg(asked.toString(Qt::ISODate))
-	                         .arg(measured.size())
-	                         .arg(bbq_describe_duration(short_by)));
+	/*
+	 * HELD, like the staleness above and for the same reason
+	 * (sec 16.106).
+	 *
+	 * "the archive has a hole in it" is true and reads as a fault in
+	 * this program's storage. On 2026-09-09 the window carried it while
+	 * the cause was Weather Underground's history endpoint sitting
+	 * fourteen hours behind its own current one -- which sec 16.79
+	 * measured, and which fills in by itself once the endpoint catches
+	 * up. A reader told the archive is holed and not told it is
+	 * self-healing has been given the alarming half.
+	 */
+	m_observed_short_day = tr("%1 returned only %2 rows, ending %3 before "
+	                          "the day did -- the archive has a hole in it")
+	                               .arg(asked.toString(Qt::ISODate))
+	                               .arg(measured.size())
+	                               .arg(bbq_describe_duration(short_by));
 }
 
 QDate bbq_wu_feed::backfill_day_wanted(const QString &station) const {

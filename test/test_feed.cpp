@@ -557,7 +557,16 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	bbq_series full(bbq_band::observed, QStringLiteral("wunderground"));
 	full.set_samples(whole);
 
+	/*
+	 * TWO STEPS, because the complaint waits for the round
+	 * (sec 16.106). check_day_is_whole measures the shortfall and holds
+	 * it; report_observed_staleness says so once the round has settled,
+	 * which is the first moment the current band is there to say
+	 * WHETHER THE HOLE WILL CLOSE. Driving only the first step would
+	 * assert that nothing is said, which is true and is not the claim.
+	 */
 	feed.check_day_is_whole(full);
+	feed.report_observed_staleness();
 	QCOMPARE(complaints.count(), 0);
 
 	/*
@@ -569,6 +578,7 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	stale.set_samples(cut);
 
 	feed.check_day_is_whole(stale);
+	feed.report_observed_staleness();
 
 	QCOMPARE(complaints.count(), 1);
 	QVERIFY2(complaints.at(0).at(1).toString().contains(QStringLiteral("hole")),
@@ -589,6 +599,7 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 	 * they are two replies.
 	 */
 	feed.check_day_is_whole(stale);
+	feed.report_observed_staleness();
 
 	int holes = 0;
 	for (const QList<QVariant> &said : complaints) {
@@ -599,6 +610,48 @@ void test_feed::a_finished_day_that_comes_back_short_says_so() {
 
 	QCOMPARE(holes, 2);
 	QCOMPARE(complaints.count(), 2);
+	/*
+	 * AND WHETHER THE HOLE WILL CLOSE (sec 16.106).
+	 *
+	 * "the archive has a hole in it" is true and reads as a fault in
+	 * this program's storage. On the day this was written the window
+	 * carried it while the cause was the provider's history endpoint
+	 * fourteen hours behind its own current one -- which fills in by
+	 * itself. A reader told the archive is holed and not told it is
+	 * self-healing has been given the alarming half.
+	 *
+	 * The station answering is what says which it is, and it is
+	 * fetched in the same round.
+	 */
+	bbq_sample fresh;
+	fresh.start_utc = QDateTime::currentSecsSinceEpoch() - 120;
+	fresh.duration_s = 300;
+	fresh.temperature = 15.0;
+
+	bbq_series live(bbq_band::current, QStringLiteral("wunderground"));
+	live.set_samples({fresh});
+	feed.m_composite.set_series(std::move(live));
+
+	feed.check_day_is_whole(stale);
+	feed.report_observed_staleness();
+	QCOMPARE(complaints.count(), 3);
+
+	const QString explained = complaints.at(2).at(1).toString();
+	QVERIFY2(explained.contains(QStringLiteral("hole")),
+	         qPrintable(QStringLiteral("the shortfall stopped being reported: "
+	                                   "%1").arg(explained)));
+	QVERIFY2(explained.contains(QStringLiteral("should fill in")),
+	         qPrintable(QStringLiteral("a self-healing hole was not said to "
+	                                   "be one: %1").arg(explained)));
+
+	/*
+	 * The control: the earlier complaints, made with no current band in
+	 * the composite, must NOT carry that reassurance. Without this the
+	 * test would pass against a program that appended it always.
+	 */
+	QVERIFY2(!complaints.at(1).at(1).toString().contains(
+	                 QStringLiteral("should fill in")),
+	         "a hole with no evidence about the station was called healing");
 }
 
 void test_feed::a_store_that_takes_fewer_rows_than_given_says_so() {

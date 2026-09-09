@@ -367,6 +367,17 @@ private:
 	 * needs the current band and that arrives in its own time.
 	 */
 	qint64 m_observed_behind_s = 0;
+
+	/*
+	 * A completed day that came back short, held for the same reason
+	 * (project.md sec 16.106): saying WHY it is short needs the current
+	 * band, and that arrives in its own time.
+	 *
+	 * Empty means nothing to say. Both this and the staleness above can
+	 * be set in one round -- a backfill reply and a today reply take
+	 * different branches -- so they are separate.
+	 */
+	QString m_observed_short_day;
 	qint64 m_view_from = 0;
 	qint64 m_view_to = 0;
 	qint64 m_loaded_from = 0;

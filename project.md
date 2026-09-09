@@ -13795,3 +13795,60 @@ wrong:
 The `help` text also said six gates when there are ten. Corrected while
 the file was open, which is the sort of count `evidence.md` says goes
 stale precisely because nothing re-derives it.
+
+## 16.106 The other half of the same sentence
+
+Sec 16.101 stopped the staleness message accusing the station of the
+provider's lateness. Rendering the window afterwards, to check the
+render work had not broken the full composition, showed the sibling
+branch still doing it:
+
+    last error: observed: 2026-09-08 returned only 121 rows, ending
+    13 h 56 min before the day did -- the archive has a hole in it
+
+True, and it reads as a fault in this program's storage. The cause was
+Weather Underground's history endpoint sitting fourteen hours behind its
+own current one, which sec 16.79 measured and which **fills in by
+itself** once the endpoint catches up. A reader told the archive is
+holed, and not told it is self-healing, has been handed the alarming
+half.
+
+It now says which it is:
+
+    2026-09-08 returned only 121 rows, ending 13 h 56 min before the
+    day did -- the archive has a hole in it; the station is answering,
+    so this is the provider's history endpoint lagging and should fill
+    in
+
+Same complaint, with the cause appended where it is known and left off
+where it is not.
+
+### 16.106.1 Found by looking at the picture
+
+Nothing prompted this but running `--shot` to confirm the day's render
+changes had not broken the full window, and reading what the status line
+said. The suite was green, the gates passed, and the message had been
+wrong the whole time.
+
+**Sec 16.103 is the lesson and it did not take.** That section recorded
+that fixing one dimension of a fault should prompt asking whether the
+other has it -- and sec 16.101 fixed the staleness branch of this exact
+function without looking at the branch beside it. The answer was
+fourteen lines away.
+
+### 16.106.2 The same deferral, and the suite caught it again
+
+The short-day complaint is held to the settle point for the reason the
+staleness one is: naming the cause needs the current band, which arrives
+in its own time. Both are separate members, because a backfill reply and
+a today reply take different branches and can both fire in one round.
+
+`a_finished_day_that_comes_back_short_says_so` expected the complaint at
+once and broke, exactly as its sibling did in sec 16.101. It drives both
+steps now and gained the new case.
+
+Its control is the one that matters: an EARLIER complaint, made with no
+current band in the composite, must not carry the reassurance.
+Sabotaged to claim the hole heals unconditionally, that control fails by
+name -- without it the test would pass against a program that told
+everybody their archive was self-healing whatever the evidence.
