@@ -14320,3 +14320,55 @@ covers all three refusals on a synthetic tree. Gutting the unlinked
 branch makes the control refuse with `no result below means anything`
 and exit 2, so the gate cannot go quietly blind: a probe whose failure
 mode is silence has to demonstrate on every run that it can speak.
+
+## 16.112 Where the long view's time goes, and one instrument that cannot say
+
+Sec 16.91 measured the simplifier at a view where it reduced 429 points
+to 69. At sixteen days it reduces **870 to 811** -- seven per cent
+against eighty-four.
+
+**That is the code's own prediction, not a surprise**, and reading the
+comment above `curve_tolerance` before theorising is what kept it from
+being written up as one: "noisier weather keeps more points and saves
+less ... the tolerance bounds the ERROR, and the speed is whatever the
+data allows." What was missing was the magnitude. Sixteen days across a
+thousand columns puts about twenty-three minutes in each, so consecutive
+columns differ by far more than a hundredth of a pixel and there is
+nothing collinear left to drop. The saving is real at a day and gone at
+a fortnight, by design.
+
+So the phase to look at is not the simplifier. Across every run the
+frame's cost concentrated in **stroking the temperature curve**, which
+is done twice -- the halo and then the ink (sec 16.32) -- over a polyline
+of eight hundred points, with the corrected overlay's two passes behind
+it. The simplify step itself was consistently under a millisecond.
+
+**The absolute numbers are withheld deliberately.** They were taken at
+load average 27 with two other sessions building, and the same binary
+rendering the same view gave totals between 28 and 132 ms. A ratio that
+holds across every run under contention is worth something; a
+millisecond figure taken there is worth nothing, and quoting one would
+put a number nobody can reproduce into a document that gets quoted.
+
+### 16.112.1 A live shot is not an A/B instrument, and the control said so
+
+The obvious next question -- what a larger tolerance costs in pixels at
+THIS view -- was attempted by rendering `--shot` at each tolerance and
+differencing. It is invalid, and the control caught it twice before any
+conclusion was drawn:
+
+- **Two renders at the SAME tolerance differ.** Whole-image: not equal.
+  Restricted to the plot, away from the status line's clock: worst
+  channel delta 5/255 over 3145 pixels, because `now` advances between
+  runs and antialiasing spreads a sub-pixel shift.
+- **The data itself moves.** One run in the sweep reported 701 input
+  points where its neighbours reported 870: a refetch had changed the
+  covered columns. Differences of 233/255 over tens of thousands of
+  pixels followed, which no sub-pixel tolerance can produce.
+
+Had the control been skipped, those deltas would have read as a crisp
+verdict that even 0.05 is visually unacceptable -- a true-looking number
+produced entirely by the instrument. **Sec 16.91.2 did it the right way
+and its method is the one to reuse**: render against the unsimplified
+output of the SAME data, from a fixture, where nothing can move between
+the two arms.
