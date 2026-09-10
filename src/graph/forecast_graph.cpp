@@ -1141,8 +1141,33 @@ void bbq_forecast_graph::mouseMoveEvent(QMouseEvent *event) {
 	}
 
 	const int column = static_cast<int>(event->position().x()) - m_metrics.margin_left;
+
+	/*
+	 * REPAINT ONLY FOR A CHANGE THE DRAWING CAN SEE (sec 16.113).
+	 *
+	 * The readout follows the COLUMN, and nothing drawn depends on
+	 * how high the pointer is, so a move within one column -- or
+	 * straight up and down -- has nothing to repaint. A pointer
+	 * reports far more often than the plot has columns, and on a
+	 * touch screen a finger held still still reports, so this is
+	 * most of them.
+	 *
+	 * It matters because there is no partial repaint here: an
+	 * update() redraws the whole plot, and the temperature curve
+	 * alone is the largest phase in the frame (sec 16.112). Moving
+	 * the pointer a pixel sideways within a column was paying for
+	 * the entire picture to learn nothing.
+	 *
+	 * A drag is the exception and not an afterthought: the view
+	 * moved under the pointer above, so the picture is stale even
+	 * where the column is not.
+	 */
+	const bool column_moved = column != m_cursor_column;
 	m_cursor_column = column;
-	update();
+
+	if (m_dragging || column_moved) {
+		update();
+	}
 	QWidget::mouseMoveEvent(event);
 }
 

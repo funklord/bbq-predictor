@@ -52,12 +52,29 @@ public:
 	using bbq_forecast_graph::wheelEvent;
 };
 
+/*
+ * Counts the repaints update() actually causes, which grab() cannot show
+ * -- it paints on demand whether or not anything asked for one. So this
+ * one is shown and driven through the event loop instead.
+ */
+class counting_probe : public probe {
+public:
+	int paints = 0;
+
+protected:
+	void paintEvent(QPaintEvent *event) override {
+		++paints;
+		bbq_forecast_graph::paintEvent(event);
+	}
+};
+
 class test_view : public QObject {
 	Q_OBJECT
 
 private slots:
 	void bbq_flatten_matches_qt();
 	void the_sample_dots_follow_a_theme_change();
+	void a_pointer_move_inside_one_column_repaints_nothing();
 	void a_dot_stamp_carries_the_ratio_it_was_rendered_at();
 	void a_caption_box_knows_when_a_line_crosses_it();
 	void a_rain_overlay_that_repeats_the_forecast_is_not_drawn();
@@ -704,6 +721,58 @@ void test_view::a_pixel_sized_font_is_scaled_rather_than_refused() {
 	qInstallMessageHandler(g_previous_handler);
 
 	QCOMPARE(g_font_complaints, 0);
+}
+
+/*
+ * A pointer move that changes nothing the drawing can see must not
+ * repaint (sec 16.113).
+ *
+ * There is no partial repaint in this widget: update() redraws the whole
+ * plot, of which the temperature curve is the largest phase. A pointer
+ * reports far more often than the plot has columns, so most moves ask
+ * for the entire picture and change none of it.
+ *
+ * Driven through the event loop rather than grab(), because grab() paints
+ * on demand and would report a repaint nobody requested -- the vacuous
+ * pass this test exists to avoid.
+ */
+void test_view::a_pointer_move_inside_one_column_repaints_nothing() {
+	counting_probe graph;
+	graph.resize(900, 400);
+	graph.show();
+	QApplication::processEvents();
+
+	const double left = graph.plot_rect().left();
+	QVERIFY2(graph.paints > 0, "the widget never painted, so the counter "
+	                           "cannot tell a suppressed repaint from a "
+	                           "platform that does not paint at all");
+
+	const auto move_to = [&](double x, double y) {
+		QMouseEvent event(QEvent::MouseMove, QPointF(x, y), QPointF(x, y),
+		                  Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+		graph.mouseMoveEvent(&event);
+		QApplication::processEvents();
+	};
+
+	/* Into a column: the readout moved, so the picture must be redrawn. */
+	graph.paints = 0;
+	move_to(left + 100.5, 100.0);
+	QCOMPARE(graph.paints, 1);
+
+	/*
+	 * Straight up, inside the same column. Nothing drawn depends on the
+	 * pointer's height, so this one is free.
+	 */
+	move_to(left + 100.5, 300.0);
+	QCOMPARE(graph.paints, 1);
+
+	/* And sideways within the same pixel column, which is the common case. */
+	move_to(left + 100.9, 300.0);
+	QCOMPARE(graph.paints, 1);
+
+	/* The next column over is a change, and must cost a repaint. */
+	move_to(left + 101.5, 300.0);
+	QCOMPARE(graph.paints, 2);
 }
 
 int main(int argc, char *argv[]) {

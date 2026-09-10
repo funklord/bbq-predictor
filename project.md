@@ -14421,3 +14421,55 @@ than stroking it (sec 16.90's trick, which took the other fills from
 paths to memfills). Not the vertex count. Any of those changes the
 picture, so each is a decision to put to the holder with a measurement
 beside it, taken on a quiet machine.
+
+## 16.113 Most pointer moves were repainting the whole plot to change nothing
+
+The widget has no partial repaint. `paintEvent` reads `event->rect()`
+only to fill the background and draws everything else in full, and every
+handler asks for a repaint with a bare `update()`. So a pointer move
+cost the entire picture -- of which the temperature curve alone is the
+largest phase (sec 16.112).
+
+`mouseMoveEvent` asked for one on EVERY move:
+
+    m_cursor_column = column;
+    update();
+
+The readout follows the COLUMN. `m_cursor_column` is the only cursor
+state the class holds, and nothing drawn depends on how high the pointer
+is -- so a move straight up and down, or sideways inside one pixel
+column, redrew the whole plot to produce the identical image. A pointer
+reports far more often than the plot has columns, and a finger resting
+on a touch screen reports while it rests, so most moves were that kind.
+
+It repaints when the column changes, and when dragging -- the exception
+that is not an afterthought, since a drag has already moved the view
+under the pointer, leaving the picture stale where the column is not.
+
+### 16.113.1 grab() cannot see this, and would have passed
+
+The suite's `paint_once` forces a paint with `grab()`, which paints on
+demand whether or not anything requested one. A test built on it would
+count a repaint after every move and report the fix working before it
+was written -- and report it working just as loudly after somebody
+removed it.
+
+So the test shows the widget and drives the real event loop, counting
+paints in an overridden `paintEvent`. It also asserts that the widget
+painted at all before measuring, because on a platform that never paints
+a suppressed repaint and an absent one are the same number.
+
+Sabotaged back to the unconditional `update()`, it fails on the vertical
+move with `Actual (graph.paints): 2, Expected (1): 1` -- through the
+assertion under test rather than through a neighbour.
+
+### 16.113.2 What it does not do
+
+Panning still redraws everything, and should: the view moves, so the
+picture is genuinely stale. The frame cost measured in sec 16.112 is
+unchanged, and this buys nothing for a drag.
+
+What it removes is the repaint that was never needed, which is the
+commonest one. The remaining levers on the frame itself all change the
+picture and are recorded at the end of sec 16.112.3 for a decision with
+a measurement beside it.
