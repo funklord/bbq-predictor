@@ -14375,6 +14375,16 @@ is done twice -- the halo and then the ink (sec 16.32) -- over a polyline
 of eight hundred points, with the corrected overlay's two passes behind
 it. The simplify step itself was consistently under a millisecond.
 
+> **This conclusion was wrong, and sec 16.115 has the measurement that
+> replaced it.** On the phone the whole of drawing is under 4 ms and the
+> curve is 1.1 of it, while 95% of the frame was a cache being emptied
+> once per mouse move. The ratio above is real and is a ratio between
+> two small things: what it could not show is the large thing sitting
+> outside the phases it compared. **A profile taken on a machine at load
+> average 27 is a measurement of that machine**, and the section below
+> says so about the absolute numbers without noticing that it applies to
+> the ranking as well.
+
 **The absolute numbers are withheld deliberately.** They were taken at
 load average 27 with two other sessions building, and the same binary
 rendering the same view gave totals between 28 and 132 ms. A ratio that
@@ -14450,7 +14460,12 @@ the weather, drawn correctly.
 Which leaves the levers that change area or the cost of covering it --
 the halo's width, the antialiasing, or filling the halo as spans rather
 than stroking it (sec 16.90's trick, which took the other fills from
-paths to memfills). Not the vertex count. Any of those changes the
+paths to memfills). Not the vertex count.
+
+**The lever chosen from this list was worth ten times at the thing it
+does and one per cent of the problem** (sec 16.115). The list was not
+wrong about the levers; it was drawn up from a profile that could not
+see what actually cost the frame. Any of those changes the
 picture, so each is a decision to put to the holder with a measurement
 beside it, taken on a quiet machine.
 
