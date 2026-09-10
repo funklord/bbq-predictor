@@ -993,7 +993,7 @@ std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
 }
 
 void bbq_forecast_graph::build_dot_stamps(double ratio) const {
-	m_dot_stamps = bbq_dot_stamps(m_palette.background, m_palette.temperature,
+	m_dot_stamps = bbq_dot_stamps(ground_behind(), m_palette.temperature,
 	                              m_metrics.sample_radius, ratio);
 	m_dot_stamp_ratio = ratio;
 }
@@ -2506,7 +2506,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 */
 	const QPen curve_ink(m_palette.temperature, m_metrics.line_width);
 	const QPen curve_halo =
-	        halo_pen(m_palette.background, m_metrics.line_width);
+	        halo_pen(ground_behind(), m_metrics.line_width);
 
 	/*
 	 * SIMPLIFIED BEFORE STROKING (sec 16.91).
@@ -2838,7 +2838,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 					 * (sec 4.3): it is drawn over a rain wash whose
 					 * darkness is the weather's to decide.
 					 */
-					painter.setPen(m_palette.background);
+					painter.setPen(ground_behind());
 					for (int dx = -1; dx <= 1; ++dx) {
 						for (int dy = -1; dy <= 1; ++dy) {
 							if (dx == 0 && dy == 0) {

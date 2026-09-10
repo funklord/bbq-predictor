@@ -313,6 +313,28 @@ public:
 	QColor contrast_ground() const { return m_contrast_ground; }
 
 	/*
+	 * The colour actually BEHIND the plot, which is not always the
+	 * palette's background (project.md sec 16.109).
+	 *
+	 * A halo and a sample dot's ring exist to separate what they are
+	 * under from whatever it crosses, so both are drawn in the ground.
+	 * `m_palette.background` is that ground everywhere the plot fills
+	 * its own -- and the home-screen widget does not: it draws over a
+	 * scrim that is the wallpaper's own colour, and a dark ring on a
+	 * pale wallpaper is a black wart rather than a separation.
+	 *
+	 * A contrast ground is set by exactly one caller,
+	 * bbq_pose_graph_for_picture, and only for the duration of a widget
+	 * render, so this is that case and no other. It is ONE rule with a
+	 * varying input rather than a second way to draw the same element,
+	 * which is the objection sec 16.109.2 recorded against doing it.
+	 */
+	QColor ground_behind() const {
+		return m_contrast_ground.isValid() ? m_contrast_ground
+		                                   : m_palette.background;
+	}
+
+	/*
 	 * The colours in force, for a caller that has to draw on the same
 	 * ground this does -- the home-screen picture's scrim is this
 	 * background made translucent, so the widget is the window's scheme

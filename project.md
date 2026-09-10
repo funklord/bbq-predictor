@@ -14033,7 +14033,7 @@ range says so with the real width, in range is silent, and no cursor at
 all is silent. Recorded rather than asserted, so the next person knows
 it rests on that.
 
-## 16.109 On a light wallpaper the curve grows black warts
+## 16.109 On a light wallpaper the curve grew black warts
 
 The home-screen widget draws the graph over a scrim that is **the
 wallpaper's own colour at 0.75 alpha** (sec 16.23), so a light wallpaper
@@ -14062,32 +14062,51 @@ its resolution. Neither changed the geometry: the stamp draws the ring
 then the fill, in the same colours and at the same radii the two
 drawEllipse calls used. The bumps predate both.
 
-### 16.109.2 It is a look, and looks belong to the holder
+### 16.109.2 Decided: halo in the ground it lands on
 
-Sec 16.31.3 settled this class already, declining to add a halo at the
-time on the grounds that it "changes how the primary data element is
-drawn, on every screenshot and in the widget, and that is a look rather
-than a bug fix". The halo arrived later; the same rule covers changing
-what colour it is.
+**The copyright holder chose the first option on 2026-09-10.** The halo
+under the curve, the ring round each sample dot and the halo under the
+"bias-corrected" caption all take `ground_behind()`, which is the
+contrast ground where one has been set and the palette's background
+where it has not.
 
-The option, its cost, and whose it is:
+The objection recorded against doing it -- that a condition like this is
+"a second way for the same element to be drawn" -- is answered by where
+the condition lives. There is ONE rule, `ground_behind()`, named once
+and read at all three sites; what varies is its input, and only one
+caller ever sets a contrast ground: `bbq_pose_graph_for_picture`, for
+the duration of a widget render.
 
-- **Halo and ring in the CONTRAST GROUND rather than the palette's
-  background.** The graph already knows it: `set_contrast_ground` is
-  what the poser calls, so the colour is in hand and no plumbing is
-  needed. It would make the widget's curve read as it does on screen. It
-  changes the on-screen drawing too unless it is conditioned on a ground
-  having been set, and a condition like that is a second way for the
-  same element to be drawn.
-- **Leave it.** A light wallpaper is one configuration, the scrim
-  already mutes it, and the widget's job is a temperature anybody can
-  read at a glance rather than a chart anybody studies.
+### 16.109.2.1 The warts go and the dots go with them
 
-Not decided here. What is recorded is the mechanism, the configuration
-that shows it, and that it is reproducible with
-`bbq_pose_graph_for_picture` against a pale ground -- which is how it
-was found, since no test renders that surface and the desktop cannot
-show it.
+**Stated because it is a real trade and not a clean win.** Rendered over
+a pale wallpaper after the change, the curve is a clean red line and the
+sample dots are faint pink specks beside it.
+
+The reason is the same geometry that made them warts. A dot sits ON the
+curve and the halo is wider than the line, so the halo covers it; what
+was ever visible was the RING peeking past the halo. When the ring was
+the dark background against a pale ground it peeked loudly, and now that
+it matches the ground it does not peek at all. Only the few tenths of a
+pixel by which the dot's red fill exceeds the halo's half-width still
+shows.
+
+So on the widget, "mark samples" now draws almost nothing. That is
+better than warts and it is not nothing lost, and it is left as it
+stands rather than answered with a second conditional -- reversing sec
+16.32.1's draw order for this surface only would be exactly the "second
+way to draw the same element" the option above was careful to avoid.
+
+### 16.109.2.2 The test's control is the on-screen render
+
+Asserting that a colour is ABSENT from a picture is the shape that
+passes when nothing was drawn. So the test first renders the graph
+unposed and requires more than a thousand pixels of the dark background
+to be there -- it is the plot's own ground on screen -- and only then
+requires none of it in a render posed over a pale wallpaper.
+
+Sabotaged back to `m_palette.background`, it reports 806 such pixels and
+names what they are.
 
 ### 16.109.3 The widget's graph has no rendered test at all
 

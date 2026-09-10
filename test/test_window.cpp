@@ -76,6 +76,7 @@ private slots:
 	void the_widget_render_leaves_the_parked_readout_where_it_was();
 	void the_picture_is_posed_at_now_with_no_cursor();
 	void the_posed_picture_draws_a_curve_that_clears_its_ground();
+	void a_widget_render_halos_in_the_ground_it_lands_on();
 	void a_following_window_is_still_following_after_a_render();
 	void the_server_default_tries_a_local_host_before_a_remote_one();
 	void the_tooltip_lists_every_window_the_count_promises();
@@ -1928,5 +1929,96 @@ void test_window::the_posed_picture_draws_a_curve_that_clears_its_ground() {
 	                                   "colour are in the picture, so the "
 	                                   "widget would show no weather")
 	                            .arg(curve_pixels)));
+}
+
+/*
+ * A halo and a sample dot's ring are drawn in the ground they sit on,
+ * and in a widget render that is not the palette's background
+ * (project.md sec 16.109).
+ *
+ * The widget draws over a scrim that is the wallpaper's own colour, so
+ * on a light wallpaper the dark theme's background -- used for both --
+ * put a black outline round the curve and black bumps where the sample
+ * dots were. Both exist to SEPARATE what they are under from what it
+ * crosses, and a colour that is not the ground cannot do that.
+ *
+ * Asserted on the picture rather than on the rule alone: the dark
+ * background must not appear in a render posed against a pale ground.
+ * The axis text is a different colour and is clamped against the same
+ * ground, so it cannot supply a false pass.
+ */
+void test_window::a_widget_render_halos_in_the_ground_it_lands_on() {
+	bbq_forecast_graph graph;
+	graph.set_theme(bbq_theme::dark);
+
+	const QColor dark_background = graph.palette_colours().background;
+
+	const qint64 begin = QDateTime::currentSecsSinceEpoch() - 12 * 3600;
+	std::vector<bbq_sample> samples;
+	for (int at = 0; at < 3 * 24; ++at) {
+		bbq_sample sample;
+		sample.start_utc = begin + at * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 12.0 + 9.0 * std::sin(at / 6.0);
+		sample.precip_rate = 0.0;
+		sample.wind_kph = 7.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(QTimeZone::UTC);
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	graph.set_composite(composite);
+
+	/*
+	 * The control comes first: unposed, the graph must USE that dark
+	 * background, or the assertion below would hold against a render
+	 * that had simply stopped drawing.
+	 */
+	graph.resize(480, 260);
+	const QImage plain = graph.grab().toImage();
+
+	int dark_on_screen = 0;
+	for (int y = 0; y < plain.height(); ++y) {
+		for (int x = 0; x < plain.width(); ++x) {
+			if (plain.pixelColor(x, y) == dark_background) {
+				++dark_on_screen;
+			}
+		}
+	}
+
+	QVERIFY2(dark_on_screen > 1000,
+	         qPrintable(QStringLiteral("the on-screen graph shows only %1 "
+	                                   "pixel(s) of its own background, so "
+	                                   "this test cannot tell it apart")
+	                            .arg(dark_on_screen)));
+
+	/* Posed for a pale wallpaper, it must not appear at all. */
+	const QColor ground(0xd8, 0xdc, 0xe0);
+	const QSize shape(480, 260);
+	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape);
+
+	QImage picture(shape, QImage::Format_ARGB32_Premultiplied);
+	picture.fill(bbq_widget_scrim(ground));
+	graph.render(&picture, QPoint(), QRegion(), QWidget::DrawChildren);
+
+	int warts = 0;
+	for (int y = 0; y < picture.height(); ++y) {
+		for (int x = 0; x < picture.width(); ++x) {
+			if (picture.pixelColor(x, y) == dark_background) {
+				++warts;
+			}
+		}
+	}
+
+	if (warts > 0) {
+		QFAIL(qPrintable(QStringLiteral(
+		        "%1 pixel(s) of the dark plot background are in a render over "
+		        "a pale wallpaper: the halo and the dot rings are not using "
+		        "the ground they land on").arg(warts)));
+	}
 }
 
