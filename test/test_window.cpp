@@ -419,6 +419,22 @@ void test_window::a_pan_inside_the_loaded_range_keeps_the_window_cache() {
 		                                   "inside the loaded range")
 		                            .arg(step)));
 	}
+
+	/*
+	 * AND THE OTHER HALF OF THE PARTITION, which is the half that keeps
+	 * this test honest. Everything above passes just as well if the feed
+	 * simply answers "nothing was read" for ever -- at which point the
+	 * graph never loads anything again and shows a frozen picture, which
+	 * is far worse than the cost this saves.
+	 *
+	 * So a pan OUT of the loaded range must still push a composite
+	 * through, and forgetting the windows is how that is visible from
+	 * here.
+	 */
+	window.m_graph->set_view(base + 90 * 24 * 3600, 24 * 3600);
+	QVERIFY2(!window.m_graph->m_windows_valid,
+	         "a pan far outside the loaded range did not reload, so the "
+	         "graph would go on showing what it already had");
 }
 
 void test_window::the_view_still_pans_and_zooms_through_the_window() {

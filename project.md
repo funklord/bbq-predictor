@@ -14607,6 +14607,23 @@ Same phone, same workload, same swipes:
 
 Fourteen times, and the paint is now 5.2 ms where the target was 4.
 
+**118 frames a second is the panel, not the program.** The Fold's display
+peaks at 120 Hz -- `dumpsys display` reports 48, 60, 96 and 120 -- so the
+app now paints every frame the screen can show, and nothing further in
+the paint is visible to anybody looking at it.
+
+Re-measured with the labels aligned, the frame no longer has a dominant
+item: curve 1139 us, grid 1030, readout and axis 961, chance 496, ribbon
+383, windows 312, the preamble 288, rain 265, and everything else under
+70. The column reduce is 63 us and the four interpolation passes 68.
+What is left is mostly text.
+
+**The lens the fault suggests was swept and came up empty**, which is
+worth recording so the next reader does not sweep it again: the graph's
+only other cache is the dot stamps, forgotten in `apply_palette` and
+`set_layout`, neither of which fires while dragging; and `view_changed`
+has exactly one handler, the one fixed here.
+
 ### 16.115.2 Three measurements that lied first, and the controls
 
 **Total process CPU cannot see this.** Ticks over a fixed drag were 1280
