@@ -441,6 +441,8 @@ private:
 	mutable std::vector<bbq_window> m_windows;
 	mutable bool m_windows_valid = false;
 
+	friend class test_window;
+
 	/*
 	 * The sample dot, drawn once per subpixel offset and stamped
 	 * (project.md sec 16.92).

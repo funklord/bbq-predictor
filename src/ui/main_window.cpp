@@ -526,7 +526,21 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 */
 	connect(m_graph, &bbq_forecast_graph::view_changed, this,
 	        [this](qint64 from_utc, qint64 to_utc) {
-		m_feed->set_view_range(from_utc, to_utc);
+		if (!m_feed->set_view_range(from_utc, to_utc)) {
+			/*
+			 * NOTHING WAS READ, SO NOTHING IS REBUILT (sec 16.115).
+			 *
+			 * This ran unconditionally, and set_composite forgets the
+			 * grilling windows -- which sec 16.57 had already moved
+			 * out of the paint for costing 195 ms over a year of
+			 * span. Measured on the phone: 120 recomputes over 125
+			 * frames of a drag, 28 ms each, 94% of the frame. The
+			 * cache was correct and was being emptied a frame before
+			 * it was read.
+			 */
+			return;
+		}
+
 		m_graph->set_composite(m_feed->composite());
 		refresh_corrected();
 	});

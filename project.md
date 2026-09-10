@@ -14563,3 +14563,79 @@ other sessions building, where the same binary rendering the same view
 gave frames between 28 and 132 ms. The counts above are what the change
 does; whether that is the win it should be is a measurement still owed,
 on a quiet machine.
+
+## 16.115 The phone's 8 frames a second, and where they actually went
+
+Measured ON the Galaxy Z Fold 3 rather than inferred from the desktop,
+which had been pointing at the wrong thing all along. Per frame, while
+dragging a sixteen-day view:
+
+    setup   68 552 us        <- 95% of the frame
+    curve    1 476 us
+    grid       786 us
+    readout    454 us
+    axis       424 us
+    total   72 343 us        <- about 8 frames a second
+
+Split further, the column reduce was **52 us** and the four interpolation
+passes **53 us**. The cost was one block: the grilling windows, at
+**65 252 us**.
+
+Which was supposed to be impossible. Sec 16.57 had already moved that
+scan out of the paint for costing 195 ms over a year of span, and cached
+it on the composite. The cache was correct. **It was being emptied a
+frame before every read**: `set_composite` is what forgets the windows,
+and the `view_changed` handler called it on every mouse move of a drag.
+Counted on the phone: **120 recomputes over 125 frames.**
+
+The handler's own comment said what it needed -- "this fires on every
+mouse move of a drag, so it must be cheap when the answer is already in
+memory" -- and `set_view_range` duly returned early without reading
+anything. It just never said so, and the caller pushed the composite
+back into the graph regardless. **The saving was real and stopped at the
+function that made it.** It returns a bool now, and the caller rebuilds
+nothing when nothing was read.
+
+### 16.115.1 What it bought
+
+Same phone, same workload, same swipes:
+
+    per-frame paint    72 343 us  ->   5 168 us
+    the window block   65 252 us  ->   1 015 us
+    frames in the run        150  ->       850
+    frame rate           8.2 fps  ->   118 fps
+
+Fourteen times, and the paint is now 5.2 ms where the target was 4.
+
+### 16.115.2 Three measurements that lied first, and the controls
+
+**Total process CPU cannot see this.** Ticks over a fixed drag were 1280
+to 1341 before and 1137 to 1203 after -- no change worth reporting. The
+reason is that a cheaper frame is not a cheaper drag: the app repaints
+as fast as it can while a finger moves, so it saturates either way and
+spends the saving on more frames. **The metric had to be per frame, not
+per second of dragging.**
+
+**The desktop profile pointed at the drawing.** Under load it made the
+curve stroke look like half the frame; on the phone the whole of drawing
+is under 4 ms and the curve is 1.5. A profile taken on a machine at load
+average 27 is a measurement of that machine.
+
+**And an A-B-A control killed an 11.5% result.** The span-halo build
+measured 1134-1159 ticks against the old build's 1280-1306, which reads
+as a win. Re-measuring the same build after reinstalling gave 1304-1341
+-- higher than the thing it beat. Launch-to-launch variance is about
+18%, larger than the effect, and without the third leg the drift would
+have been published as a speedup.
+
+What the halo change is actually worth was settled by interleaving the
+two implementations inside one process, one frame each, in thread CPU
+time -- this project's own technique from sec 16.89, and the only one
+here immune to that drift:
+
+    fill  83.8 us      stroke  832.9 us      n = 50 each
+
+Ten times faster at the thing it does, and 0.8 ms of a frame that was
+72 ms. **A real improvement to 1% of the problem**, which is the honest
+description of it, and it was chosen off a desktop profile that could
+not see the other 95%.

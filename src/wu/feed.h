@@ -169,7 +169,13 @@ public:
 	 * then takes a margin either side, because this is called on every
 	 * mouse move during a drag.
 	 */
-	void set_view_range(qint64 from_utc, qint64 to_utc);
+	/*
+	 * Tell the feed what the graph is showing. Returns whether anything
+	 * was actually read: false means the range was already in memory and
+	 * the composite is unchanged, so a caller must not rebuild anything
+	 * from it (sec 16.115).
+	 */
+	bool set_view_range(qint64 from_utc, qint64 to_utc);
 
 	/*
 	 * The bias-corrected overlay for a range (sec 12.5). Empty until

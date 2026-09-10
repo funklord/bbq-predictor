@@ -92,6 +92,7 @@ private slots:
 	void the_record_line_reports_the_verdict_too();
 	void the_list_names_the_station_actually_being_read();
 	void the_view_still_pans_and_zooms_through_the_window();
+	void a_pan_inside_the_loaded_range_keeps_the_window_cache();
 	void turning_and_unfolding_the_device_keeps_what_was_on_screen();
 	void a_fix_from_where_discovery_already_ran_is_not_sent_to_it();
 	void a_wrapping_row_asks_its_height_at_its_own_preferred_width();
@@ -367,6 +368,57 @@ void test_window::the_list_names_the_station_actually_being_read() {
 	window.refresh_station_list();
 
 	QCOMPARE(window.m_station_box->currentData().toString(), override_id);
+}
+
+/*
+ * Panning inside what is already loaded must not throw away the grilling
+ * windows (sec 16.115).
+ *
+ * They are cached because scanning for them is linear in the composite's
+ * span -- 195 ms over a year (sec 16.57) -- and set_composite is what
+ * forgets them. The view_changed handler called it on every mouse move,
+ * so the cache was emptied a frame before each read: measured on the
+ * phone, 120 recomputes over 125 frames of a drag, 94% of the frame.
+ *
+ * The assertion is on the CACHE rather than on any drawing, because the
+ * picture is identical either way -- which is exactly why this survived
+ * being looked at.
+ */
+void test_window::a_pan_inside_the_loaded_range_keeps_the_window_cache() {
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	window.watch_station(QStringLiteral("ITESTCACHE"));
+
+	const qint64 base = 1700000000;
+	bbq_composite composite;
+	composite.set_series(bandful(bbq_band::hourly, base, 48));
+	window.m_graph->set_composite(composite);
+
+	window.m_graph->resize(900, 400);
+	window.m_graph->grab();
+	window.m_graph->set_view(base, 24 * 3600);
+
+	/* Fill the cache, the way a paint would. */
+	window.m_graph->grill_windows();
+	QVERIFY2(window.m_graph->m_windows_valid,
+	         "the cache did not fill, so the test below cannot tell a kept "
+	         "cache from one that was never there");
+
+	/*
+	 * A drag's worth of view changes, each one small and well inside
+	 * what the feed has in memory.
+	 */
+	for (int step = 1; step <= 12; ++step) {
+		window.m_graph->set_view(base + step * 60, 24 * 3600);
+		QVERIFY2(window.m_graph->m_windows_valid,
+		         qPrintable(QStringLiteral("the grilling windows were "
+		                                   "forgotten on pan %1 of 12, "
+		                                   "inside the loaded range")
+		                            .arg(step)));
+	}
 }
 
 void test_window::the_view_still_pans_and_zooms_through_the_window() {
