@@ -14473,3 +14473,93 @@ What it removes is the repaint that was never needed, which is the
 commonest one. The remaining levers on the frame itself all change the
 picture and are recorded at the end of sec 16.112.3 for a decision with
 a measurement beside it.
+
+## 16.114 The halo, filled as spans rather than stroked
+
+Chosen by the copyright holder from the three levers left at the end of
+sec 16.112.3. The temperature curve was drawn twice -- a wide pen for the
+ground under it (sec 16.32) and then the ink -- and the wide one is now
+built as aligned opaque rectangles, one run of columns at a time, with
+antialiasing turned off for them. The ink is unchanged.
+
+It is built from the UNSIMPLIFIED curve. The fill follows the line a
+column at a time, and a simplified segment spanning many columns would be
+filled to its bounding box, which is a rectangle where the curve is a
+diagonal.
+
+### 16.114.1 Two models of the shape, both measured, both wrong first
+
+A stroke is the curve fattened by half a width in every direction. Two
+ways of reproducing that per column were tried and neither survived a
+measurement.
+
+**Extending each column by half the width** leaves the ink outside its
+own halo: the ink is stroked too, so at a sharp turn it reaches sideways
+into the next column while a span stops at the segment's own. 16 ink
+pixels on bare ground on a flat line, and -- the part worth noting --
+`the_curve_clears_the_floor_against_whatever_it_crosses`, which exists
+for the flat-cap defect of one bare side in 1490, failed at the same
+moment on the real graph. **The guard written for the previous version of
+this mistake caught the new one.**
+
+**Extending by half_width * sqrt(1 + slope^2)** is the vertical cut
+through a band around an INFINITE line, and it is right for one: a
+sixteen-day view climbs steeply, and a band that steep does reach that
+far. It is wrong for a segment ONE COLUMN long, because the offset edges
+that would carry it have moved out of the column. Measured against the
+stroke it replaces: **2012 pixels covered that the stroke never drew**,
+on a curve 160 columns wide -- a visibly fatter line.
+
+What is correct is the pair: a disc at every point, which is the pen's
+round join and round cap, and a segment term that joins one disc to the
+next. Neither alone.
+
+### 16.114.2 The margin, and which error to keep
+
+Whole pixels and Qt's rasteriser both add a little. Measured: the stroke
+covers 16,72 for a cap of radius 3.3 centred on 20,70, which is 3.6 away
+-- so Qt paints a round cap about half a pixel past the ideal disc.
+
+    margin   missing (3 shapes)    excess (3 shapes)
+    0.6      0, 0, 18              170, 64, 213
+    0.9      0, 0, 0               680, 2810, 1185
+    1.2      0, 0, 0               850, 3084, 1416
+
+0.6 is kept. Driving the shortfall to zero costs seventeen pixels a
+column of halo the stroke never drew, and the shortfall carries no ink:
+the coverage test proves nothing inked sits on bare ground. **A fringe
+the eye cannot find is a better error than a line that is visibly
+fatter.**
+
+### 16.114.3 The test that has teeth is the one comparing to the stroke
+
+`the_filled_halo_covers_every_pixel_the_ink_touches` is the property that
+matters and it is not sufficient: it passes with the segment reach set
+flat, because the graph hands this a point per column and a disc at every
+column already traces the curve. It cannot see the term.
+
+`the_filled_halo_is_the_shape_of_the_stroke_it_replaces` renders both and
+compares, so it catches the shape going wrong in EITHER direction -- 1700
+pixels short with the discs removed, 506 too many with the infinite-line
+reach restored. A replacement is judged against the thing it replaces,
+which is a stronger question than whether it is good enough on its own.
+
+The third test is a performance property that would regress silently
+because the picture is identical either way: a flat run must coalesce
+into one fill rather than three hundred.
+
+### 16.114.4 What it costs, counted rather than timed
+
+    view      curve points   fills   area filled
+    1 day        870          461     8 116 px
+    16 day       870          847    29 511 px
+
+One antialiased stroked path over 800 points becomes 847 aligned opaque
+rectangles. Coalescing halves the count at a day and does almost nothing
+at sixteen, where every column on a steep limb has its own extent.
+
+**No timing is recorded.** The machine was at load average 27 with two
+other sessions building, where the same binary rendering the same view
+gave frames between 28 and 132 ms. The counts above are what the change
+does; whether that is the win it should be is a measurement still owed,
+on a quiet machine.

@@ -13,6 +13,7 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QPaintEvent>
+#include <limits>
 #include <QPainter>
 #include <QPen>
 #include <QPolygonF>
@@ -225,10 +226,6 @@ const int dot_stamp_offsets = 8;
  * the test was made to sweep both layouts. A round cap carries the
  * ground half a width past the ink, which is what an end needs.
  */
-QPen halo_pen(const QColor &ground, double line_width) {
-	return QPen(ground, line_width + 2.0 * halo_grow, Qt::SolidLine,
-	            Qt::RoundCap, Qt::RoundJoin);
-}
 
 QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
 	switch (band) {
@@ -940,6 +937,212 @@ bool bbq_box_meets_polyline(const QRectF &box, const QPolygonF &line) {
 	}
 
 	return false;
+}
+
+std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width) {
+	std::vector<QRect> spans;
+
+	if (line.size() < 2 || half_width <= 0.0) {
+		return spans;
+	}
+
+	/*
+	 * DENSIFIED FIRST, so the contract cannot be got wrong by a caller.
+	 *
+	 * Everything below reasons one pixel column at a time, and a segment
+	 * spanning many columns breaks that in both directions: its extent
+	 * would come from its endpoints, filling the bounding box where the
+	 * curve is a diagonal, and the discs standing in for the pen's round
+	 * join would sit far apart with the ink's own band leaning out
+	 * between them -- measured at 14 ink pixels on bare ground where a
+	 * steep sparse segment began. The graph passes a point per column
+	 * and neither happens, but a precondition nobody states is one the
+	 * next caller cannot see, so it is removed here rather than written
+	 * down.
+	 */
+	QPolygonF dense;
+	dense.reserve(line.size());
+
+	for (int i = 0; i + 1 < line.size(); ++i) {
+		const QPointF a = line.at(i);
+		const QPointF b = line.at(i + 1);
+		dense << a;
+
+		const double step = b.x() - a.x();
+
+		if (step <= 1.0) {
+			continue;
+		}
+
+		for (int x = static_cast<int>(std::floor(a.x())) + 1;
+		     x < static_cast<int>(std::ceil(b.x())); ++x) {
+			const double t = (static_cast<double>(x) - a.x()) / step;
+
+			if (t > 0.0 && t < 1.0) {
+				dense << QPointF(static_cast<double>(x),
+				                 a.y() + t * (b.y() - a.y()));
+			}
+		}
+	}
+
+	dense << line.constLast();
+
+	/*
+	 * A margin over the nominal half width, for two effects that are not
+	 * this geometry's: the spans are whole pixels, and Qt rasterises a
+	 * round cap about half a pixel past the ideal disc -- measured, its
+	 * stroke covers 16,72 for a cap of radius 3.3 centred on 20,70,
+	 * which is 3.6 away. Without it the fill falls a couple of hundred
+	 * pixels short of the stroke it stands in for.
+	 */
+	const double reach = half_width + 0.6;
+
+	const int margin = static_cast<int>(std::ceil(reach)) + 1;
+	const int first_x =
+	        static_cast<int>(std::floor(dense.constFirst().x())) - margin;
+	const int last_x =
+	        static_cast<int>(std::ceil(dense.constLast().x())) + margin;
+	const int width = last_x - first_x;
+
+	if (width <= 0) {
+		return spans;
+	}
+
+	const double none = std::numeric_limits<double>::max();
+	std::vector<double> top(static_cast<std::size_t>(width), none);
+	std::vector<double> bottom(static_cast<std::size_t>(width), -none);
+
+	const auto cover = [&](int x, double lo, double hi) {
+		if (x < first_x || x >= last_x) {
+			return;
+		}
+
+		const std::size_t at = static_cast<std::size_t>(x - first_x);
+		top[at] = std::min(top[at], lo);
+		bottom[at] = std::max(bottom[at], hi);
+	};
+
+	/*
+	 * ONE: the segments, which after densifying are one column wide.
+	 *
+	 * A vertical cut through a band of half_width around an INFINITE
+	 * line of slope m is half_width * sqrt(1 + m^2), and reaching that
+	 * far here was wrong: measured, it covered 2012 pixels the stroke
+	 * does not, because a band around a segment ONE COLUMN long cannot
+	 * reach it -- the offset edges that would carry it have moved out of
+	 * the column. What the stroke has there is its two endpoint discs,
+	 * which part TWO draws. So this term only joins one disc to the next.
+	 */
+	for (int i = 0; i + 1 < dense.size(); ++i) {
+		const double x0 = dense.at(i).x();
+		const double x1 = dense.at(i + 1).x();
+
+		if (x1 <= x0) {
+			continue;
+		}
+
+		const double lo =
+		        std::min(dense.at(i).y(), dense.at(i + 1).y()) - reach;
+		const double hi =
+		        std::max(dense.at(i).y(), dense.at(i + 1).y()) + reach;
+
+		for (int x = static_cast<int>(std::floor(x0));
+		     x < static_cast<int>(std::ceil(x1)); ++x) {
+			cover(x, lo, hi);
+		}
+	}
+
+	/*
+	 * TWO: a disc at every point, which is the pen's round join and its
+	 * round cap. Without it the halo stops on the segment's own column
+	 * while the ink -- stroked, so half a width thick in every direction
+	 * -- reaches sideways past a sharp turn and lands on bare ground.
+	 * That is one bare side in 1490, the defect a flat cap caused
+	 * before, arriving by another route.
+	 */
+	for (int i = 0; i < dense.size(); ++i) {
+		const double cx = dense.at(i).x();
+		const double cy = dense.at(i).y();
+
+		for (int x = static_cast<int>(std::floor(cx - reach));
+		     x <= static_cast<int>(std::ceil(cx + reach)); ++x) {
+			/* Nearest point of this column to the centre. */
+			const double near_x =
+			        std::max(static_cast<double>(x),
+			                 std::min(cx, static_cast<double>(x) + 1.0));
+			const double away = std::abs(near_x - cx);
+
+			if (away >= reach) {
+				continue;
+			}
+
+			const double d = std::sqrt(reach * reach - away * away);
+			cover(x, cy - d, cy + d);
+		}
+	}
+
+	/* Coalesced into runs, because a flat stretch is one fill. */
+	int run_x = 0;
+	int run_top = 0;
+	int run_bottom = 0;
+	bool open = false;
+
+	const auto close_at = [&](int x_end) {
+		if (open && x_end > run_x) {
+			spans.push_back(
+			        QRect(run_x, run_top, x_end - run_x, run_bottom - run_top));
+		}
+
+		open = false;
+	};
+
+	for (int x = first_x; x < last_x; ++x) {
+		const std::size_t at = static_cast<std::size_t>(x - first_x);
+
+		if (top[at] == none) {
+			close_at(x);
+			continue;
+		}
+
+		const int lo = static_cast<int>(std::floor(top[at]));
+		const int hi = static_cast<int>(std::ceil(bottom[at]));
+
+		if (open && lo == run_top && hi == run_bottom) {
+			continue;
+		}
+
+		close_at(x);
+		run_x = x;
+		run_top = lo;
+		run_bottom = hi;
+		open = true;
+	}
+
+	close_at(last_x);
+	return spans;
+}
+
+void bbq_fill_halo(QPainter &painter, const QPolygonF &line,
+                   const QColor &ground, double half_width) {
+	if (line.size() < 2 || half_width <= 0.0) {
+		return;
+	}
+
+	/*
+	 * The body, as aligned opaque fills rather than one stroked path.
+	 * Antialiasing is turned off for them deliberately: an integer rect
+	 * of a solid colour is a memory fill, and the edge it leaves is
+	 * covered by the ink and by the next span either side.
+	 */
+	const bool was_antialiased = painter.testRenderHint(QPainter::Antialiasing);
+	painter.setRenderHint(QPainter::Antialiasing, false);
+
+	for (const QRect &span : bbq_halo_spans(line, half_width)) {
+		painter.fillRect(span, ground);
+	}
+
+	painter.setRenderHint(QPainter::Antialiasing, was_antialiased);
+
 }
 
 std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
@@ -2543,8 +2746,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * to know, so the ink brings one.
 	 */
 	const QPen curve_ink(m_palette.temperature, m_metrics.line_width);
-	const QPen curve_halo =
-	        halo_pen(ground_behind(), m_metrics.line_width);
+	const double halo_half_width = m_metrics.line_width / 2.0 + halo_grow;
 
 	/*
 	 * SIMPLIFIED BEFORE STROKING (sec 16.91).
@@ -2571,8 +2773,15 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 	const auto stroke_curve = [&](const QPolygonF &full) {
 		const QPolygonF line = bbq_simplify_polyline(full, curve_tolerance);
-		painter.setPen(curve_halo);
-		painter.drawPolyline(line);
+		/*
+		 * THE HALO IS FILLED, THE INK IS STROKED (sec 16.114).
+		 *
+		 * From the UNSIMPLIFIED curve, because the fill follows the
+		 * line one column at a time and a simplified segment spanning
+		 * many columns would be filled to its bounding box -- a
+		 * rectangle where the curve is a diagonal.
+		 */
+		bbq_fill_halo(painter, full, ground_behind(), halo_half_width);
 		painter.setPen(curve_ink);
 		painter.drawPolyline(line);
 	};

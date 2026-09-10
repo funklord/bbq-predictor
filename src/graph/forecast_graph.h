@@ -195,6 +195,15 @@ QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
  * device pixels and told the ratio, so the caller draws them in logical
  * coordinates and gets the same dot at any resolution.
  */
+/*
+ * The halo under a curve, filled as spans rather than stroked as a wide
+ * pen (sec 16.114). Free functions so a test can hold the result and
+ * compare it against the stroke it replaces.
+ */
+std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width);
+void bbq_fill_halo(QPainter &painter, const QPolygonF &line,
+                   const QColor &ground, double half_width);
+
 std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
                                     double radius, double ratio);
 

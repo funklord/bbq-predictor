@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <QPainter>
 #include <QSet>
@@ -75,6 +76,9 @@ private slots:
 	void bbq_flatten_matches_qt();
 	void the_sample_dots_follow_a_theme_change();
 	void a_pointer_move_inside_one_column_repaints_nothing();
+	void the_filled_halo_covers_every_pixel_the_ink_touches();
+	void the_filled_halo_coalesces_a_flat_run();
+	void the_filled_halo_is_the_shape_of_the_stroke_it_replaces();
 	void a_dot_stamp_carries_the_ratio_it_was_rendered_at();
 	void a_caption_box_knows_when_a_line_crosses_it();
 	void a_rain_overlay_that_repeats_the_forecast_is_not_drawn();
@@ -773,6 +777,261 @@ void test_view::a_pointer_move_inside_one_column_repaints_nothing() {
 	/* The next column over is a change, and must cost a repaint. */
 	move_to(left + 101.5, 300.0);
 	QCOMPARE(graph.paints, 2);
+}
+
+/*
+ * The halo is filled as spans now rather than stroked as a wide pen
+ * (sec 16.114), and the property that has to survive that is the only
+ * reason the halo exists: no part of the ink may sit on the ground the
+ * halo was meant to cover.
+ *
+ * Asserted in pixels, over shapes chosen for where the two constructions
+ * DISAGREE rather than where they agree. A vertical cut through a
+ * perpendicular band is longer than the segment, so a steep limb is the
+ * case a naive span fill gets wrong -- and a flat line is the case it
+ * gets right whatever it does.
+ */
+void test_view::the_filled_halo_covers_every_pixel_the_ink_touches() {
+	const double line_width = 2.6;
+	const double half_width = line_width / 2.0 + 2.0;
+	const QColor bare(255, 0, 255);
+
+	struct shape {
+		const char *name;
+		QPolygonF line;
+	};
+
+	const auto build = [](const std::function<double(int)> &f) {
+		QPolygonF line;
+		for (int x = 0; x < 160; ++x) {
+			line << QPointF(20.0 + x, f(x));
+		}
+		return line;
+	};
+
+	const auto weather = [](int x) {
+		return 150.0 + 90.0 * std::sin(x / 9.0) * std::cos(x / 31.0);
+	};
+
+	const std::vector<shape> shapes = {
+		{"flat", build([](int) { return 150.0; })},
+		{"gentle", build([](int x) { return 60.0 + x * 0.3; })},
+		{"forty-five", build([](int x) { return 40.0 + x; })},
+		{"steep", build([](int x) { return 150.0 + (x % 20) * 8.0 - 80.0; })},
+		{"spike", build([](int x) { return x == 80 ? 40.0 : 150.0; })},
+		{"weather", build(weather)},
+	};
+
+	/*
+	 * A SPARSE steep zigzag, which is the case the dense shapes above
+	 * cannot test. Where the curve carries a point per column, a disc at
+	 * every vertex already traces the stroke and the segment term hardly
+	 * matters -- so those shapes pass whether or not the segment reach
+	 * accounts for the slope. Twenty columns between vertices leaves the
+	 * discs far apart and the segment term carrying the span alone,
+	 * which is the only arrangement where getting it wrong shows.
+	 */
+	QPolygonF sparse;
+	for (int i = 0; i <= 8; ++i) {
+		sparse << QPointF(20.0 + i * 20.0, i % 2 == 0 ? 60.0 : 220.0);
+	}
+
+	std::vector<shape> all = shapes;
+	all.push_back({"sparse-steep", sparse});
+
+	for (const shape &s : all) {
+		QImage halo(220, 300, QImage::Format_ARGB32_Premultiplied);
+		QImage ink(220, 300, QImage::Format_ARGB32_Premultiplied);
+		halo.fill(bare);
+		ink.fill(bare);
+
+		{
+			QPainter p(&halo);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			bbq_fill_halo(p, s.line, QColor(0, 0, 0), half_width);
+		}
+		{
+			QPainter p(&ink);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			p.setPen(QPen(QColor(255, 255, 255), line_width));
+			p.drawPolyline(bbq_simplify_polyline(s.line, 0.02));
+		}
+
+		int uncovered = 0;
+		int worst_x = -1;
+		int worst_y = -1;
+
+		for (int y = 0; y < ink.height(); ++y) {
+			for (int x = 0; x < ink.width(); ++x) {
+				if (ink.pixel(x, y) == bare.rgb()) {
+					continue;                   /* no ink here */
+				}
+				if (halo.pixel(x, y) != bare.rgb()) {
+					continue;                   /* the halo got there */
+				}
+				++uncovered;
+				if (worst_x < 0) {
+					worst_x = x;
+					worst_y = y;
+				}
+			}
+		}
+
+		QVERIFY2(uncovered == 0,
+		         qPrintable(QStringLiteral("%1: %2 ink pixel(s) sit on bare "
+		                                   "ground, first at %3,%4")
+		                            .arg(QString::fromLatin1(s.name))
+		                            .arg(uncovered)
+		                            .arg(worst_x)
+		                            .arg(worst_y)));
+	}
+}
+
+/*
+ * And the reason for filling spans at all: a flat run must become ONE
+ * fill rather than one per column. Without this the change trades a
+ * stroked path for eight hundred calls and is not obviously a gain --
+ * a performance property that would regress silently, since the picture
+ * is identical either way.
+ */
+void test_view::the_filled_halo_coalesces_a_flat_run() {
+	QPolygonF flat;
+	for (int x = 0; x < 300; ++x) {
+		flat << QPointF(10.0 + x, 100.0);
+	}
+
+	/*
+	 * Not exactly one: the ends are round, so the few columns under each
+	 * cap step. What matters is that the BODY is a single fill rather
+	 * than three hundred.
+	 */
+	const std::vector<QRect> spans = bbq_halo_spans(flat, 3.3);
+	int widest = 0;
+	for (const QRect &span : spans) {
+		widest = std::max(widest, span.width());
+	}
+
+	QVERIFY2(widest >= 280,
+	         qPrintable(QStringLiteral("the flat body came out as fills of at "
+	                                   "most %1 columns").arg(widest)));
+	QVERIFY2(spans.size() < 20,
+	         qPrintable(QStringLiteral("%1 fills for one flat line")
+	                            .arg(spans.size())));
+
+	/* A staircase cannot coalesce, and must not pretend to. */
+	QPolygonF steps;
+	for (int x = 0; x < 300; ++x) {
+		steps << QPointF(10.0 + x, 100.0 + (x / 10) * 5.0);
+	}
+
+	QVERIFY(bbq_halo_spans(steps, 3.3).size() > 20);
+}
+
+/*
+ * The filled halo must be the SHAPE of the wide stroke it replaced, not
+ * merely wide enough to hide the ink (sec 16.114.2).
+ *
+ * This is the assertion that has teeth. The ink-coverage test above
+ * passes with the segment reach set to a flat half_width, because the
+ * graph hands this a point per column and a disc at every column already
+ * traces the curve -- so that test cannot see the term that makes the
+ * span match a perpendicular band. Comparing against the stroke can.
+ */
+void test_view::the_filled_halo_is_the_shape_of_the_stroke_it_replaces() {
+	const double half_width = 2.6 / 2.0 + 2.0;
+	const QColor bare(255, 0, 255);
+
+	const auto build = [](const std::function<double(int)> &f) {
+		QPolygonF line;
+		for (int x = 0; x < 160; ++x) {
+			line << QPointF(20.0 + x, f(x));
+		}
+		return line;
+	};
+
+	const std::vector<QPolygonF> shapes = {
+		build([](int x) { return 150.0 + x * 4.0 - 160.0; }),
+		build([](int x) { return 150.0 + (x % 20) * 8.0 - 80.0; }),
+		build([](int x) {
+			return 150.0 + 90.0 * std::sin(x / 9.0) * std::cos(x / 31.0);
+		}),
+	};
+
+	for (const QPolygonF &line : shapes) {
+		QImage stroked(220, 340, QImage::Format_ARGB32_Premultiplied);
+		QImage filled(220, 340, QImage::Format_ARGB32_Premultiplied);
+		stroked.fill(bare);
+		filled.fill(bare);
+
+		{
+			QPainter p(&stroked);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			p.setPen(QPen(QColor(0, 0, 0), half_width * 2.0, Qt::SolidLine,
+			              Qt::RoundCap, Qt::RoundJoin));
+			p.drawPolyline(line);
+		}
+		{
+			QPainter p(&filled);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			bbq_fill_halo(p, line, QColor(0, 0, 0), half_width);
+		}
+
+		int missing = 0;
+		int extra = 0;
+		int first_x = -1;
+		int first_y = -1;
+
+		for (int y = 0; y < stroked.height(); ++y) {
+			for (int x = 0; x < stroked.width(); ++x) {
+				const bool in_stroke = stroked.pixel(x, y) != bare.rgb();
+				const bool in_fill = filled.pixel(x, y) != bare.rgb();
+
+				if (in_stroke && !in_fill) {
+					++missing;
+					if (first_x < 0) {
+						first_x = x;
+						first_y = y;
+					}
+				} else if (in_fill && !in_stroke) {
+					++extra;
+				}
+			}
+		}
+
+		/*
+		 * Not zero: Qt rasterises a round cap about half a pixel past
+		 * the ideal disc -- measured, the stroke covers 16,72 where the
+		 * cap centre is 20,70 and its radius 3.3, which is 3.6 away.
+		 * So a handful of fringe pixels at each end belong to the
+		 * rasteriser rather than to this geometry, and they carry no
+		 * ink: the test above already proves nothing inked sits on bare
+		 * ground.
+		 *
+		 * Measured over these three shapes: 0, 0 and 18. Widening the
+		 * reach until all three are zero costs 2810 excess pixels on
+		 * the sawtooth against 64 -- seventeen a column of halo that
+		 * the stroke never drew, which is a fatter line, so the
+		 * fringe is the better error to keep.
+		 */
+		QVERIFY2(missing <= 32,
+		         qPrintable(QStringLiteral("the fill leaves %1 pixel(s) the "
+		                                   "stroke covered, first at %2,%3")
+		                            .arg(missing)
+		                            .arg(first_x)
+		                            .arg(first_y)));
+
+		/*
+		 * Some excess is the price of whole pixels: each column is
+		 * floored and ceiled, so it may gain a row at each end. Three a
+		 * column is generous for that and nowhere near the doubling a
+		 * wrong reach produces.
+		 */
+		QVERIFY2(extra <= 3 * line.size(),
+		         qPrintable(QStringLiteral("the fill covers %1 pixel(s) the "
+		                                   "stroke did not, over %2 columns")
+		                            .arg(extra)
+		                            .arg(line.size())));
+	}
 }
 
 int main(int argc, char *argv[]) {
