@@ -13362,6 +13362,52 @@ test's control reports that a correction halving the rain drew none --
 which is what "not drawn" looks like from a renderer that has stopped
 drawing anything.
 
+### 16.97.6 A baseline, so the decision can be judged rather than trusted
+
+Scored on 2026-09-10, before any forecast made under the new rule had
+matured. Every sample here was predicted by the OLD rule, so this is the
+fault measured rather than the fix:
+
+    lead   hourly n / MAE     corrected n / MAE
+    1h      7 / 0.341         66 / 0.214
+    3h     13 / 0.351         66 / 0.324
+    6h     19 / 0.292         29 / 0.228
+    12h    32 / 0.092         36 / 0.189
+    1d     53 / 0.218         48 / 0.356
+    2d     65 / 0.256         36 / 0.435
+    4d     65 / 0.101         12 / 0.607
+
+**The correction is better exactly where the bias was positive and worse
+exactly where it was negative**, and the damage grows with lead time:
+six times worse at four days, where the raw band is at its best. That is
+the diagnosis of sec 16.97 arriving from the archive rather than from
+reading the code, and it is the strongest evidence the decision was the
+right one.
+
+The prediction it licenses, which is what makes this worth keeping:
+**under the new rule the corrected figures at 12h and beyond should
+converge on the raw band's**, because the correction is a no-op there,
+while 1h to 6h keep their advantage. If they do not, the reasoning was
+wrong somewhere and this table is where to start.
+
+Re-measure with:
+
+    select lead_bucket,
+           max(case when band=6 then count end) as hourly_n,
+           round(max(case when band=6 then
+                     sum_absolute_error/count end),3) as hourly_mae,
+           max(case when band=5 then count end) as corrected_n,
+           round(max(case when band=5 then
+                     sum_absolute_error/count end),3) as corrected_mae
+    from verification
+    where quantity='precip_rate' and band in (5,6) and station='ISTOCK877'
+    group by lead_bucket order by lead_bucket;
+
+**It will take days rather than hours.** One forecast is kept per band,
+valid time and bucket, so what the old rule wrote stays until its valid
+time passes and sec 12.6 expires it, and the long buckets are the last
+to turn over -- which is exactly where the difference is largest.
+
 ## 16.98 The same measurement, described two ways
 
 Sec 16.19 settled what to say when it never rained: skill is measured
