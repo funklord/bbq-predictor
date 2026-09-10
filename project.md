@@ -13408,6 +13408,38 @@ valid time and bucket, so what the old rule wrote stays until its valid
 time passes and sec 12.6 expires it, and the long buckets are the last
 to turn over -- which is exactly where the difference is largest.
 
+**And then it still will not answer, which is a fault in this plan
+rather than in the archive.** `verification` holds cumulative sums keyed
+by station, band, quantity and lead bucket, with **no time dimension**,
+and `forecast_pending` rows are deleted once they are folded in. So
+every error the old rule made is permanently inside the sum, and there
+is nothing left to reconstruct a post-fix score from. The query above
+converges only by DILUTION -- asymptotically, and never telling a reader
+how much of what remains is historical.
+
+Measured a day after the floor landed, precipitation MAE at
+ISTOCK877: the corrected band at four days moved from 0.607 over 12
+samples to 0.567 over 27, against the raw band's 0.146. That is the
+dilution and not a verdict. At a week and beyond the corrected band now
+has no verified samples at all.
+
+**Getting a clean answer is a decision about the archive, and it is the
+holder's.** Three ways, and none of them is a tidy-up to be done in
+passing:
+
+- **Zero the corrected band's `precip_rate` rows** so scoring restarts
+  from the fix. Cheapest and immediate. It discards the record of how
+  the old rule scored -- though the baseline table above is that record,
+  written down before the change for exactly this reason.
+- **Give `verification` an epoch**, so scores can be sliced by which
+  rule produced them. It answers the question properly and every time it
+  is asked again, and it changes what every archived number means --
+  which is the same ground as the open question at sec 16.94.2, and
+  should probably be decided with it rather than before it.
+- **Accept the dilution.** Costs nothing, and means the corrected band's
+  precipitation score cannot be trusted as a measure of the CURRENT rule
+  for weeks, without anything on it saying so.
+
 ### 16.97.7 The rule is live, checked at the write rather than the verdict
 
 The verdict above needs days. Whether the new rule is RUNNING does not,
