@@ -14752,3 +14752,55 @@ as more than it is: the table still has no time dimension. The next rule
 change to precipitation faces exactly this question again, and the
 answer will again be either another deletion or the epoch column of sec
 16.97.6, which remains open and belongs with sec 16.94.2.
+
+## 16.116 The filled halo was a staircase on a scaled display
+
+Sec 16.114 replaced a stroked halo with aligned opaque fills and never
+once mentioned the device pixel ratio. It is the same omission sec 16.99
+made in the sample dots, from the same instinct: an optimisation that is
+exactly right at a ratio of one, on the machine it was written on.
+
+**These fills are the only quantised rectangles in the paint.** Every
+other rectangle in `paintEvent` is a `QRectF`; the stroke they replaced
+was resolution independent. Built a LOGICAL column at a time, the halo's
+edge can land only on a 2.75 device-pixel grid on the phone, against a
+half width of 9.1 device pixels -- a third of it.
+
+**Rendered side by side against the stroke at that ratio it is not an
+arithmetic nicety, it is a staircase.** Which is what settled it: the
+pixel counts were arguable and the picture was not.
+
+### 16.116.1 A partial fix that measured almost nothing
+
+The first attempt snapped only the vertical extents to device pixels and
+left the columns logical. Measured against the stroke at 2.75:
+
+    logical columns          missing 85   extra 5606
+    vertical snapping only   missing 112  extra 4860
+    device space throughout  missing 0    extra 1736
+
+Thirteen per cent off one number and a worse figure on the other. The
+reasoning behind it was wrong in a specific way worth keeping: the
+error is dominated by the HORIZONTAL stepping, because a span is one
+column wide whatever its height, and half a fix aimed at the other axis
+could not touch it.
+
+So the whole construction runs in device pixels now and the rectangles
+are converted back at the end. At a ratio of one it is the arithmetic it
+replaces, to the pixel: 18 and 213 before and after.
+
+**And the fidelity no longer depends on the ratio.** Divided by area,
+the excess is 213 at a ratio of one and 230 at 2.75, where it was 741
+before -- the scaling costs nothing now.
+
+### 16.116.2 What is not measured
+
+The phone was unplugged before this could be timed on it. Device columns
+mean about 2.75 times as many fills there, so the 83.8 us of sec 16.115
+should become roughly 230 -- still several times cheaper than the 832.9
+us stroke, but that is arithmetic and not a measurement, and it is
+recorded here as one to take.
+
+**It also matters less than it did.** That saving is 0.75 ms of a frame
+that now runs at 5.1 ms and is limited by a 120 Hz panel, so nothing
+about it is visible to anybody. The staircase was.

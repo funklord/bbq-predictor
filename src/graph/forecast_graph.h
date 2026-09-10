@@ -200,7 +200,8 @@ QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
  * pen (sec 16.114). Free functions so a test can hold the result and
  * compare it against the stroke it replaces.
  */
-std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width);
+std::vector<QRectF> bbq_halo_spans(const QPolygonF &line, double half_width,
+                                  double ratio = 1.0);
 void bbq_fill_halo(QPainter &painter, const QPolygonF &line,
                    const QColor &ground, double half_width);
 

@@ -79,6 +79,7 @@ private slots:
 	void the_filled_halo_covers_every_pixel_the_ink_touches();
 	void the_filled_halo_coalesces_a_flat_run();
 	void the_filled_halo_is_the_shape_of_the_stroke_it_replaces();
+	void the_filled_halo_keeps_its_shape_on_a_scaled_display();
 	void a_dot_stamp_carries_the_ratio_it_was_rendered_at();
 	void a_caption_box_knows_when_a_line_crosses_it();
 	void a_rain_overlay_that_repeats_the_forecast_is_not_drawn();
@@ -905,9 +906,9 @@ void test_view::the_filled_halo_coalesces_a_flat_run() {
 	 * cap step. What matters is that the BODY is a single fill rather
 	 * than three hundred.
 	 */
-	const std::vector<QRect> spans = bbq_halo_spans(flat, 3.3);
-	int widest = 0;
-	for (const QRect &span : spans) {
+	const std::vector<QRectF> spans = bbq_halo_spans(flat, 3.3);
+	double widest = 0.0;
+	for (const QRectF &span : spans) {
 		widest = std::max(widest, span.width());
 	}
 
@@ -1031,6 +1032,93 @@ void test_view::the_filled_halo_is_the_shape_of_the_stroke_it_replaces() {
 		                                   "stroke did not, over %2 columns")
 		                            .arg(extra)
 		                            .arg(line.size())));
+	}
+}
+
+/*
+ * And it must keep that shape on a SCALED display (sec 16.116).
+ *
+ * These fills are the only quantised rectangles in the paint; everything
+ * else is a QRectF. Rounded to whole LOGICAL pixels the halo's edge can
+ * only land on a 2.75 device-pixel grid on the phone, against a half
+ * width of 9.1 device pixels -- coarser than anything drawn beside it,
+ * and the same mistake sec 16.99 made in the sample dots.
+ */
+void test_view::the_filled_halo_keeps_its_shape_on_a_scaled_display() {
+	const double half_width = 2.6 / 2.0 + 2.0;
+	const QColor bare(255, 0, 255);
+
+	QPolygonF line;
+	for (int x = 0; x < 160; ++x) {
+		line << QPointF(20.0 + x,
+		                150.0 + 90.0 * std::sin(x / 9.0) * std::cos(x / 31.0));
+	}
+
+	for (double ratio : {1.0, 2.75}) {
+		const int w = qRound(220.0 * ratio);
+		const int h = qRound(340.0 * ratio);
+
+		QImage stroked(w, h, QImage::Format_ARGB32_Premultiplied);
+		QImage filled(w, h, QImage::Format_ARGB32_Premultiplied);
+		stroked.setDevicePixelRatio(ratio);
+		filled.setDevicePixelRatio(ratio);
+		stroked.fill(bare);
+		filled.fill(bare);
+
+		{
+			QPainter p(&stroked);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			p.setPen(QPen(QColor(0, 0, 0), half_width * 2.0, Qt::SolidLine,
+			              Qt::RoundCap, Qt::RoundJoin));
+			p.drawPolyline(line);
+		}
+		{
+			QPainter p(&filled);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			bbq_fill_halo(p, line, QColor(0, 0, 0), half_width);
+		}
+
+		int missing = 0;
+		int extra = 0;
+
+		for (int y = 0; y < h; ++y) {
+			for (int x = 0; x < w; ++x) {
+				const bool in_stroke = stroked.pixel(x, y) != bare.rgb();
+				const bool in_fill = filled.pixel(x, y) != bare.rgb();
+
+				if (in_stroke && !in_fill) {
+					++missing;
+				} else if (in_fill && !in_stroke) {
+					++extra;
+				}
+			}
+		}
+
+		QVERIFY2(missing <= 32,
+		         qPrintable(QStringLiteral("at ratio %1 the fill leaves %2 "
+		                                   "pixel(s) the stroke covered")
+		                            .arg(ratio)
+		                            .arg(missing)));
+
+		/*
+		 * Normalised by area, so the allowance is the same one the
+		 * unscaled test uses per column rather than a second number to
+		 * keep honest. Measured: 213 at a ratio of one and 1736 at
+		 * 2.75, which is 213 and 230 once divided by the area -- the
+		 * point being that the ratio no longer costs fidelity.
+		 *
+		 * Built a LOGICAL column at a time it was 5606, and the
+		 * difference is a staircase rather than an arithmetic nicety.
+		 */
+		const double per_area = extra / (ratio * ratio);
+
+		QVERIFY2(per_area <= 3.0 * line.size(),
+		         qPrintable(QStringLiteral("at ratio %1 the fill covers %2 "
+		                                   "pixel(s) the stroke did not, "
+		                                   "%3 once divided by the area")
+		                            .arg(ratio)
+		                            .arg(extra)
+		                            .arg(per_area, 0, 'f', 0)));
 	}
 }
 

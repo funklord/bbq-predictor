@@ -939,33 +939,44 @@ bool bbq_box_meets_polyline(const QRectF &box, const QPolygonF &line) {
 	return false;
 }
 
-std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width) {
-	std::vector<QRect> spans;
+std::vector<QRectF> bbq_halo_spans(const QPolygonF &line, double half_width,
+                                  double ratio) {
+	std::vector<QRectF> spans;
 
 	if (line.size() < 2 || half_width <= 0.0) {
 		return spans;
 	}
 
 	/*
-	 * DENSIFIED FIRST, so the contract cannot be got wrong by a caller.
+	 * BUILT IN DEVICE PIXELS, NOT LOGICAL ONES (sec 16.116).
 	 *
-	 * Everything below reasons one pixel column at a time, and a segment
-	 * spanning many columns breaks that in both directions: its extent
-	 * would come from its endpoints, filling the bounding box where the
-	 * curve is a diagonal, and the discs standing in for the pen's round
-	 * join would sit far apart with the ink's own band leaning out
-	 * between them -- measured at 14 ink pixels on bare ground where a
-	 * steep sparse segment began. The graph passes a point per column
-	 * and neither happens, but a precondition nobody states is one the
-	 * next caller cannot see, so it is removed here rather than written
-	 * down.
+	 * These fills are the only quantised rectangles in the paint --
+	 * every other rectangle here is a QRectF -- and the stroke they
+	 * replaced was resolution independent. Built a logical column at a
+	 * time, the halo's edge can only land on a 2.75 device-pixel grid on
+	 * the phone, against a half width of 9.1 device pixels: rendered
+	 * side by side against the stroke at that ratio the difference is
+	 * not subtle, it is a staircase. Sec 16.99 is the same mistake in
+	 * the sample dots, from the same instinct.
+	 *
+	 * So the whole construction runs in device space and the rectangles
+	 * are converted back at the end. Whole device pixels keep both
+	 * properties that made whole pixels right to begin with: the edges
+	 * land on pixel boundaries, so an aliased fill has nothing to blend
+	 * and abutting runs cannot seam; and floor and ceil still expand
+	 * OUTWARD, so the ink still cannot stand on bare ground. At a ratio
+	 * of one this is exactly the arithmetic it replaces.
 	 */
+	const double scale = ratio > 0.0 ? ratio : 1.0;
+	const double reach = (half_width + 0.6 / scale) * scale;
+
 	QPolygonF dense;
 	dense.reserve(line.size());
 
 	for (int i = 0; i + 1 < line.size(); ++i) {
-		const QPointF a = line.at(i);
-		const QPointF b = line.at(i + 1);
+		const QPointF a(line.at(i).x() * scale, line.at(i).y() * scale);
+		const QPointF b(line.at(i + 1).x() * scale,
+		                line.at(i + 1).y() * scale);
 		dense << a;
 
 		const double step = b.x() - a.x();
@@ -985,17 +996,8 @@ std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width) {
 		}
 	}
 
-	dense << line.constLast();
-
-	/*
-	 * A margin over the nominal half width, for two effects that are not
-	 * this geometry's: the spans are whole pixels, and Qt rasterises a
-	 * round cap about half a pixel past the ideal disc -- measured, its
-	 * stroke covers 16,72 for a cap of radius 3.3 centred on 20,70,
-	 * which is 3.6 away. Without it the fill falls a couple of hundred
-	 * pixels short of the stroke it stands in for.
-	 */
-	const double reach = half_width + 0.6;
+	dense << QPointF(line.constLast().x() * scale,
+	                 line.constLast().y() * scale);
 
 	const int margin = static_cast<int>(std::ceil(reach)) + 1;
 	const int first_x =
@@ -1023,15 +1025,12 @@ std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width) {
 	};
 
 	/*
-	 * ONE: the segments, which after densifying are one column wide.
-	 *
-	 * A vertical cut through a band of half_width around an INFINITE
-	 * line of slope m is half_width * sqrt(1 + m^2), and reaching that
-	 * far here was wrong: measured, it covered 2012 pixels the stroke
-	 * does not, because a band around a segment ONE COLUMN long cannot
-	 * reach it -- the offset edges that would carry it have moved out of
-	 * the column. What the stroke has there is its two endpoint discs,
-	 * which part TWO draws. So this term only joins one disc to the next.
+	 * ONE: the segments, one device column wide after densifying, so
+	 * this term only has to join one disc to the next. A vertical cut
+	 * through a band around an INFINITE line of slope m would be
+	 * reach * sqrt(1 + m^2), and reaching that far here was wrong --
+	 * measured, it covered 2012 pixels the stroke does not, because a
+	 * band around a one-column segment cannot reach it.
 	 */
 	for (int i = 0; i + 1 < dense.size(); ++i) {
 		const double x0 = dense.at(i).x();
@@ -1066,7 +1065,6 @@ std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width) {
 
 		for (int x = static_cast<int>(std::floor(cx - reach));
 		     x <= static_cast<int>(std::ceil(cx + reach)); ++x) {
-			/* Nearest point of this column to the centre. */
 			const double near_x =
 			        std::max(static_cast<double>(x),
 			                 std::min(cx, static_cast<double>(x) + 1.0));
@@ -1089,8 +1087,9 @@ std::vector<QRect> bbq_halo_spans(const QPolygonF &line, double half_width) {
 
 	const auto close_at = [&](int x_end) {
 		if (open && x_end > run_x) {
-			spans.push_back(
-			        QRect(run_x, run_top, x_end - run_x, run_bottom - run_top));
+			spans.push_back(QRectF(run_x / scale, run_top / scale,
+			                       (x_end - run_x) / scale,
+			                       (run_bottom - run_top) / scale));
 		}
 
 		open = false;
@@ -1137,7 +1136,10 @@ void bbq_fill_halo(QPainter &painter, const QPolygonF &line,
 	const bool was_antialiased = painter.testRenderHint(QPainter::Antialiasing);
 	painter.setRenderHint(QPainter::Antialiasing, false);
 
-	for (const QRect &span : bbq_halo_spans(line, half_width)) {
+	/* The resolution it will actually be drawn at (sec 16.99). */
+	const double ratio = std::max(0.25, painter.deviceTransform().m11());
+
+	for (const QRectF &span : bbq_halo_spans(line, half_width, ratio)) {
 		painter.fillRect(span, ground);
 	}
 
