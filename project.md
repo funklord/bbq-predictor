@@ -13408,6 +13408,45 @@ valid time and bucket, so what the old rule wrote stays until its valid
 time passes and sec 12.6 expires it, and the long buckets are the last
 to turn over -- which is exactly where the difference is largest.
 
+### 16.97.7 The rule is live, checked at the write rather than the verdict
+
+The verdict above needs days. Whether the new rule is RUNNING does not,
+and it is a different question wanting a different instrument: ask the
+archive what it has written since the fix, rather than what the scores
+say about it.
+
+    select c.lead_bucket, count(*) as pairs,
+           sum(case when abs(c.precip_rate - h.precip_rate) < 0.0005
+                    then 1 else 0 end) as identical
+    from forecast_pending c
+    join forecast_pending h
+      on h.station=c.station and h.valid_utc=c.valid_utc
+     and h.lead_bucket=c.lead_bucket and h.band=6
+    where c.band=5 and c.precip_rate is not null
+      and h.precip_rate is not null
+      and c.issued_utc > 1788993362        -- 00abcef, the floor
+    group by c.lead_bucket order by c.lead_bucket;
+
+At the three leads whose measured bias is negative, rows written after
+the floor are identical to the raw band 20 of 20 at four days, 20 of 20
+at a week, and 16 of 18 beyond. The same query without the date bound,
+over rows written before it: 87 of 111 differed, then 125 of 139 and
+125 of 139.
+
+**The two that still differ at `beyond` are the rule working rather
+than leaking.** A bias is re-derived from whatever has been verified so
+far, so its sign can move during a day, and a row written while that
+bucket still measured positive carries a real correction and should.
+The floor promises that the correction never ADDS rain to a band that
+is already too dry -- not that a lead once floored stays floored.
+
+**And the instrument is the point.** `forecast_pending` holds what the
+program decided, so it answers about the code that is running, today.
+`verification` holds what the weather then did, and cannot answer until
+the weather does. Asking the second for an answer only the first has is
+how a change gets called unverified for a week when it was checkable in
+a minute.
+
 ## 16.98 The same measurement, described two ways
 
 Sec 16.19 settled what to say when it never rained: skill is measured
