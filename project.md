@@ -14703,3 +14703,52 @@ Ten times faster at the thing it does, and 0.8 ms of a frame that was
 72 ms. **A real improvement to 1% of the problem**, which is the honest
 description of it, and it was chosen off a desktop profile that could
 not see the other 95%.
+
+### 16.97.8 Zeroed, on the holder's instruction, 2026-09-11
+
+Sec 16.97.6's re-measurement could not answer while the old rule's
+errors sat inside cumulative sums with no time dimension. Of the three
+ways out, the holder chose the first: restart the corrected band's
+precipitation scoring from the floor.
+
+**What was removed, in full, because after this the sums are the only
+place it existed:**
+
+    station    bucket  count  sum_error  sum_abs   sum_square
+    ISTOCK877     0      88     2.7426    14.1235    14.3034
+    ISTOCK877     1      91     6.9483    21.7618    24.1612
+    ISTOCK877     2      44     1.9493    10.0151    13.8193
+    ISTOCK877     3      49     2.0820     9.6970    10.6098
+    ISTOCK877     4      63     3.2861    20.9631    20.8247
+    ISTOCK877     5      51     4.8450    22.8527    22.3837
+    ISTOCK877     6      27    -0.6825    15.3182    17.4548
+
+Seven rows, one station; no other band, quantity or station had any.
+
+**Deleted rather than set to zero, and the two are the same to this
+program.** `bbq_history::verification` guards `count <= 0` and returns
+an empty record before dividing, so a zero row and an absent row read
+identically; and the writer is an UPSERT, so the next verified forecast
+recreates whichever row it needs. An absent row says "nothing recorded",
+which is what is true.
+
+**The proof, stated before the delete and checked after** (sec
+`evidence.md`, a mechanical change carries one): nothing outside band 5
+/ `precip_rate` may move.
+
+    rows in verification        120  ->  113
+    rows matching the target      7  ->    0
+    sum of count elsewhere     6402  ->  6402
+    sum of absolute error      11772.383907  ->  11772.383907
+
+**What to expect now.** The corrected band has no precipitation score at
+all until forecasts made under the floor verify, and the short leads
+fill first. A reading taken before then is not a cautious number, it is
+an absent one -- `has_skill()` and the count guard already say so, and
+the status line reads the hourly band, which was not touched.
+
+**And the thing this does NOT fix**, so that nobody reads the new score
+as more than it is: the table still has no time dimension. The next rule
+change to precipitation faces exactly this question again, and the
+answer will again be either another deletion or the epoch column of sec
+16.97.6, which remains open and belongs with sec 16.94.2.
