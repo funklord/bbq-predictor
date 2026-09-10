@@ -60,6 +60,7 @@ private slots:
 	void the_sample_dots_follow_a_theme_change();
 	void a_dot_stamp_carries_the_ratio_it_was_rendered_at();
 	void a_caption_box_knows_when_a_line_crosses_it();
+	void a_rain_overlay_that_repeats_the_forecast_is_not_drawn();
 	void bbq_simplify_keeps_every_point_within_tolerance();
 	void bbq_simplify_keeps_what_a_curve_needs();
 	void a_fresh_graph_follows_the_clock();
@@ -2186,5 +2187,98 @@ void test_view::a_caption_box_knows_when_a_line_crosses_it() {
 	}
 	QVERIFY2(!bbq_box_meets_polyline(box, below),
 	         "a line well below the caption was called a collision");
+}
+
+/*
+ * A corrected rain line that says what the forecast already said is not
+ * drawn (project.md sec 16.97.5).
+ *
+ * The rain bias is floored at zero (sec 16.97), so where a band has
+ * been under-forecasting the correction declines to act and the
+ * corrected rate is the forecast's own. Sec 12.10 already suppressed an
+ * EMPTY overlay, because a line that says nothing still has to be read
+ * before it can be dismissed; this one is worse than empty -- a line
+ * lying on the forecast says it was checked and found right, when it
+ * was checked, found too dry, and left alone.
+ *
+ * Detected by the overlay's own ink, which is the rain colour darkened
+ * and is not the colour of the rain area beneath it, so the two can be
+ * told apart in a render.
+ */
+void test_view::a_rain_overlay_that_repeats_the_forecast_is_not_drawn() {
+	const auto build = [](double corrected_scale) {
+		std::vector<bbq_sample> forecast;
+		for (int at = 0; at < 48; ++at) {
+			bbq_sample sample;
+			sample.start_utc = 1600000000 + at * 3600;
+			sample.duration_s = 3600;
+			sample.temperature = 14.0;
+			sample.precip_rate = 1.0 + 0.5 * std::sin(at / 4.0);
+			forecast.push_back(sample);
+		}
+
+		bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+		band.set_zone(QTimeZone::UTC);
+		band.set_samples(forecast);
+
+		bbq_composite composite;
+		composite.set_series(std::move(band));
+
+		std::vector<bbq_sample> corrected = forecast;
+		for (bbq_sample &sample : corrected) {
+			sample.precip_rate = *sample.precip_rate * corrected_scale;
+		}
+
+		bbq_series overlay(bbq_band::corrected,
+		                   QStringLiteral("bias-corrected"));
+		overlay.set_zone(QTimeZone::UTC);
+		overlay.set_samples(std::move(corrected));
+
+		bbq_forecast_graph graph;
+		graph.set_theme(bbq_theme::dark);
+		graph.set_composite(composite);
+		graph.set_corrected(overlay);
+		graph.resize(700, 420);
+		graph.set_view(1600000000, 2 * 86400LL);
+
+		const QColor ink = graph.palette_colours().rain.darker(150);
+		const QImage shot = graph.grab().toImage();
+
+		int found = 0;
+		for (int y = 0; y < shot.height(); ++y) {
+			for (int x = 0; x < shot.width(); ++x) {
+				const QColor at = shot.pixelColor(x, y);
+				const int away = qMax(qMax(qAbs(at.red() - ink.red()),
+				                           qAbs(at.green() - ink.green())),
+				                      qAbs(at.blue() - ink.blue()));
+				if (away < 20) {
+					++found;
+				}
+			}
+		}
+
+		return found;
+	};
+
+	/*
+	 * THE CONTROL FIRST, because "not drawn" is what a broken renderer
+	 * reports for everything. A correction that genuinely reduces the
+	 * rain must be visible, or the assertion below means nothing.
+	 */
+	const int reduced = build(0.6);
+	QVERIFY2(reduced > 100,
+	         qPrintable(QStringLiteral("a correction that halves the rain "
+	                                   "drew only %1 pixel(s), so this test "
+	                                   "cannot see an overlay at all")
+	                            .arg(reduced)));
+
+	/* And one that changes nothing must not be drawn at all. */
+	const int identical = build(1.0);
+	if (identical > 0) {
+		QFAIL(qPrintable(QStringLiteral(
+		        "an overlay identical to the forecast drew %1 pixel(s): it "
+		        "says the forecast was checked and found right, when it was "
+		        "checked and left alone").arg(identical)));
+	}
 }
 

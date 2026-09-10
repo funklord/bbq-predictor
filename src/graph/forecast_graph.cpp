@@ -2619,6 +2619,53 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			if (most < 0.05) {
 				continue;
 			}
+
+			/*
+			 * NOR ONE THAT SAYS WHAT THE FORECAST ALREADY SAID
+			 * (sec 16.97.5).
+			 *
+			 * The rain bias is floored at zero (sec 16.97), so where a
+			 * band has been UNDER-forecasting the correction declines
+			 * to act and the corrected rate is the forecast's own. A
+			 * view lying entirely inside such a lead -- anything past a
+			 * week, where the bucket is `beyond` -- then draws a dashed
+			 * line exactly along the forecast it is drawn against.
+			 *
+			 * That is worse than the empty line above rather than
+			 * merely as bad. A flat line at the baseline plainly says
+			 * nothing; a line lying on the forecast says the forecast
+			 * was checked and found right, when what happened is that
+			 * it was checked, found too dry, and left alone.
+			 *
+			 * Compared against the composite at each sample's own
+			 * instant, which is what the correction was computed FROM
+			 * -- not against the drawn columns, which carry smoothing
+			 * and rounding this line is given separately below, so two
+			 * identical inputs could differ there and hide the case.
+			 */
+			bool says_something = false;
+			for (const bbq_sample &sample : m_corrected.samples()) {
+				if (sample.start_utc < from || sample.start_utc >= to ||
+				    !sample.precip_rate.has_value()) {
+					continue;
+				}
+
+				const bbq_reading raw = m_composite.at(sample.start_utc);
+				if (!raw.is_valid() || !raw.sample->precip_rate.has_value()) {
+					says_something = true;
+					break;
+				}
+
+				if (qAbs(*sample.precip_rate - *raw.sample->precip_rate) >=
+				    0.001) {
+					says_something = true;
+					break;
+				}
+			}
+
+			if (!says_something) {
+				continue;
+			}
 		}
 
 		/*

@@ -13340,13 +13340,27 @@ corrected rain line traces the raw one.
 
 Sec 12.10 suppresses a corrected rain line with no rain in it, "because
 a line that says nothing on a weather graph still has to be read before
-it can be dismissed". This is a line that says nothing for a different
-reason, and by that argument it might be suppressed too. **It is not
-done here**: 12.10's rule is about an EMPTY overlay and extending it to
-an identical one is a new rule about how the correction is drawn, which
-sec 16.31.3 reserves to the holder along with the rest of that
-question. Recorded so the next reader of a flat week-out overlay knows
-why it traces the forecast exactly.
+it can be dismissed". **The copyright holder extended that to this case
+on 2026-09-10**, and it is done: an overlay whose rain is the
+forecast's own is not drawn.
+
+It is worse than the empty line rather than merely as bad, which is the
+argument for treating it the same way. A flat line at the baseline
+plainly says nothing. A line lying ON the forecast says the forecast was
+checked and found right -- when what happened is that it was checked,
+found too dry, and left alone.
+
+**Compared against the composite at each sample's own instant**, which
+is what the correction was computed from, rather than against the drawn
+columns. Those carry smoothing and rounding that the overlay is given
+separately a few lines later, so two identical inputs could differ there
+and hide the case.
+
+Sabotaged both ways: without the suppression an identical overlay draws
+1013 pixels of its own ink, and with it suppressed unconditionally the
+test's control reports that a correction halving the rain drew none --
+which is what "not drawn" looks like from a renderer that has stopped
+drawing anything.
 
 ## 16.98 The same measurement, described two ways
 
