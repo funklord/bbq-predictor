@@ -14372,3 +14372,52 @@ produced entirely by the instrument. **Sec 16.91.2 did it the right way
 and its method is the one to reuse**: render against the unsimplified
 output of the SAME data, from a fixture, where nothing can move between
 the two arms.
+
+### 16.112.2 The tolerance cannot buy speed, and the reason is the algorithm
+
+The question sec 16.112.1 could not answer with a live shot -- whether a
+larger tolerance would pay -- turns out not to need a stopwatch at all.
+
+**Douglas-Peucker preserves the PATH, so it cannot reduce the AREA.**
+Every point it drops lies within the tolerance of the polyline that
+survives, so the simplified path is within a hundredth of a pixel of the
+original everywhere. A stroke is that path dilated by half the pen
+width, and two paths that close together dilate to regions whose areas
+differ by about tolerance times length -- some two per cent here. The
+rasteriser fills the same pixels either way.
+
+So simplification can only save PATH CONSTRUCTION, never filling. For a
+wide pen the fill is the larger half, which is why the saving measured
+at a day did not repeat at a fortnight even before the vertex counts
+came in.
+
+Sec 16.91.2 proves the same thing from the other side without meaning
+to: at a day it drops seven points in ten and the worst pixel moves
+6/255. A change that removes most of the vertices and none of the
+picture has removed none of the area either.
+
+### 16.112.3 What the long view actually costs, from the picture
+
+Matched renders at one size, so the numbers compare:
+
+    view      points in   after simplify   ink area
+    1 day        870           249          2 127 px
+    3 day        870           637          3 481 px
+    16 day       870           804         10 931 px
+
+The input is 870 at every view because the curve carries one point per
+pixel column, which the plot's width sets. What changes is how much of
+the plot the curve crosses.
+
+Twelve and a half ink pixels per column at sixteen days looked like
+jitter and is not: **the crop shows sixteen diurnal cycles**, each
+climbing and falling the full height of the plot, so a column on a
+steep limb is nearly vertical and covers ten pixels of it. The area is
+the weather, drawn correctly.
+
+Which leaves the levers that change area or the cost of covering it --
+the halo's width, the antialiasing, or filling the halo as spans rather
+than stroking it (sec 16.90's trick, which took the other fills from
+paths to memfills). Not the vertex count. Any of those changes the
+picture, so each is a decision to put to the holder with a measurement
+beside it, taken on a quiet machine.
