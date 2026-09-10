@@ -14191,3 +14191,40 @@ colour and the ratio: "#d5202a is at 1.15035 against its ground".
 This does not cover sec 16.109 itself, and cannot: the warts are a look
 that has not been decided, and a test asserting the present appearance
 would pin the thing under discussion.
+
+## 16.110 The marks do not sit on the curve, and that is the feature
+
+Looking at a rendered shot after a day of paint changes, the sample
+dots appeared to sit three to six pixels BELOW the temperature curve
+rather than on it, in the stretch either side of the day divider. Every
+ingredient of a real defect was present: the dot placement had been
+rewritten that day (sec 16.92), the stamp is blitted at an integer
+origin with a chosen subpixel offset, and `drawPixmap` positions in
+logical coordinates while `stamp.height()` counts device pixels -- a
+pairing that IS wrong on a scaled display and had been wrong here a few
+hours earlier (sec 16.99).
+
+**The measurement disproved it rather than failing to confirm it.** A
+placement error is a displacement, and a displacement cannot scatter:
+across the seventy columns where a dot separates from the curve, 34 sit
+above it and 36 below, mean +0.24 px. What produces symmetric scatter is
+smoothing. The drawn curve carries the smoothing and rounding that the
+column's own value does not -- the same distinction sec 16.97.5 leans on
+when it compares the corrected rain against the composite rather than
+against the drawn columns -- so the marks show where the readings are
+and the line shows what the graph made of them. **The gap is the
+smoothing, drawn.**
+
+Which sec 3.11.3 had already said, in the section that motivated the
+marks in the first place: the marks say where the data is and the curve
+says what is drawn between. The answer was in the design document before
+anybody went to the pixels, and a session that "fixes" this will be
+moving the reading onto the line and deleting the only visible evidence
+of how far the line was moved.
+
+**The shape of the near-miss is worth more than the answer.** The
+suspicion was cheap and correct to have. What nearly filed it as a
+defect is that the crop chosen to look at happened to be a stretch where
+the scatter fell one way, and six dots below a line is a convincing
+picture of an offset. The discriminator was not a better look at the
+same crop -- it was counting both sides over every dot in the frame.

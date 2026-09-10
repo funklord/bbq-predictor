@@ -2441,9 +2441,22 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 				continue;
 			}
 
+			/*
+			 * THE MARK NEED NOT LAND ON THE CURVE, and when it does
+			 * not that is the feature rather than a misplacement
+			 * (sec 16.110). This is the column's own reading; the
+			 * line below it is drawn from the smoothed and rounded
+			 * series, so the two differ by however much the smoothing
+			 * moved the line -- which is precisely what sec 3.11.3
+			 * put the marks here to show.
+			 *
+			 * Measured once, in case the scatter looks like an offset
+			 * again: over the 70 columns of one frame where a mark
+			 * separates from the curve, 34 sat above it and 36 below.
+			 * A placement error is a displacement and cannot scatter.
+			 */
 			const double px = plot.left() + x;
 			const double py = y_for_temperature(c.knot_temperature);
-			const double r = m_metrics.sample_radius;
 
 			/*
 			 * STAMPED FROM A CACHE, NOT DRAWN (sec 16.92).
