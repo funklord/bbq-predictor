@@ -24,13 +24,14 @@
 #                        faketime, and REFUSES rather than skipping
 #                        without it (sec 16.105)
 #   make check        -- everything that must pass before a commit
-#   make style        -- ten gates: indentation, project.md against the
-#                        tree, every signal has a listener, the manual
-#                        page against the options, palette contrast,
-#                        the fetch exit codes against the unit, the XML
-#                        files, the build wiring, the setup calls that
-#                        fail silently, and QtTest slots QtTest would
-#                        not run
+#   make style        -- eleven gates: indentation, project.md against
+#                        the tree, every signal has a listener, the
+#                        manual page against the options, palette
+#                        contrast, the fetch exit codes against the
+#                        unit, the XML files, the build wiring, the
+#                        setup calls that fail silently, QtTest slots
+#                        QtTest would not run, and every source being
+#                        linked by some test
 #   make hooks        -- install the commit-msg hook from tool/hooks/
 #   make install      -- install the binary, desktop entry, icon and
 #                        manual page under PREFIX
@@ -396,7 +397,7 @@ test: tests-build $(ARTIFACT)
 	[ "$$failed" -eq 0 ]
 
 style: style-source style-docs style-signals style-man style-palette style-exits style-xml style-wiring \
-       style-setup style-tests
+       style-setup style-tests style-links
 
 style-source:
 	python3 tool/style_gate.py check
@@ -429,6 +430,12 @@ style-setup:
 # report if the test were there (project.md sec 16.95).
 style-tests:
 	python3 tool/test_slots.py
+
+# A source file nobody linked is untested in the one way the suite
+# cannot report: it still builds, still passes, and does not contain
+# the file. Sec 16.111.
+style-links:
+	python3 tool/test_links.py
 
 style-exits:
 	python3 tool/exit_codes.py
@@ -619,6 +626,6 @@ help:
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
-        style-wiring style-setup style-tests test-clocks \
+        style-wiring style-setup style-tests style-links test-clocks \
         android android-aab \
         install uninstall clean veryclean distclean help

@@ -14267,3 +14267,56 @@ defect is that the crop chosen to look at happened to be a stretch where
 the scatter fell one way, and six dots below a line is a convincing
 picture of an offset. The discriminator was not a better look at the
 same crop -- it was counting both sides over every dot in the frame.
+
+## 16.111 A count in prose, replaced by a gate that asserts the partition
+
+Sec 16.58 recorded which source files no test links: **24 of 28**, with
+the four exceptions named. Re-measured, the tree holds 30 and the same
+four are out -- so the RULE held perfectly and the NUMBER rotted, which
+is the shape `evidence.md` names as the one that always does: a
+present-tense countable claim about the tree's own shape, in a document
+that is quoted rather than re-derived. Nothing in the ordinary course of
+work brings a prose count together with the tree it describes.
+
+Writing 26 of 30 buys the same rot again on the next file. What replaces
+it is `tool/test_links.py`, run by `make style`.
+
+### 16.111.1 The half that is usually left out
+
+The obvious gate refuses a source no project links. This one also
+refuses a **waiver whose file has since been linked**, and a **waiver
+naming a file that no longer exists**.
+
+Those two are what make the first worth anything. A bare exception list
+is a claim; a list that cannot grow, shrink or go stale without the gate
+saying so is a guarantee -- `evidence.md`'s population assertion, where
+an empty cell is asserted along with the partition so that nothing can
+be added to it unnoticed. Without them the waiver list is exactly the
+kind of ignore list that switches a gate off by instalments.
+
+The four waived, each with its reason in the tool rather than here, so
+that the reason travels with the thing it excuses: `main.cpp`, whose
+argument parsing was extracted to `cli/options.cpp` where test_cli does
+link it; `net/probe.cpp`, whose predicate is what a live server replies
+(sec 16.61.2); `net/tls_backend.cpp`, which needs a real installation's
+plugin path; and `wu/fetch_once.cpp`, which talks to the provider.
+
+### 16.111.2 Matched on the path, not the basename
+
+Two files may share a name. A basename match would find the linked one,
+report success, and let the other through -- a gate passing for the
+wrong file, which is worse than no gate because it is quoted afterwards.
+The tree has no duplicate basenames today; matching on the path below
+`src/` means it never has to be checked again.
+
+### 16.111.3 Watched failing, three ways
+
+A transient `src/graph/zz_sabotage.cpp` made it name that file and exit
+1, and removing the file put it back to green -- which tests the wiring
+to the real tree, not just the checker.
+
+The checker itself carries a control that runs on every invocation and
+covers all three refusals on a synthetic tree. Gutting the unlinked
+branch makes the control refuse with `no result below means anything`
+and exit 2, so the gate cannot go quietly blind: a probe whose failure
+mode is silence has to demonstrate on every run that it can speak.
