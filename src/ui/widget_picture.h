@@ -26,6 +26,15 @@ class bbq_forecast_graph;
  * `reading` is the number to draw over the graph -- the tray's, from
  * bbq_tray_icon::reading_label, so that the two cannot disagree.
  */
+/*
+ * Everything about the picture that is not Android's to answer, so that
+ * a test can produce one without a device (sec 16.119). Returns whether
+ * the file landed.
+ */
+bool bbq_render_widget_picture(bbq_forecast_graph *source,
+                               const QString &reading, const QSize &shape,
+                               const QString &path);
+
 void bbq_write_widget_picture(bbq_forecast_graph *source,
                               const QString &reading);
 

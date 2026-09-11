@@ -15001,3 +15001,59 @@ on the graph.
 because the phone was plugged in. The gap sec 16.109.3 names is still
 open, and the only thing that closes it is a way to produce this file
 without a device.
+
+## 16.119 The widget's picture, testable at last
+
+Sec 16.109.3 recorded that `bbq_write_widget_picture` sits entirely
+inside `#ifdef Q_OS_ANDROID`, so no test here reaches it and the suite
+checks the POSING instead -- "the posing can be perfect and the picture
+still wrong, which is what this is."
+
+**Only two questions in it are Android's**: whether a widget has been
+placed at all, and what shape it wants. Everything else -- borrowing the
+graph, the scrim and the ground, posing, rendering, drawing the reading
+over the top, and landing the file by rename -- is the same everywhere,
+and is the whole of what can be wrong with the picture.
+
+So it is `bbq_render_widget_picture(source, reading, shape, path)` now,
+outside the guard, with the JNI narrowed to the two calls that need it.
+`draw_reading` came out with it: it had been inside the guard, which is
+most of why the picture was unreachable.
+
+### 16.119.1 Three sabotages, and the two assertions that failed them
+
+The properties are the ones measured off the phone in sec 16.109.5, and
+they are a PAIR: the scrim must let the wallpaper through, and the
+ground under the curve must not. A picture can satisfy either alone.
+
+    no reading drawn      -> 0 near-white pixels
+    picture filled opaque -> 0 translucent pixels of 83600
+    posed with no ground  -> 0 pixels of the ground colour #505253
+
+### 16.119.2 It passed three times before it tested anything
+
+Worth recording in full, because every step looked like progress.
+
+**First it asserted the wrong objects.** `scrim.alpha() < 255` is a fact
+about `bbq_widget_scrim` and holds however the image is filled -- proved
+by filling it opaque, which it passed. And `opaque_ground > 0` claimed
+to check the curve's ground while counting any opaque pixel at all,
+which the reading's own ink satisfies.
+
+**Then the fixture drew nothing.** The picture was 98% scrim with the
+number on it and the words "No forecast data yet" -- and every assertion
+passed on that. Three causes, found one at a time by dumping the image
+and looking:
+
+- a fixed epoch in 2023, where the poser follows the present;
+- `bandful` does not set a zone, and the sibling test that works does;
+- **and the killer: `set_view` before `set_composite`.** The view change
+  emits `view_changed`, whose handler asks the feed for the range and
+  pushes the feed's composite into the graph -- empty, here. That is sec
+  16.115's own wiring, defeating a test of it.
+
+**What found it was not a better assertion.** It was writing the picture
+to a file and looking at it, which is what the `--shot` option's help
+text has said all along: looking at the picture is how layout defects
+actually get found. Three rounds of strengthening assertions moved
+nothing, because the assertions were fine and the picture was empty.

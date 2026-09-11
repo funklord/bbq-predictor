@@ -93,6 +93,7 @@ private slots:
 	void the_list_names_the_station_actually_being_read();
 	void the_view_still_pans_and_zooms_through_the_window();
 	void a_pan_inside_the_loaded_range_keeps_the_window_cache();
+	void the_widget_picture_can_be_made_without_a_device();
 	void turning_and_unfolding_the_device_keeps_what_was_on_screen();
 	void a_fix_from_where_discovery_already_ran_is_not_sent_to_it();
 	void a_wrapping_row_asks_its_height_at_its_own_preferred_width();
@@ -384,6 +385,147 @@ void test_window::the_list_names_the_station_actually_being_read() {
  * picture is identical either way -- which is exactly why this survived
  * being looked at.
  */
+/*
+ * The widget's picture, produced and inspected without a phone
+ * (sec 16.119).
+ *
+ * Sec 16.109.3 recorded that this file's contents had no test at all,
+ * because everything that made one sat inside Q_OS_ANDROID with the two
+ * JNI calls. Only WHETHER to draw and WHAT SHAPE are Android's; posing,
+ * rendering, the reading and the atomic rename are the same everywhere
+ * and are the whole of what can be wrong with the picture.
+ *
+ * The properties asserted are the ones measured off the device in sec
+ * 16.109.5, and they are a pair: the scrim must let the wallpaper
+ * through, and the ground under the curve must not. Either alone is
+ * satisfiable by a picture that fails the other.
+ */
+void test_window::the_widget_picture_can_be_made_without_a_device() {
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	window.watch_station(QStringLiteral("ITESTWIDGET"));
+
+	/*
+	 * Anchored to NOW, because the poser follows the present -- the
+	 * first version of this test used a fixed epoch in 2023 and produced
+	 * a picture that was 98% scrim with the reading on it and no curve
+	 * at all. Every assertion below passed on that, which is what makes
+	 * the anchor part of the test rather than part of the setup.
+	 */
+	const qint64 base = QDateTime::currentSecsSinceEpoch() - 12 * 3600;
+
+	/*
+	 * With its ZONE set, which bandful does not do. Without one the
+	 * graph has no time axis to draw against and renders an empty plot
+	 * -- and the first version of this test did exactly that and passed.
+	 */
+	bbq_series band = bandful(bbq_band::hourly, base, 48);
+	band.set_zone(QTimeZone::UTC);
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+
+	/*
+	 * The view FIRST, then the data. set_view emits view_changed, whose
+	 * handler asks the feed for the range and -- when the feed has
+	 * nothing loaded, which is the case here -- pushes the feed's empty
+	 * composite into the graph (sec 16.115). Done the other way round
+	 * this test rendered "No forecast data yet" and still passed
+	 * everything asserted below.
+	 */
+	window.m_graph->set_view(base, 24 * 3600);
+	window.m_graph->set_composite(composite);
+
+	const QSize shape(440, 190);
+	const QString path = directory.filePath(QStringLiteral("widget.png"));
+
+	QVERIFY2(bbq_render_widget_picture(window.m_graph, QStringLiteral("12"),
+	                                   shape, path),
+	         "the picture was not written");
+
+	QImage picture(path);
+	QVERIFY2(!picture.isNull(), "the file that landed is not an image");
+	QCOMPARE(picture.size(), shape * window.m_graph->devicePixelRatioF());
+
+	const QColor scrim =
+	        bbq_widget_scrim(window.m_graph->palette_colours().background);
+
+	/*
+	 * Asked of the PICTURE, not of the colour the helper returns. The
+	 * first version asserted scrim.alpha() < 255, which is a fact about
+	 * bbq_widget_scrim and survives filling the image with anything at
+	 * all -- proved by filling it opaque, which it passed.
+	 */
+	const QColor ground = bbq_widget_worst_ground(scrim);
+
+	int translucent = 0;
+	int opaque_not_reading = 0;
+
+	for (int y = 0; y < picture.height(); ++y) {
+		for (int x = 0; x < picture.width(); ++x) {
+			const QColor here = picture.pixelColor(x, y);
+
+			if (here.alpha() < 255) {
+				++translucent;
+			} else if (here.rgb() == ground.rgb()) {
+				/* The curve's own ground, put there by the halo. */
+				++opaque_not_reading;
+			}
+		}
+	}
+
+	QVERIFY2(translucent > picture.width() * picture.height() / 4,
+	         qPrintable(QStringLiteral("only %1 translucent pixel(s) of %2: "
+	                                   "no wallpaper could show through")
+	                            .arg(translucent)
+	                            .arg(picture.width() * picture.height())));
+
+	/*
+	 * And the curve's own ground is opaque where it was drawn: it is
+	 * what the contrast clamp measured against, so a translucent one
+	 * would put the curve on a colour nobody chose, which is the whole
+	 * reason sec 16.32 draws a halo. Counted excluding the reading's
+	 * halo, because that is opaque too and would otherwise answer this
+	 * question for it -- as it did, until a picture with no curve in it
+	 * passed this assertion.
+	 */
+	QVERIFY2(opaque_not_reading > 200,
+	         qPrintable(QStringLiteral("only %1 pixel(s) of the ground "
+	                                   "colour %2: the curve was drawn with "
+	                                   "no ground of its own")
+	                            .arg(opaque_not_reading)
+	                            .arg(ground.name())));
+
+	/*
+	 * AND THE READING IS ON IT. That number is drawn after the render,
+	 * over the top, and is the one thing in this file no other test can
+	 * see -- the poser does not put it there and the graph knows nothing
+	 * about it. Its halo is near-white and nothing else in the picture
+	 * is, so counting that colour asks exactly this question.
+	 */
+	int reading_halo_pixels = 0;
+
+	for (int y = 0; y < picture.height(); ++y) {
+		for (int x = 0; x < picture.width(); ++x) {
+			const QColor here = picture.pixelColor(x, y);
+
+			if (here.red() > 0xe0 && here.green() > 0xe0 &&
+			    here.blue() > 0xe0 && here.alpha() == 255) {
+				++reading_halo_pixels;
+			}
+		}
+	}
+
+	QVERIFY2(reading_halo_pixels > 100,
+	         qPrintable(QStringLiteral("only %1 near-white pixel(s): the "
+	                                   "reading was not drawn onto the "
+	                                   "picture")
+	                            .arg(reading_halo_pixels)));
+}
+
 void test_window::a_pan_inside_the_loaded_range_keeps_the_window_cache() {
 	QTemporaryDir directory;
 	bbq_main_window window;

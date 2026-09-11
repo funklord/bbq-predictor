@@ -89,7 +89,11 @@ const double scrim_alpha = 0.75;
  */
 const double contrast_floor = 3.0;
 
-#ifdef Q_OS_ANDROID
+/*
+ * Drawing the number is not Android's (sec 16.119). It used to sit
+ * inside the guard with the JNI below, which is what kept the whole
+ * picture out of reach of any test.
+ */
 
 /*
  * Everything from here to the end of the namespace draws the number,
@@ -135,6 +139,8 @@ const QColor reading_halo(0xf2, 0xf2, 0xf2);
 const double reading_height_share = 0.25;
 const double reading_width_share = 0.10;
 
+#ifdef Q_OS_ANDROID
+
 /*
  * How big the placed widget actually is, in dp, or 0 for "Android did
  * not say". GraphWidget.java explains why dp rather than pixels.
@@ -151,6 +157,8 @@ int asked_size(const char *method) {
 
 	return size >= smallest_dp && size <= largest_dp ? size : 0;
 }
+
+#endif
 
 /*
  * Draw the current temperature across the top of the picture.
@@ -208,7 +216,7 @@ void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
 	painter.fillPath(glyphs, reading_ink);
 }
 
-#endif
+
 
 } // namespace
 
@@ -348,63 +356,24 @@ bool bbq_widget_scrim_is_bounded(const QColor &scrim, const QColor &ink) {
 	       (of_ink < at_scrim && of_ink < at_worst);
 }
 
-void bbq_write_widget_picture(bbq_forecast_graph *source,
-                              const QString &reading) {
-#ifdef Q_OS_ANDROID
-	if (source == nullptr) {
-		return;
+/*
+ * Everything about the picture that is not Android's to answer
+ * (sec 16.119).
+ *
+ * Only two questions need the host: whether a widget has been placed at
+ * all, and what shape it wants. Posing the graph, rendering it over the
+ * scrim, putting the reading on top and landing the file atomically are
+ * the same everywhere -- and they are the whole of what can be WRONG
+ * with the picture, so they belong where a test can reach them.
+ */
+bool bbq_render_widget_picture(bbq_forecast_graph *source,
+                               const QString &reading, const QSize &shape,
+                               const QString &path) {
+	if (source == nullptr || shape.isEmpty() || path.isEmpty()) {
+		return false;
 	}
 
-	/*
-	 * NOTHING TO DRAW FOR (sec 16.21).
-	 *
-	 * Rendering the graph and writing 120 kB is not free, and it
-	 * happened on every fetch whether or not anybody had put a widget on
-	 * a home screen. The Java side has always declined to broadcast in
-	 * that case, which saved the broadcast and none of the work.
-	 *
-	 * Asked first now. A reader who adds the widget later gets its empty
-	 * state until the next fetch, which is a few minutes and is what the
-	 * empty state is for.
-	 */
-	QJniObject placed_context =
-	        QNativeInterface::QAndroidApplication::context();
-
-	/*
-	 * An invalid context is the question failing rather than a "no", so
-	 * it draws. Only a definite answer of false skips, for the reason
-	 * anyPlaced states on its own side.
-	 */
-	if (placed_context.isValid() &&
-	    !QJniObject::callStaticMethod<jboolean>(
-	            "se/vibes/bbq_predictor/GraphWidget", "anyPlaced",
-	            "(Landroid/content/Context;)Z", placed_context.object())) {
-		return;
-	}
-
-	const QString directory =
-	        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-	if (directory.isEmpty()) {
-		return;
-	}
-
-	const QString path = directory + QString::fromLatin1(picture_name);
 	const QString partial = path + QStringLiteral(".part");
-
-	/*
-	 * THE WIDGET'S OWN SHAPE, ASKED FOR RATHER THAN GUESSED.
-	 *
-	 * Both or neither: a width from Android and a fallback height would
-	 * be an aspect ratio nobody chose, and the launcher would letterbox
-	 * or crop it. Either the host answered about this widget or it did
-	 * not.
-	 */
-	const int asked_width = asked_size("wantedWidth");
-	const int asked_height = asked_size("wantedHeight");
-	const bool answered = asked_width > 0 && asked_height > 0;
-
-	const QSize shape(answered ? asked_width : fallback_width,
-	                  answered ? asked_height : fallback_height);
 
 	/*
 	 * Rendered at the widget's shape by resizing for the render and
@@ -445,7 +414,6 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 
 	source->render(&picture, QPoint(), QRegion(), QWidget::DrawChildren);
 
-
 	/*
 	 * The number over the top, after the render rather than inside it:
 	 * the graph draws the weather and knows nothing about home screens,
@@ -459,7 +427,7 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 
 	if (picture.isNull() || !picture.save(partial, "PNG")) {
 		QFile::remove(partial);
-		return;
+		return false;
 	}
 
 	/*
@@ -471,6 +439,70 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 	QFile::remove(path);
 	if (!QFile::rename(partial, path)) {
 		QFile::remove(partial);
+		return false;
+	}
+
+	return true;
+}
+
+void bbq_write_widget_picture(bbq_forecast_graph *source,
+                              const QString &reading) {
+#ifdef Q_OS_ANDROID
+	if (source == nullptr) {
+		return;
+	}
+
+	/*
+	 * NOTHING TO DRAW FOR (sec 16.21).
+	 *
+	 * Rendering the graph and writing 120 kB is not free, and it
+	 * happened on every fetch whether or not anybody had put a widget on
+	 * a home screen. The Java side has always declined to broadcast in
+	 * that case, which saved the broadcast and none of the work.
+	 *
+	 * Asked first now. A reader who adds the widget later gets its empty
+	 * state until the next fetch, which is a few minutes and is what the
+	 * empty state is for.
+	 */
+	QJniObject placed_context =
+	        QNativeInterface::QAndroidApplication::context();
+
+	/*
+	 * An invalid context is the question failing rather than a "no", so
+	 * it draws. Only a definite answer of false skips, for the reason
+	 * anyPlaced states on its own side.
+	 */
+	if (placed_context.isValid() &&
+	    !QJniObject::callStaticMethod<jboolean>(
+	            "se/vibes/bbq_predictor/GraphWidget", "anyPlaced",
+	            "(Landroid/content/Context;)Z", placed_context.object())) {
+		return;
+	}
+
+	const QString directory =
+	        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+	if (directory.isEmpty()) {
+		return;
+	}
+
+	/*
+	 * THE WIDGET'S OWN SHAPE, ASKED FOR RATHER THAN GUESSED.
+	 *
+	 * Both or neither: a width from Android and a fallback height would
+	 * be an aspect ratio nobody chose, and the launcher would letterbox
+	 * or crop it. Either the host answered about this widget or it did
+	 * not.
+	 */
+	const int asked_width = asked_size("wantedWidth");
+	const int asked_height = asked_size("wantedHeight");
+	const bool answered = asked_width > 0 && asked_height > 0;
+
+	const QSize shape(answered ? asked_width : fallback_width,
+	                  answered ? asked_height : fallback_height);
+
+	if (!bbq_render_widget_picture(source, reading, shape,
+	                               directory +
+	                                       QString::fromLatin1(picture_name))) {
 		return;
 	}
 
