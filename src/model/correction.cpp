@@ -262,6 +262,17 @@ bbq_series bbq_corrected_forecast(const bbq_composite &composite,
 		 * steps wide (sec 16.96), so removing it is worth far more than
 		 * the clamp costs.
 		 */
+		/*
+		 * CHANGING THIS MEANS BUMPING AN EPOCH (sec 16.120).
+		 *
+		 * A verification row is a running sum with no time in it, so a
+		 * rule changed without bumping `bbq_scoring_epoch` for its
+		 * quantity leaves every error the old rule made inside the
+		 * score the new one is judged by -- for weeks, and with nothing
+		 * on the number saying so. This floor is the change that cost
+		 * a deletion to escape (sec 16.97.8), which is why the pointer
+		 * is here rather than only beside the constant.
+		 */
 		rain_bias = std::max(0.0, rain_bias);
 
 		const bool know_wind =

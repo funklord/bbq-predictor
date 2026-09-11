@@ -772,7 +772,15 @@ int main(int argc, char *argv[]) {
 
 		for (const bbq_scored_quantity &scored : bbq_scored_quantities) {
 			const QString quantity = QString::fromLatin1(scored.name);
-			report << "\n" << quantity << " error, by band and lead time:\n";
+			/*
+			 * NAMED, because otherwise the epoch is invisible until
+			 * it bites (sec 16.120). A bump empties this whole
+			 * section, and a reader who cannot see which generation
+			 * is being reported has no way to tell a reset score
+			 * from a broken one.
+			 */
+			report << "\n" << quantity << " error, by band and lead time"
+			       << " (epoch " << bbq_scoring_epoch(quantity) << "):\n";
 
 			for (bbq_band band : bbq_scored_bands) {
 				for (bbq_lead_bucket bucket : bbq_scored_buckets) {

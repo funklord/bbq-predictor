@@ -346,6 +346,7 @@ int bbq_scoring_epoch(const QString &quantity) {
 		{"temperature", 1},
 		{"precip_rate", 1},
 		{"wind_kph", 1},
+		{"grill", 1},
 	};
 
 	for (const auto &known : epochs) {
@@ -355,10 +356,18 @@ int bbq_scoring_epoch(const QString &quantity) {
 	}
 
 	/*
-	 * An unlisted quantity scores under 1 rather than under nothing: a
-	 * new one added without touching this table is scored from its first
-	 * row, which is right, and appears here the first time its rule
-	 * changes.
+	 * An unlisted quantity scores under 1 rather than under nothing, so
+	 * a new one added without touching this table is scored from its
+	 * first row, which is right.
+	 *
+	 * IT IS NOT A SAFETY NET FOR A MISSPELLING. A name here that does
+	 * not match what `quantity_name` writes takes this branch silently,
+	 * and the day somebody bumps that entry the bump does nothing at all
+	 * -- the rows keep arriving under the old epoch and the score it was
+	 * meant to restart carries on accumulating. `grill` was missing from
+	 * the list above until the seeder wrote one and it turned up under
+	 * the fallback; nothing was wrong, and nothing would have been said
+	 * if its epoch had been bumped either.
 	 */
 	return 1;
 }
@@ -406,6 +415,18 @@ bool bbq_history::migrate_schema() {
 	}
 
 	if (!has_table || has_epoch) {
+		/*
+		 * The shape is current. Make the stamp say so, because the
+		 * rebuild below commits before writing it: a process that dies
+		 * in that window leaves a migrated table claiming to be the old
+		 * one, and this early return is the only place that could ever
+		 * notice.
+		 */
+		if (has_epoch && schema_version() != current_schema_version()) {
+			exec(QStringLiteral("PRAGMA user_version = %1")
+			             .arg(current_schema_version()));
+		}
+
 		return true;
 	}
 

@@ -15267,3 +15267,41 @@ to do with it.
 The claims that held were the measured ones -- pixel counts, frame
 times, row sums. It is the prose that summarises a change, not the
 number taken from a run, that needs checking against the tree.
+
+### 16.120.4 Four things found by reading it back rather than running it
+
+None of these failed a test. They came from exercising the feature with
+`--history-path` and from checking what sec 16.120 claimed against what
+the tree contained.
+
+**The version stamp could outlive its shape.** The rebuild commits and
+the stamp is written after it, so a process dying in that window leaves
+a migrated table claiming to be the old one -- and the early return for
+"already has the column" was the only code that could ever have noticed,
+and did not. The migration keys off the shape, so behaviour was right
+and only the stamp rotted; a later migration keying off the number would
+have read one wrong since a crash nobody saw. Reconciled there now,
+proved by setting the stamp back by hand and reopening: 1 to 2, 180 rows
+and their sums untouched.
+
+**`grill` was missing from the epochs table.** It turned up under the
+fallback when `--seed-verification` wrote one. Nothing was wrong -- the
+fallback returns 1, which is its epoch -- but the list is the
+enumeration of what gets scored, and grill is the second largest
+quantity in both real archives: 1956 samples on the desktop and 3392 on
+the phone.
+
+**And the fallback is not a safety net for a misspelling**, which is
+what that near-miss actually showed. A name in the table that does not
+match what `quantity_name` writes takes the fallback silently, so the
+day somebody bumps that entry the bump does nothing at all: rows keep
+arriving under the old epoch and the score it was meant to restart goes
+on accumulating. That is the exact failure the column exists to prevent,
+arriving through the mechanism meant to prevent it. Said where somebody
+editing the table will read it.
+
+**The epoch was invisible in the one place it will be noticed.**
+`--history` reports scores read from the current epoch and never said
+which, so a bump would empty a whole section with nothing to separate a
+deliberate reset from a broken archive. The header names it now:
+`grill error, by band and lead time (epoch 1):`.
