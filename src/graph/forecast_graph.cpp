@@ -1147,6 +1147,33 @@ void bbq_fill_halo(QPainter &painter, const QPolygonF &line,
 
 }
 
+QPoint bbq_dot_origin(const QPixmap &stamp, double px, double py) {
+	/*
+	 * THE STAMP'S SIZE IS IN DEVICE PIXELS AND THIS POSITION IS NOT
+	 * (sec 16.117).
+	 *
+	 * Sec 16.99 made the stamp a device-sized pixmap carrying its ratio,
+	 * so it DRAWS at the right logical size -- and left the centring
+	 * subtracting half of `width()`, which is a count of device pixels,
+	 * from a logical coordinate. That puts every mark side * (ratio - 1)
+	 * / 2 up and to the left of the reading it marks: six pixels at a
+	 * ratio of two, and on the phone every one of 320 measured dots sat
+	 * above its own curve.
+	 *
+	 * It is exactly zero at a ratio of one, which is where the feature
+	 * had been checked -- including the measurement in sec 16.110 that
+	 * concluded these marks scatter evenly about the curve. They do,
+	 * on that machine.
+	 */
+	const double ratio =
+	        stamp.devicePixelRatio() > 0.0 ? stamp.devicePixelRatio() : 1.0;
+
+	return QPoint(
+	        static_cast<int>(px) - static_cast<int>(stamp.width() / ratio) / 2,
+	        static_cast<int>(std::floor(py)) -
+	                static_cast<int>(stamp.height() / ratio) / 2);
+}
+
 std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
                                     double radius, double ratio) {
 	const double outer = radius + dot_ring_grow;
@@ -2721,10 +2748,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			        dot_stamp_offsets;
 			const QPixmap &stamp = m_dot_stamps[size_t(stamp_at)];
 
-			painter.drawPixmap(
-			        QPoint(int(px) - stamp.width() / 2,
-			               int(std::floor(py)) - stamp.height() / 2),
-			        stamp);
+			painter.drawPixmap(bbq_dot_origin(stamp, px, py), stamp);
 		}
 
 		painter.setBrush(Qt::NoBrush);

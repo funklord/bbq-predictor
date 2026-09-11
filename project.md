@@ -14278,7 +14278,21 @@ hours earlier (sec 16.99).
 **The measurement disproved it rather than failing to confirm it.** A
 placement error is a displacement, and a displacement cannot scatter:
 across the seventy columns where a dot separates from the curve, 34 sit
-above it and 36 below, mean +0.24 px. What produces symmetric scatter is
+above it and 36 below, mean +0.24 px.
+
+> **There WAS a displacement, and this measurement could not see it
+> (sec 16.117).** The marks are centred using the stamp's size in DEVICE
+> pixels against a LOGICAL position, so they land `side * (ratio - 1)/2`
+> up and to the left -- and that is identically zero on the machine this
+> was measured on. On the phone all 320 measured dots sit above their
+> curve, by about a degree.
+>
+> The reasoning above is sound and its premise was local. **A
+> displacement proportional to (ratio - 1) cannot scatter and cannot be
+> seen at a ratio of one either**, so "it scatters, therefore nothing is
+> displaced" holds only where it was taken. Everything below about the
+> smoothing is still true and is still the reason the marks do not sit
+> exactly on the line. What produces symmetric scatter is
 smoothing. The drawn curve carries the smoothing and rounding that the
 column's own value does not -- the same distinction sec 16.97.5 leans on
 when it compares the corrected rain against the composite rather than
@@ -14822,3 +14836,68 @@ visible to anybody. The staircase was, and on the device it is gone:
 at ten times magnification the halo's boundary against a grilling
 window's shading steps at device-pixel scale, where the logical version
 stepped in blocks a third of the halo's half width.
+
+## 16.117 Every sample dot on the phone sat above its own reading
+
+Found by looking at a screenshot of the phone, which is the first time
+this feature had been looked at anywhere but the desktop.
+
+    columns holding one dot and one curve   320
+    dot ABOVE the curve                     320
+    dot BELOW                                 0
+    mean offset                     -40.6 device px  (-1.05 C)
+
+Sec 16.110 had measured these same marks on the desktop -- 34 above, 36
+below, mean +0.24 px -- and recorded that the scatter is the smoothing
+made visible. That is true, and it is a measurement of a machine whose
+device pixel ratio is 1.
+
+**The stamp's size is in device pixels and the position it is drawn at
+is not.** Sec 16.99 fixed these dots being half size by making the
+pixmap device-sized and telling it the ratio, so it draws at the correct
+logical size. The blit kept centring it:
+
+    QPoint(int(px) - stamp.width() / 2, ...)
+
+`width()` counts device pixels; `px` is logical. The mark therefore
+lands `side * (ratio - 1) / 2` up and to the left of the reading it
+marks -- **six pixels at a ratio of two, measured, against six
+predicted** -- and exactly nothing at a ratio of one.
+
+**So sec 16.99's fix introduced this, and every check since could not
+see it.** The size was corrected and the placement was not, on a machine
+where the placement error is identically zero.
+
+### 16.117.1 What the wrong measurement cost
+
+Sec 16.110 is the entry that nearly buried this. It investigated the
+right thing -- dots not sitting on the curve -- reached a defensible
+conclusion, and closed with a rule: a placement error is a displacement
+and cannot scatter, so symmetric scatter proves there is no
+displacement.
+
+The logic is sound and the premise was a measurement taken at ratio 1.
+**A displacement that is proportional to (ratio - 1) is invisible to
+every test on the machine the tests run on**, and the entry's own
+argument then reads as a reason not to look again.
+
+It has been corrected in place rather than left to be read as it stands.
+
+### 16.117.2 Asserted on the pixels, at three ratios
+
+The placement is a free function now, so a test can hold the stamp: draw
+it at the computed origin into a sheet carrying the ratio, take the
+centroid of everything that is not bare ground, and require it within a
+pixel of the reading. That covers the sizing and the placement together,
+which matters because these two defects are the same arithmetic in
+opposite directions.
+
+Ratios 1, 2 and 2.75. Before the fix it failed at 2 with the dot marking
+40,30 centred on 34,24.
+
+**Not yet confirmed on the phone**: it was unplugged again before the
+build could be installed. The evidence is the pixel test and the
+agreement between the predicted and measured offsets, and re-measuring
+the screenshot is one line -- 320 paired columns, and the median should
+move from -37.5 device px to roughly -10, which is sec 16.110's
+smoothing and nothing else.

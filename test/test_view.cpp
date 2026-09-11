@@ -75,6 +75,7 @@ class test_view : public QObject {
 private slots:
 	void bbq_flatten_matches_qt();
 	void the_sample_dots_follow_a_theme_change();
+	void a_sample_dot_lands_on_its_reading_at_any_ratio();
 	void a_pointer_move_inside_one_column_repaints_nothing();
 	void the_filled_halo_covers_every_pixel_the_ink_touches();
 	void the_filled_halo_coalesces_a_flat_run();
@@ -1119,6 +1120,74 @@ void test_view::the_filled_halo_keeps_its_shape_on_a_scaled_display() {
 		                            .arg(ratio)
 		                            .arg(extra)
 		                            .arg(per_area, 0, 'f', 0)));
+	}
+}
+
+/*
+ * A dot must be CENTRED on the reading it marks, at any device pixel
+ * ratio (sec 16.117).
+ *
+ * Sec 16.99 made the stamp a device-sized pixmap carrying its ratio, so
+ * it draws at the right logical size. The blit kept centring it with
+ * stamp.width() / 2 -- a count of DEVICE pixels, subtracted from a
+ * LOGICAL coordinate. The error is side * (ratio - 1) / 2, up and to the
+ * left, and it is exactly zero at a ratio of one, which is where every
+ * check of this feature had been run.
+ *
+ * Asserted on the drawn pixels rather than on the arithmetic, so it
+ * covers the sizing and the placement together.
+ */
+void test_view::a_sample_dot_lands_on_its_reading_at_any_ratio() {
+	for (double ratio : {1.0, 2.0, 2.75}) {
+		const std::vector<QPixmap> stamps = bbq_dot_stamps(
+		        QColor(0, 0, 0), QColor(255, 255, 255), 3.0, ratio);
+		QVERIFY2(!stamps.empty(), "no stamps were built");
+
+		const QPixmap &stamp = stamps.front();
+		const double px = 40.0;
+		const double py = 30.0;
+
+		QImage sheet(qRound(90 * ratio), qRound(70 * ratio),
+		             QImage::Format_ARGB32_Premultiplied);
+		sheet.setDevicePixelRatio(ratio);
+		sheet.fill(QColor(255, 0, 255));
+
+		{
+			QPainter p(&sheet);
+			p.drawPixmap(bbq_dot_origin(stamp, px, py), stamp);
+		}
+
+		/* Centroid of everything that is not the bare ground. */
+		double sum_x = 0.0;
+		double sum_y = 0.0;
+		int seen = 0;
+
+		for (int y = 0; y < sheet.height(); ++y) {
+			for (int x = 0; x < sheet.width(); ++x) {
+				if (sheet.pixel(x, y) == QColor(255, 0, 255).rgb()) {
+					continue;
+				}
+
+				sum_x += x;
+				sum_y += y;
+				++seen;
+			}
+		}
+
+		QVERIFY2(seen > 0, "the stamp drew nothing");
+
+		/* Back into logical coordinates, where px and py live. */
+		const double cx = (sum_x / seen + 0.5) / ratio;
+		const double cy = (sum_y / seen + 0.5) / ratio;
+
+		QVERIFY2(std::abs(cx - px) <= 1.0 && std::abs(cy - py) <= 1.0,
+		         qPrintable(QStringLiteral("at ratio %1 the dot marking "
+		                                   "%2,%3 is centred on %4,%5")
+		                            .arg(ratio)
+		                            .arg(px)
+		                            .arg(py)
+		                            .arg(cx, 0, 'f', 2)
+		                            .arg(cy, 0, 'f', 2)));
 	}
 }
 

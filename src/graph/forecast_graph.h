@@ -205,6 +205,8 @@ std::vector<QRectF> bbq_halo_spans(const QPolygonF &line, double half_width,
 void bbq_fill_halo(QPainter &painter, const QPolygonF &line,
                    const QColor &ground, double half_width);
 
+QPoint bbq_dot_origin(const QPixmap &stamp, double px, double py);
+
 std::vector<QPixmap> bbq_dot_stamps(const QColor &ring, const QColor &fill,
                                     double radius, double ratio);
 
