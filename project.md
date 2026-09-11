@@ -15232,3 +15232,38 @@ in both versions.
 The first test asserts the migration as SUMS read back through the
 program rather than as a row count, because a rebuild that dropped a
 column's contents would keep the count.
+
+## 16.121 Two of my own claims from this morning were false
+
+Swept every countable claim written into this document today and checked
+it against the tree rather than reading it back. Fifteen or so; two were
+wrong, and both were mine, written within an hour of the work they
+describe.
+
+- **Sec 16.120.2**: "the correction's own code points at it", of the
+  epoch. `correction.cpp` mentioned neither the epoch nor the section.
+  The pointer was worth having, so it was added rather than the sentence
+  softened.
+- **Sec 16.119**: the widget extraction left "the JNI narrowed to the
+  two calls that need it". Four JNI operations remain in that function
+  and a second function has a guard of its own. The code was right; the
+  sentence was reworded.
+
+**They share a shape.** Both are SUMMARY sentences -- the clause at the
+end of a paragraph saying what the change amounts to -- and both describe
+work as though it were done: one invented a mitigation, the other
+inflated a count. Neither is catchable by re-reading, because both are
+fluent and neither contradicts anything nearby. What caught them was
+counting the thing: `grep -c QJniObject`, and grepping `correction.cpp`
+for "epoch".
+
+**And the two wanted opposite repairs**, which is the part worth
+carrying. One sentence was ahead of the code and one was wrong about it,
+so softening both would have discarded a pointer worth having, and
+implementing both would have written a guard nobody needed. The question
+to ask of a false claim is which of the two it is before deciding what
+to do with it.
+
+The claims that held were the measured ones -- pixel counts, frame
+times, row sums. It is the prose that summarises a change, not the
+number taken from a run, that needs checking against the tree.
