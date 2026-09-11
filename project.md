@@ -15377,3 +15377,46 @@ three options, where it is not mentioned.
 Nothing is wrong today; the deletion is done and the archive will
 recover as the raw band's post-deletion samples accumulate. What must
 not happen is somebody quoting the table above.
+
+### 16.97.10 A snapshot, so the comparison can be made after all
+
+Sec 16.97.9 says the two bands are incomparable because one was emptied
+and the other was not. That is true of the sums as they stand and not of
+what can be done with them: the raw band's totals are cumulative, so
+recording them NOW makes every later reading a difference over a known
+window.
+
+Band 6, `precip_rate`, ISTOCK877, at 2026-09-11 15:54 +0200:
+
+    lead  count  sum_absolute_error
+    0      13      2.4200
+    1      21      5.3700
+    2      27      7.9800
+    3      46      7.3300
+    4      90     28.9700
+    5     104     42.0100
+    6     104     29.5000
+    7      79     34.2600
+    8     145     37.0800
+
+Subtract those from a later reading and the remainder is the raw band
+over the same days the corrected band has been accumulating since its
+reset. Then the two MAEs describe one stretch of weather and can be put
+beside each other.
+
+    select lead_bucket, count, round(sum_absolute_error, 4)
+    from verification
+    where quantity = 'precip_rate' and band = 6
+      and station = 'ISTOCK877'
+    order by lead_bucket;
+
+**It needs a few days at the long leads**, where the counts move
+slowest, and it needs nobody to delete or bump precipitation in the
+meantime -- either would reset the raw band's totals and make the
+subtraction silently wrong rather than obviously so. If that happens the
+snapshot is void and this entry should say so.
+
+Worth it because the alternative is waiting for the raw band's fortnight
+of history to be outweighed, which is weeks, and because it costs one
+table written down before it is needed -- which is the same reason sec
+16.97.6's baseline existed to be useful.
