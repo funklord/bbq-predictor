@@ -14973,3 +14973,31 @@ project that ships to a scaled display and verifies on an unscaled one
 has a blind spot the size of that difference**, and the only instruments
 that have ever found anything in it are a device render and an invariant
 that holds at more than one ratio.
+
+### 16.109.5 Somebody looked at the widget picture at last
+
+Sec 16.109.3 records that `bbq_write_widget_picture` sits inside
+`#ifdef Q_OS_ANDROID`, so no test on this machine reaches it and the
+suite checks the POSING instead. The output had therefore never been
+inspected. Pulled off the phone with `run-as`, at
+`files/widget.png`, 885 by 546:
+
+    ground     #151819  alpha 191     the scrim, three quarters opaque
+    halo, ring #505253  alpha 255     opaque, in the assumed ground
+    curve      #ec8187                Weather Underground's red, clamped
+
+**It is correct, and the opaque halo is the point rather than a
+blemish.** The scrim lets the wallpaper through, so the ground under the
+curve is not knowable from inside this program -- which is exactly what
+sec 16.32 says the halo is for, and what makes the contrast clamp's
+guarantee hold: the curve clears its floor against #505253 because the
+halo puts #505253 there, whatever the wallpaper is doing.
+
+The marks straddle the curve here too, so sec 16.117's fix reaches this
+surface; before it they sat above the line on this picture as they did
+on the graph.
+
+**What this is not is a test.** It is one look at one render, taken
+because the phone was plugged in. The gap sec 16.109.3 names is still
+open, and the only thing that closes it is a way to produce this file
+without a device.
