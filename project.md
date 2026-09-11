@@ -15454,3 +15454,39 @@ Checked against the archive rather than the suite alone, because every
 stored row is keyed by one of these strings and the refactor changed how
 they are produced: 120 verification rows in the table, 120 printed by
 `--history`, and per quantity 29, 30, 31 and 30 both ways.
+
+## 16.122 What is open, as of 2026-09-11
+
+Everything below is recorded in its own section; this is a list so that
+somebody arriving cold does not have to find them.
+
+**Waiting on the copyright holder:**
+
+- **Sec 16.94.2** -- whether to score every band on the observation's
+  whole-degree grid. It would level Weather Underground against
+  Open-Meteo, and it changes what every archived number means. Open
+  since before today and untouched by the epoch, which says which RULE
+  produced a number and nothing about what the number means.
+- **Sec 16.120.5** -- what the applet should say in the days after an
+  epoch bump, when the current rule has scored nothing and the archive
+  is not fresh. Neither existing message is true then. A third one is a
+  sentence somebody should decide to add rather than have appear as a
+  side effect.
+
+**Waiting on time:**
+
+- **Sec 16.97.10** -- the raw band's precipitation totals were written
+  down at 15:54 on 2026-09-11 so that a later reading becomes a
+  difference over a known window, which is the only way left to compare
+  the corrected band against it after sec 16.97.8's deletion. It needs a
+  few days at the long leads. **It is void if anybody deletes or bumps
+  precipitation in the meantime**, and this entry should say so when
+  that happens.
+
+**Recorded limits, not gaps to close:**
+
+- An old epoch is kept in the file and readable by nothing in the
+  program (sec 16.120); `sqlite3` is the only way to see one.
+- `bbq_write_widget_picture`'s two JNI questions cannot be tested here
+  (sec 16.119); everything else about the picture now can be.
+- `--shot`'s cursor message cannot be reached offline (sec 16.108.2).
