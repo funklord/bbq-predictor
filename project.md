@@ -15062,7 +15062,12 @@ over the top, and landing the file by rename -- is the same everywhere,
 and is the whole of what can be wrong with the picture.
 
 So it is `bbq_render_widget_picture(source, reading, shape, path)` now,
-outside the guard, with the JNI narrowed to the two calls that need it.
+outside the guard, which now holds only what Android answers -- whether a
+widget is placed and what shape it wants -- and the broadcast that tells
+it the file has changed. (This said "narrowed to the two calls that need
+it", which was not true when it was written: four JNI operations remain
+in that function and `bbq_schedule_background_fetch` has a guard of its
+own.)
 `draw_reading` came out with it: it had been inside the guard, which is
 most of why the picture was unreachable.
 
