@@ -106,6 +106,26 @@ struct bbq_station {
  * quantity. Sums rather than samples, so the table is a fixed size
  * however many years pass (sec 12.1).
  */
+/*
+ * WHICH GENERATION OF THE SCORING RULES PRODUCED A ROW (sec 16.120).
+ *
+ * A verification row is a running sum with no time in it, so a change to
+ * the rule that produces the numbers is invisible inside it for ever
+ * after: the old rule's errors stay in the sum and dilute away
+ * asymptotically, never saying how much of what is left is historical.
+ * That is how sec 16.97's floor could only be judged by deleting the
+ * rows it had spoiled.
+ *
+ * Rows carry the epoch they were written under, reads ask for the
+ * current one, and a bump therefore starts a clean score while leaving
+ * the old one in the file to be looked at.
+ *
+ * PER QUANTITY, because that is the grain a rule changes at. The rain
+ * floor changed nothing about temperature or wind, and a single epoch
+ * would have thrown their history away with it.
+ */
+int bbq_scoring_epoch(const QString &quantity);
+
 struct bbq_verification {
 	int count = 0;
 
@@ -418,6 +438,7 @@ public:
 private:
 	bool exec(const QString &statement);
 	bool create_schema();
+	bool migrate_schema();
 
 	bool m_open = false;
 	QString m_path;

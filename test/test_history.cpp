@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFile>
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
@@ -24,6 +25,8 @@ class test_history : public QObject {
 
 private slots:
 	void the_archive_reports_its_resolution();
+	void an_archive_without_the_epoch_column_gains_it();
+	void a_score_is_read_from_the_current_epoch_only();
 	void a_dry_spell_has_no_skill_to_report();
 	void lead_times_bucket_by_their_upper_bound();
 	void a_bin_counts_the_wet_ones_apart_from_the_total();
@@ -904,6 +907,130 @@ void test_history::rain_is_still_scored_through_a_dry_spell() {
  * being right for the wrong reason. Seven of ten separates them, and
  * only a query that actually looks at the value can produce it.
  */
+/*
+ * An archive written before the epoch column gains it, keeping every row
+ * (sec 16.120).
+ *
+ * The table is rebuilt rather than altered, because SQLite cannot add a
+ * column to a primary key -- so this is the one migration in the program
+ * that can lose data, and what it must not lose is asserted as sums
+ * rather than as a row count. A rebuild that dropped a column's contents
+ * would keep the count.
+ */
+void test_history::an_archive_without_the_epoch_column_gains_it() {
+	QTemporaryDir directory;
+	const QString path = directory.filePath(QStringLiteral("old.sqlite"));
+
+	/* The table as it was, written by hand, with rows in it. */
+	{
+		QSqlDatabase old = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"),
+		                                             QStringLiteral("old"));
+		old.setDatabaseName(path);
+		QVERIFY(old.open());
+
+		QSqlQuery make(old);
+		QVERIFY(make.exec(QStringLiteral(
+		        "CREATE TABLE verification ("
+		        "station TEXT NOT NULL, band INTEGER NOT NULL, "
+		        "quantity TEXT NOT NULL, lead_bucket INTEGER NOT NULL, "
+		        "count INTEGER NOT NULL, sum_error REAL NOT NULL, "
+		        "sum_absolute_error REAL NOT NULL, "
+		        "sum_square_error REAL NOT NULL, "
+		        "PRIMARY KEY (station, band, quantity, lead_bucket))")));
+		QVERIFY(make.exec(QStringLiteral(
+		        "INSERT INTO verification VALUES "
+		        "('IOLD', 6, 'temperature', 0, 10, 2.5, 7.5, 9.0),"
+		        "('IOLD', 6, 'precip_rate', 0, 4, -0.5, 1.5, 1.0)")));
+		QVERIFY(make.exec(QStringLiteral("PRAGMA user_version = 1")));
+		old.close();
+	}
+
+	QSqlDatabase::removeDatabase(QStringLiteral("old"));
+
+	bbq_history store;
+	QVERIFY2(store.open(path), qPrintable(store.last_error()));
+
+	/*
+	 * The rows are still there, and still say what they said. Asked
+	 * through the program's own reader rather than in SQL, so the
+	 * migration and the epoch-scoped read are checked together.
+	 */
+	const bbq_verification kept = store.verification(
+	        QStringLiteral("IOLD"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+
+	QCOMPARE(kept.count, 10);
+	QCOMPARE(kept.bias, 0.25);
+	QCOMPARE(kept.mean_absolute_error, 0.75);
+
+	const bbq_verification wet = store.verification(
+	        QStringLiteral("IOLD"), bbq_band::hourly,
+	        QStringLiteral("precip_rate"), bbq_lead_bucket::hour);
+
+	QCOMPARE(wet.count, 4);
+	QCOMPARE(wet.bias, -0.125);
+}
+
+/*
+ * And a row from another epoch is not read (sec 16.120), which is the
+ * whole point of the column: a rule change starts a clean score and
+ * leaves the old one in the file.
+ */
+void test_history::a_score_is_read_from_the_current_epoch_only() {
+	QTemporaryDir directory;
+	bbq_history store;
+	QVERIFY2(store.open(directory.filePath(QStringLiteral("h.sqlite"))),
+	         qPrintable(store.last_error()));
+
+	QVERIFY(store.set_verification(QStringLiteral("INOW"), bbq_band::hourly,
+	                               QStringLiteral("temperature"),
+	                               bbq_lead_bucket::hour, 8, 1.0, 2.0, 3.0));
+
+	/*
+	 * A row for the SAME key under an OLDER epoch, written behind the
+	 * program's back because nothing in it can write one -- which is the
+	 * point: the reader must not find it.
+	 *
+	 * Older rather than newer, and that is the difference between a test
+	 * and a decoration. A superseded row sorts BEFORE the live one, so a
+	 * reader that has lost its epoch filter returns this row; written
+	 * one epoch ABOVE, the same query returns the right answer by index
+	 * order and the test passes with the filter deleted -- measured,
+	 * because the first version did exactly that.
+	 */
+	{
+		QSqlDatabase side = QSqlDatabase::addDatabase(
+		        QStringLiteral("QSQLITE"), QStringLiteral("side"));
+		side.setDatabaseName(directory.filePath(QStringLiteral("h.sqlite")));
+		QVERIFY(side.open());
+
+		QSqlQuery put(side);
+		put.prepare(QStringLiteral(
+		        "INSERT INTO verification VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+		put.addBindValue(QStringLiteral("INOW"));
+		put.addBindValue(static_cast<int>(bbq_band::hourly));
+		put.addBindValue(QStringLiteral("temperature"));
+		put.addBindValue(static_cast<int>(bbq_lead_bucket::hour));
+		put.addBindValue(bbq_scoring_epoch(QStringLiteral("temperature")) - 1);
+		put.addBindValue(999);
+		put.addBindValue(999.0);
+		put.addBindValue(999.0);
+		put.addBindValue(999.0);
+		QVERIFY2(put.exec(), qPrintable(put.lastError().text()));
+		side.close();
+	}
+
+	QSqlDatabase::removeDatabase(QStringLiteral("side"));
+
+	const bbq_verification read = store.verification(
+	        QStringLiteral("INOW"), bbq_band::hourly,
+	        QStringLiteral("temperature"), bbq_lead_bucket::hour);
+
+	QCOMPARE(read.count, 8);
+	QVERIFY2(read.count != 999,
+	         "the reader took a row belonging to another epoch");
+}
+
 void test_history::the_archive_reports_its_resolution() {
 	QTemporaryDir directory;
 	QVERIFY(directory.isValid());

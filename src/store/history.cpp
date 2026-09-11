@@ -308,6 +308,14 @@ bool bbq_history::open(const QString &path) {
 	}
 
 	/*
+	 * An older file gains what it lacks, before anything reads it.
+	 */
+	if (!migrate_schema()) {
+		m_open = false;
+		return false;
+	}
+
+	/*
 	 * Stamped after the tables exist, so a half-created file is never
 	 * marked as a whole one.
 	 */
@@ -319,8 +327,44 @@ bool bbq_history::open(const QString &path) {
 	return true;
 }
 
-int bbq_history::current_schema_version() {
+int bbq_scoring_epoch(const QString &quantity) {
+	/*
+	 * BUMP THE ENTRY IN THE SAME COMMIT AS THE RULE, and say in the
+	 * message what changed. Nothing can detect a rule change on its own,
+	 * so this is a promise kept by hand -- and a rule changed without a
+	 * bump leaves the old errors in the new score, which is exactly the
+	 * state sec 16.97 had to delete rows to escape.
+	 *
+	 * All at 1 today. The precipitation rule DID change when the floor
+	 * landed, and its rows were deleted on the holder's instruction
+	 * (sec 16.97.8), so it starts level with the rest rather than at 2.
+	 */
+	static const struct {
+		const char *quantity;
+		int epoch;
+	} epochs[] = {
+		{"temperature", 1},
+		{"precip_rate", 1},
+		{"wind_kph", 1},
+	};
+
+	for (const auto &known : epochs) {
+		if (quantity == QLatin1String(known.quantity)) {
+			return known.epoch;
+		}
+	}
+
+	/*
+	 * An unlisted quantity scores under 1 rather than under nothing: a
+	 * new one added without touching this table is scored from its first
+	 * row, which is right, and appears here the first time its rule
+	 * changes.
+	 */
 	return 1;
+}
+
+int bbq_history::current_schema_version() {
+	return 2;
 }
 
 int bbq_history::schema_version() const {
@@ -334,6 +378,112 @@ int bbq_history::schema_version() const {
 	}
 
 	return query.value(0).toInt();
+}
+
+bool bbq_history::migrate_schema() {
+	/*
+	 * ASKED OF THE TABLE, NOT OF THE VERSION STAMP (sec 16.120).
+	 *
+	 * `user_version` is a claim about the file written by whoever made
+	 * it; `table_info` is the file. They agree in every case anybody has
+	 * met, and when they do not it is the shape that decides whether a
+	 * statement below will work.
+	 */
+	QSqlQuery columns(QSqlDatabase::database(m_connection));
+	if (!columns.exec(QStringLiteral("PRAGMA table_info(verification)"))) {
+		m_last_error = columns.lastError().text();
+		return false;
+	}
+
+	bool has_epoch = false;
+	bool has_table = false;
+
+	while (columns.next()) {
+		has_table = true;
+		if (columns.value(1).toString() == QStringLiteral("epoch")) {
+			has_epoch = true;
+		}
+	}
+
+	if (!has_table || has_epoch) {
+		return true;
+	}
+
+	/*
+	 * SQLite cannot add a column to a primary key, so the table is
+	 * rebuilt. Every existing row is stamped with the CURRENT epoch of
+	 * its own quantity rather than with nothing: these rows were
+	 * produced by today's rules, and stamping them zero would discard
+	 * every score in the archive on the morning the column landed --
+	 * which is the opposite of what the column is for.
+	 */
+	if (!exec(QStringLiteral("BEGIN IMMEDIATE"))) {
+		return false;
+	}
+
+	const bool built =
+	        exec(QStringLiteral(
+	                "CREATE TABLE verification_rebuilt ("
+	                "station TEXT NOT NULL,"
+	                "band INTEGER NOT NULL,"
+	                "quantity TEXT NOT NULL,"
+	                "lead_bucket INTEGER NOT NULL,"
+	                "epoch INTEGER NOT NULL,"
+	                "count INTEGER NOT NULL,"
+	                "sum_error REAL NOT NULL,"
+	                "sum_absolute_error REAL NOT NULL,"
+	                "sum_square_error REAL NOT NULL,"
+	                "PRIMARY KEY (station, band, quantity, lead_bucket, epoch))")) &&
+	        exec(QStringLiteral(
+	                "INSERT INTO verification_rebuilt SELECT station, band, "
+	                "quantity, lead_bucket, 1, count, sum_error, "
+	                "sum_absolute_error, sum_square_error FROM verification"));
+
+	if (!built) {
+		exec(QStringLiteral("ROLLBACK"));
+		return false;
+	}
+
+	/*
+	 * Then the quantities whose current epoch is not 1, one statement
+	 * each. Written this way rather than as a CASE so that adding a
+	 * quantity to bbq_scoring_epoch needs no second edit here.
+	 */
+	QSqlQuery quantities(QSqlDatabase::database(m_connection));
+	if (quantities.exec(QStringLiteral(
+	            "SELECT DISTINCT quantity FROM verification_rebuilt"))) {
+		while (quantities.next()) {
+			const QString quantity = quantities.value(0).toString();
+			const int epoch = bbq_scoring_epoch(quantity);
+
+			if (epoch == 1) {
+				continue;
+			}
+
+			QSqlQuery stamp(QSqlDatabase::database(m_connection));
+			stamp.prepare(QStringLiteral(
+			        "UPDATE verification_rebuilt SET epoch = ? "
+			        "WHERE quantity = ?"));
+			stamp.addBindValue(epoch);
+			stamp.addBindValue(quantity);
+			stamp.exec();
+		}
+	}
+
+	if (!exec(QStringLiteral("DROP TABLE verification")) ||
+	    !exec(QStringLiteral(
+	            "ALTER TABLE verification_rebuilt RENAME TO verification"))) {
+		exec(QStringLiteral("ROLLBACK"));
+		return false;
+	}
+
+	if (!exec(QStringLiteral("COMMIT"))) {
+		return false;
+	}
+
+	exec(QStringLiteral("PRAGMA user_version = %1")
+	             .arg(current_schema_version()));
+	return true;
 }
 
 bool bbq_history::create_schema() {
@@ -393,11 +543,12 @@ bool bbq_history::create_schema() {
 	            "band INTEGER NOT NULL,"
 	            "quantity TEXT NOT NULL,"
 	            "lead_bucket INTEGER NOT NULL,"
+	            "epoch INTEGER NOT NULL,"
 	            "count INTEGER NOT NULL,"
 	            "sum_error REAL NOT NULL,"
 	            "sum_absolute_error REAL NOT NULL,"
 	            "sum_square_error REAL NOT NULL,"
-	            "PRIMARY KEY (station, band, quantity, lead_bucket))"))) {
+	            "PRIMARY KEY (station, band, quantity, lead_bucket, epoch))"))) {
 		return false;
 	}
 
@@ -860,9 +1011,11 @@ int bbq_history::verify(const QString &station) {
 	QSqlQuery fold(database);
 	fold.prepare(QStringLiteral(
 	        "INSERT INTO verification "
-	        "(station, band, quantity, lead_bucket, count, sum_error, "
-	        "sum_absolute_error, sum_square_error) VALUES (?, ?, ?, ?, 1, ?, ?, ?) "
-	        "ON CONFLICT (station, band, quantity, lead_bucket) DO UPDATE SET "
+	        "(station, band, quantity, lead_bucket, epoch, count, sum_error, "
+	        "sum_absolute_error, sum_square_error) "
+	        "VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?) "
+	        "ON CONFLICT (station, band, quantity, lead_bucket, epoch) "
+	        "DO UPDATE SET "
 	        "count = count + 1, "
 	        "sum_error = sum_error + excluded.sum_error, "
 	        "sum_absolute_error = sum_absolute_error + excluded.sum_absolute_error, "
@@ -1055,6 +1208,7 @@ int bbq_history::verify(const QString &station) {
 			fold.addBindValue(found.band);
 			fold.addBindValue(quantity_name(q));
 			fold.addBindValue(found.bucket);
+			fold.addBindValue(bbq_scoring_epoch(quantity_name(q)));
 			fold.addBindValue(error);
 			fold.addBindValue(std::fabs(error));
 			fold.addBindValue(error * error);
@@ -1139,12 +1293,14 @@ bool bbq_history::set_verification(const QString &station, bbq_band band,
 	QSqlQuery query(QSqlDatabase::database(m_connection));
 	query.prepare(QStringLiteral(
 	        "INSERT OR REPLACE INTO verification "
-	        "(station, band, quantity, lead_bucket, count, sum_error, "
-	        "sum_absolute_error, sum_square_error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"));
+	        "(station, band, quantity, lead_bucket, epoch, count, sum_error, "
+	        "sum_absolute_error, sum_square_error) "
+	        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 	query.addBindValue(station);
 	query.addBindValue(static_cast<int>(band));
 	query.addBindValue(quantity);
 	query.addBindValue(static_cast<int>(bucket));
+	query.addBindValue(bbq_scoring_epoch(quantity));
 	query.addBindValue(count);
 	query.addBindValue(bias * count);
 	query.addBindValue(mean_absolute_error * count);
@@ -1277,11 +1433,12 @@ bbq_verification bbq_history::verification(const QString &station,
 	query.prepare(QStringLiteral(
 	        "SELECT count, sum_error, sum_absolute_error, sum_square_error "
 	        "FROM verification WHERE station = ? AND band = ? AND quantity = ? "
-	        "AND lead_bucket = ?"));
+	        "AND lead_bucket = ? AND epoch = ?"));
 	query.addBindValue(station);
 	query.addBindValue(static_cast<int>(band));
 	query.addBindValue(quantity);
 	query.addBindValue(static_cast<int>(bucket));
+	query.addBindValue(bbq_scoring_epoch(quantity));
 
 	if (!query.exec() || !query.next()) {
 		return result;

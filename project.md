@@ -15112,3 +15112,78 @@ worth naming as a weak one: it says the path ran, not that it ran
 correctly. What says the second is the colours above matching what the
 previous build wrote, and the test in sec 16.119 covering everything
 between the shape and the file.
+
+## 16.120 The verification table has an epoch
+
+Added on the holder's instruction, from the three ways out of sec
+16.97.6. A verification row is a running sum with no time in it, so a
+change to the rule producing the numbers is invisible inside it ever
+after: the old rule's errors stay in the sum and dilute asymptotically,
+never saying how much of what is left is historical. That is why sec
+16.97's floor could only be judged by deleting the rows it had spoiled.
+
+Rows carry the epoch they were written under, reads ask for the current
+one, and a bump starts a clean score while leaving the old one in the
+file to be looked at.
+
+**Per quantity, because that is the grain a rule changes at.** The rain
+floor changed nothing about temperature or wind, and a single epoch
+would have discarded their history along with the rain's -- which is the
+opposite of what the holder asked for when only the precipitation rows
+were zeroed.
+
+### 16.120.1 The migration, and what it must not lose
+
+SQLite cannot add a column to a primary key, so the table is rebuilt.
+That makes this the one migration in the program that can lose data.
+
+**Existing rows are stamped with the CURRENT epoch of their own
+quantity, not with nothing.** Those rows were produced by today's rules;
+stamping them zero would have excluded every score in the archive on the
+morning the column landed.
+
+Asked of `PRAGMA table_info` rather than of `user_version`, because the
+stamp is a claim about the file written by whoever made it and the
+column list is the file. They agree in every case anybody has met, and
+when they do not it is the shape that decides whether the next statement
+works.
+
+Run against a copy of the real archive first, then the archive:
+
+    user_version          1  ->  2
+    rows                120  ->  120
+    sum of count       8305  ->  8305
+    sum of |error|   17345.466063  ->  17345.466063
+    epochs present        -  ->  1
+
+### 16.120.2 A promise kept by hand, said out loud
+
+Nothing can detect that a scoring rule has changed. The epoch is a
+constant bumped in the same commit as the rule, and **a rule changed
+without a bump leaves the old errors in the new score** -- exactly the
+state this column exists to escape, arriving by the one route it cannot
+guard.
+
+It is written where the numbers are rather than where the rule is, which
+is the wrong end for whoever edits the rule. The correction's own code
+points at it; that is the whole mitigation, and it is weaker than a
+check.
+
+### 16.120.3 The test that passed with the filter deleted
+
+Two tests: an old-shaped archive gains the column and keeps its rows,
+and a row from another epoch is not read.
+
+The second one was decoration at first. It wrote the extra row one epoch
+ABOVE the live one -- and a reader with its epoch filter deleted returns
+the right answer anyway, because the live row sorts first. Measured: the
+sabotage passed.
+
+**A superseded row belongs BELOW the live one, which is also what the
+world will contain**, and then the unfiltered query returns it and the
+test fails. The fixture is the assertion here; the QCOMPARE was correct
+in both versions.
+
+The first test asserts the migration as SUMS read back through the
+program rather than as a row count, because a rebuild that dropped a
+column's contents would keep the count.
