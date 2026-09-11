@@ -13644,6 +13644,14 @@ Recorded because the paragraph above invites the wrong fix, and somebody
 acting on it would add a guard that passes the defect it was written
 for.
 
+**The remedy here is narrower than it reads, and sec 16.118 has the
+general form.** Asking the objects that carry a resolution caught the
+pixmap's ratio, and could not catch either of the two defects that
+followed -- both carried the right ratio and were USED wrongly. What
+generalises is a same-ratio invariant checked at several ratios: render
+against something that must hold of the render whatever the ratio is,
+never render against render.
+
 ## 16.100 A sanitized suite that is always red is one nobody reads
 
 `make SANITIZE=1 test` exits 1, and has since sec 16.83, for a single
@@ -14914,3 +14922,54 @@ in a band of its own before.
 
 What is left is two-sided and about a fifth of a degree -- sec 16.110's
 smoothing, which was the right answer to the wrong question.
+
+## 16.118 The guard for resolution independence that does work
+
+Two defects in two days were invisible at a ratio of one and obvious on
+the phone: the halo's fills quantised to logical pixels (sec 16.116) and
+every sample mark centred with a device-pixel count (sec 16.117). Both
+were introduced by work that was checked, carefully, on the desktop.
+
+Sec 16.99.4 says what does NOT guard this, and it is measured rather
+than argued: rendering at two ratios and comparing is INVERTED, because
+a higher-resolution render is supposed to carry detail the lower one
+cannot hold, so the difference grows with correctness. It scored the
+half-size dots better than the fix.
+
+Its remedy -- ask the objects that carry a resolution -- caught the
+pixmap's ratio and could not have caught either of these, because both
+objects carried the right ratio and were used wrongly.
+
+**What works is a SAME-RATIO invariant, checked at several ratios.** Not
+render against render, but render against something that must be true of
+it whatever the ratio is:
+
+- **Against a resolution-independent reference.** A stroked wide pen is
+  correct at every ratio by construction, so the filled halo can be
+  required to match it -- at 1 and at 2.75, each compared with itself
+  (sec 16.116). The reference is the thing being replaced, which is
+  usually available precisely when this class of bug is introduced.
+- **Against the geometry it claims.** A mark says it is centred on a
+  reading; draw it and take the centroid (sec 16.117). That covers the
+  size and the position together, which matters because those two
+  defects were the same arithmetic in opposite directions.
+
+Neither compares two renders, so neither inherits sec 16.99.4's fault.
+
+**Swept for anything else of the class, and it is empty.** The only
+constructs in the paint whose behaviour depends on the ratio are the ones
+that quantise or hold a pixmap: the dot stamps and the halo spans, both
+now covered. `widget_picture` passes its LOGICAL size to a painter that
+carries the ratio, which is correct; `tray_icon` never sets a ratio, so
+it has one space throughout. Every other rectangle in the paint is a
+`QRectF` and every path a `QPolygonF`.
+
+**And the standing lesson is about where to look, not what to fix.**
+Nothing on this machine could see either defect -- not the suite, not
+the sanitizer, not the style gates, not a deliberate investigation of
+the very dots that were wrong, which measured them at ratio 1 and
+concluded they were fine. Both took a screenshot of the phone. **A
+project that ships to a scaled display and verifies on an unscaled one
+has a blind spot the size of that difference**, and the only instruments
+that have ever found anything in it are a device render and an invariant
+that holds at more than one ratio.
