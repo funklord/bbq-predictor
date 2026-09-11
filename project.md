@@ -15139,6 +15139,15 @@ Rows carry the epoch they were written under, reads ask for the current
 one, and a bump starts a clean score while leaving the old one in the
 file to be looked at.
 
+**In the FILE, and that is the whole of the promise today.** Nothing in
+the program can show a superseded epoch: `verification()` asks for the
+current one and every report is built on it, so an old score is reachable
+with `sqlite3` and by no other means. That is deliberate as far as it
+goes -- a report describing the current rule should not mix in numbers
+another rule produced -- but "kept to be looked at" is doing more work in
+that sentence than the program supports, and somebody wanting the
+comparison will have to write the query.
+
 **Per quantity, because that is the grain a rule changes at.** The rain
 floor changed nothing about temperature or wind, and a single epoch
 would have discarded their history along with the rain's -- which is the
