@@ -15166,6 +15166,14 @@ one of the three that nobody could have tuned the migration against:
 
 Both at epoch 1 afterwards, and no row in either lost a digit.
 
+**And the rows are still being READ**, which the sums cannot show. A
+migration that preserved every number and left the epoch-scoped query
+finding none of them would pass everything above. On the phone, one
+minute after the new build launched, the widget picture it wrote carries
+14022 pixels of the bias-corrected overlay -- a line that exists only if
+the correction found verification rows to build it from -- with no
+`no such column` or `QSqlError` anywhere in the log.
+
 ### 16.120.2 A promise kept by hand, said out loud
 
 Nothing can detect that a scoring rule has changed. The epoch is a
