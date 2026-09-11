@@ -4281,7 +4281,12 @@ Three consequences worth stating:
 - **Reloading is skipped when the view is already inside what is
   loaded**, and a margin of one span either side is taken when it is not.
   The view emits on every mouse move of a drag, so this has to be cheap
-  when the answer is already in memory.
+  when the answer is already in memory -- **and has to SAY so, which is
+  the half this originally left out**. Being cheap saved the query and
+  nothing else: the caller went on rebuilding the graph's composite from
+  the feed regardless, which threw away a cache costing 28 ms to refill
+  and made the drag eight frames a second on a phone (sec 16.115). It
+  returns whether anything was read now.
 
 Verification runs when a round settles rather than on a timer of its own:
 a round is precisely when new observations have arrived, so it is the
@@ -10644,6 +10649,13 @@ budgets a whole paint at 7.6 ms against a sixteen-millisecond frame, so
 today's composite -- sixteen days of forecast plus whatever history is
 loaded -- already spends more than that budget on this one scan, and a
 drag repaints on every mouse move.
+
+> **The cache this section adds was correct and was being emptied a
+> frame before every read** (sec 16.115). `set_composite` is what
+> forgets the windows, and the view_changed handler called it on every
+> mouse move -- 120 recomputes over 125 frames, measured on the phone.
+> A reader stopping here would believe the cost was gone; it was, and
+> then it was paid again by another route for months.
 
 ### 16.57.1 The fix is caching, because nothing about the view enters it
 
