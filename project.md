@@ -9041,11 +9041,20 @@ than as good.
 
 ## 16.32 The curve carries its own ground
 
-The temperature curve is stroked twice: the plot's own background at
-1.5 pixels wider, then Weather Underground's red over it. What it is
-read against is now a colour this program chose, whatever the weather
-shades underneath -- so it leaves the measured red exactly where it is
-and stops the washes deciding whether the forecast is visible.
+The temperature curve is drawn twice: the plot's own ground first,
+reaching two pixels past the ink on either side, then Weather
+Underground's red over it. What it is read against is now a colour this
+program chose, whatever the weather shades underneath -- so it leaves
+the measured red exactly where it is and stops the washes deciding
+whether the forecast is visible.
+
+**The ground is FILLED and the ink is stroked**, which is not how this
+started: both were strokes of a wide pen until sec 16.114, and the fills
+were rebuilt in device pixels in sec 16.116. The sentence above used to
+say "stroked twice ... at 1.5 pixels wider", and both halves had gone
+stale -- the mechanism by a change made deliberately, the number by
+`halo_grow` being 2.0. Everything below about WHY the ground is there is
+unaffected by either.
 
 The same answer this project reached for the tray icon and for the
 widget's number, and for the same reason: the ground is not ours to
@@ -12770,6 +12779,10 @@ the temperature was a two-value step and cost 1.9 ms.
 Split further: halo 3687 us, ink 1849. The curve carries one point per
 column and is stroked twice, and the halo pen has `Qt::RoundJoin`, which
 is an arc generated at every vertex.
+
+*(The halo is filled rather than stroked since sec 16.114, so that
+split describes the code this measurement was taken on. The measurement
+stands; the sentence describing the mechanism does not.)*
 
 ### 16.91.1 Douglas-Peucker, and the version of it that was wrong
 
