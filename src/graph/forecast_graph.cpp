@@ -1661,8 +1661,14 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	QPainter painter(this);
 
 	/*
-	 * ANTIALIASED THROUGHOUT, WHICH IS NOT FREE AND IS WORTH IT
-	 * (sec 16.89).
+	 * ANTIALIASED, WHICH IS NOT FREE AND IS WORTH IT (sec 16.89).
+	 *
+	 * With ONE exception, and it is in this function: the halo's
+	 * fills turn the hint off for their own run (sec 16.114). They
+	 * are whole device pixels of a solid colour, so there is nothing
+	 * for antialiasing to do but blend the seams between abutting
+	 * runs into visible lines. This said THROUGHOUT until that
+	 * landed.
 	 *
 	 * Measured with an interleaved A/B inside one process, in CPU time
 	 * so machine load cannot reach it: turning the hint off for the
