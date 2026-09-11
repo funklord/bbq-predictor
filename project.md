@@ -14258,7 +14258,7 @@ requires none of it in a render posed over a pale wallpaper.
 Sabotaged back to `m_palette.background`, it reports 806 such pixels and
 names what they are.
 
-### 16.109.3 The widget's graph has no rendered test at all
+### 16.109.3 ~~The widget's graph has no rendered test at all~~ CLOSED
 
 `bbq_write_widget_picture` is entirely inside `#ifdef Q_OS_ANDROID`, so
 it does nothing on this machine and the existing tests check
@@ -14267,6 +14267,14 @@ back, which is the fault sec 16.35 was written for.
 
 What none of them do is LOOK at the result. The posing can be perfect
 and the picture still wrong, which is what this is.
+
+**Closed by sec 16.119.** Only two questions in that function were ever
+Android's -- whether a widget is placed, and what shape it wants -- and
+everything else came out of the guard as `bbq_render_widget_picture`,
+which a test now calls to produce a picture and inspect it. The header
+above is struck through rather than deleted: the diagnosis was right,
+and `git log -S` on its own words is how the next reader finds what it
+cost to act on.
 
 ### 16.109.4 One of them looks now
 
