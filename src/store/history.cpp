@@ -11,6 +11,7 @@
 #include <QVariant>
 
 #include <cmath>
+#include <iterator>
 
 namespace {
 
@@ -66,24 +67,44 @@ const qint64 give_up_after_s = 36 * 3600;
  */
 const qint64 match_within_s = 150;
 
+/*
+ * THE SCORED QUANTITIES, AND WHICH GENERATION OF THE RULES SCORES EACH
+ * (sec 16.120).
+ *
+ * One table because there used to be two: these names, and a second
+ * list pairing them with epochs. A name in the second that did not
+ * match the first took a fallback silently -- so a bump would have done
+ * nothing at all, with the rows still arriving under the old epoch and
+ * the score it was meant to restart still accumulating. `grill` was
+ * already missing from one of them when this was found.
+ *
+ * BUMP THE EPOCH IN THE SAME COMMIT AS THE RULE. Nothing can detect a
+ * rule change on its own; what this arrangement removes is the second
+ * way to get it wrong, not the first.
+ */
+struct scored_quantity {
+	const char *name;
+	int epoch;
+};
+
+const scored_quantity scored[] = {
+	{"temperature", 1},
+	{"precip_rate", 1},
+	{"wind_kph", 1},
+	/*
+	 * The verdict itself (sec 12.20). Not one of the fields a provider
+	 * sends -- it is what this program makes of them, and the only
+	 * output anybody acts on.
+	 */
+	{"grill", 1},
+};
+
 QString quantity_name(int index) {
-	switch (index) {
-	case 0:
-		return QStringLiteral("temperature");
-	case 1:
-		return QStringLiteral("precip_rate");
-	case 2:
-		return QStringLiteral("wind_kph");
-	case 3:
-		/*
-		 * The verdict itself (sec 12.20). Not one of the fields a
-		 * provider sends -- it is what this program makes of them, and
-		 * the only output anybody acts on.
-		 */
-		return QStringLiteral("grill");
+	if (index < 0 || index >= int(std::size(scored))) {
+		return QStringLiteral("unknown");
 	}
 
-	return QStringLiteral("unknown");
+	return QString::fromLatin1(scored[index].name);
 }
 
 } // namespace
@@ -328,46 +349,17 @@ bool bbq_history::open(const QString &path) {
 }
 
 int bbq_scoring_epoch(const QString &quantity) {
-	/*
-	 * BUMP THE ENTRY IN THE SAME COMMIT AS THE RULE, and say in the
-	 * message what changed. Nothing can detect a rule change on its own,
-	 * so this is a promise kept by hand -- and a rule changed without a
-	 * bump leaves the old errors in the new score, which is exactly the
-	 * state sec 16.97 had to delete rows to escape.
-	 *
-	 * All at 1 today. The precipitation rule DID change when the floor
-	 * landed, and its rows were deleted on the holder's instruction
-	 * (sec 16.97.8), so it starts level with the rest rather than at 2.
-	 */
-	static const struct {
-		const char *quantity;
-		int epoch;
-	} epochs[] = {
-		{"temperature", 1},
-		{"precip_rate", 1},
-		{"wind_kph", 1},
-		{"grill", 1},
-	};
-
-	for (const auto &known : epochs) {
-		if (quantity == QLatin1String(known.quantity)) {
+	for (const scored_quantity &known : scored) {
+		if (quantity == QLatin1String(known.name)) {
 			return known.epoch;
 		}
 	}
 
 	/*
 	 * An unlisted quantity scores under 1 rather than under nothing, so
-	 * a new one added without touching this table is scored from its
-	 * first row, which is right.
-	 *
-	 * IT IS NOT A SAFETY NET FOR A MISSPELLING. A name here that does
-	 * not match what `quantity_name` writes takes this branch silently,
-	 * and the day somebody bumps that entry the bump does nothing at all
-	 * -- the rows keep arriving under the old epoch and the score it was
-	 * meant to restart carries on accumulating. `grill` was missing from
-	 * the list above until the seeder wrote one and it turned up under
-	 * the fallback; nothing was wrong, and nothing would have been said
-	 * if its epoch had been bumped either.
+	 * one added without touching the table above is scored from its
+	 * first row. It cannot be reached by a misspelling any more: these
+	 * are the same strings the rows are written with.
 	 */
 	return 1;
 }

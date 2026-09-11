@@ -15297,7 +15297,10 @@ quantity in both real archives: 1956 samples on the desktop and 3392 on
 the phone.
 
 **And the fallback is not a safety net for a misspelling**, which is
-what that near-miss actually showed. A name in the table that does not
+what that near-miss actually showed. *(Closed since, by sec 16.120.6:
+there is one table now and the names have one spelling, so this route no
+longer exists. The paragraph stands because it is why the change was
+made.)* A name in the table that does not
 match what `quantity_name` writes takes the fallback silently, so the
 day somebody bumps that entry the bump does nothing at all: rows keep
 arriving under the old epoch and the score it was meant to restart goes
@@ -15420,3 +15423,34 @@ Worth it because the alternative is waiting for the raw band's fortnight
 of history to be outweighed, which is weeks, and because it costs one
 table written down before it is needed -- which is the same reason sec
 16.97.6's baseline existed to be useful.
+
+### 16.120.6 One table, so a misspelling cannot happen rather than be caught
+
+The quantity names were written twice: in `quantity_name`, which decides
+what is STORED, and in the epochs list, which decides what a bump DOES.
+A name in the second that did not match the first took the fallback
+silently -- so the bump would do nothing, rows would keep arriving under
+the old epoch, and the score it was meant to restart would go on
+accumulating. `grill` was already missing from one of them when this was
+found (sec 16.120.4).
+
+**A runtime check for that divergence was considered and dropped.** It
+would have to compare the list against `quantity_name`'s answers and
+warn -- and there is no way to make it fail, because the table it
+inspects is not reachable from a test. That is the untested guard
+`evidence.md` distrusts: it would sit there looking like protection, and
+the first time it mattered would be the first time anybody learned
+whether it worked.
+
+One table needs no check. `quantity_name` indexes it and
+`bbq_scoring_epoch` searches it, so the fallback can only be reached by
+a genuinely new quantity, which is what it is for.
+
+**What it does NOT fix, stated in the code as well**: nothing detects a
+rule change, so bumping still depends on somebody remembering. This
+removes the second way to get it wrong, not the first.
+
+Checked against the archive rather than the suite alone, because every
+stored row is keyed by one of these strings and the refactor changed how
+they are produced: 120 verification rows in the table, 120 printed by
+`--history`, and per quantity 29, 30, 31 and 30 both ways.
