@@ -13450,7 +13450,15 @@ has no verified samples at all.
 
 **Getting a clean answer is a decision about the archive, and it is the
 holder's.** Three ways, and none of them is a tidy-up to be done in
-passing:
+passing.
+
+> **DECIDED, and the first two were both taken.** The precipitation rows
+> were zeroed on 2026-09-11 (sec 16.97.8), and the epoch column went in
+> the same day (sec 16.120) -- the deletion for the score already
+> spoiled, the column so the next rule change needs no deletion at all.
+> The third was declined. Left below as written because the reasoning is
+> what the decision was made from, and a reader who finds only the
+> outcome cannot tell which costs were weighed.
 
 - **Zero the corrected band's `precip_rate` rows** so scoring restarts
   from the fix. Cheapest and immediate. It discards the record of how
@@ -13461,6 +13469,11 @@ passing:
   is asked again, and it changes what every archived number means --
   which is the same ground as the open question at sec 16.94.2, and
   should probably be decided with it rather than before it.
+
+  *(Taken, and the worry in the last clause did not materialise: the
+  epoch is per QUANTITY and existing rows keep their meaning, so nothing
+  archived changed. Sec 16.94.2 is still open and is still about what a
+  number MEANS, which the epoch only says which rule produced.)*
 - **Accept the dilution.** Costs nothing, and means the corrected band's
   precipitation score cannot be trusted as a measure of the CURRENT rule
   for weeks, without anything on it saying so.
