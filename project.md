@@ -14793,14 +14793,32 @@ replaces, to the pixel: 18 and 213 before and after.
 the excess is 213 at a ratio of one and 230 at 2.75, where it was 741
 before -- the scaling costs nothing now.
 
-### 16.116.2 What is not measured
+### 16.116.2 Measured on the phone, and the arithmetic held
 
-The phone was unplugged before this could be timed on it. Device columns
-mean about 2.75 times as many fills there, so the 83.8 us of sec 16.115
-should become roughly 230 -- still several times cheaper than the 832.9
-us stroke, but that is arithmetic and not a measurement, and it is
-recorded here as one to take.
+The prediction written here while the phone was unplugged was that
+device columns mean about 2.75 times as many fills, so the 83.8 us of
+sec 16.115 should become roughly 230. Measured, interleaved one frame
+each in thread CPU time as before:
 
-**It also matters less than it did.** That saving is 0.75 ms of a frame
-that now runs at 5.1 ms and is limited by a 120 Hz panel, so nothing
-about it is visible to anybody. The staircase was.
+    fill  244.6 us      stroke  692.9 us      n = 970 each
+
+**244.6 against a predicted 230**, which is six per cent, and still
+2.8 times cheaper than the stroke it replaces. The stroke's own figure
+moves between runs -- 832.9 us in sec 16.115 against 692.9 here -- with
+the view and the data, which is exactly why the comparison is
+interleaved rather than taken from two runs.
+
+**Its control was worth having.** The phone is shared with another
+session, and the first attempt at this measurement found `se.vibes.
+beerssh` holding the screen: a screenshot taken for this section showed
+that project's host list, not this one's graph. The run above checks
+which activity is resumed before and after, and the first pass was
+discarded because the check came back empty rather than because
+anything was wrong.
+
+**It matters less than it did.** That saving is 0.45 ms of a frame that
+now runs at 5.1 ms against a 120 Hz panel, so nothing about it is
+visible to anybody. The staircase was, and on the device it is gone:
+at ten times magnification the halo's boundary against a grilling
+window's shading steps at device-pixel scale, where the logical version
+stepped in blocks a third of the halo's half width.
