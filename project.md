@@ -13464,6 +13464,11 @@ passing.
   from the fix. Cheapest and immediate. It discards the record of how
   the old rule scored -- though the baseline table above is that record,
   written down before the change for exactly this reason.
+
+  *(It also has a cost nobody named at the time: emptying ONE band
+  leaves its score incomparable with the raw band it exists to be judged
+  against, until the raw band's later samples outweigh its history. Sec
+  16.97.9 has the numbers that nearly got read as a verdict.)*
 - **Give `verification` an epoch**, so scores can be sliced by which
   rule produced them. It answers the question properly and every time it
   is asked again, and it changes what every archived number means --
@@ -15334,3 +15339,41 @@ today -- every row is epoch 1 -- and because the honest third message,
 "the rule changed and scoring restarted", is a sentence somebody should
 decide to add rather than one that should appear as a side effect of
 this note.
+
+### 16.97.9 The deletion broke the comparison the numbers are for
+
+Fifteen hours after the corrected band's precipitation rows were
+deleted, the archive reads:
+
+    lead   hourly n / MAE      corrected n / MAE
+    1h      13 / 0.186          43 / 0.000
+    3h      21 / 0.256          45 / 0.827
+    12h     46 / 0.159           8 / 0.175
+    4d     104 / 0.284          24 / 0.859
+
+**None of that says the correction is worse, and reading it that way is
+the mistake this entry exists to prevent.** The two columns cover
+different spans: band 5 was emptied last night and band 6 was not, so
+the corrected figures are fifteen hours of one autumn day and the raw
+ones are a fortnight. Different weather, not different skill. The sample
+counts say so plainly once looked at -- the corrected band has MORE
+samples at the short leads despite a twentieth of the time.
+
+**And that is a cost of the deletion nobody named when it was made.**
+Sec 16.97.8 zeroed one band of one quantity, which is the smallest thing
+that could restart the score -- and it made that score incomparable with
+the band it exists to be compared against, for as long as the raw band's
+history dominates.
+
+**An epoch bump would not have done that.** `bbq_scoring_epoch` is per
+QUANTITY, so bumping precipitation moves every band's rows for it at
+once: the corrected band and the raw band start together and stay
+comparable from the same instant. That the epoch is the better
+instrument here was not the argument for adding it -- the argument was
+being able to tell old errors from new -- and it is worth writing down
+because the next person facing this choice will be reading sec 16.97.6's
+three options, where it is not mentioned.
+
+Nothing is wrong today; the deletion is done and the archive will
+recover as the raw band's post-deletion samples accumulate. What must
+not happen is somebody quoting the table above.
