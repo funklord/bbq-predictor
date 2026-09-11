@@ -15305,3 +15305,32 @@ editing the table will read it.
 which, so a bump would empty a whole section with nothing to separate a
 deliberate reset from a broken archive. The header names it now:
 `grill error, by band and lead time (epoch 1):`.
+
+### 16.120.5 One reader deliberately spans epochs
+
+`verified_count(station)` sums `count` over the whole table with no
+epoch filter, and that is the eighth statement naming `verification` --
+found by counting them rather than by remembering which four had been
+changed.
+
+It is right unfiltered, and the reason is what it is asked for.
+Sec 16.14 uses it to tell a fresh install from an archive that has
+worked but has nothing AT THIS LEAD: measured on a phone with 500
+samples banked and the line claiming the archive had done nothing. That
+is a question about the archive's lifetime, not about the current
+record, so rows from a superseded rule answer it correctly -- the work
+was done, whatever scored it.
+
+**It goes slightly wrong for a few days after a bump**, and nobody has
+seen that yet because no epoch has ever been bumped. The applet will say
+"none at 4d yet" while every other lead is empty too, implying current
+scores elsewhere that do not exist. The alternative is worse: filtered,
+it would say "none yet" and read as a fresh install on an archive with
+months in it, which is exactly the sentence sec 16.14 was written to
+remove.
+
+Recorded rather than changed, because there is no behaviour to fix
+today -- every row is epoch 1 -- and because the honest third message,
+"the rule changed and scoring restarted", is a sentence somebody should
+decide to add rather than one that should appear as a side effect of
+this note.
