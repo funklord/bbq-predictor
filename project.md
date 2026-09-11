@@ -14895,9 +14895,22 @@ opposite directions.
 Ratios 1, 2 and 2.75. Before the fix it failed at 2 with the dot marking
 40,30 centred on 34,24.
 
-**Not yet confirmed on the phone**: it was unplugged again before the
-build could be installed. The evidence is the pixel test and the
-agreement between the predicted and measured offsets, and re-measuring
-the screenshot is one line -- 320 paired columns, and the median should
-move from -37.5 device px to roughly -10, which is sec 16.110's
-smoothing and nothing else.
+### 16.117.3 Confirmed on the phone
+
+Same measurement, same station, the build before and after:
+
+                        before          after
+    paired columns        320             43
+    dot above / below   320 / 0        30 / 13
+    mean offset       -40.6 px        -8.0 px
+    range         -75 .. -20 px   -22.5 .. +19.5 px
+
+**The collapse from 320 paired columns to 43 is the clearest part.** A
+pair is a column where the dot and the curve are separate runs of red;
+once the marks land on the line they merge, and only the ones the
+smoothing pushes clear of it stay countable. The picture agrees: the
+dots straddle the curve now, where every one of them floated above it
+in a band of its own before.
+
+What is left is two-sided and about a fifth of a degree -- sec 16.110's
+smoothing, which was the right answer to the wrong question.
