@@ -15148,13 +15148,23 @@ column list is the file. They agree in every case anybody has met, and
 when they do not it is the shape that decides whether the next statement
 works.
 
-Run against a copy of the real archive first, then the archive:
+Run against a copy of the real archive first, then the archive, then the
+phone's -- which is a second file with different contents, and the only
+one of the three that nobody could have tuned the migration against:
 
-    user_version          1  ->  2
-    rows                120  ->  120
-    sum of count       8305  ->  8305
-    sum of |error|   17345.466063  ->  17345.466063
-    epochs present        -  ->  1
+    desktop        before        after
+    user_version        1            2
+    rows              120          120
+    sum of count     8305         8305
+    sum of |error|  17345.466063  17345.466063
+
+    phone          before        after
+    user_version        1            2
+    rows              125          125
+    sum of count    15218        15218
+    sum of |error|  31423.014705  31423.014705
+
+Both at epoch 1 afterwards, and no row in either lost a digit.
 
 ### 16.120.2 A promise kept by hand, said out loud
 
