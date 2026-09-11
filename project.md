@@ -15057,3 +15057,25 @@ to a file and looking at it, which is what the `--shot` option's help
 text has said all along: looking at the picture is how layout defects
 actually get found. Three rounds of strengthening assertions moved
 nothing, because the assertions were fine and the picture was empty.
+
+### 16.119.3 And the device path still works
+
+The extraction moved the whole body of the picture out of the guard, so
+the half that no test can reach is the half that was rewritten. Checked
+on the phone rather than assumed: installed, launched, and the file at
+`files/widget.png` was rewritten within seconds -- which exercises
+`anyPlaced`, the shape query, the new call, the rename and the refresh
+broadcast, none of which exist on this machine.
+
+The picture is the same one:
+
+    885 by 546          the shape Android asked for
+    #151819 a=191       the scrim
+    #505253 a=255       the halo, opaque
+    #17aadb a=255       the ribbon
+
+**A file whose timestamp moved is the whole assertion here**, and it is
+worth naming as a weak one: it says the path ran, not that it ran
+correctly. What says the second is the colours above matching what the
+previous build wrote, and the test in sec 16.119 covering everything
+between the shape and the file.
