@@ -242,11 +242,6 @@ prose is a fact about the tree that nothing re-derives.
 
     Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
 
-Attribution rather than a grant: naming the holder says who wrote this
-and confers no rights on anybody.
-
 ## Licence
 
-None. That is deliberate rather than an oversight -- see `project.md`
-sec 8. No rights are granted, and the choice belongs to the copyright
-holder.
+None yet.
