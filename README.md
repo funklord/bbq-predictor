@@ -241,7 +241,3 @@ prose is a fact about the tree that nothing re-derives.
 ## Copyright
 
     Copyright (C) 2026 Nabeel Sowan <nabeel@vibes.se>
-
-## Licence
-
-None yet.
