@@ -15455,6 +15455,53 @@ stored row is keyed by one of these strings and the refactor changed how
 they are produced: 120 verification rows in the table, 120 printed by
 `--history`, and per quantity 29, 30, 31 and 30 both ways.
 
+## 16.123 A headless suite that offscreen did not make headless
+
+**Reported through this tree's inbox 2026-10-08 from hembygd, confirmed
+here 2026-10-19, and it was live rather than theoretical.**
+
+`QT_QPA_PLATFORMTHEME` names a plugin loaded SEPARATELY from the QPA
+platform, and it opens a display of its own whatever the platform is. So
+`qputenv("QT_QPA_PLATFORM", "offscreen")` does exactly what it says and
+the process still dies on a machine with no display, as soon as anything
+exports a theme -- which a GTK desktop does by default.
+
+**Measured across the whole suite rather than taken on report**, by
+running all thirteen built test binaries twice, once with the variable
+unset and once with `QT_QPA_PLATFORMTHEME=gtk3`, both with `DISPLAY`,
+`WAYLAND_DISPLAY` and `QT_QPA_PLATFORM` cleared:
+
+    eleven binaries          pass, pass
+    test_view                pass, FAIL  Gtk-WARNING: cannot open display
+    test_window              pass, FAIL  Gtk-WARNING: cannot open display
+
+**The two that fail are exactly the two that set `offscreen`**, which is
+the finding rather than a coincidence: they are the GUI tests, the line
+is doing its job, and the theme plugin goes round it. Both plugins are
+installed here -- `libqgtk3.so` and `libqtlxqt.so` -- and the fix is
+verified against both.
+
+**`qunsetenv("QT_QPA_PLATFORMTHEME")` beside each `qputenv`**, rather
+than in the Makefile. That is this tree's existing shape and it is the
+better one for the same reason the comment beside it already gives: the
+variables are set BEFORE `QApplication`, in the binary, so somebody
+running `./build-test/test_window` by hand is covered and a Makefile
+guard would not cover them. Unset rather than set to a value -- there is
+no theme plugin worth loading when there is no display, and naming one
+would be a second thing to be wrong.
+
+**Why nobody here had seen it.** This machine exports neither
+`XDG_CURRENT_DESKTOP` nor `QT_QPA_PLATFORMTHEME`, so the gate passes on
+this box and has all along. It fails for a contributor on GNOME or XFCE,
+with a message naming GTK rather than their environment, which sends
+them at the wrong thing entirely.
+
+**Not found by this tree's own gate, and could not have been.** `make
+check` runs the suite in whatever environment it is handed; it cannot
+notice a variable it never sets. What found it was somebody else hitting
+it in another tree and saying so.
+
+
 ## 16.122 What is open, as of 2026-09-11
 
 Everything below is recorded in its own section; this is a list so that

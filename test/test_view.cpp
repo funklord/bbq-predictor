@@ -1193,6 +1193,14 @@ void test_view::a_sample_dot_lands_on_its_reading_at_any_ratio() {
 
 int main(int argc, char *argv[]) {
 	qputenv("QT_QPA_PLATFORM", "offscreen");
+	/*
+	 * AND THE PLATFORM THEME, for the reason test_window.cpp gives at
+	 * length: the theme plugin is loaded separately from the QPA
+	 * platform and opens a display of its own, so `offscreen` above
+	 * does not cover it and this binary exits 1 under
+	 * QT_QPA_PLATFORMTHEME=gtk3.
+	 */
+	qunsetenv("QT_QPA_PLATFORMTHEME");
 	QApplication app(argc, argv);
 	test_view suite;
 	return QTest::qExec(&suite, argc, argv);

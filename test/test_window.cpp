@@ -1165,6 +1165,28 @@ void test_window::a_dry_spell_is_not_a_rain_forecast_with_no_skill() {
 
 int main(int argc, char *argv[]) {
 	qputenv("QT_QPA_PLATFORM", "offscreen");
+	/*
+	 * AND THE PLATFORM THEME, which `offscreen` does not cover. The
+	 * platform-theme plugin is loaded separately from the QPA platform
+	 * and opens a display of its OWN: with QT_QPA_PLATFORMTHEME=gtk3
+	 * exported -- the default on a GTK desktop -- this binary exits 1
+	 * with `Gtk-WARNING: cannot open display` while the line above is
+	 * doing exactly what it says.
+	 *
+	 * Latent on a machine that exports neither XDG_CURRENT_DESKTOP nor
+	 * QT_QPA_PLATFORMTHEME, which is why it had never been seen here;
+	 * live for anybody on GNOME or XFCE, with a message naming GTK
+	 * rather than their environment, which sends them at the wrong
+	 * thing. Reported from hembygd via this tree's inbox 2026-10-08,
+	 * confirmed here by running the suite with the variable set: of
+	 * thirteen test binaries exactly this one and test_view failed,
+	 * and both are the ones that set the line above.
+	 *
+	 * Unset rather than set to a value: there is no theme plugin worth
+	 * loading when there is no display, and naming one would be a
+	 * second thing to be wrong.
+	 */
+	qunsetenv("QT_QPA_PLATFORMTHEME");
 
 	/*
 	 * The configuration goes somewhere that does not outlive the run.
