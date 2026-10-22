@@ -1,13 +1,13 @@
 [Unit]
-# One fetch of every band into the shared archive (project.md sec 15.1).
+# One fetch of every band into the archive, published signed (project.md
+# sec 15.1, 15.12, 15.13).
 #
 # A phone only fetches while somebody is looking at it, so the archive
 # advances in bursts and verification cannot accumulate for a station
-# nobody opens. This is the fetching half of the server: it collects and
-# scores on its own clock. Publishing is not implemented yet -- sec 15.5
-# has the format questions that must be settled first.
-Description=Fetch weather bands into the bbq-predictor archive
-Documentation=file:///usr/share/doc/bbq-predictor/project.md
+# nobody opens. This is the fetching half of the server: it collects on
+# its own clock and writes what bbq-predictor-serve serves.
+Description=Fetch weather bands and publish the bbq-predictor archive
+Documentation=man:bbq-predictor-publish(1)
 After=network-online.target
 Wants=network-online.target
 
@@ -21,10 +21,6 @@ Type=oneshot
 # returns, so this forgives the partial case by name rather than
 # forgiving every failure.
 SuccessExitStatus=3
-
-# The program builds a QApplication before it reads its arguments, so a
-# headless run needs a platform plugin that asks for no display.
-Environment=QT_QPA_PLATFORM=offscreen
 
 EnvironmentFile=-/etc/default/bbq-predictor
 

@@ -19,10 +19,8 @@ Depends: ${shlibs:Depends},
          ${misc:Depends},
 # The SQLite driver is loaded at run time, so it appears in no ELF
 # header and dpkg-shlibdeps cannot see it. Without this the archive
-# cannot be opened at all, which is the whole of what the timer does.
+# cannot be opened at all.
          libqt6sql6-sqlite
-# Where systemd is not running, cron runs the fetch instead of the timer.
-Recommends: cron | cron-daemon
 Description: weather applet and forecast-verification archive
  A Qt Widgets applet that draws high-resolution temperature and rain
  graphs from several providers at once, and answers whether an afternoon
@@ -30,24 +28,35 @@ Description: weather applet and forecast-verification archive
  .
  It keeps a permanent archive of what was observed and what was
  forecast, scores each provider against the measurements as they arrive,
- and corrects later forecasts by the bias it has measured. The package
- also installs a systemd timer that fetches on its own clock, so the
- archive advances and verification accumulates without anybody opening
- the window.
+ and corrects later forecasts by the bias it has measured.
 
 Package: bbq-predictor-server
 Architecture: any
 Depends: ${shlibs:Depends},
-         ${misc:Depends}
-# The publisher is bbq-predictor --publish; this serves what it writes,
-# which can as well be a tree published elsewhere and copied here.
-Recommends: bbq-predictor
+         ${misc:Depends},
+# The publisher's archive, for the reason the applet's line gives.
+         libqt6sql6-sqlite,
+# Every provider is HTTPS, and Qt's network library only recommends the
+# trust store: a bare trixie with only this package failed every
+# handshake with "the issuer certificate ... could not be found"
+# (project.md sec 15.13).
+         ca-certificates
+# Where systemd is not running, cron runs the round instead of the timer.
+Recommends: cron | cron-daemon
+# The scheduled round, its configuration and its account were the
+# applet's package's until 0.1.0-2 (project.md sec 15.13).
+Breaks: bbq-predictor (<< 0.1.0-2)
+Replaces: bbq-predictor (<< 0.1.0-2)
 Description: server for the bbq-predictor weather archive
- A small daemon that answers bbq-predictor clients from the signed files
- the publisher writes: a fixed 48-byte request, and a prebuilt file held
- in memory in reply. There is no HTTP and no TLS; every file is signed
- with Ed25519 and checked by the applet, and the daemon never holds the
- signing key.
+ The publisher, bbq-predictor-publish, fetches every band on a five-minute
+ timer (or cron where systemd is not running) and writes the station's
+ signed files. It uses Qt's core, network and SQL libraries and nothing
+ that draws, so a server needs no display and no desktop libraries.
+ .
+ The daemon, bbq-predictor-serve, answers bbq-predictor clients from those
+ files: a fixed 48-byte request, and a prebuilt file held in memory in
+ reply. There is no HTTP and no TLS; every file is signed with Ed25519 and
+ checked by the applet, and the daemon never holds the signing key.
  .
  It binds its ports as root, then chroots into the published tree as an
  account of its own. The init script runs under sysvinit and OpenRC, and

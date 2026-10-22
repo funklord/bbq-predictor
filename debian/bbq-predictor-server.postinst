@@ -3,14 +3,24 @@ set -e
 
 #DEBHELPER#
 
-# The tree the daemon chroots into. It belongs to the publisher's account
-# when that exists, so the daemon -- which runs as bbq-predictor-serve --
-# can read it and write nothing (project.md sec 15.12.2).
+# The publisher's state directory and the tree the daemon chroots into
+# (project.md sec 15.12.2, 15.13). Both belong to the publisher's account,
+# made by this package's sysusers snippet above: the round writes its lock,
+# key and archive into the first, and the daemon -- which runs as
+# bbq-predictor-serve -- can read the second and write nothing.
+#
+# Made here because on a systemd host the unit's StateDirectory= would
+# make the first, and where cron runs the round instead nothing does. It
+# was the applet's postinst until 0.1.0-2 moved the round to this package,
+# and the first round under cron after the move failed on a root-owned
+# directory until it came across too. The getent stays for a host where
+# account creation was skipped, which leaves root-owned directories rather
+# than a failed install.
 if [ "$1" = "configure" ]; then
 	owner=root
 	if getent passwd bbq-predictor >/dev/null; then
 		owner=bbq-predictor
 	fi
-	install -d -m 0755 /var/lib/bbq-predictor
+	install -d -o "$owner" -g "$owner" -m 0755 /var/lib/bbq-predictor
 	install -d -o "$owner" -g "$owner" -m 0755 /var/lib/bbq-predictor/published
 fi

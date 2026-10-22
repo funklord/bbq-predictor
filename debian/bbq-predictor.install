@@ -1,10 +1,4 @@
 usr/bin/bbq-predictor
-usr/lib/bbq-predictor/fetch
 usr/share/applications
 usr/share/icons
-usr/share/man/man1
-packaging/systemd/bbq-predictor-fetch.service usr/lib/systemd/system
-packaging/systemd/bbq-predictor-fetch.timer   usr/lib/systemd/system
-packaging/default/bbq-predictor               etc/default
-packaging/sysusers/bbq-predictor.conf        usr/lib/sysusers.d
-packaging/cron/bbq-predictor                  etc/cron.d
+usr/share/man/man1/bbq-predictor.1

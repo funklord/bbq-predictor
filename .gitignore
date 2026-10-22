@@ -7,6 +7,8 @@
 /bbq-predictor.new
 /bbq-predictor-serve
 /bbq-predictor-serve.new
+/bbq-predictor-publish
+/bbq-predictor-publish.new
 
 # qmake droppings
 .qmake.stash

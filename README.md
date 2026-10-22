@@ -184,28 +184,32 @@ scratch work. All of them run headless.
     make install                  # binary, desktop entry, icon, manual page
     man bbq-predictor             # every option, not just what --help lists
 
-Or as a Debian package, which is what a machine that should keep
-fetching wants:
+Or as Debian packages:
 
     make deb                      # lands in build/deb, runs the suite first
     sudo apt-get install -y ./build/deb/bbq-predictor_*.deb
 
-The package brings a systemd timer that runs `--fetch-once` every five
-minutes, so the archive advances and verification accumulates without
-the window being open. It needs a station before it will do anything:
+## Running the server
+
+`bbq-predictor-server` is what vibes.se runs, and needs no display: the
+publisher, `bbq-predictor-publish`, is built on Qt's core, network and
+SQL libraries and nothing that draws. A five-minute round (a systemd
+timer, or cron where systemd is not running) fetches every band and
+writes the station's signed files; `bbq-predictor-serve` serves them.
+
+    sudo apt-get install -y ./build/deb/bbq-predictor-server_*.deb
+    sudo -u bbq-predictor bbq-predictor-publish \
+            --generate-signing-key /var/lib/bbq-predictor/signing.key
+
+The public key that prints is what the applet is built with. Then name
+the station, and start the daemon once the first round has published:
 
     # /etc/default/bbq-predictor
     BBQ_STATION=ISTOCK877
 
-Unset, the service **skips** its run and says why rather than fetching
-for a station nobody named. It runs as its own `bbq-predictor` system
-account, and its archive is deliberately readable:
-
-    bbq-predictor --history --history-path /var/lib/bbq-predictor/history.sqlite
-
-That archive is **not** the applet's. The applet keeps its own under
-`~/.local/share`; whether the two should ever be reconciled is an open
-question in `project.md` sec 15.5.
+Unset, the round **skips** itself and says why rather than fetching for
+a station nobody named. It runs as the `bbq-predictor` account, and the
+archive it builds is deliberately readable.
 
 ## On a phone
 

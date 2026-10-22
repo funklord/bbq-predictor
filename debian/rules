@@ -31,16 +31,19 @@ override_dh_installinit:
 # [Install] section and is never started on install -- an install-time
 # start would fetch before anybody had named a station. The timer is what
 # gets enabled and started, and it is what makes the archive advance.
+# Both are the server's since 0.1.0-2: the round is the publisher.
 override_dh_installsystemd:
-	dh_installsystemd -pbbq-predictor --no-start bbq-predictor-fetch.service
-	dh_installsystemd -pbbq-predictor --restart-after-upgrade bbq-predictor-fetch.timer
+	dh_installsystemd -pbbq-predictor-server --no-start bbq-predictor-fetch.service
+	dh_installsystemd -pbbq-predictor-server --restart-after-upgrade \
+	        bbq-predictor-fetch.timer
 	dh_installsystemd -pbbq-predictor-server --no-start --no-enable \
 	        bbq-predictor-serve.service
 
-# Both units carry Documentation=file:///usr/share/doc/bbq-predictor/
-# project.md, and dh_compress would gzip anything over 4k in that
-# directory -- leaving the units citing a path that does not exist. A
-# reference that does not resolve is worse than none, so the design
-# record stays readable at the name the units give.
+# bbq-predictor(1) cites /usr/share/doc/bbq-predictor/project.md, and
+# dh_compress would gzip anything over 4k in that directory -- leaving the
+# page citing a path that does not exist. A reference that does not
+# resolve is worse than none, so the design record stays readable at the
+# name the page gives. (The units cite their manual pages instead, since
+# the server package does not carry the design record.)
 override_dh_compress:
 	dh_compress -X.md

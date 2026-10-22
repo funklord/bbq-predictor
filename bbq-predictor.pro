@@ -13,16 +13,11 @@
 TEMPLATE = app
 TARGET = bbq-predictor
 
-# Passed in by the top-level Makefile so the version lives in one place --
-# the VERSION file. The fallback exists so that opening this in Qt Creator,
-# or any bare qmake run, still produces something that builds and can say
-# what it is.
-isEmpty(BBQ_VERSION): BBQ_VERSION = 0.0.0-nomake
-DEFINES += BBQ_VERSION_STRING=\\\"$$BBQ_VERSION\\\"
+# The version, the language level, the size flags, network and sql: all
+# of it shared with the publisher, so it is stated once, in core.pri.
+include(core.pri)
 
-# network is here from the start rather than added later: the whole
-# program is a client for somebody else's HTTP endpoint (project.md sec 2).
-QT += widgets network sql
+QT += widgets
 
 # Positioning is how "near me" is answered (sec 13.3). Optional at run
 # time: with no source, or with the permission refused, the station list
@@ -30,41 +25,6 @@ QT += widgets network sql
 # on a desktop anyway, so the fallback is a path that gets exercised
 # rather than one that waits for a failure to be discovered.
 QT += positioning
-
-# sql is for the permanent history (project.md sec 12). It brings the
-# SQLite driver plugin, which Qt builds in-tree; measured before choosing
-# the dependency -- both Qt6Sql and libqsqlite.so were already installed
-# here, so it costs a packaging dependency and one more module in the
-# Android kit rather than a new package.
-
-CONFIG += c++17
-CONFIG -= app_bundle
-
-# Size over speed, per the global rule.
-#
-# This is the only place saying so takes effect. qmake's release default is
-# -O2 and it is applied by the Makefile qmake GENERATES, so passing -Os to
-# the top-level make would be silently dropped -- the same shape as the
-# signing flags beerssh lost that way, and just as invisible in the output.
-QMAKE_CXXFLAGS_RELEASE -= -O2
-QMAKE_CXXFLAGS_RELEASE += -Os
-
-# AND THE SAME AGAIN FOR THE DEBUG-INFO VARIANT, which is a different
-# qmake variable and not a modifier of the one above.
-#
-# `CONFIG+=force_debug_info` does not add -g to the release flags: it
-# switches qmake to QMAKE_CXXFLAGS_RELEASE_WITH_DEBUGINFO, which
-# defaults to `-O2 -g`. Patching only the line above therefore left the
-# packaged build at -O2 -- the global rule to optimise for size,
-# silently reverted by a switch whose name says nothing about
-# optimisation.
-#
-# Measured when it happened: the shipped binary went from 388,784 to
-# 478,896 bytes, 23% larger, with a green lintian and no other sign.
-QMAKE_CXXFLAGS_RELEASE_WITH_DEBUGINFO -= -O2
-QMAKE_CXXFLAGS_RELEASE_WITH_DEBUGINFO += -Os
-QMAKE_CFLAGS_RELEASE   -= -O2
-QMAKE_CFLAGS_RELEASE   += -Os
 
 # --- Android ---------------------------------------------------------------
 # The only platform conditional in this file. Everything above is shared by
@@ -132,26 +92,14 @@ android {
 	}
 }
 
-INCLUDEPATH += $$PWD/src
-
+# What the window adds to core.pri, which holds everything that does not
+# draw.
 SOURCES += \
 	src/main.cpp \
 	src/graph/forecast_graph.cpp \
 	src/graph/interpolate.cpp \
 	src/graph/simplify.cpp \
 	src/graph/ticks.cpp \
-	src/met/nowcast.cpp \
-	src/net/probe.cpp \
-	src/net/tls_backend.cpp \
-	src/model/composite.cpp \
-	src/cli/options.cpp \
-	src/model/units.cpp \
-	src/model/correction.cpp \
-	src/openmeteo/forecast.cpp \
-	src/model/grill.cpp \
-	src/model/series.cpp \
-	src/model/settings.cpp \
-	src/store/history.cpp \
 	src/ui/accessibility.cpp \
 	src/ui/layout.cpp \
 	src/ui/locator.cpp \
@@ -159,77 +107,18 @@ SOURCES += \
 	src/ui/flow_layout.cpp \
 	src/ui/widget_picture.cpp \
 	src/ui/main_window.cpp \
-	src/ui/tray_icon.cpp \
-	src/wu/client.cpp \
-	src/wu/feed.cpp \
-	src/wu/fetch_once.cpp \
-	src/wu/key_source.cpp \
-	src/wu/reader.cpp
+	src/ui/tray_icon.cpp
 
 HEADERS += \
 	src/graph/forecast_graph.h \
 	src/graph/interpolate.h \
 	src/graph/simplify.h \
 	src/graph/ticks.h \
-	src/met/nowcast.h \
-	src/net/probe.h \
-	src/net/tls_backend.h \
-	src/model/composite.h \
-	src/cli/options.h \
-	src/model/units.h \
-	src/model/correction.h \
-	src/openmeteo/forecast.h \
-	src/model/grill.h \
-	src/model/sample.h \
-	src/model/series.h \
-	src/model/settings.h \
-	src/store/history.h \
 	src/ui/accessibility.h \
 	src/ui/layout.h \
 	src/ui/locator.h \
 	src/ui/theme.h \
 	src/ui/flow_layout.h \
 	src/ui/widget_picture.h \
-	src/wu/fetch_verdict.h \
 	src/ui/main_window.h \
-	src/ui/tray_icon.h \
-	src/wu/client.h \
-	src/wu/feed.h \
-	src/wu/fetch_once.h \
-	src/wu/key_source.h \
-	src/wu/reader.h
-
-# The published format, in every build: the applet reads and verifies
-# what vibes.se serves, on a phone as much as anywhere (project.md sec
-# 15.12). monocypher is for the signature and the index's digests.
-INCLUDEPATH += monocypher/src monocypher/src/optional src/wire/vendor
-SOURCES += \
-	src/server/transport.cpp \
-	src/server/policy.cpp \
-	src/wire/format.cpp \
-	src/wire/read.cpp \
-	src/wire/vendor/situ.c \
-	monocypher/src/monocypher.c \
-	monocypher/src/optional/monocypher-ed25519.c
-HEADERS += \
-	src/server/transport.h \
-	src/server/policy.h \
-	src/wire/format.h \
-	src/wire/read.h \
-	src/wire/vendor/bbq.hpp \
-	src/wire/vendor/situ.h \
-	src/wire/vendor/situ.hpp
-
-# The publisher: desktop and server only. Nothing publishes from a phone,
-# and keeping it out keeps getrandom(), which bionic has only from API 28
-# against a minSdk of 26, out of the package.
-!android {
-	SOURCES += \
-		src/publish/encode.cpp \
-		src/publish/publish.cpp \
-		src/publish/signing_key.cpp
-	HEADERS += \
-		src/publish/encode.h \
-		src/publish/publish.h \
-		src/publish/signing_key.h
-}
+	src/ui/tray_icon.h

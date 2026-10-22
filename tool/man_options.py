@@ -28,8 +28,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cxx_text  # noqa: E402  -- needs the path line above
 
-SOURCE = Path("src/main.cpp")
-PAGE = Path("packaging/bbq-predictor.1")
+# Each program against its own page. Two since the publisher left the
+# applet (project.md sec 15.13): an option moved between them and left in
+# the old page would otherwise read as documented, which is the second
+# direction below arriving through a move rather than a typo.
+PROGRAMS = (
+	(Path("src/main.cpp"), Path("packaging/bbq-predictor.1")),
+	(Path("src/publish/main.cpp"), Path("packaging/bbq-predictor-publish.1")),
+)
 
 # An option deliberately left out of the page goes here, with the reason.
 # An empty mapping is the honest state today: everything the program
@@ -88,8 +94,10 @@ IN_UNIT = re.compile(r"(--[a-z][a-z-]*)")
 # line went: the timer and cron share it, so the options live there now
 # (project.md sec 15.12). Its arguments are built with `set --`, and only
 # those lines are read -- its comments name options too, and a comment
-# is not a call.
+# is not a call. It runs the publisher, so it is held to the publisher's
+# options and not to the union, where an applet-only option would pass.
 WRAPPER = Path("packaging/fetch")
+WRAPPER_RUNS = Path("src/publish/main.cpp")
 
 
 def options_in_units(texts):
@@ -161,10 +169,11 @@ def main():
 			  "anything", file=sys.stderr)
 		return 2
 
-	for path in (SOURCE, PAGE):
-		if not path.is_file():
-			print(f"man-options: {path} is missing", file=sys.stderr)
-			return 2
+	for source, page in PROGRAMS:
+		for path in (source, page):
+			if not path.is_file():
+				print(f"man-options: {path} is missing", file=sys.stderr)
+				return 2
 
 	if not cxx_text.self_check():
 		print("man-options: the comment stripper is broken, so a "
@@ -172,24 +181,36 @@ def main():
 		      "accepts", file=sys.stderr)
 		return 2
 
-	source_text = cxx_text.without_comments(
-	        SOURCE.read_text(encoding="utf-8"))
-	page_text = PAGE.read_text(encoding="utf-8")
+	accepted = {}
+	bad = False
+	for source, page in PROGRAMS:
+		source_text = cxx_text.without_comments(
+		        source.read_text(encoding="utf-8"))
+		page_text = page.read_text(encoding="utf-8")
 
-	in_source = options_in_source(source_text)
-	if not in_source:
-		print("man-options: found no options in " + str(SOURCE) +
-			  " -- the pattern has stopped matching, which is not the "
-			  "same as a program with no options", file=sys.stderr)
-		return 2
+		in_source = options_in_source(source_text)
+		if not in_source:
+			print("man-options: found no options in " + str(source) +
+			      " -- the pattern has stopped matching, which is not the "
+			      "same as a program with no options", file=sys.stderr)
+			return 2
+		accepted[source] = in_source
+
+		undocumented, invented = compare(source_text, page_text)
+		for option in undocumented:
+			print(f"man-options: {option} is accepted by {source} but not "
+			      f"in {page}", file=sys.stderr)
+		for option in invented:
+			print(f"man-options: {option} is in {page} but not accepted by "
+			      f"{source}", file=sys.stderr)
+		bad = bad or bool(undocumented or invented)
 
 	# A UNIT FILE IS A CALLER, and the one whose failure nobody sees.
 	#
-	# The service runs on a timer, offscreen, as its own user, and its
-	# stdout goes where sec 17.4 says nothing reads. An option renamed
-	# in the program and not in the unit fails there and only there --
-	# the archive simply stops advancing, which is the symptom sec 15.6
-	# exists to remove.
+	# The service runs on a timer, as its own user, and its stdout goes
+	# where sec 17.4 says nothing reads. An option renamed in the program
+	# and not in the unit fails there and only there -- the archive simply
+	# stops advancing, which is the symptom sec 15.6 exists to remove.
 	unit_texts = [path.read_text(encoding="utf-8")
 	              for path in sorted(UNIT_DIR.glob("*.service"))]
 
@@ -198,36 +219,31 @@ def main():
 		      "the packaging invokes", file=sys.stderr)
 		return 2
 
-	in_units = options_in_units(unit_texts)
 	if not WRAPPER.is_file():
 		print(f"man-options: {WRAPPER} is missing, so nothing checked what "
 		      "the schedulers invoke", file=sys.stderr)
 		return 2
-	in_units |= options_in_wrapper(WRAPPER.read_text(encoding="utf-8"))
-	if not in_units:
-		print("man-options: neither a unit nor the wrapper names an option, "
-		      "so the patterns have stopped matching", file=sys.stderr)
+	in_wrapper = options_in_wrapper(WRAPPER.read_text(encoding="utf-8"))
+	in_units = options_in_units(unit_texts)
+	if not in_wrapper:
+		print("man-options: the wrapper names no option, so the pattern has "
+		      "stopped matching", file=sys.stderr)
 		return 2
 
-	unmatched = unit_only(in_units, in_source)
-	for option in unmatched:
+	every = set().union(*accepted.values())
+	unmatched = unit_only(in_units, every)
+	unmatched += unit_only(in_wrapper, accepted[WRAPPER_RUNS])
+	for option in sorted(set(unmatched)):
 		print("man-options: %s is passed by the packaging and the program "
 		      "does not accept it" % option, file=sys.stderr)
 
-	undocumented, invented = compare(source_text, page_text)
-
-	for option in undocumented:
-		print(f"man-options: {option} is accepted but not in {PAGE}",
-			  file=sys.stderr)
-	for option in invented:
-		print(f"man-options: {option} is documented but not accepted",
-			  file=sys.stderr)
-
-	if undocumented or invented or unmatched:
+	if bad or unmatched:
 		return 1
 
-	print(f"man-options: {len(in_source)} option(s), documented both ways, "
-	      f"and {len(in_units)} passed by the packaging that it accepts")
+	counts = ", ".join(f"{len(accepted[s])} in {s}" for s, _ in PROGRAMS)
+	print(f"man-options: {counts}, documented both ways, and "
+	      f"{len(in_units | in_wrapper)} passed by the packaging that its "
+	      f"program accepts")
 	return 0
 
 

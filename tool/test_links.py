@@ -53,6 +53,10 @@ WAIVED = {
 		"selects a TLS backend from the installed Qt plugins at "
 		"startup; there is nothing to assert without the plugin path "
 		"of a real installation",
+	"publish/main.cpp":
+		"the publisher's entry point, which no test can link beside "
+		"its own main; test_publisher runs the built program instead "
+		"and checks what it refuses and what it leaves on disk",
 	"wu/fetch_once.cpp":
 		"the one-shot fetch, which talks to the live provider",
 }

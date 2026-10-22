@@ -24,13 +24,6 @@
 #include "model/settings.h"
 #include "store/history.h"
 
-#ifndef Q_OS_ANDROID
-#include <QDateTime>
-
-#include "publish/publish.h"
-#include "publish/signing_key.h"
-#endif
-
 /*
  * bbq-predictor -- a Qt Widgets weather applet for the tray and a window.
  *
@@ -131,7 +124,6 @@ bool wants_headless(int argc, char *argv[]) {
 		"--discover",
 		"--stations",
 		"--history",
-		"--generate-signing-key",
 	};
 
 	for (const char *name : quiet) {
@@ -346,6 +338,30 @@ int main(int argc, char *argv[]) {
 	}
 
 	/*
+	 * PUBLISHING MOVED TO ITS OWN PROGRAM (sec 15.13), AND SAYS SO.
+	 *
+	 * This program ignores what it does not recognise, so without this a
+	 * command line written for the old --publish ran the fetch and
+	 * silently stopped publishing -- and with nothing else on it, opened
+	 * the window, which is how the gap was found. Refused by name, before
+	 * any application object, so a cron line fails loudly where it is.
+	 */
+	static const char *const moved[] = {
+		"--publish",
+		"--signing-key",
+		"--generate-signing-key",
+	};
+
+	for (const char *name : moved) {
+		if (has_flag(argc, argv, name)) {
+			QTextStream error(stderr);
+			error << "bbq-predictor: " << name << " has moved to "
+			         "bbq-predictor-publish(1)\n";
+			return 2;
+		}
+	}
+
+	/*
 	 * WHICH APPLICATION OBJECT, DECIDED FROM ARGV (sec 16.70.1).
 	 *
 	 * A QApplication loads a platform plugin, and where none can be
@@ -417,82 +433,11 @@ int main(int argc, char *argv[]) {
 		return bbq_net_probe(15);
 	}
 
-#ifndef Q_OS_ANDROID
-	/*
-	 * The publisher's key (project.md sec 15.12.2). Made once, on the
-	 * machine that publishes; the public half it prints is what the
-	 * applet is built with. Never overwrites: a lost key strands every
-	 * client built with its public half.
-	 */
-	if (arguments.contains(QStringLiteral("--generate-signing-key"))) {
-		QTextStream out(stdout);
-		QTextStream error(stderr);
-		const QString path =
-		        bbq_option_value(arguments, QStringLiteral("--generate-signing-key"));
-		if (path.isEmpty()) {
-			error << "generate-signing-key: give the file to create\n";
-			return 2;
-		}
-
-		bbq_signing_key key;
-		QString why;
-		if (!key.generate(path, &why)) {
-			error << "generate-signing-key: " << why << "\n";
-			return 1;
-		}
-		out << "signing key written to " << path << ", readable by its owner alone\n";
-		out << "public key: " << QString::fromLatin1(key.public_key().toHex()) << "\n";
-		return 0;
-	}
-#endif
-
 	if (arguments.contains(QStringLiteral("--fetch-once"))) {
-		bbq_after_round after_round;
-
-#ifndef Q_OS_ANDROID
-		/*
-		 * --publish rides on a fetch: what this round fetched becomes the
-		 * head, and the archive it just wrote to becomes the months. The
-		 * key is loaded BEFORE fetching, so a bad key costs nothing but
-		 * its message, not a round of somebody else's quota.
-		 */
-		const QString publish_dir =
-		        bbq_option_value(arguments, QStringLiteral("--publish"));
-		auto key = std::make_shared<bbq_signing_key>();
-		if (!publish_dir.isEmpty()) {
-			QTextStream error(stderr);
-			const QString key_path =
-			        bbq_option_value(arguments, QStringLiteral("--signing-key"));
-			QString why;
-			if (key_path.isEmpty()) {
-				error << "publish: --publish needs --signing-key FILE\n";
-				return 2;
-			}
-			if (!key->load(key_path, &why)) {
-				error << "publish: " << why << "\n";
-				return 2;
-			}
-
-			QString station = bbq_option_value(arguments, QStringLiteral("--station"));
-			if (station.isEmpty()) {
-				station = bbq_settings::station();
-			}
-
-			after_round = [publish_dir, station, key](const bbq_composite &composite,
-			                                          const bbq_history &history) {
-				QTextStream out(stdout);
-				QTextStream error(stderr);
-				return bbq_publish(publish_dir, station, &composite, history, *key,
-				                   QDateTime::currentSecsSinceEpoch(), out, error);
-			};
-		}
-#endif
-
 		return bbq_wu_fetch_once(
 		        bbq_option_value(arguments, QStringLiteral("--station")),
 		        bbq_option_value(arguments, QStringLiteral("--geocode")), 30,
-		        bbq_option_value(arguments, QStringLiteral("--history-path")),
-		        after_round);
+		        bbq_option_value(arguments, QStringLiteral("--history-path")));
 	}
 
 

@@ -1,6 +1,14 @@
+usr/bin/bbq-predictor-publish
 usr/sbin/bbq-predictor-serve
+usr/lib/bbq-predictor/fetch
+usr/share/man/man1/bbq-predictor-publish.1
 usr/share/man/man8
 packaging/sysvinit/bbq-predictor-serve        etc/init.d
 packaging/default/bbq-predictor-serve         etc/default
+packaging/default/bbq-predictor               etc/default
+packaging/cron/bbq-predictor                  etc/cron.d
+packaging/sysusers/bbq-predictor.conf        usr/lib/sysusers.d
 packaging/sysusers/bbq-predictor-serve.conf  usr/lib/sysusers.d
+packaging/systemd/bbq-predictor-fetch.service usr/lib/systemd/system
+packaging/systemd/bbq-predictor-fetch.timer   usr/lib/systemd/system
 packaging/systemd/bbq-predictor-serve.service usr/lib/systemd/system

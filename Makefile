@@ -206,7 +206,20 @@ $(SERVE_ARTIFACT): src/serve/serve.c src/serve/serve_loop.c \
 	        -o $@.new $(filter %.c,$^)
 	mv -f $@.new $@
 
-all: $(ARTIFACT) $(SERVE_ARTIFACT)
+# The headless publisher (project.md sec 15.13): core.pri and the signing,
+# on QtCore, QtNetwork and QtSql. A qmake project of its own in a build
+# directory of its own, since qmake writes one Makefile and one flat object
+# directory per project, and two projects in one directory overwrite each
+# other's -- the client.o collision of sec 15.12.6, one level up.
+PUBLISH_TARGET = bbq-predictor-publish
+PUBLISH_BUILD_DIR = $(BUILD_DIR)/publish
+ifeq ($(BUILD_DIR),build)
+PUBLISH_ARTIFACT = $(PUBLISH_TARGET)
+else
+PUBLISH_ARTIFACT = $(PUBLISH_BUILD_DIR)/$(PUBLISH_TARGET)
+endif
+
+all: $(ARTIFACT) $(SERVE_ARTIFACT) $(PUBLISH_ARTIFACT)
 
 # The vendored submodules, fetched when absent and never moved
 # (makefile-hazards: the build fetches what it vendors, and fails loudly
@@ -273,6 +286,46 @@ $(BUILD_DIR)/$(TARGET): $(BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
 $(TARGET): $(BUILD_DIR)/$(TARGET)
 	cp $(BUILD_DIR)/$(TARGET) $(TARGET).new
 	mv -f $(TARGET).new $(TARGET)
+
+$(PUBLISH_BUILD_DIR)/Makefile: bbq-predictor-publish.pro core.pri | submodules
+	mkdir -p $(PUBLISH_BUILD_DIR)
+	cd $(PUBLISH_BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor-publish.pro \
+	        $(QMAKE_CONFIG) QMAKE_CXX=$(CXX) BBQ_VERSION=$(VERSION)
+
+$(PUBLISH_BUILD_DIR)/$(PUBLISH_TARGET): $(PUBLISH_BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
+	$(MAKE) -C $(PUBLISH_BUILD_DIR)
+
+ifeq ($(BUILD_DIR),build)
+$(PUBLISH_TARGET): $(PUBLISH_BUILD_DIR)/$(PUBLISH_TARGET)
+	cp $(PUBLISH_BUILD_DIR)/$(PUBLISH_TARGET) $(PUBLISH_TARGET).new
+	mv -f $(PUBLISH_TARGET).new $(PUBLISH_TARGET)
+endif
+
+# The publisher links nothing that draws (sec 15.13), read from the ELF
+# header the dynamic loader reads. A QColor or a QPixmap reaching a core
+# source pulls Gui in silently -- the build succeeds and the server package
+# gains the desktop's libraries -- so this is where it surfaces. It also
+# requires Core, so an unreadable or empty header fails rather than
+# passing over nothing.
+PUBLISH_FORBIDDEN = Qt6Gui Qt6Widgets Qt6Positioning Qt6OpenGL Qt6DBus
+
+check-publish-libraries: $(PUBLISH_ARTIFACT)
+	@needed=$$(readelf -d $(PUBLISH_ARTIFACT) | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p'); \
+	if ! echo "$$needed" | grep -q '^libQt6Core\.so'; then \
+		echo "check-publish-libraries: no libQt6Core in $(PUBLISH_ARTIFACT)'s" >&2; \
+		echo "  header, so this read nothing it can vouch for" >&2; \
+		exit 1; \
+	fi; \
+	bad=0; \
+	for module in $(PUBLISH_FORBIDDEN); do \
+		if echo "$$needed" | grep -q "^lib$$module\.so"; then \
+			echo "check-publish-libraries: $(PUBLISH_ARTIFACT) links lib$$module" >&2; \
+			bad=1; \
+		fi; \
+	done; \
+	[ $$bad -eq 0 ] || exit 1; \
+	echo "check-publish-libraries: $$(echo "$$needed" | grep -c '^libQt6') Qt module(s)," \
+	     "none that draws: $$(echo "$$needed" | grep '^libQt6' | tr '\n' ' ')"
 
 run: $(ARTIFACT)
 	./$(ARTIFACT)
@@ -387,7 +440,7 @@ tests-build: $(TEST_BUILD_DIR)/Makefile
 # in the difference.
 TEST_CLOCKS ?= 00:05:00 00:30:00 01:10:00 12:00:00 23:50:00 23:59:30
 
-test-clocks: tests-build $(ARTIFACT)
+test-clocks: tests-build $(ARTIFACT) $(PUBLISH_ARTIFACT)
 	@command -v faketime >/dev/null 2>&1 || { \
 		echo "test-clocks: faketime is not installed." >&2; \
 		echo "test-clocks:   apt install faketime" >&2; \
@@ -401,7 +454,8 @@ test-clocks: tests-build $(ARTIFACT)
 		ran=$$((ran + 1)); \
 		for binary in $(TEST_BUILD_DIR)/test_*; do \
 			[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
-			BBQ_APP_BINARY="$(abspath $(ARTIFACT))" $(TEST_CRASH_ENV) \
+			BBQ_APP_BINARY="$(abspath $(ARTIFACT))" \
+			BBQ_PUBLISH_BINARY="$(abspath $(PUBLISH_ARTIFACT))" $(TEST_CRASH_ENV) \
 			        faketime "$$today $$at" \
 			        timeout $(TEST_TIMEOUT) "$$binary" >/dev/null 2>&1 \
 			        || { echo "test-clocks: $$binary failed at $$at" >&2; \
@@ -437,14 +491,16 @@ TEST_TIMEOUT ?= 120
 # --seed-verification refuses the real archive, and a guard of that kind
 # cannot be tested by linking a library. BBQ_APP_BINARY tells it where to
 # look, so the test fails loudly rather than skipping when it is absent --
-# a skipped guard reads exactly like a guard that passed.
-test: tests-build $(ARTIFACT)
+# a skipped guard reads exactly like a guard that passed. test_publisher
+# does the same with the publisher, through BBQ_PUBLISH_BINARY.
+test: tests-build $(ARTIFACT) $(PUBLISH_ARTIFACT)
 	@failed=0; ran=0; \
 	for binary in $(TEST_BUILD_DIR)/test_*; do \
 		[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
 		ran=$$((ran + 1)); \
 		echo "--- $$binary"; \
-		BBQ_APP_BINARY="$(abspath $(ARTIFACT))" $(TEST_CRASH_ENV) $(TEST_SANITIZE_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
+		BBQ_APP_BINARY="$(abspath $(ARTIFACT))" \
+		BBQ_PUBLISH_BINARY="$(abspath $(PUBLISH_ARTIFACT))" $(TEST_CRASH_ENV) $(TEST_SANITIZE_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
 	done; \
 	if [ "$$ran" -eq 0 ]; then \
 		echo "test: no test binaries were found in $(TEST_BUILD_DIR)." >&2; \
@@ -526,7 +582,7 @@ style-signals:
 #
 # `test` joined this the moment test/ became real, which was the whole
 # point of the target that failed until then.
-check: style test
+check: style test check-publish-libraries
 
 # The daemon's request path under libFuzzer (project.md sec 15.12.2).
 #
@@ -614,11 +670,17 @@ DEB_DIR ?= $(BUILD_DIR)/deb
 # names is not there, and once if anything matching the package name is
 # still in the parent afterwards. A collector is proved by what it
 # leaves behind, and the previous one reported success while leaking.
+#
+# The version is debian/changelog's, read when the recipe runs. It was
+# spelled $(VERSION)-1, which held only while the changelog had one entry:
+# 0.1.0-2 made the rule look for a .changes file dpkg had not named that
+# way and report a successful build as "not produced".
 deb:
 	dpkg-buildpackage -b -us -uc
 	mkdir -p $(DEB_DIR)
 	@arch=$$(dpkg --print-architecture); \
-	changes=bbq-predictor_$(VERSION)-1_$$arch.changes; \
+	version=$$(dpkg-parsechangelog -S Version) || exit 1; \
+	changes=bbq-predictor_$${version}_$$arch.changes; \
 	if [ ! -f "../$$changes" ]; then \
 		echo "deb: ../$$changes was not produced" >&2; exit 1; \
 	fi; \
@@ -631,7 +693,7 @@ deb:
 		mv -f "../$$f" $(DEB_DIR)/; \
 		echo "deb: $(DEB_DIR)/$$f"; \
 	done; \
-	left=$$(ls ../bbq-predictor*_$(VERSION)-1_* 2>/dev/null || true); \
+	left=$$(ls ../bbq-predictor*_$${version}_* 2>/dev/null || true); \
 	if [ -n "$$left" ]; then \
 		echo "deb: left in the parent directory:" >&2; \
 		echo "$$left" >&2; \
@@ -675,11 +737,15 @@ install: all
 	install -m 0644 packaging/$(TARGET).1 \
 	        $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
 
-	# The archive server (project.md sec 15.12.2): a daemon, so sbin and
-	# section 8. The scheduler's wrapper goes beside it, under lib,
-	# because nobody types it.
+	# The archive server (project.md sec 15.12.2, 15.13): the daemon, so
+	# sbin and section 8, and the publisher, which a person types to make
+	# the key, so bin and section 1. The scheduler's wrapper goes under
+	# lib, because nobody types it.
 	mkdir -p $(DESTDIR)$(PREFIX)/sbin $(DESTDIR)$(PREFIX)/share/man/man8
 	install -m 0755 $(SERVE_ARTIFACT) $(DESTDIR)$(PREFIX)/sbin/$(SERVE_TARGET)
+	install -m 0755 $(PUBLISH_ARTIFACT) $(DESTDIR)$(PREFIX)/bin/$(PUBLISH_TARGET)
+	install -m 0644 packaging/$(PUBLISH_TARGET).1 \
+	        $(DESTDIR)$(PREFIX)/share/man/man1/$(PUBLISH_TARGET).1
 	install -m 0644 packaging/$(SERVE_TARGET).8 \
 	        $(DESTDIR)$(PREFIX)/share/man/man8/$(SERVE_TARGET).8
 	mkdir -p $(DESTDIR)$(PREFIX)/lib/$(TARGET)
@@ -691,14 +757,17 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
 	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
 	rm -f $(DESTDIR)$(PREFIX)/sbin/$(SERVE_TARGET)
+	rm -f $(DESTDIR)$(PREFIX)/bin/$(PUBLISH_TARGET)
+	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/$(PUBLISH_TARGET).1
 	rm -f $(DESTDIR)$(PREFIX)/share/man/man8/$(SERVE_TARGET).8
 	rm -f $(DESTDIR)$(PREFIX)/lib/$(TARGET)/fetch
 
 # clean removes intermediates only; $(TARGET) survives, so `make install`
 # stays possible without a rebuild.
 clean:
-	rm -f $(TARGET).new $(SERVE_TARGET).new
+	rm -f $(TARGET).new $(SERVE_TARGET).new $(PUBLISH_TARGET).new
 	@if [ -f $(BUILD_DIR)/Makefile ]; then $(MAKE) -C $(BUILD_DIR) clean; fi
+	@if [ -f $(PUBLISH_BUILD_DIR)/Makefile ]; then $(MAKE) -C $(PUBLISH_BUILD_DIR) clean; fi
 	@if [ -f $(TEST_BUILD_DIR)/Makefile ]; then $(MAKE) -C $(TEST_BUILD_DIR) clean; fi
 
 # Removes a whole directory, having first checked it is one we could
@@ -728,7 +797,7 @@ endef
 
 veryclean: clean
 	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) $(ANDROID_BUILD_DIR))
-	rm -f $(TARGET) $(SERVE_TARGET)
+	rm -f $(TARGET) $(SERVE_TARGET) $(PUBLISH_TARGET)
 
 # `distclean` removes what the build generated and `veryclean` does not.
 # `.qmake.stash` is qmake's, is named, and is disposable by construction.
@@ -748,6 +817,6 @@ help:
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
         style-wiring style-setup style-tests style-links test-clocks fuzz-serve fuzz-wire \
-        submodules \
+        submodules check-publish-libraries \
         android android-aab \
         install uninstall clean veryclean distclean help

@@ -1,13 +1,13 @@
 #!/bin/sh
-# One fetch round, and a publish when one is configured (project.md
-# sec 15.6, 15.12). Installed as /usr/lib/bbq-predictor/fetch.
+# One fetch round, published (project.md sec 15.6, 15.12, 15.13).
+# Installed as /usr/lib/bbq-predictor/fetch by bbq-predictor-server.
 #
 # The ONE thing both schedulers run: the systemd unit on hosts that have
 # systemd, packaging/cron/bbq-predictor everywhere else. Two copies of the
 # command line would be two things to keep in step, and the copy on the
 # machines nobody here runs is the one that would drift.
 #
-# Terminates on its own: --fetch-once bounds the round with its own
+# Terminates on its own: the publisher bounds the round with its own
 # timeout, and flock -n refuses to start a second round while one runs,
 # so a slow round cannot stack copies of itself behind it.
 set -u
@@ -19,23 +19,18 @@ fi
 
 state=${STATE_DIRECTORY:-/var/lib/bbq-predictor}
 
-# Unconfigured is the normal state of a package installed for the applet
-# alone, so it is quiet rather than an error: under cron an error is a
-# mail every five minutes. The systemd unit says why in its own
-# ExecCondition before this ever runs.
+# Unconfigured is the normal state of a freshly installed server, so it is
+# quiet rather than an error: under cron an error is a mail every five
+# minutes. The systemd unit says why in its own ExecCondition before this
+# ever runs.
 if [ -z "${BBQ_STATION:-}" ]; then
 	exit 0
 fi
 
-set -- --fetch-once --station "$BBQ_STATION" --history-path "$state/history.sqlite"
-if [ -n "${BBQ_PUBLISH_DIR:-}" ]; then
-	set -- "$@" --publish "$BBQ_PUBLISH_DIR" \
-	        --signing-key "${BBQ_SIGNING_KEY:-$state/signing.key}"
-fi
+# A station without a key is a misconfiguration rather than a quiet
+# state, so the publisher is left to say so: it refuses before fetching.
+set -- --station "$BBQ_STATION" --history-path "$state/history.sqlite" \
+        --dir "${BBQ_PUBLISH_DIR:-$state/published}" \
+        --signing-key "${BBQ_SIGNING_KEY:-$state/signing.key}"
 
-# A QApplication is built before arguments are read, and a server has no
-# display.
-QT_QPA_PLATFORM=offscreen
-export QT_QPA_PLATFORM
-
-exec flock -n "$state/.fetch.lock" /usr/bin/bbq-predictor "$@"
+exec flock -n "$state/.fetch.lock" /usr/bin/bbq-predictor-publish "$@"

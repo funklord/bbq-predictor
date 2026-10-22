@@ -17,13 +17,6 @@ bbq\-predictor \- weather applet and forecast\-verification archive
 .IR LAT , LON ]
 .RB [ \-\-history\-path
 .IR FILE ]
-.RB [ \-\-publish
-.I DIR
-.B \-\-signing\-key
-.IR FILE ]
-.br
-.B bbq\-predictor \-\-generate\-signing\-key
-.I FILE
 .br
 .B bbq\-predictor \-\-shot
 .I FILE
@@ -79,36 +72,9 @@ which refuses to run without it.
 .TP
 .B \-\-fetch\-once
 Fetch every band once, archive what arrives, verify what can be
-verified, report what happened, and exit. This is what the systemd timer
-runs.
-.TP
-.BI \-\-publish " DIR"
-With
-.BR \-\-fetch\-once ,
-also write the station's signed files under
-.IR DIR :
-a file per month of observations, an index of them, the bands this
-round fetched, and a
-.I stations
-manifest written last. Each file is written aside and renamed into
-place, a month whose rows have not changed is not rewritten, and a round
-in which no band arrived leaves the last bands in place.
-.BR bbq\-predictor\-serve (8)
-serves the directory. Needs
-.BR \-\-signing\-key .
-.TP
-.BI \-\-signing\-key " FILE"
-The Ed25519 key that signs what
-.B \-\-publish
-writes: its 32\-byte seed and nothing else. Refused if any other user
-can read it.
-.TP
-.BI \-\-generate\-signing\-key " FILE"
-Create a new signing key at
-.IR FILE ,
-readable by its owner alone, print its public half in hex, and exit.
-Never overwrites an existing file: losing a key strands every client
-built with its public half.
+verified, report what happened, and exit. Publishing what was fetched is
+.BR bbq\-predictor\-publish (1),
+which runs the same round with no window behind it.
 .TP
 .B \-\-android\-service
 Fetch once and exit, building no window and no
@@ -222,15 +188,13 @@ Every band answered.
 .TP
 .B 3
 Some band failed, but the composite still covers now. The archive
-advanced. The systemd timer forgives this by name.
+advanced.
 .TP
 .B 1
 Nothing covers now: the run stored nothing usable.
 .TP
 .B 2
-A configuration error, including a
-.B \-\-signing\-key
-that cannot be used. A publish that fails after the fetch exits 1.
+A configuration error.
 .PP
 Other modes exit 0 on success and non\-zero otherwise.
 .SH FILES
@@ -242,49 +206,21 @@ Settings, including the watched station. Preferences only.
 The archive: observations, pending forecasts, verification sums and the
 station list. Records of what was measured, kept apart from preferences
 on purpose.
-.TP
-.I /etc/default/bbq-predictor
-Read by the systemd service.
-.B BBQ_STATION
-must be set there; unset, the service skips its run and says why rather
-than fetching for a station nobody named.
-.TP
-.I /var/lib/bbq-predictor/history.sqlite
-The archive the systemd timer builds, which is
-.B not
-the applet's. The service runs as the
-.B bbq\-predictor
-system account, created at install time, and the directory is readable,
-so the archive can be inspected without root:
-.IP
-.nf
-bbq\-predictor \-\-history \e
-        \-\-history\-path /var/lib/bbq\-predictor/history.sqlite
-.fi
-.IP
-A fixed account rather than
-.B DynamicUser
-deliberately: that would place the directory under
-.I /var/lib/private/
-where systemd keeps it inaccessible to unprivileged users, and an
-archive its owner cannot read is one they will not read.
-.TP
-.I /usr/lib/systemd/system/bbq-predictor-fetch.timer
-Runs
-.B \-\-fetch\-once
-every five minutes, so the archive advances and verification accumulates
-without the window being open. The service it triggers carries no
-.B [Install]
-section: the timer is what starts it.
 .SH NOTES
 The Weather Underground key is scraped from that site rather than
 licensed. Asking more often than a station reports spends somebody
-else's quota for nothing, which is why the timer runs at the station's
-own cadence and why a day the archive already holds whole is not fetched
-again.
+else's quota for nothing, which is why the publisher's timer runs at the
+station's own cadence and why a day the archive already holds whole is
+not fetched again.
+.PP
+The publishing options belong to
+.BR bbq\-predictor\-publish (1)
+now. This program refuses them by name rather than ignoring them, so a
+command line written for them fails where it is instead of fetching and
+quietly publishing nothing.
 .SH SEE ALSO
-.BR systemctl (1),
-.BR journalctl (1)
+.BR bbq\-predictor\-publish (1),
+.BR bbq\-predictor\-serve (8)
 .PP
 .I /usr/share/doc/bbq-predictor/project.md
 is the project's design record and is authoritative over this page.

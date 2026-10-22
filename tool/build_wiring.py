@@ -35,10 +35,11 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Where a header may be named. Nothing else in the tree affects what
 # qmake tracks.
-PROJECT_FILES = ("*.pro", "test/*.pro", "test/*.pri")
+PROJECT_FILES = ("*.pro", "*.pri", "test/*.pro", "test/*.pri")
 
 NAMES_A_HEADER = re.compile(r"[A-Za-z0-9_./$]*src/([A-Za-z0-9_/]+\.h)")
 NAMES_A_SOURCE = re.compile(r"[A-Za-z0-9_./$]*src/([A-Za-z0-9_/]+\.cpp)")
+INCLUDES_A_PRI = re.compile(r"^\s*include\(([A-Za-z0-9_./-]+\.pri)\)", re.M)
 INCLUDES_A_HEADER = re.compile(
         r'^\s*#\s*include\s+"([A-Za-z0-9_/]+\.h)"', re.M)
 
@@ -68,8 +69,17 @@ def project_units():
 	shared = ROOT / "test" / "test_common.pri"
 	shared_text = shared.read_text(encoding="utf-8") if shared.is_file() else ""
 
-	units = [("bbq-predictor.pro",
-	          (ROOT / "bbq-predictor.pro").read_text(encoding="utf-8"))]
+	# Every program at the root, each with the .pri files it includes:
+	# core.pri holds what the applet and the publisher share (sec 15.13),
+	# and a .pro read without it lists almost nothing it needs.
+	units = []
+	for path in sorted(ROOT.glob("*.pro")):
+		text = path.read_text(encoding="utf-8")
+		for included in INCLUDES_A_PRI.findall(text):
+			pri = ROOT / included
+			if pri.is_file():
+				text += "\n" + pri.read_text(encoding="utf-8")
+		units.append((path.name, text))
 
 	for path in sorted((ROOT / "test").glob("test_*.pro")):
 		units.append((path.relative_to(ROOT).as_posix(),

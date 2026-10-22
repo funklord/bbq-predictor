@@ -1,3 +1,14 @@
+bbq-predictor (0.1.0-2) unstable; urgency=low
+
+  * Publish from bbq-predictor-publish, built on QtCore, QtNetwork and
+    QtSql alone, so a server needs no display and no desktop libraries.
+    The applet refuses --publish and the signing-key options by name.
+  * Move the five-minute round -- the timer, the cron line, its
+    configuration and the bbq-predictor account -- to bbq-predictor-server,
+    and run the publisher from it.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Thu, 22 Oct 2026 23:03:09 +0200
+
 bbq-predictor (0.1.0-1) unstable; urgency=low
 
   * First package.  Installs the applet and a systemd timer that fetches

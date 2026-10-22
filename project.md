@@ -6103,11 +6103,13 @@ sent somebody looking for a data-corruption bug that does not exist.
 
 ## 15. A fetching server, published statically
 
-**Proposed by the copyright holder 2026-08-31, and not yet decided.** A
-machine that is always on fetches the bands, writes them as static files,
-and serves them over HTTP; the applet asks that first and falls back to
-the providers it uses today. Recorded here as a design rather than
-started as work, because several of its forks change what gets built.
+**Proposed by the copyright holder 2026-08-31, decided and built
+2026-10-22.** A machine that is always on fetches the bands, writes them
+as signed files, and serves them; the applet asks that first and falls
+back to the providers it uses today. Sec 15.1 to 15.11 are the design as
+it was argued, forks and all, and read as history: what was decided is
+sec 15.5, what was built is sec 15.12, and the publisher's split from
+the applet is sec 15.13.
 
 ### 15.1 What it is actually for
 
@@ -7266,11 +7268,12 @@ observed while building it.
 ### 15.12.5 Deploying it without systemd, and with it
 
 **Two packages, because the applet's must never open a port.** Installing
-`bbq-predictor` for the window gets the applet, the fetch timer and a
-cron entry; `bbq-predictor-server` adds the daemon, its init script, its
-systemd unit and its account. The server is registered for boot but **not
-started on install**: 443 may belong to something else, and until the
-publisher has run there is nothing to serve.
+`bbq-predictor` for the window gets the applet and nothing scheduled;
+`bbq-predictor-server` has the publisher, the fetch timer and cron entry
+that run it, the daemon, its init script, its systemd unit and both
+accounts (sec 15.13 moved the round there). The server is registered for
+boot but **not started on install**: 443 may belong to something else,
+and until the publisher has run there is nothing to serve.
 
 **One fetch command, two schedulers.** `packaging/fetch` is what the
 systemd timer and `packaging/cron/bbq-predictor` both run, reading
@@ -7375,6 +7378,99 @@ HTTPS body arrived whole before the streaming cap could abort it, so
 the cap is enforced on what arrived as well. And a 290 ms bound on a
 300 ms coarse QTimer failed about one run in two, since such a timer may
 fire 5% early.
+
+## 15.13 The publisher is its own program, with no Gui
+
+**Asked by the copyright holder 2026-10-22: the publisher runs on a
+headless server, and it must not depend on the desktop.** Until then it
+was the applet's `--publish`, one binary linking Widgets, Gui and
+Positioning, so a server installed the desktop's libraries for a program
+that never opened a window there.
+
+**Split at the module boundary, not rewritten.** `nm -uC` over the
+publisher's objects found 285 Qt symbols across about fifty classes --
+QString, QDateTime and QTimeZone, the event loop and signals, QtNetwork's
+TLS, QtSql -- so a stand-in for "the few calls it makes" would have been
+a partial copy of QtCore. A Qt-free core on libcurl, sqlite3 and a
+vendored JSON parser was sized (about 10,000 lines to move) and set
+aside: the applet still scrapes when the server is gone, so it would
+have meant two scrapers to keep in step, or moving the applet onto the
+same core as well. The holder settled it: remove the Gui parts, share
+the core parts that still use Qt's core. Nothing the publisher compiles
+included a Gui header, which the test projects had already shown by
+building the feed with `QT -= gui`.
+
+- **`core.pri`** holds every source that draws nothing -- the providers,
+  the store, the feed, the published format -- and the build settings
+  both programs need. `bbq-predictor.pro` includes it and adds the
+  window; `bbq-predictor-publish.pro` includes it and adds the signing
+  and the encoder, with `QT -= gui`. Each builds in its own directory,
+  since qmake writes one flat object directory per project: the
+  `client.o` collision of sec 15.12.6, one level up.
+- **`bbq-predictor-publish`** is `src/publish/main.cpp`: the round the
+  applet's `--fetch-once` runs, with the publish riding on it as before.
+  `--dir` and `--signing-key` are both required, the key is loaded before
+  anything is fetched, and it keeps the applet's application name so
+  QSettings and the default archive path are the applet's. It links
+  QtCore, QtNetwork and QtSql, 497 KB; `make check-publish-libraries`
+  reads its ELF header and fails on Gui, Widgets, Positioning, OpenGL or
+  DBus, and also fails if Core is absent, so an unreadable header cannot
+  pass.
+- **The applet refuses `--publish`, `--signing-key` and
+  `--generate-signing-key` by name.** It ignores options it does not
+  know, so a command line written for the old `--publish` fetched and
+  published nothing -- found when such a line, with nothing else on it,
+  opened the window. Refused from raw argv before any application
+  object exists.
+- **The five-minute round moved to `bbq-predictor-server`**: the
+  wrapper, the timer and its service, the cron line,
+  `/etc/default/bbq-predictor` and the `bbq-predictor` account, with
+  `Breaks`/`Replaces: bbq-predictor (<< 0.1.0-2)`. It was described as
+  the fetching half of the server from the start (sec 15.6), and with
+  publishing gone from the applet it had nothing left to do in the
+  applet's package. The wrapper always publishes now, defaulting the
+  tree and the key under the state directory; a station with no key is
+  a misconfiguration and the publisher says so before fetching. The
+  `QT_QPA_PLATFORM=offscreen` the wrapper and the unit carried is gone:
+  it was there because a QApplication was built before arguments were
+  read, which sec 16.70.1 had already ended for `--fetch-once`. The
+  units cite `bbq-predictor-publish(1)` rather than this file, which the
+  server package does not ship.
+
+**Measured.** A real round from the built publisher with `DISPLAY` and
+`WAYLAND_DISPLAY` unset, against ISTOCK877: six bands, a month, its
+index, the head and the manifest written, exit 3 because WU's history
+endpoint was five hours behind the station -- the ordinary partial case.
+`test_publisher` drives both built programs: no tree or no key refuses
+and creates nothing; a key others can read is refused with the archive
+never opened; a key is made 0600 and never overwritten; the applet
+refuses all three moved options and writes nothing. Two sabotages --
+the applet's refusal disabled, and a bad key let through into the round
+-- each failed the test, which then passed on the restored source.
+`man_options.py` now holds each program to its own page and the wrapper
+to the publisher's options alone (a wrapper passing the applet-only
+`--shot` fails it); `exit_codes.py` reads both pages; `build_wiring.py`
+reads `core.pri` with each project that includes it. Each was sabotaged
+once and failed.
+
+**Four things the packaging found.** The state directory was made by the
+applet's postinst, which stayed behind when the round moved: on a bare
+trixie with only `bbq-predictor-server`, the cron path's first round
+could not open its lock in a root-owned `/var/lib/bbq-predictor`, and the
+key could not be made there either. Under systemd `StateDirectory=` would
+have hidden it, so it bit exactly the hosts the holder runs. The server's
+postinst makes both directories now, and the applet has no postinst. The
+packaged build compiled monocypher and situ's runtime at `-O2 -g`:
+`force_debug_info` swaps in `QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO`, and
+the size flags had patched only its C++ twin -- the applet's build had
+the same gap. And `make deb` collected `$(VERSION)-1` by name, so the
+first changelog entry after `-1` made a good build report its artifacts
+"not produced"; it reads the version from `debian/changelog` now.
+And the trust store: Qt's network library only recommends
+`ca-certificates`, so with `--no-install-recommends` every handshake
+failed with "the issuer certificate of a locally looked up certificate
+could not be found" and the round stored nothing. The server package
+depends on it now, since every provider is HTTPS.
 
 ## 16. The home-screen widget
 

@@ -9,7 +9,9 @@ copy of it agrees:
     src/wu/fetch_once.cpp    the codes the program actually returns
     src/wu/fetch_once.h      what callers are told they mean
     packaging/systemd/...    SuccessExitStatus, which forgives one
-    packaging/bbq-predictor.1  the EXIT STATUS a reader is given
+    packaging/*.1            the EXIT STATUS a reader is given, in
+                             both pages: the applet's --fetch-once and
+                             the publisher run the same round
 
 Drift here fails silently in the worst direction. If the partial code
 changes and the unit is not updated, the timer marks itself failed every
@@ -30,7 +32,8 @@ import cxx_text  # noqa: E402  -- needs the path line above
 CODE = Path("src/wu/fetch_once.cpp")
 HEADER = Path("src/wu/fetch_once.h")
 UNIT = Path("packaging/systemd/bbq-predictor-fetch.service")
-MANUAL = Path("packaging/bbq-predictor.1")
+MANUALS = (Path("packaging/bbq-predictor.1"),
+           Path("packaging/bbq-predictor-publish.1"))
 
 # The partial case: some band failed, the composite still covers now.
 # This is the one the unit forgives, and the only one it may forgive.
@@ -80,7 +83,7 @@ def main():
 		      "anything", file=sys.stderr)
 		return 2
 
-	for path in (CODE, HEADER, UNIT, MANUAL):
+	for path in (CODE, HEADER, UNIT) + MANUALS:
 		if not path.is_file():
 			print(f"exit-codes: {path} is missing", file=sys.stderr)
 			return 2
@@ -93,7 +96,6 @@ def main():
 
 	code = cxx_text.without_comments(CODE.read_text(encoding="utf-8"))
 	unit = UNIT.read_text(encoding="utf-8")
-	manual = MANUAL.read_text(encoding="utf-8")
 	header = HEADER.read_text(encoding="utf-8")
 
 	returned = returns_of(code, "int bbq_wu_fetch_once(")
@@ -117,13 +119,15 @@ def main():
 		bad += 1
 
 	# Every code the program can return must be explained to a reader.
-	section = manual[manual.index(".SH EXIT STATUS"):]
-	section = section[:section.index(".SH ", 1)]
-	for value in sorted(returned):
-		if not re.search(rf'^\.B {value}$', section, re.M):
-			print(f"exit-codes: {value} is returned but not in the manual "
-			      f"page's EXIT STATUS", file=sys.stderr)
-			bad += 1
+	for page in MANUALS:
+		manual = page.read_text(encoding="utf-8")
+		section = manual[manual.index(".SH EXIT STATUS"):]
+		section = section[:section.index(".SH ", 1)]
+		for value in sorted(returned):
+			if not re.search(rf'^\.B {value}$', section, re.M):
+				print(f"exit-codes: {value} is returned but not in {page}'s "
+				      f"EXIT STATUS", file=sys.stderr)
+				bad += 1
 
 	# And the header, which is what a caller reads, must name them all.
 	# Deliberately the weaker question -- does the number appear -- since

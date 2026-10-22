@@ -1,0 +1,153 @@
+.\" Manual page for bbq-predictor-publish.
+.\"
+.\" No version number here, for the reason bbq-predictor.1 gives: VERSION
+.\" is the one place this project keeps one.
+.TH BBQ\-PREDICTOR\-PUBLISH 1 "2026-10-22" "bbq-predictor" "User Commands"
+.SH NAME
+bbq\-predictor\-publish \- fetch the weather bands once and publish them signed
+.SH SYNOPSIS
+.B bbq\-predictor\-publish
+.B \-\-dir
+.I DIR
+.B \-\-signing\-key
+.I FILE
+.RB [ \-\-station
+.IR ID ]
+.RB [ \-\-geocode
+.IR LAT , LON ]
+.RB [ \-\-history\-path
+.IR FILE ]
+.br
+.B bbq\-predictor\-publish \-\-generate\-signing\-key
+.I FILE
+.br
+.B bbq\-predictor\-publish
+.RB [ \-\-version | \-\-help ]
+.SH DESCRIPTION
+.B bbq\-predictor\-publish
+runs one round of the applet's fetch with no window behind it: every
+band from every provider, archived, and then written as the station's
+signed files under
+.I DIR
+for
+.BR bbq\-predictor\-serve (8)
+to serve. Clients read those files first and fetch from the providers
+themselves only when the server has been gone a while.
+.PP
+It is built with QtCore, QtNetwork and QtSql and nothing that draws, so
+a server needs neither a display nor the desktop's libraries to run it.
+.PP
+What a round writes under
+.IR DIR :
+a file per month of observations, an index of them, the bands this round
+fetched, and a
+.I stations
+manifest written last. Each file is written aside and renamed into
+place, a month whose rows have not changed is not rewritten, and a round
+in which no band arrived leaves the last bands in place.
+.SH OPTIONS
+.TP
+.BI \-\-dir " DIR"
+The published tree. Created if missing.
+.TP
+.BI \-\-signing\-key " FILE"
+The Ed25519 key that signs what is written: its 32\-byte seed and
+nothing else. Refused if any other user can read it, and loaded before
+anything is fetched, so a bad key costs a message and not a round.
+.TP
+.BI \-\-station " ID"
+The station to fetch and publish, for example
+.BR ISTOCK877 .
+Taken from the applet's settings when omitted.
+.TP
+.BI \-\-geocode " LAT,LON"
+Where the forecast bands are aimed. Derived from the station when
+omitted.
+.TP
+.BI \-\-history\-path " FILE"
+The archive to fetch into and publish from, instead of the default one.
+.TP
+.BI \-\-generate\-signing\-key " FILE"
+Create a new signing key at
+.IR FILE ,
+readable by its owner alone, print its public half in hex, and exit.
+Never overwrites an existing file: losing a key strands every client
+built with its public half.
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.B \-\-help
+Print a usage summary and exit.
+.SH EXIT STATUS
+A round distinguishes a partial fetch from a failed one, because a
+station going quiet for an hour is ordinary and the other bands still
+land in the archive:
+.TP
+.B 0
+Every band answered.
+.TP
+.B 3
+Some band failed, but the composite still covers now. The archive
+advanced. The systemd timer forgives this by name.
+.TP
+.B 1
+Nothing covers now: the run stored nothing usable. A publish that fails
+after the fetch exits 1 as well.
+.TP
+.B 2
+A configuration error, including a
+.B \-\-signing\-key
+that cannot be used.
+.SH FILES
+.TP
+.I /etc/default/bbq-predictor
+Read by the scheduled round.
+.B BBQ_STATION
+must be set there; unset, the round skips itself and says why rather
+than fetching for a station nobody named.
+.B BBQ_PUBLISH_DIR
+and
+.B BBQ_SIGNING_KEY
+name the tree and the key, defaulting to the two paths below.
+.TP
+.I /var/lib/bbq-predictor/signing.key
+The key, made once as the account that publishes:
+.IP
+.nf
+sudo \-u bbq\-predictor bbq\-predictor\-publish \e
+        \-\-generate\-signing\-key /var/lib/bbq\-predictor/signing.key
+.fi
+.TP
+.I /var/lib/bbq-predictor/published
+The tree
+.BR bbq\-predictor\-serve (8)
+serves.
+.TP
+.I /var/lib/bbq-predictor/history.sqlite
+The archive the rounds build. Readable, so the applet's archive
+diagnostic in
+.BR bbq\-predictor (1)
+can inspect it without root.
+.TP
+.I /usr/lib/bbq-predictor/fetch
+What both schedulers run: the systemd timer
+.I bbq\-predictor\-fetch.timer
+every five minutes where systemd runs, and
+.I /etc/cron.d/bbq\-predictor
+everywhere else. It runs as the
+.B bbq\-predictor
+system account.
+.SH SEE ALSO
+.BR bbq\-predictor (1),
+.BR bbq\-predictor\-serve (8)
+.PP
+The project's design record is
+.I project.md
+in its source tree, which the
+.B bbq\-predictor
+package installs under
+.IR /usr/share/doc/bbq-predictor/ ;
+it is authoritative over this page.
+.SH AUTHOR
+Nabeel Sowan <nabeel@vibes.se>

@@ -1,6 +1,6 @@
 [Unit]
 Description=Fetch weather bands regularly
-Documentation=file:///usr/share/doc/bbq-predictor/project.md
+Documentation=man:bbq-predictor-publish(1)
 
 [Timer]
 # A station reports about every five minutes, so asking more often than
