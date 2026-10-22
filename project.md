@@ -6149,19 +6149,40 @@ line -- keeping something on one machine and publishing it are different
 acts -- and the option was put with that cost stated. It is recorded as
 the holder's decision because it is theirs and nobody else's.
 
-### 15.5 Still open, and now the real questions
+### 15.5 Decided 2026-10-22, and what is still open
 
-- **What the format is.** The internal series has no wire form; the
-  readers translate into it in memory. A stable public contract needs
-  one written down. If it is binary, `situ` is the sibling built for
-  byte-exact layouts and must be evaluated rather than hand-rolled
-  (the standing instruction in `build-and-commit.md`); if it is JSON,
-  situ does not apply and the question is only the schema.
-- **Retention.** "History, published" needs a floor: how far back, and
-  what happens when a station has years.
-- **Where it runs**, and what fetches when nothing has asked -- the
-  server has the opposite problem from the phone, in that it must
-  fetch sparingly without a user's attention to pace it.
+The holder answered three of the four questions this section held:
+
+- **Retention: all of it.** Every observation is kept and published,
+  so the format has to pack hard and still be seekable -- a client
+  asking for last week must not download a decade.
+- **The format is binary**, and so is the protocol, because the
+  service may reach thousands of clients. That makes `situ` the
+  candidate to evaluate before anything is hand-rolled (the standing
+  instruction in `build-and-commit.md`). Its tree carries examples
+  that describe varints and `coded` (compressed) regions, so it is a
+  real candidate rather than a formal one -- but whether it fits is
+  settled by writing the schema, not by reading its feature list.
+  **Evaluate it with the tree's `bin/situc`, not the installed one**:
+  `/usr/bin/situc` dates from 2026-08-05 and is far behind the tree,
+  and both print `situc 1.0`, so the version string cannot tell them
+  apart.
+- **It must not need systemd.** None of the holder's machines run it,
+  but systemd hosts should still work. The fetcher is already a
+  one-shot `--fetch-once`, so this is about what invokes it, not about
+  the program.
+
+**Measured, to size the format**: the desktop archive's ISTOCK877 rows,
+2609 observations over 16 days, packed column by column -- zigzag
+varint deltas of time, duration, temperature x10, precipitation rate
+x100 and wind x10, which is the finest resolution the data carries --
+came to 6.4 bytes a row, and 2.5 after zlib (2.3 with xz), against
+about 90 in SQLite (sec 12.1). That is roughly 260 KB per station-year.
+n is one station in one fortnight of late summer, so it sizes the
+design and does not promise a number.
+
+Still open:
+
 - **Whether clients keep their own archive at all** once the server has
   one, or become readers. That decides whether sec 12's store stays the
   centre of the program or becomes a cache.
@@ -6351,9 +6372,10 @@ copy and false of an installed one.**
   installs anything. `DESKTOP_ID` is separate now.
 
 **What is not installed is the publishing half**, and that is deliberate
-rather than unfinished-by-accident. Sec 15.5's questions -- the wire
-format, the retention, whether clients keep their own archives -- are the
-holder's, and a format guessed at now is one somebody has to keep
+rather than unfinished-by-accident. When this was written sec 15.5's
+questions were all open; the holder has since settled retention, a
+binary format and no systemd dependency, and the format itself is still
+to be designed -- a format guessed at is one somebody has to keep
 answering for. The fetching half is useful without it and is what sec
 15.1 actually complained about.
 
