@@ -754,9 +754,13 @@ android-uninstall:
 # put back by the trap, whatever the outcome; an override already present
 # is restored rather than reset.
 #
-# The status bar goes into SystemUI demo mode -- a fixed clock, a full
-# battery, no notifications -- so the device's own state is not published
-# either, and comes out of it on exit.
+# The status bar is asked into SystemUI demo mode -- a fixed clock, a
+# full battery, no notifications -- and out of it on exit. ASKED, not
+# put: on a Galaxy Z Fold3 (One UI, Android 15) the broadcasts raised no
+# error and changed nothing, and every capture showed the live clock,
+# battery and charging icon (hydra, 2026-10-22). So an app that must not
+# publish the device's status bar hides it itself in a store_view run,
+# as beerssh does.
 #
 # Before each capture the focused window must be this app's. A locked
 # phone photographs as black, which has cost two rounds before (the
