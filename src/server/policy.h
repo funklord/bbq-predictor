@@ -28,13 +28,13 @@
 
 struct bbq_server_policy {
 	/* How long failures must have been seen before scraping. */
-	qint64 give_up_s = 6 * 3600;
+	qint64 give_up_s = 30 * 60;
 
 	/* And how many of them, so a long window with two failures is not enough. */
-	int min_failures = 12;
+	int min_failures = 6;
 
 	/* The retry interval grows to this and stays there. */
-	qint64 max_retry_s = 15 * 60;
+	qint64 max_retry_s = 5 * 60;
 };
 
 struct bbq_server_state {

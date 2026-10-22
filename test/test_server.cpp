@@ -58,8 +58,8 @@ void test_server::a_server_that_answers_is_never_abandoned() {
 void test_server::a_sustained_outage_with_the_network_up_falls_back() {
 	bbq_server_state state;
 
-	/* Every 15 minutes for 7 hours: 29 failures spanning 7 h. */
-	fail(state, 0, 15 * 60, 29);
+	/* Every 5 minutes for 35 minutes: 8 failures spanning 35 min. */
+	fail(state, 0, 5 * 60, 8);
 	bbq_server_record_network_ok(state, t(3600));
 
 	QVERIFY(bbq_server_should_scrape(state));
@@ -68,8 +68,8 @@ void test_server::a_sustained_outage_with_the_network_up_falls_back() {
 void test_server::few_failures_over_a_long_window_do_not_fall_back() {
 	bbq_server_state state;
 
-	/* Opened twice a day for three days: six failures. */
-	fail(state, 0, 12 * 3600, 6);
+	/* Opened twice a day for two days: four failures. */
+	fail(state, 0, 12 * 3600, 4);
 	bbq_server_record_network_ok(state, t(3600));
 
 	QVERIFY(!bbq_server_should_scrape(state));
@@ -78,8 +78,8 @@ void test_server::few_failures_over_a_long_window_do_not_fall_back() {
 void test_server::many_failures_in_a_short_window_do_not_fall_back() {
 	bbq_server_state state;
 
-	/* A restart storm: fifty failures in under an hour. */
-	fail(state, 0, 60, 50);
+	/* A restart storm: fifty failures in under twenty minutes. */
+	fail(state, 0, 20, 50);
 	bbq_server_record_network_ok(state, t(30));
 
 	QVERIFY(!bbq_server_should_scrape(state));
@@ -89,11 +89,11 @@ void test_server::a_closed_app_is_not_a_witness() {
 	bbq_server_state state;
 
 	/*
-	 * Twelve failures in the first hour, then nothing for two days
-	 * because nobody opened the app. The span the client SAW is an
-	 * hour, however much time has passed.
+	 * Eight failures in the first ten minutes, then nothing for two days
+	 * because nobody opened the app. The span the client SAW is ten
+	 * minutes, however much time has passed.
 	 */
-	fail(state, 0, 5 * 60, 12);
+	fail(state, 0, 75, 8);
 	bbq_server_record_network_ok(state, t(600));
 
 	QVERIFY(!bbq_server_should_scrape(state));
@@ -103,7 +103,7 @@ void test_server::no_network_is_not_an_outage() {
 	bbq_server_state state;
 
 	/* A long flight: the server failed throughout, and so did everything. */
-	fail(state, 0, 15 * 60, 40);
+	fail(state, 0, 5 * 60, 20);
 
 	QVERIFY(!bbq_server_should_scrape(state));
 }
@@ -112,7 +112,7 @@ void test_server::network_seen_only_before_the_outage_does_not_count() {
 	bbq_server_state state;
 
 	bbq_server_record_network_ok(state, t(100));
-	fail(state, 1000, 15 * 60, 40);
+	fail(state, 1000, 5 * 60, 20);
 
 	QVERIFY(!bbq_server_should_scrape(state));
 
@@ -124,15 +124,15 @@ void test_server::network_seen_only_before_the_outage_does_not_count() {
 void test_server::one_success_ends_the_fallback() {
 	bbq_server_state state;
 
-	fail(state, 0, 15 * 60, 40);
-	bbq_server_record_network_ok(state, t(3600));
+	fail(state, 0, 5 * 60, 20);
+	bbq_server_record_network_ok(state, t(600));
 	QVERIFY(bbq_server_should_scrape(state));
 
-	bbq_server_record_success(state, t(40 * 15 * 60));
+	bbq_server_record_success(state, t(20 * 5 * 60));
 	QVERIFY(!bbq_server_should_scrape(state));
 	QCOMPARE(state.failures, 0);
 	QCOMPARE(state.outage_since_utc, qint64(0));
-	QVERIFY(bbq_server_may_attempt(state, t(40 * 15 * 60)));
+	QVERIFY(bbq_server_may_attempt(state, t(20 * 5 * 60)));
 }
 
 void test_server::retries_back_off_and_cap() {
@@ -140,14 +140,13 @@ void test_server::retries_back_off_and_cap() {
 	QCOMPARE(bbq_server_retry_delay(1), qint64(60));
 	QCOMPARE(bbq_server_retry_delay(2), qint64(120));
 	QCOMPARE(bbq_server_retry_delay(3), qint64(300));
-	QCOMPARE(bbq_server_retry_delay(4), qint64(600));
-	QCOMPARE(bbq_server_retry_delay(5), qint64(900));
-	QCOMPARE(bbq_server_retry_delay(500), qint64(900));
+	QCOMPARE(bbq_server_retry_delay(4), qint64(300));
+	QCOMPARE(bbq_server_retry_delay(500), qint64(300));
 
 	/* The cap holds even below the fixed steps. */
 	bbq_server_policy tight;
 	tight.max_retry_s = 90;
-	QCOMPARE(bbq_server_retry_delay(3, tight), qint64(90));
+	QCOMPARE(bbq_server_retry_delay(2, tight), qint64(90));
 }
 
 void test_server::a_retry_waits_its_turn() {

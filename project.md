@@ -7048,8 +7048,8 @@ the suite's usual shape for a decision only a reply could otherwise
 reach. Three conditions at once, each guarding one way a client could
 fall back wrongly:
 
-- **At least 12 failures**, so a long window holding two is not enough.
-- **Failures seen across 6 hours**: the span from the first OBSERVED
+- **At least 6 failures**, so a long window holding two is not enough.
+- **Failures seen across 30 minutes**: the span from the first OBSERVED
   failure to the latest, never from the first failure to now. A phone
   that failed once on a plane and opens two days later has seen one
   failure, not two days of outage.
@@ -7057,7 +7057,9 @@ fall back wrongly:
   network was up and the server was what was missing. Without this, a
   traveller with no connection would fall back the moment one returned.
 
-Retries back off 1, 2, 5, 10 minutes and then every 15. The server is
+Retries back off 1, 2 and then every 5 minutes, so a client that keeps
+the app open has asked seven or eight times by the half hour. The
+server is
 still asked first on every round after the fallback starts, and one
 success ends it. Each condition was sabotaged in turn and each is caught
 by the case named for it.
@@ -7069,8 +7071,11 @@ the window check should have failed the restart-storm case and did not;
 every absolute time is now offset from a real epoch, and the same
 sabotage fails it.
 
-The numbers are defaults chosen here, not measured, and are the
-holder's to move.
+**The window was 6 hours and the holder cut it to 30 minutes** the same
+day, as too long to go without data. The retry cap came down with it
+from 15 minutes to 5, because a window of half an hour with retries
+every quarter of an hour could not gather enough observed failures to
+mean anything. The numbers are still defaults rather than measurements.
 
 ### 15.12.2 A purpose-built daemon, not a web server
 

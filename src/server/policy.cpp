@@ -28,12 +28,12 @@ void bbq_server_record_network_ok(bbq_server_state &state, qint64 now_utc) {
 
 qint64 bbq_server_retry_delay(int failures, const bbq_server_policy &policy) {
 	/*
-	 * A minute, then two, five, ten, and the cap. Short at first because
+	 * A minute, then two, then the cap of five. Short at first because
 	 * the commonest failure is a restart that is over in seconds; capped
-	 * because a client that backs off to hours would also notice the
-	 * server's return hours late.
+	 * low because the window before scraping is half an hour, and a
+	 * client must have asked several times inside it to have seen it.
 	 */
-	static const qint64 steps[] = {60, 120, 300, 600};
+	static const qint64 steps[] = {60, 120};
 	const int count = int(sizeof steps / sizeof steps[0]);
 
 	if (failures <= 0) {
