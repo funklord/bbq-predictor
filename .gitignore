@@ -5,6 +5,8 @@
 /build-test/
 /bbq-predictor
 /bbq-predictor.new
+/bbq-predictor-serve
+/bbq-predictor-serve.new
 
 # qmake droppings
 .qmake.stash

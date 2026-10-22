@@ -231,6 +231,34 @@ static struct bbq_serve_blob *load_file(int dir_fd, const char *name,
 	return blob;
 }
 
+/*
+ * A directory stream of its own over `dir_fd`, starting at the first
+ * entry.
+ *
+ * NOT dup(): a duplicated descriptor shares its file offset, and a
+ * directory's read position IS that offset. The first load read the
+ * shared one to the end, so every reload after it listed nothing and
+ * the daemon served an empty tree from its first republish on. The
+ * loop's reload case found it. openat(".") opens the same directory
+ * with an offset of its own, and the rewind is for any platform where
+ * fdopendir does not start at the top.
+ */
+static DIR *open_listing(int dir_fd) {
+	const int fd = openat(dir_fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+	if (fd < 0) {
+		return NULL;
+	}
+
+	DIR *listing = fdopendir(fd);
+	if (!listing) {
+		close(fd);
+		return NULL;
+	}
+
+	rewinddir(listing);
+	return listing;
+}
+
 static int compare_station(const void *a, const void *b) {
 	return strcmp(((const struct bbq_serve_station *)a)->id,
 	              ((const struct bbq_serve_station *)b)->id);
@@ -267,12 +295,8 @@ static int station_load(int root_fd, const char *id,
 	station->index = load_file(fd, "index", BBQ_SERVE_SMALL_FILE_MAX);
 	station->head = load_file(fd, "head", BBQ_SERVE_SMALL_FILE_MAX);
 
-	const int listing_fd = dup(fd);
-	DIR *listing = listing_fd >= 0 ? fdopendir(listing_fd) : NULL;
+	DIR *listing = open_listing(fd);
 	if (!listing) {
-		if (listing_fd >= 0) {
-			close(listing_fd);
-		}
 		close(fd);
 		return 0;
 	}
@@ -352,12 +376,8 @@ struct bbq_serve_table *bbq_serve_table_load(int dir_fd) {
 
 	table->stations = load_file(dir_fd, "stations", BBQ_SERVE_SMALL_FILE_MAX);
 
-	const int listing_fd = dup(dir_fd);
-	DIR *listing = listing_fd >= 0 ? fdopendir(listing_fd) : NULL;
+	DIR *listing = open_listing(dir_fd);
 	if (!listing) {
-		if (listing_fd >= 0) {
-			close(listing_fd);
-		}
 		return table;
 	}
 

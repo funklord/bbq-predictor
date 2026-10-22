@@ -181,7 +181,29 @@ else
 ARTIFACT = $(BUILD_DIR)/$(TARGET)
 endif
 
-all: $(ARTIFACT)
+# The daemon that serves the published archive (project.md sec 15.12.2).
+# Plain C on libc, no Qt, so it is built by the C compiler here rather
+# than by qmake. One compile-and-link call: the headers are prerequisites
+# so an edit to one rebuilds it, and $(filter %.c,$^) keeps them off the
+# command line. Same naming and rename-into-place as the applet, for the
+# same reasons -- a sanitized build stays in its BUILD_DIR, and a running
+# daemon does not make the build fail with ETXTBSY.
+SERVE_TARGET = bbq-predictor-serve
+ifeq ($(BUILD_DIR),build)
+SERVE_ARTIFACT = $(SERVE_TARGET)
+else
+SERVE_ARTIFACT = $(BUILD_DIR)/$(SERVE_TARGET)
+endif
+SERVE_CFLAGS = -std=c11 -Os -Wall -Wextra -Isrc
+
+$(SERVE_ARTIFACT): src/serve/serve.c src/serve/serve_loop.c \
+                   src/serve/serve_core.c $(wildcard src/serve/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(SERVE_CFLAGS) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) \
+	        -o $@.new $(filter %.c,$^)
+	mv -f $@.new $@
+
+all: $(ARTIFACT) $(SERVE_ARTIFACT)
 
 $(BUILD_DIR)/Makefile: bbq-predictor.pro
 	mkdir -p $(BUILD_DIR)
@@ -593,7 +615,7 @@ uninstall:
 # clean removes intermediates only; $(TARGET) survives, so `make install`
 # stays possible without a rebuild.
 clean:
-	rm -f $(TARGET).new
+	rm -f $(TARGET).new $(SERVE_TARGET).new
 	@if [ -f $(BUILD_DIR)/Makefile ]; then $(MAKE) -C $(BUILD_DIR) clean; fi
 	@if [ -f $(TEST_BUILD_DIR)/Makefile ]; then $(MAKE) -C $(TEST_BUILD_DIR) clean; fi
 
@@ -624,7 +646,7 @@ endef
 
 veryclean: clean
 	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) $(ANDROID_BUILD_DIR))
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(SERVE_TARGET)
 
 # `distclean` removes what the build generated and `veryclean` does not.
 # `.qmake.stash` is qmake's, is named, and is disposable by construction.
