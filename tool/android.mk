@@ -784,6 +784,13 @@ android-uninstall:
 # which display that is on a folding phone is unmeasured; on failure the
 # mTopFocusedDisplayId line is printed with the focus lines, to say so.
 #
+# The app is force-stopped on exit as well. The last view's process
+# otherwise stays alive, and a plain launch or a tap on the icon only
+# brings it forward: fuzzypickles' Fold run, 2026-10-22, left the phone
+# showing its demo contacts with no daemon behind them until an
+# `am start -S`. For an app whose demo replaces its data, that is the
+# user's own app impersonated by its demo until the process dies.
+#
 # Each PNG's size is read back from its header and held to Play's rules:
 # 320 to 3840 px a side, long side at most twice the short.
 STORE_SCREEN_SIZE   ?= 1080x1920
@@ -808,6 +815,7 @@ android-screenshots: android-install
 	old_size=$$($$adb shell wm size | sed -n 's/^Override size: //p' | tr -d '\r'); \
 	old_demo=$$($$adb shell settings get global sysui_demo_allowed | tr -d '\r'); \
 	restore() { \
+		$$adb shell am force-stop $(APP_ID); \
 		$$adb shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null 2>&1; \
 		case "$$old_demo" in 1) ;; null|'') $$adb shell settings delete global sysui_demo_allowed >/dev/null 2>&1;; \
 			*) $$adb shell settings put global sysui_demo_allowed "$$old_demo" >/dev/null 2>&1;; esac; \
