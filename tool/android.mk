@@ -17,6 +17,8 @@
 #   make android-log        follow this app's log, and only this app's
 #   make android-uninstall  remove it
 #   make android-check      everything the build needs, checked by name
+#   make android-play-check what Play would refuse, read from the bundle
+#   make android-screenshots  the store screenshots, from this build
 #
 # `apk` is deliberately NOT a target name. netcfgd's `apk` is Alpine's
 # packaging command, and one word meaning two things across sibling trees is
@@ -43,6 +45,16 @@
 #   ANDROID_ARTIFACT    the path the build rule leaves the APK at
 #   android-build       a rule that produces the APK, however this project
 #                       builds; qmake and CMake differ and neither belongs here
+#
+# NOTHING HERE DEFAULTS A VARIABLE TO EMPTY, and that is deliberate.
+#
+# `X ?=` with nothing after it still DEFINES X, so a project writing its
+# own `X ?= value` below the include finds X already set and keeps the
+# empty one: no error, and the setting silently does nothing. beerssh met
+# it 2026-10-22 with ANDROID_AAB, and seven variables here had the shape.
+# An unset variable expands to empty anyway, so the line bought nothing.
+# The variables with real defaults still take `?=`; to override one of
+# those, set it above the include or with a plain `=`.
 #
 # WHAT THIS FILE SUPPLIES
 #   The variable names, the preflight, the versionCode, the adb plumbing,
@@ -260,8 +272,6 @@ ANDROID_VERSION_CODE ?= $(shell echo $(VERSION) | awk -F. \
 #
 # A keystore committed anywhere is a keystore that has to be replaced, and
 # the upload key is the one thing a store account cannot regenerate for you.
-ANDROID_KEYSTORE  ?=
-ANDROID_KEY_ALIAS ?=
 
 # A project's own preflight runs as part of this one, not instead of it.
 #
@@ -306,7 +316,6 @@ ANDROID_KEY_ALIAS ?=
 # Invoked with $(MAKE) at the end of the recipe rather than ordered among
 # prerequisites, because prerequisite order is not guaranteed under `make
 # -j`. A recursive call is sequenced by construction.
-ANDROID_CHECK_LOCAL ?=
 
 # The activity `android-run` starts. Three of the four adopters declare Qt's
 # own class in their manifests and never touch this; hydra subclasses it and
@@ -354,7 +363,6 @@ ANDROID_ACTIVITY ?= org.qtproject.qt.android.bindings.QtActivity
 # it -- an allowlist of what Android provides is a waiver list, and goes
 # stale silently when ANDROID_API moves. The fragment supplies the place to
 # attach, not the policy.
-ANDROID_ARTIFACT_CHECK ?=
 
 android-check:
 	@# ANDROID_API must not exceed what the app declares.
@@ -555,6 +563,133 @@ define android_verify_signature
 	fi
 endef
 
+# What Play will refuse, read from the bundle itself before uploading it.
+#
+# The android-aab rules in the four adopters each refuse to run without a
+# keystore, and none of them reads the result: whether the bundle came out
+# signed, by which key, at which targetSdk and versionCode, and with which
+# page alignment is announced by the build or assumed. Each is something
+# Play checks on upload, a day later and one rejection at a time. So this
+# reads all four from the file, and says which it could not read rather
+# than passing over it.
+#
+#   ANDROID_AAB              the bundle; the project's android-aab knows it
+#   ANDROID_PLAY_TARGET_API  Play's targetSdk floor for new apps and updates.
+#                            36 since 2026-08-31, per
+#                            developer.android.com/google/play/requirements/target-sdk
+#                            -- dated, because Play raises it every year
+#   ANDROID_PLAY_ALLOW_4K    set to 1 to let 4 KB-aligned libraries through
+#
+# The signer is read with keytool rather than apksigner, which does not
+# read a bundle: an AAB is jar-signed. "Not a signed jar file" and a DN of
+# Android Debug both fail, since Play takes neither.
+#
+# targetSdk and versionCode come from the bundle's manifest, which is in
+# protobuf rather than binary XML. aapt2 refuses the bundle itself ("could
+# not identify format of APK"), and reads the same manifest once it is
+# re-zipped at the root of an archive of its own -- measured 2026-10-22
+# against a bundle made from beerssh's APK, which read back targetSdk 35.
+# The versionCode is compared with what this tree's VERSION derives, so a
+# bundle left over from an earlier version is caught rather than uploaded.
+#
+# Page alignment: Play requires 16 KB support for apps targeting 35 and up
+# that carry native code, and refuses updates without it from 2027-02-01.
+# Only the 64-bit ABIs are read, which is what the requirement covers.
+# Every LOAD segment of every library must be aligned to at least 0x4000.
+# Qt's own libraries are; measured 2026-10-22, bbq-predictor's
+# cross-compiled OpenSSL was 0x1000, because NDK r27 links at 4 KB unless
+# told -Wl,-z,max-page-size=16384. A library that is not aligned also fails
+# to load on a 16 KB device, which is why this is an error and not advice.
+ANDROID_PLAY_TARGET_API ?= 36
+
+android-play-check:
+	@aab="$(ANDROID_AAB)"; \
+	if [ -z "$$aab" ]; then \
+		echo "play: ANDROID_AAB is not set; the project names its bundle." >&2; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$$aab" ]; then \
+		echo "play: no bundle at $$aab -- run make android-aab first." >&2; \
+		exit 1; \
+	fi; \
+	aapt2=$$(ls $(ANDROID_SDK_ROOT)/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1); \
+	for t in keytool zip unzip readelf "$$aapt2"; do \
+		if [ -z "$$t" ] || ! command -v "$$t" >/dev/null 2>&1; then \
+			echo "play: missing $${t:-aapt2 under build-tools}; nothing was checked." >&2; \
+			exit 1; \
+		fi; \
+	done; \
+	tmp=$$(mktemp -d) || exit 1; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	fail=0; \
+	owner=$$(keytool -printcert -jarfile "$$aab" 2>/dev/null \
+	         | sed -n 's/^Owner: //p' | head -1); \
+	if [ -z "$$owner" ]; then \
+		echo "play: $$aab is UNSIGNED. Play takes only a bundle signed" >&2; \
+		echo "play:   with the upload key." >&2; \
+		fail=1; \
+	elif echo "$$owner" | grep -q "Android Debug"; then \
+		echo "play: $$aab is signed with the DEBUG key: $$owner" >&2; \
+		fail=1; \
+	else \
+		echo "play:   signed by $$owner"; \
+	fi; \
+	mkdir "$$tmp/m"; \
+	if unzip -q -j "$$aab" base/manifest/AndroidManifest.xml -d "$$tmp/m" 2>/dev/null \
+	   && (cd "$$tmp/m" && zip -q ../m.zip AndroidManifest.xml); then \
+		tree=$$("$$aapt2" dump xmltree --file AndroidManifest.xml "$$tmp/m.zip" 2>/dev/null); \
+	else \
+		tree=''; \
+	fi; \
+	target=$$(echo "$$tree" | sed -n 's/.*:targetSdkVersion([^)]*)=\([0-9][0-9]*\).*/\1/p' | head -1); \
+	code=$$(echo "$$tree" | sed -n 's/.*:versionCode([^)]*)=\([0-9][0-9]*\).*/\1/p' | head -1); \
+	if [ -z "$$target" ] || [ -z "$$code" ]; then \
+		echo "play: cannot read targetSdk and versionCode from the bundle's" >&2; \
+		echo "play:   manifest, so neither is CHECKED." >&2; \
+		fail=1; \
+	else \
+		if [ "$$target" -lt "$(ANDROID_PLAY_TARGET_API)" ]; then \
+			echo "play: targetSdk $$target, Play requires $(ANDROID_PLAY_TARGET_API) or higher." >&2; \
+			fail=1; \
+		else \
+			echo "play:   targetSdk $$target, floor $(ANDROID_PLAY_TARGET_API)"; \
+		fi; \
+		if [ "$$code" != "$(ANDROID_VERSION_CODE)" ]; then \
+			echo "play: versionCode $$code, but VERSION $(VERSION) derives" >&2; \
+			echo "play:   $(ANDROID_VERSION_CODE) -- a stale bundle, or an override." >&2; \
+			fail=1; \
+		else \
+			echo "play:   versionCode $$code, from VERSION $(VERSION)"; \
+		fi; \
+	fi; \
+	libs=$$(unzip -Z1 "$$aab" 2>/dev/null \
+	        | grep -E '^base/lib/(arm64-v8a|x86_64)/[^/]*\.so$$'); \
+	n=0; bad=''; \
+	for so in $$libs; do \
+		unzip -p "$$aab" "$$so" > "$$tmp/l.so"; \
+		low=$$(readelf -lW "$$tmp/l.so" 2>/dev/null | awk '$$1=="LOAD"{print $$NF}' \
+		       | while read a; do echo $$((a)); done | sort -n | head -1); \
+		n=$$((n + 1)); \
+		if [ -z "$$low" ] || [ "$$low" -lt 16384 ]; then \
+			bad="$$bad $${so##*/}($${low:-unreadable})"; \
+		fi; \
+	done; \
+	if [ "$$n" -eq 0 ]; then \
+		echo "play:   no 64-bit native libraries, so no page alignment to check"; \
+	elif [ -n "$$bad" ]; then \
+		echo "play: not 16 KB aligned, of $$n 64-bit libraries:$$bad" >&2; \
+		echo "play:   link with -Wl,-z,max-page-size=16384 on NDK r27 and older." >&2; \
+		[ "$(ANDROID_PLAY_ALLOW_4K)" = 1 ] || fail=1; \
+	else \
+		echo "play:   $$n 64-bit libraries, all 16 KB aligned"; \
+	fi; \
+	if [ "$$fail" -ne 0 ]; then \
+		echo "play: $$aab would be refused." >&2; \
+		exit 1; \
+	fi; \
+	echo "play: $$aab passes what this can read; the listing and the"; \
+	echo "play:   declarations are the console's, and are not checked here."
+
 android-install: android
 	$(if $(ANDROID_ARTIFACT_CHECK),@$(MAKE) --no-print-directory $(ANDROID_ARTIFACT_CHECK))
 	$(ANDROID_ADB) install -r $(ANDROID_ARTIFACT)
@@ -589,4 +724,117 @@ android-log:
 android-uninstall:
 	$(ANDROID_ADB) uninstall $(APP_ID)
 
-.PHONY: android-check android-install android-run android-log android-uninstall
+# Store screenshots of named views, taken from the build just installed.
+#
+# Asked for by the holder 2026-10-22: screenshots made automatically from
+# the current version, of views chosen in advance, so the listing never
+# shows a release older than the one it describes. It depends on
+# android-install, so what is photographed is what this tree builds.
+#
+#   STORE_VIEWS          the views, in listing order; the project's. Play
+#                        wants 2 to 8 per device type
+#   STORE_SCREEN_SIZE    the display is switched to this for the capture
+#   STORE_SHOT_DIR       where they land, per VERSION; build output, not
+#                        source, since every build can regenerate them
+#   STORE_READY_TIMEOUT  seconds to wait for a view to say it is drawn
+#
+# THE APP'S HALF, which this cannot supply. It is started as
+#
+#   am start -S -W -n $(APP_ID)/$(ANDROID_ACTIVITY) --es store_view <name>
+#
+# and must open that view with demo content -- never the user's real
+# hosts, keys or history, which would then be published -- and log a line
+# containing `store-view-ready <name>` once it is drawn. The capture waits
+# for that line rather than sleeping, because a fixed sleep photographs a
+# half-laid-out window on a slow device and wastes time on a fast one.
+#
+# 1080x1920 because Play refuses a screenshot whose long side exceeds twice
+# its short side, and a 20:9 phone at native size is 2.2 -- every capture
+# from a current phone would be refused. `wm size` is set for the run and
+# put back by the trap, whatever the outcome; an override already present
+# is restored rather than reset.
+#
+# The status bar goes into SystemUI demo mode -- a fixed clock, a full
+# battery, no notifications -- so the device's own state is not published
+# either, and comes out of it on exit.
+#
+# Before each capture the focused window must be this app's. A locked
+# phone photographs as black, which has cost two rounds before (the
+# android-build skill's instrument note), and a focus check is what
+# separates the app from the lock screen without a person looking.
+#
+# Each PNG's size is read back from its header and held to Play's rules:
+# 320 to 3840 px a side, long side at most twice the short.
+STORE_SCREEN_SIZE   ?= 1080x1920
+STORE_SHOT_DIR      ?= $(ANDROID_BUILD_DIR)/store/$(VERSION)
+STORE_READY_TIMEOUT ?= 30
+
+android-screenshots: android-install
+	@adb="$(ANDROID_ADB)"; views="$(STORE_VIEWS)"; \
+	set -- $$views; \
+	if [ $$# -lt 2 ] || [ $$# -gt 8 ]; then \
+		echo "screenshots: STORE_VIEWS names $$# views; Play wants 2 to 8." >&2; \
+		exit 1; \
+	fi; \
+	n=$$($$adb devices | grep -cw device); \
+	if [ "$$n" -ne 1 ] && [ -z "$$ANDROID_SERIAL" ]; then \
+		echo "screenshots: $$n devices attached; attach one or set ANDROID_SERIAL." >&2; \
+		exit 1; \
+	fi; \
+	out="$(STORE_SHOT_DIR)"; \
+	case "$$out" in ''|/) echo "screenshots: STORE_SHOT_DIR is '$$out'." >&2; exit 1;; esac; \
+	mkdir -p "$$out" || exit 1; \
+	old_size=$$($$adb shell wm size | sed -n 's/^Override size: //p' | tr -d '\r'); \
+	old_demo=$$($$adb shell settings get global sysui_demo_allowed | tr -d '\r'); \
+	restore() { \
+		$$adb shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null 2>&1; \
+		case "$$old_demo" in 1) ;; null|'') $$adb shell settings delete global sysui_demo_allowed >/dev/null 2>&1;; \
+			*) $$adb shell settings put global sysui_demo_allowed "$$old_demo" >/dev/null 2>&1;; esac; \
+		if [ -n "$$old_size" ]; then $$adb shell wm size "$$old_size"; else $$adb shell wm size reset; fi; \
+		$$adb shell rm -f /sdcard/store-shot.png; \
+	}; \
+	trap restore EXIT; trap 'exit 1' INT TERM; \
+	$$adb shell wm size $(STORE_SCREEN_SIZE) || exit 1; \
+	$$adb shell settings put global sysui_demo_allowed 1; \
+	demo() { $$adb shell am broadcast -a com.android.systemui.demo -e command "$$@" >/dev/null; }; \
+	demo enter; demo clock -e hhmm 1200; \
+	demo battery -e level 100 -e plugged false; \
+	demo network -e wifi show -e level 4 -e mobile show -e level 4; \
+	demo notifications -e visible false; \
+	i=0; fail=0; \
+	for v in $$views; do \
+		i=$$((i + 1)); f=$$(printf '%s/%02d-%s.png' "$$out" $$i "$$v"); \
+		$$adb logcat -c; \
+		$$adb shell am start -S -W -n $(APP_ID)/$(ANDROID_ACTIVITY) \
+			--es store_view "$$v" >/dev/null || { fail=1; break; }; \
+		t=0; \
+		until $$adb logcat -d | grep -qF "store-view-ready $$v"; do \
+			t=$$((t + 1)); \
+			if [ $$t -ge $(STORE_READY_TIMEOUT) ]; then \
+				echo "screenshots: $$v never logged store-view-ready in $(STORE_READY_TIMEOUT)s." >&2; \
+				echo "screenshots:   the app's half is missing or failed; see the comment" >&2; \
+				echo "screenshots:   above android-screenshots in tool/android.mk." >&2; \
+				fail=1; break 2; \
+			fi; \
+			sleep 1; \
+		done; \
+		if ! $$adb shell dumpsys window | grep mCurrentFocus | grep -qF "$(APP_ID)"; then \
+			echo "screenshots: $$v: the focused window is not $(APP_ID) -- locked?" >&2; \
+			fail=1; break; \
+		fi; \
+		$$adb shell screencap -p /sdcard/store-shot.png && \
+		$$adb pull -q /sdcard/store-shot.png "$$f" >/dev/null || { fail=1; break; }; \
+		set -- $$(od -An -tu1 -j16 -N8 "$$f"); \
+		w=$$(( ($$1 << 24) | ($$2 << 16) | ($$3 << 8) | $$4 )); \
+		h=$$(( ($$5 << 24) | ($$6 << 16) | ($$7 << 8) | $$8 )); \
+		lo=$$w; hi=$$h; [ $$w -gt $$h ] && { lo=$$h; hi=$$w; }; \
+		if [ $$lo -lt 320 ] || [ $$hi -gt 3840 ] || [ $$hi -gt $$((lo * 2)) ]; then \
+			echo "screenshots: $$f is $${w}x$${h}, which Play refuses." >&2; \
+			fail=1; \
+		else \
+			echo "screenshots: $$f  $${w}x$${h}"; \
+		fi; \
+	done; \
+	[ $$fail -eq 0 ]
+
+.PHONY: android-check android-play-check android-screenshots android-install android-run android-log android-uninstall
