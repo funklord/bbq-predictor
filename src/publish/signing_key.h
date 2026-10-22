@@ -52,9 +52,4 @@ private:
 	bool m_valid = false;
 };
 
-/* Whether `signature` is `public_key`'s over `message`. */
-bool bbq_signature_valid(const QByteArray &signature,
-                         const QByteArray &public_key,
-                         const QByteArray &message);
-
 #endif

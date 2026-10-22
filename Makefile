@@ -537,6 +537,37 @@ check: style test
 FUZZ_SECONDS ?= 60
 FUZZ_DIR ?= $(TEST_BUILD_DIR)/fuzz
 
+# The applet's reader under libFuzzer (project.md sec 15.12), bounded by
+# FUZZ_SECONDS the same way. Seeded from real bodies the encoder writes,
+# so the run starts inside every structure. Refuses to start if the
+# reader calls framed() or required(), which read out of bounds at the
+# vendored situ commit (src/wire/vendor/README.md).
+WIRE_FUZZ_FLAGS = -std=c++17 -g -O1 -fPIC -Isrc -Isrc/wire/vendor \
+                  -Imonocypher/src -Imonocypher/src/optional \
+                  $(shell pkg-config --cflags Qt6Core)
+WIRE_FUZZ_SOURCES = src/wire/read.cpp src/wire/format.cpp src/model/series.cpp \
+                    src/wire/vendor/situ.c monocypher/src/monocypher.c \
+                    monocypher/src/optional/monocypher-ed25519.c
+
+fuzz-wire: test/fuzz_wire.cpp test/fuzz_wire_seed.cpp $(WIRE_FUZZ_SOURCES) \
+           $(wildcard src/wire/*.h src/wire/vendor/*.h src/wire/vendor/*.hpp)
+	@if grep -nE '(\.|::)(framed|required)\(' src/wire/read.cpp; then \
+		echo "fuzz-wire: the reader calls framed() or required(); see" >&2; \
+		echo "fuzz-wire:   src/wire/vendor/README.md" >&2; \
+		exit 1; \
+	fi
+	mkdir -p $(FUZZ_DIR)/wire-corpus
+	clang++ $(WIRE_FUZZ_FLAGS) -fsanitize=fuzzer,address,undefined \
+	        -fno-sanitize-recover=undefined test/fuzz_wire.cpp \
+	        $(WIRE_FUZZ_SOURCES) -o $(FUZZ_DIR)/fuzz_wire \
+	        $(shell pkg-config --libs Qt6Core)
+	clang++ $(WIRE_FUZZ_FLAGS) test/fuzz_wire_seed.cpp src/publish/encode.cpp \
+	        src/publish/signing_key.cpp $(WIRE_FUZZ_SOURCES) \
+	        -o $(FUZZ_DIR)/fuzz_wire_seed $(shell pkg-config --libs Qt6Core)
+	$(FUZZ_DIR)/fuzz_wire_seed $(FUZZ_DIR)/wire-corpus
+	cd $(FUZZ_DIR) && ./fuzz_wire -max_total_time=$(FUZZ_SECONDS) \
+	        -max_len=65536 -rss_limit_mb=2048 wire-corpus
+
 fuzz-serve: test/fuzz_serve.c src/serve/serve_core.c src/serve/serve_core.h
 	mkdir -p $(FUZZ_DIR)/corpus
 	clang -std=c11 -g -O1 -fsanitize=fuzzer,address,undefined \
@@ -716,7 +747,7 @@ help:
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
-        style-wiring style-setup style-tests style-links test-clocks fuzz-serve \
+        style-wiring style-setup style-tests style-links test-clocks fuzz-serve fuzz-wire \
         submodules \
         android android-aab \
         install uninstall clean veryclean distclean help

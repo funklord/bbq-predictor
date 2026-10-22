@@ -468,8 +468,13 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t provider_extent_from(std::uint32_t at) const noexcept
 	{
-		return ::situ::provider_name(situ_view_t{ situ_base(raw_) + at,
-			raw_.limit - at, raw().generation, raw().owner }).extent();
+		situ_view_t whole;
+
+		if (situ_view_sub(this->raw(), at,
+				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
+			return 0u;
+		}
+		return ::situ::provider_name(whole).extent();
 	}
 	[[nodiscard]] std::uint32_t provider_extent() const noexcept
 	{
@@ -551,15 +556,20 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t columns_extent_from(std::uint32_t at) const noexcept
 	{
-		return ::situ::packed_columns(situ_view_t{ situ_base(raw_) + at,
-			raw_.limit - at, raw().generation, raw().owner }).extent();
+		situ_view_t whole;
+
+		if (situ_view_sub(this->raw(), at,
+				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
+			return 0u;
+		}
+		return ::situ::packed_columns(whole).extent();
 	}
 	[[nodiscard]] std::uint32_t columns_extent() const noexcept
 	{
 		std::uint32_t at = 0;
-		at += 1;
+		at = situ_advance_u32(at, 1u, raw_.limit);
 		at = situ_advance_u32(at, provider_extent_from(at), raw_.limit);
-		at += 16;
+		at = situ_advance_u32(at, 16u, raw_.limit);
 		return columns_extent_from(at);
 	}
 	[[nodiscard]] ::situ::rt::err columns(::situ::packed_columns &out) const noexcept
@@ -1184,7 +1194,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 
-		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 		if (used == 0u) {
 			return ::situ::rt::err::bounds;
 		}
@@ -1206,7 +1216,7 @@ public:
 		if (at >= raw_.limit) {
 			return 0u;
 		}
-		return situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		return situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 	}
 
 	/** The same value where an error cannot be returned: the length
@@ -1331,7 +1341,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 
-		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 		if (used == 0u) {
 			return ::situ::rt::err::bounds;
 		}
@@ -1353,7 +1363,7 @@ public:
 		if (at >= raw_.limit) {
 			return 0u;
 		}
-		return situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		return situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 	}
 
 	/** The same value where an error cannot be returned: the length
@@ -1478,7 +1488,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 
-		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 		if (used == 0u) {
 			return ::situ::rt::err::bounds;
 		}
@@ -1500,7 +1510,7 @@ public:
 		if (at >= raw_.limit) {
 			return 0u;
 		}
-		return situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		return situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 	}
 
 	/** The same value where an error cannot be returned: the length
@@ -1534,7 +1544,7 @@ public:
 	 * O(index). A loop calling this for every element is
 	 * O(n^2), and there is no cursor here to replace it with
 	 * -- hold `at` yourself, take each element with
-	 * `situ_view_sub(raw(), at, raw().limit - at, &raw)` and
+	 * `situ_view_sub(raw(), at, situ_remaining_u32(raw().limit, at), &raw)` and
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err delta_at(std::uint32_t index,
@@ -1550,7 +1560,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -1558,7 +1568,7 @@ public:
 			const ::situ::zv1 element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				/* A zero-extent element would walk here forever,
 				 * and one past the limit was never in this frame. */
 				break;
@@ -1593,7 +1603,7 @@ public:
 		while (n < delta_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -1601,11 +1611,24 @@ public:
 			const ::situ::zv1 element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				break;
 			}
 			at += size;
 			n  += 1;
+		}
+
+		/* A run whose declared count does not fit is
+		 * malformed, and the honest span is one no frame
+		 * can satisfy. Returning the bytes that DID fit
+		 * told `check` the run was shorter than it claims,
+		 * so `validate` answered OK for nine bytes whose
+		 * one element declared 203 (26.676). A run sized
+		 * by bytes rather than by a count has nothing to
+		 * fall short of, which is why this is conditional
+		 * on the same `count` the loop bound is. */
+		if (n < delta_count()) {
+			return UINT32_MAX;
 		}
 		return at - start;
 	}
@@ -1889,7 +1912,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 
-		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 		if (used == 0u) {
 			return ::situ::rt::err::bounds;
 		}
@@ -1911,7 +1934,7 @@ public:
 		if (at >= raw_.limit) {
 			return 0u;
 		}
-		return situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		return situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 	}
 
 	/** The same value where an error cannot be returned: the length
@@ -1947,7 +1970,7 @@ public:
 	[[nodiscard]] std::uint32_t start_utc_offset() const noexcept
 	{
 		std::uint32_t at = 0;
-		at += 1;
+		at = situ_advance_u32(at, 1u, raw_.limit);
 		at = situ_advance_u32(at, rows_len(), raw_.limit);
 		at = situ_advance_u32(at, (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 		at = situ_advance_u32(at, (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
@@ -1966,7 +1989,7 @@ public:
 	 * O(index). A loop calling this for every element is
 	 * O(n^2), and there is no cursor here to replace it with
 	 * -- hold `at` yourself, take each element with
-	 * `situ_view_sub(raw(), at, raw().limit - at, &raw)` and
+	 * `situ_view_sub(raw(), at, situ_remaining_u32(raw().limit, at), &raw)` and
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err start_utc_at(std::uint32_t index,
@@ -1982,7 +2005,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -1990,7 +2013,7 @@ public:
 			const ::situ::zv1 element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				/* A zero-extent element would walk here forever,
 				 * and one past the limit was never in this frame. */
 				break;
@@ -2025,7 +2048,7 @@ public:
 		while (n < start_utc_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -2033,11 +2056,24 @@ public:
 			const ::situ::zv1 element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				break;
 			}
 			at += size;
 			n  += 1;
+		}
+
+		/* A run whose declared count does not fit is
+		 * malformed, and the honest span is one no frame
+		 * can satisfy. Returning the bytes that DID fit
+		 * told `check` the run was shorter than it claims,
+		 * so `validate` answered OK for nine bytes whose
+		 * one element declared 203 (26.676). A run sized
+		 * by bytes rather than by a count has nothing to
+		 * fall short of, which is why this is conditional
+		 * on the same `count` the loop bound is. */
+		if (n < start_utc_count()) {
+			return UINT32_MAX;
 		}
 		return at - start;
 	}
@@ -2052,7 +2088,7 @@ public:
 	[[nodiscard]] std::uint32_t duration_s_offset() const noexcept
 	{
 		std::uint32_t at = 0;
-		at += 1;
+		at = situ_advance_u32(at, 1u, raw_.limit);
 		at = situ_advance_u32(at, rows_len(), raw_.limit);
 		at = situ_advance_u32(at, (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 		at = situ_advance_u32(at, (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
@@ -2072,7 +2108,7 @@ public:
 	 * O(index). A loop calling this for every element is
 	 * O(n^2), and there is no cursor here to replace it with
 	 * -- hold `at` yourself, take each element with
-	 * `situ_view_sub(raw(), at, raw().limit - at, &raw)` and
+	 * `situ_view_sub(raw(), at, situ_remaining_u32(raw().limit, at), &raw)` and
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err duration_s_at(std::uint32_t index,
@@ -2088,7 +2124,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -2096,7 +2132,7 @@ public:
 			const ::situ::v1 element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				/* A zero-extent element would walk here forever,
 				 * and one past the limit was never in this frame. */
 				break;
@@ -2131,7 +2167,7 @@ public:
 		while (n < duration_s_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -2139,11 +2175,24 @@ public:
 			const ::situ::v1 element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				break;
 			}
 			at += size;
 			n  += 1;
+		}
+
+		/* A run whose declared count does not fit is
+		 * malformed, and the honest span is one no frame
+		 * can satisfy. Returning the bytes that DID fit
+		 * told `check` the run was shorter than it claims,
+		 * so `validate` answered OK for nine bytes whose
+		 * one element declared 203 (26.676). A run sized
+		 * by bytes rather than by a count has nothing to
+		 * fall short of, which is why this is conditional
+		 * on the same `count` the loop bound is. */
+		if (n < duration_s_count()) {
+			return UINT32_MAX;
 		}
 		return at - start;
 	}
@@ -2322,7 +2371,7 @@ public:
 	[[nodiscard]] std::uint32_t temperature_temperature_values_extent() const noexcept
 	{
 		std::uint32_t at = 0;
-		at += 1;
+		at = situ_advance_u32(at, 1u, raw_.limit);
 		at = situ_advance_u32(at, rows_len(), raw_.limit);
 		at = situ_advance_u32(at, (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 		at = situ_advance_u32(at, (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
@@ -2388,7 +2437,7 @@ public:
 	[[nodiscard]] std::uint32_t precip_rate_precip_rate_values_extent() const noexcept
 	{
 		std::uint32_t at = 0;
-		at += 1;
+		at = situ_advance_u32(at, 1u, raw_.limit);
 		at = situ_advance_u32(at, rows_len(), raw_.limit);
 		at = situ_advance_u32(at, (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 		at = situ_advance_u32(at, (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
@@ -2455,7 +2504,7 @@ public:
 	[[nodiscard]] std::uint32_t precip_chance_precip_chance_values_extent() const noexcept
 	{
 		std::uint32_t at = 0;
-		at += 1;
+		at = situ_advance_u32(at, 1u, raw_.limit);
 		at = situ_advance_u32(at, rows_len(), raw_.limit);
 		at = situ_advance_u32(at, (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 		at = situ_advance_u32(at, (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
@@ -2523,7 +2572,7 @@ public:
 	[[nodiscard]] std::uint32_t wind_kph_wind_kph_values_extent() const noexcept
 	{
 		std::uint32_t at = 0;
-		at += 1;
+		at = situ_advance_u32(at, 1u, raw_.limit);
 		at = situ_advance_u32(at, rows_len(), raw_.limit);
 		at = situ_advance_u32(at, (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 		at = situ_advance_u32(at, (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
@@ -3257,8 +3306,13 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t station_extent_from(std::uint32_t at) const noexcept
 	{
-		return ::situ::station_id(situ_view_t{ situ_base(raw_) + at,
-			raw_.limit - at, raw().generation, raw().owner }).extent();
+		situ_view_t whole;
+
+		if (situ_view_sub(this->raw(), at,
+				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
+			return 0u;
+		}
+		return ::situ::station_id(whole).extent();
 	}
 	[[nodiscard]] std::uint32_t station_extent() const noexcept
 	{
@@ -3326,7 +3380,7 @@ public:
 	{
 		std::uint32_t at = 0;
 		at = situ_advance_u32(at, station_extent_from(at), raw_.limit);
-		at += 9;
+		at = situ_advance_u32(at, 9u, raw_.limit);
 		return at;
 	}
 	[[nodiscard]] std::uint32_t bands_count() const noexcept
@@ -3340,7 +3394,7 @@ public:
 	 * O(index). A loop calling this for every element is
 	 * O(n^2), and there is no cursor here to replace it with
 	 * -- hold `at` yourself, take each element with
-	 * `situ_view_sub(raw(), at, raw().limit - at, &raw)` and
+	 * `situ_view_sub(raw(), at, situ_remaining_u32(raw().limit, at), &raw)` and
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err bands_at(std::uint32_t index,
@@ -3356,7 +3410,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -3364,7 +3418,7 @@ public:
 			const ::situ::band element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				/* A zero-extent element would walk here forever,
 				 * and one past the limit was never in this frame. */
 				break;
@@ -3399,7 +3453,7 @@ public:
 		while (n < bands_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -3407,11 +3461,24 @@ public:
 			const ::situ::band element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				break;
 			}
 			at += size;
 			n  += 1;
+		}
+
+		/* A run whose declared count does not fit is
+		 * malformed, and the honest span is one no frame
+		 * can satisfy. Returning the bytes that DID fit
+		 * told `check` the run was shorter than it claims,
+		 * so `validate` answered OK for nine bytes whose
+		 * one element declared 203 (26.676). A run sized
+		 * by bytes rather than by a count has nothing to
+		 * fall short of, which is why this is conditional
+		 * on the same `count` the loop bound is. */
+		if (n < bands_count()) {
+			return UINT32_MAX;
 		}
 		return at - start;
 	}
@@ -3833,8 +3900,13 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t station_extent_from(std::uint32_t at) const noexcept
 	{
-		return ::situ::station_id(situ_view_t{ situ_base(raw_) + at,
-			raw_.limit - at, raw().generation, raw().owner }).extent();
+		situ_view_t whole;
+
+		if (situ_view_sub(this->raw(), at,
+				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
+			return 0u;
+		}
+		return ::situ::station_id(whole).extent();
 	}
 	[[nodiscard]] std::uint32_t station_extent() const noexcept
 	{
@@ -3902,7 +3974,7 @@ public:
 	{
 		std::uint32_t at = 0;
 		at = situ_advance_u32(at, station_extent_from(at), raw_.limit);
-		at += 10;
+		at = situ_advance_u32(at, 10u, raw_.limit);
 		return at;
 	}
 	[[nodiscard]] std::uint32_t months_count() const noexcept
@@ -4127,7 +4199,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 
-		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 		if (used == 0u) {
 			return ::situ::rt::err::bounds;
 		}
@@ -4149,7 +4221,7 @@ public:
 		if (at >= raw_.limit) {
 			return 0u;
 		}
-		return situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		return situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 	}
 
 	/** The same value where an error cannot be returned: the length
@@ -4358,8 +4430,13 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t station_extent_from(std::uint32_t at) const noexcept
 	{
-		return ::situ::station_id(situ_view_t{ situ_base(raw_) + at,
-			raw_.limit - at, raw().generation, raw().owner }).extent();
+		situ_view_t whole;
+
+		if (situ_view_sub(this->raw(), at,
+				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
+			return 0u;
+		}
+		return ::situ::station_id(whole).extent();
 	}
 	[[nodiscard]] std::uint32_t station_extent() const noexcept
 	{
@@ -4428,7 +4505,7 @@ public:
 	{
 		std::uint32_t at = 0;
 		at = situ_advance_u32(at, station_extent_from(at), raw_.limit);
-		at += 3;
+		at = situ_advance_u32(at, 3u, raw_.limit);
 		return at;
 	}
 	[[nodiscard]] std::uint32_t providers_count() const noexcept
@@ -4442,7 +4519,7 @@ public:
 	 * O(index). A loop calling this for every element is
 	 * O(n^2), and there is no cursor here to replace it with
 	 * -- hold `at` yourself, take each element with
-	 * `situ_view_sub(raw(), at, raw().limit - at, &raw)` and
+	 * `situ_view_sub(raw(), at, situ_remaining_u32(raw().limit, at), &raw)` and
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err providers_at(std::uint32_t index,
@@ -4458,7 +4535,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -4466,7 +4543,7 @@ public:
 			const ::situ::provider_name element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				/* A zero-extent element would walk here forever,
 				 * and one past the limit was never in this frame. */
 				break;
@@ -4501,7 +4578,7 @@ public:
 		while (n < providers_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -4509,11 +4586,24 @@ public:
 			const ::situ::provider_name element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				break;
 			}
 			at += size;
 			n  += 1;
+		}
+
+		/* A run whose declared count does not fit is
+		 * malformed, and the honest span is one no frame
+		 * can satisfy. Returning the bytes that DID fit
+		 * told `check` the run was shorter than it claims,
+		 * so `validate` answered OK for nine bytes whose
+		 * one element declared 203 (26.676). A run sized
+		 * by bytes rather than by a count has nothing to
+		 * fall short of, which is why this is conditional
+		 * on the same `count` the loop bound is. */
+		if (n < providers_count()) {
+			return UINT32_MAX;
 		}
 		return at - start;
 	}
@@ -4540,7 +4630,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 
-		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		const std::uint32_t used = situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 		if (used == 0u) {
 			return ::situ::rt::err::bounds;
 		}
@@ -4562,7 +4652,7 @@ public:
 		if (at >= raw_.limit) {
 			return 0u;
 		}
-		return situ_varint_get(situ_base(raw_) + at, raw_.limit - at, 10u, &raw);
+		return situ_varint_get(situ_base(raw_) + at, situ_remaining_u32(raw_.limit, at), 10u, &raw);
 	}
 
 	/** The same value where an error cannot be returned: the length
@@ -4583,7 +4673,7 @@ public:
 	{
 		std::uint32_t at = 0;
 		at = situ_advance_u32(at, station_extent_from(at), raw_.limit);
-		at += 3;
+		at = situ_advance_u32(at, 3u, raw_.limit);
 		at = situ_advance_u32(at, providers_span_from(at), raw_.limit);
 		at = situ_advance_u32(at, run_count_len(), raw_.limit);
 		return at;
@@ -4599,7 +4689,7 @@ public:
 	 * O(index). A loop calling this for every element is
 	 * O(n^2), and there is no cursor here to replace it with
 	 * -- hold `at` yourself, take each element with
-	 * `situ_view_sub(raw(), at, raw().limit - at, &raw)` and
+	 * `situ_view_sub(raw(), at, situ_remaining_u32(raw().limit, at), &raw)` and
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err runs_at(std::uint32_t index,
@@ -4615,7 +4705,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -4623,7 +4713,7 @@ public:
 			const ::situ::provider_run element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				/* A zero-extent element would walk here forever,
 				 * and one past the limit was never in this frame. */
 				break;
@@ -4658,7 +4748,7 @@ public:
 		while (n < runs_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -4666,11 +4756,24 @@ public:
 			const ::situ::provider_run element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				break;
 			}
 			at += size;
 			n  += 1;
+		}
+
+		/* A run whose declared count does not fit is
+		 * malformed, and the honest span is one no frame
+		 * can satisfy. Returning the bytes that DID fit
+		 * told `check` the run was shorter than it claims,
+		 * so `validate` answered OK for nine bytes whose
+		 * one element declared 203 (26.676). A run sized
+		 * by bytes rather than by a count has nothing to
+		 * fall short of, which is why this is conditional
+		 * on the same `count` the loop bound is. */
+		if (n < runs_count()) {
+			return UINT32_MAX;
 		}
 		return at - start;
 	}
@@ -4685,14 +4788,19 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t columns_extent_from(std::uint32_t at) const noexcept
 	{
-		return ::situ::packed_columns(situ_view_t{ situ_base(raw_) + at,
-			raw_.limit - at, raw().generation, raw().owner }).extent();
+		situ_view_t whole;
+
+		if (situ_view_sub(this->raw(), at,
+				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
+			return 0u;
+		}
+		return ::situ::packed_columns(whole).extent();
 	}
 	[[nodiscard]] std::uint32_t columns_extent() const noexcept
 	{
 		std::uint32_t at = 0;
 		at = situ_advance_u32(at, station_extent_from(at), raw_.limit);
-		at += 3;
+		at = situ_advance_u32(at, 3u, raw_.limit);
 		at = situ_advance_u32(at, providers_span_from(at), raw_.limit);
 		at = situ_advance_u32(at, run_count_len(), raw_.limit);
 		at = situ_advance_u32(at, runs_span_from(at), raw_.limit);
@@ -5018,7 +5126,7 @@ public:
 	[[nodiscard]] ::situ::rt::bytes zlib() const noexcept
 	{
 		return ::situ::rt::bytes(situ_base(raw_) + zlib_offset(),
-			situ_min_u32((raw_.limit - (4)),
+			situ_min_u32((situ_remaining_u32(raw_.limit, 4)),
 				situ_remaining_u32(raw_.limit, zlib_offset())));
 	}
 
@@ -5165,7 +5273,7 @@ public:
 	 * O(index). A loop calling this for every element is
 	 * O(n^2), and there is no cursor here to replace it with
 	 * -- hold `at` yourself, take each element with
-	 * `situ_view_sub(raw(), at, raw().limit - at, &raw)` and
+	 * `situ_view_sub(raw(), at, situ_remaining_u32(raw().limit, at), &raw)` and
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err ids_at(std::uint32_t index,
@@ -5181,7 +5289,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -5189,7 +5297,7 @@ public:
 			const ::situ::station_id element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				/* A zero-extent element would walk here forever,
 				 * and one past the limit was never in this frame. */
 				break;
@@ -5224,7 +5332,7 @@ public:
 		while (n < ids_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, raw_.limit - at, &raw)
+			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -5232,11 +5340,24 @@ public:
 			const ::situ::station_id element(raw);
 			const std::uint32_t size = element.extent();
 
-			if (size == 0 || at + size > raw_.limit) {
+			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
 				break;
 			}
 			at += size;
 			n  += 1;
+		}
+
+		/* A run whose declared count does not fit is
+		 * malformed, and the honest span is one no frame
+		 * can satisfy. Returning the bytes that DID fit
+		 * told `check` the run was shorter than it claims,
+		 * so `validate` answered OK for nine bytes whose
+		 * one element declared 203 (26.676). A run sized
+		 * by bytes rather than by a count has nothing to
+		 * fall short of, which is why this is conditional
+		 * on the same `count` the loop bound is. */
+		if (n < ids_count()) {
+			return UINT32_MAX;
 		}
 		return at - start;
 	}

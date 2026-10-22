@@ -4,14 +4,16 @@
 // first prose draft it says so at the member, tagged SPEC CHANGE, with
 // the compiler's reason quoted.
 //
-// NOT YET USED TO GENERATE THE CLIENT'S PARSER. situ's generated C++
-// reads out of bounds on hostile input at f9fa599 (reported to situ,
-// inbox 20261022T1621Z), and `u8 x[remaining] max 0` after a dynamic
-// member is not enforced, so every `trailing` guard below is also the
-// caller's check until that is fixed. Regenerate with the tree's
-// compiler, never /usr/bin/situc:
+// The client's parser is generated from this at situ 56dcad1, whose
+// validate(), check() and accessors refuse hostile lengths. framed() and
+// required() still read out of bounds there, so the client never calls
+// them (src/wire/vendor/README.md), and `u8 x[remaining] max 0` after a
+// dynamic member is still not enforced, so every `trailing` guard below
+// is also the caller's check. Regenerate from an exported commit of
+// situ, never its working tree and never /usr/bin/situc:
 //
-//     python3 ~/src/situ/bin/situc build --target cpp --out gen bbq.situ
+//     git -C ~/src/situ archive <commit> | tar -x -C <scratch>
+//     python3 <scratch>/bin/situc build --target cpp --out src/wire/vendor bbq.situ
 //
 // Reading model. Three acquisitions, each over a span the previous one
 // handed back:

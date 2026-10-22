@@ -193,17 +193,25 @@ HEADERS += \
 	src/wu/key_source.h \
 	src/wu/reader.h
 
-# The publisher (project.md sec 15.12): desktop and server only. Nothing
-# publishes from a phone, and keeping it out keeps getrandom(), which
-# bionic has only from API 28 against a minSdk of 26, out of the package.
+# The published format, in every build: the applet reads and verifies
+# what vibes.se serves, on a phone as much as anywhere (project.md sec
+# 15.12). monocypher is for the signature and the index's digests.
+INCLUDEPATH += monocypher/src monocypher/src/optional
+SOURCES += \
+	src/wire/format.cpp \
+	monocypher/src/monocypher.c \
+	monocypher/src/optional/monocypher-ed25519.c
+HEADERS += \
+	src/wire/format.h
+
+# The publisher: desktop and server only. Nothing publishes from a phone,
+# and keeping it out keeps getrandom(), which bionic has only from API 28
+# against a minSdk of 26, out of the package.
 !android {
-	INCLUDEPATH += monocypher/src monocypher/src/optional
 	SOURCES += \
 		src/publish/encode.cpp \
 		src/publish/publish.cpp \
-		src/publish/signing_key.cpp \
-		monocypher/src/monocypher.c \
-		monocypher/src/optional/monocypher-ed25519.c
+		src/publish/signing_key.cpp
 	HEADERS += \
 		src/publish/encode.h \
 		src/publish/publish.h \

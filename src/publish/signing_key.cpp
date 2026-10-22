@@ -117,16 +117,3 @@ QByteArray bbq_signing_key::sign(const QByteArray &message) const {
 QByteArray bbq_signing_key::public_key() const {
 	return QByteArray(reinterpret_cast<const char *>(m_public), sizeof m_public);
 }
-
-bool bbq_signature_valid(const QByteArray &signature, const QByteArray &public_key,
-                         const QByteArray &message) {
-	if (signature.size() != 64 || public_key.size() != 32) {
-		return false;
-	}
-
-	return crypto_ed25519_check(
-	               reinterpret_cast<const uint8_t *>(signature.constData()),
-	               reinterpret_cast<const uint8_t *>(public_key.constData()),
-	               reinterpret_cast<const uint8_t *>(message.constData()),
-	               size_t(message.size())) == 0;
-}
