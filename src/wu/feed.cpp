@@ -268,6 +268,28 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	m_net->setTransferTimeout(30 * 1000);
 	m_keys = new bbq_wu_key_source(m_net, this);
 	m_client = new bbq_wu_client(m_net, m_keys, this);
+
+	/*
+	 * THE KEY OUTLIVES THE PROCESS (sec 2.6.1.3).
+	 *
+	 * It was held in memory alone, which cost the window nothing -- one
+	 * process, one scrape -- and cost the publisher a scrape every five
+	 * minutes, since every round is a new process. On 2026-10-22 the page
+	 * carried a working key about one fetch in ten, so nearly every round
+	 * on the server fetched nothing at all. Kept in the store, the key is
+	 * scraped when it is refused rather than when a process starts.
+	 *
+	 * Forgotten on a refusal rather than left for the next process, so a
+	 * dead key costs one refused request and not one per round. Empty
+	 * rather than deleted, because the table has no delete and an empty
+	 * value is what remember() refuses.
+	 */
+	connect(m_keys, &bbq_wu_key_source::acquired, this, [this](const QString &key) {
+		m_history.set_state_value(QStringLiteral("wu_key"), key.toLatin1());
+	});
+	connect(m_keys, &bbq_wu_key_source::invalidated, this, [this]() {
+		m_history.set_state_value(QStringLiteral("wu_key"), QByteArray(""));
+	});
 	m_met = new bbq_met_client(m_net, this);
 	m_open = new bbq_openmeteo_client(m_net, this);
 
@@ -1649,7 +1671,7 @@ void bbq_wu_feed::apply_head(const QByteArray &file, bool remember) {
 	}
 
 	if (remember) {
-		m_history.set_server_value(QStringLiteral("head/") + m_station_id, file);
+		m_history.set_state_value(QStringLiteral("head/") + m_station_id, file);
 	}
 	emit updated();
 }
@@ -1851,7 +1873,7 @@ void bbq_wu_feed::load_server_state() {
 		return;
 	}
 
-	QByteArray bytes = m_history.server_value(QStringLiteral("policy"));
+	QByteArray bytes = m_history.state_value(QStringLiteral("policy"));
 	QDataStream in(&bytes, QIODevice::ReadOnly);
 	qint32 route = 0;
 	qint32 failures = 0;
@@ -1875,7 +1897,7 @@ void bbq_wu_feed::load_server_state() {
 	 * each band under its own fetch time.
 	 */
 	if (bbq_wire_station_valid(m_station_id)) {
-		const QByteArray head = m_history.server_value(QStringLiteral("head/") + m_station_id);
+		const QByteArray head = m_history.state_value(QStringLiteral("head/") + m_station_id);
 		if (!head.isEmpty()) {
 			apply_head(head, false);
 		}
@@ -1889,7 +1911,7 @@ void bbq_wu_feed::save_server_state() {
 	    << m_server_state.last_failure_utc << qint32(m_server_state.failures)
 	    << m_server_state.network_ok_utc << m_server_state.next_attempt_utc
 	    << qint32(m_server ? m_server->preferred_route() : 0);
-	m_history.set_server_value(QStringLiteral("policy"), bytes);
+	m_history.set_state_value(QStringLiteral("policy"), bytes);
 }
 
 bool bbq_wu_feed::open_history(const QString &path) {
@@ -1900,6 +1922,9 @@ bool bbq_wu_feed::open_history(const QString &path) {
 
 	/* The server's state lives in the store, so it can only be read now. */
 	load_server_state();
+
+	/* And so does the last key that worked (sec 2.6.1.3). */
+	m_keys->remember(QString::fromLatin1(m_history.state_value(QStringLiteral("wu_key"))));
 	return true;
 }
 

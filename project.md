@@ -458,6 +458,66 @@ the cause was hunted in logcat twice before the app's own status line
 was read, where it had been all along. A probe pointed at the wrong file
 says what that file holds, not what was asked.
 
+#### 2.6.1.3 The page now usually carries no key, so the key is kept
+
+Found 2026-10-22 when `bbq-predictor-publish` (sec 15.13), installed on
+a bare trixie, could not publish a single round, and confirmed from this
+desk the same hour. Two changes on WU's side, and one in this program
+that had been cheap until the publisher made it expensive.
+
+**The page varies, and it is not only our client any more.** Ten curl
+fetches spaced four seconds apart, the program's user agent, identity
+encoding:
+
+    /forecast    404 (82 KB, no weather key) four times; 200 (558 KB,
+                 key in weather URLs) once
+    /            200 (99 KB shell, no weather key) five times out of five
+
+The 664 KB render of the home page, with the working key in a dozen
+weather-endpoint URLs, came back once that evening and not again. So
+sec 2.6.1.2's "curl gets 200 every time" is no longer true: curl is
+refused too, and when it is not refused it is mostly handed a shell.
+Switching the scrape to the home page was tried and reverted -- it
+served the shell five times running.
+
+**The shell carries one key, and it is the wrong one.** It sits in an
+advertising-configuration URL on weather.com, and every weather endpoint
+refuses it (401 on the station and hourly endpoints, measured). The
+extractor's last-resort fallback -- any `apiKey=` in any URL -- took it,
+so a round reported "Host requires authentication" six times where the
+truth was "the page had no key". That is the failure the extractor's own
+comment warned of: a fallback that supplies a broken key is worse than
+failing. The fallback is gone; a key is taken only from a weather
+endpoint's URL.
+
+**A keyless page is retried now**, within the same three attempts. The
+code said asking again would return the same page, which today's
+sampling disproves: WU alternates. The message for the last attempt says
+the page carried no weather key, where it blamed the pattern -- a cause
+nothing had tested.
+
+**The expensive part was ours: the key lived in memory alone.** The
+window is one process and scrapes once, so that cost nothing. The
+publisher is a new process every five minutes, so it scraped every
+round, and at one fetch in ten nearly every round fetched nothing. The
+key is kept in the store now (`wu_key` among its named values, which the
+store's API calls `state_value` since this is not the server's state),
+reloaded when the store opens, and cleared when the client throws it
+away on a 401 -- so a dead key costs one refused request, not one per
+round. `remember()` takes only 32 lowercase hex, so a damaged store
+cannot hand the endpoints a string that was never a key.
+
+**Measured.** Three publisher rounds from an empty home: the first was
+refused three times (404) and failed; the second scraped a key and
+published; the third published with a DNS trace showing `api.weather.com`
+and `api.met.no` looked up and `www.wunderground.com` not at all. Keys
+are long-lived -- the working one was unchanged through the evening --
+so the scrape is now a rare event rather than the first step of every
+round. `test_feed` has three feeds on one store standing in for three
+rounds, and fails with either the reload or the clearing removed;
+`test_client` covers the shell and the full page, the keyless retry and
+what `remember()` refuses.
+
 ### 2.6.2 The three traps
 
 Each of these was found by inspecting real responses, and each would
@@ -7470,7 +7530,9 @@ And the trust store: Qt's network library only recommends
 `ca-certificates`, so with `--no-install-recommends` every handshake
 failed with "the issuer certificate of a locally looked up certificate
 could not be found" and the round stored nothing. The server package
-depends on it now, since every provider is HTTPS.
+depends on it now, since every provider is HTTPS. With the trust store
+in place the round there still stored nothing: WU's key page had begun
+answering 404 or a keyless shell, which is sec 2.6.1.3.
 
 ## 16. The home-screen widget
 

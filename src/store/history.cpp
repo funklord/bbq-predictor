@@ -679,7 +679,7 @@ bool bbq_history::set_server_month(const QString &station, int month, const QByt
 	return true;
 }
 
-QByteArray bbq_history::server_value(const QString &name) const {
+QByteArray bbq_history::state_value(const QString &name) const {
 	if (!m_open) {
 		return QByteArray();
 	}
@@ -693,7 +693,7 @@ QByteArray bbq_history::server_value(const QString &name) const {
 	return query.value(0).toByteArray();
 }
 
-bool bbq_history::set_server_value(const QString &name, const QByteArray &value) {
+bool bbq_history::set_state_value(const QString &name, const QByteArray &value) {
 	if (!m_open) {
 		return false;
 	}

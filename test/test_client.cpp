@@ -37,6 +37,9 @@ private slots:
 	void api_requests_ask_for_identity_encoding();
 	void a_query_parameter_is_read_back_by_name();
 	void a_failed_key_page_says_what_the_server_answered();
+	void only_a_key_a_weather_endpoint_used_is_taken();
+	void a_page_without_a_key_is_tried_again();
+	void a_remembered_key_must_look_like_one();
 };
 
 void test_client::requests_wait_when_there_is_no_key() {
@@ -175,6 +178,82 @@ void test_client::api_requests_ask_for_identity_encoding() {
 	        sent.at(0).at(0).value<QNetworkReply *>()->request();
 
 	QCOMPARE(asked.rawHeader("Accept-Encoding"), QByteArray("identity"));
+}
+
+/*
+ * The two shapes WU served on 2026-10-22, cut down to the URLs that
+ * matter (sec 2.6.1.3). The shell's one key belongs to an advertising
+ * configuration URL and every weather endpoint refuses it; taking it is
+ * what turned "the page had no key" into a round of 401s.
+ */
+static const char shell_page[] =
+        "<script>{\"rulesUrl\":\"https://weather.com/api/v1/mew/entity/"
+        "ad_third_party_config/6c750bdb?apiKey=5c241d00000000000000000000000000\"}"
+        "</script>";
+
+static const char full_page[] =
+        "<script>{\"rulesUrl\":\"https://weather.com/api/v1/mew/entity/"
+        "ad_third_party_config/6c750bdb?apiKey=5c241d00000000000000000000000000\"}"
+        "{\"u\":\"https://api.weather.com/v3/location/near?"
+        "apiKey=ff90f200000000000000000000000000&geocode=37.779%2C-122.419\"}"
+        "</script>";
+
+void test_client::only_a_key_a_weather_endpoint_used_is_taken() {
+	QCOMPARE(bbq_wu_key_source::extract_key(QString::fromLatin1(full_page)),
+	         QStringLiteral("ff90f200000000000000000000000000"));
+
+	/* Not the advertising key, even though it is the only one there. */
+	QCOMPARE(bbq_wu_key_source::extract_key(QString::fromLatin1(shell_page)), QString());
+}
+
+void test_client::a_page_without_a_key_is_tried_again() {
+	QNetworkAccessManager net;
+	net.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy,
+	                           QStringLiteral("127.0.0.1"), 1));
+	bbq_wu_key_source keys(&net);
+	QSignalSpy failures(&keys, &bbq_wu_key_source::failed);
+
+	/*
+	 * The first of three attempts brought the shell. WU alternates, so it
+	 * is worth asking again -- and nothing is reported yet.
+	 */
+	keys.m_attempts = 1;
+	keys.page_arrived(QString::fromLatin1(shell_page));
+	QCOMPARE(failures.count(), 0);
+	QVERIFY2(!keys.has_key(), "the advertising key was taken");
+
+	/* The retry goes to the dead proxy and the budget runs out. */
+	QVERIFY2(failures.wait(15000), "the key source never gave up");
+	QCOMPARE(keys.m_attempts, 3);
+
+	/* The last of three brings the shell: said as what it was. */
+	QSignalSpy last(&keys, &bbq_wu_key_source::failed);
+	keys.page_arrived(QString::fromLatin1(shell_page));
+	QCOMPARE(last.count(), 1);
+	QVERIFY2(last.at(0).at(0).toString().contains(QStringLiteral("no weather key")),
+	         qPrintable(last.at(0).at(0).toString()));
+}
+
+void test_client::a_remembered_key_must_look_like_one() {
+	QNetworkAccessManager net;
+	bbq_wu_key_source keys(&net);
+	QSignalSpy thrown(&keys, &bbq_wu_key_source::invalidated);
+
+	QVERIFY(!keys.remember(QString()));
+	QVERIFY(!keys.remember(QStringLiteral("ff90f2")));
+	QVERIFY(!keys.remember(QStringLiteral("FF90F200000000000000000000000000")));
+	QVERIFY(!keys.has_key());
+
+	/* Throwing away nothing tells nobody. */
+	keys.invalidate();
+	QCOMPARE(thrown.count(), 0);
+
+	QVERIFY(keys.remember(QStringLiteral("ff90f200000000000000000000000000")));
+	QCOMPARE(keys.key(), QStringLiteral("ff90f200000000000000000000000000"));
+
+	keys.invalidate();
+	QCOMPARE(thrown.count(), 1);
+	QVERIFY(!keys.has_key());
 }
 
 QTEST_GUILESS_MAIN(test_client)

@@ -57,7 +57,23 @@ bbq_wu_key_source::bbq_wu_key_source(QNetworkAccessManager *net,
 }
 
 void bbq_wu_key_source::invalidate() {
+	if (m_key.isEmpty()) {
+		return;
+	}
+
 	m_key.clear();
+	emit invalidated();
+}
+
+bool bbq_wu_key_source::remember(const QString &key) {
+	static const QRegularExpression shape(QStringLiteral("^[0-9a-f]{32}$"));
+
+	if (!shape.match(key).hasMatch()) {
+		return false;
+	}
+
+	m_key = key;
+	return true;
 }
 
 void bbq_wu_key_source::acquire() {
@@ -171,7 +187,9 @@ QString bbq_wu_transfer_error(const QString &qt_message, int http_status) {
 void bbq_wu_key_source::page_arrived(const QString &page) {
 	m_in_flight = false;
 
-	if (page.isEmpty()) {
+	const QString key = page.isEmpty() ? QString() : extract_key(page);
+
+	if (key.isEmpty()) {
 		/*
 		 * RETRIED, because the page refuses intermittently
 		 * (sec 2.6.1.1). Measured: three of six consecutive attempts
@@ -179,11 +197,13 @@ void bbq_wu_key_source::page_arrived(const QString &page) {
 		 * page every time -- so a single refusal says nothing about
 		 * whether the next one will succeed.
 		 *
-		 * Only a TRANSFER failure is retried. A page that arrives and
-		 * carries no key is the failure sec 2.2 predicted, and asking
-		 * for the same page again would return the same page --
-		 * retrying that would turn a clear diagnosis into three of
-		 * them.
+		 * A page that arrives WITHOUT a key is retried too, since
+		 * 2026-10-22 (sec 2.6.1.3). This said asking again would return
+		 * the same page, and it does not: WU alternates between the full
+		 * render and a shell with no weather key, and ten spaced fetches
+		 * that evening carried the key once. The three-attempt budget is
+		 * unchanged, so a page that really has reorganised costs three
+		 * fetches and the same diagnosis.
 		 */
 		if (m_attempts < key_attempts) {
 			/*
@@ -197,23 +217,23 @@ void bbq_wu_key_source::page_arrived(const QString &page) {
 			return;
 		}
 
-		emit failed(m_transfer_error.isEmpty()
-		                    ? tr("the key page could not be fetched")
-		                    : m_transfer_error);
-		return;
-	}
+		if (page.isEmpty()) {
+			emit failed(m_transfer_error.isEmpty()
+			                    ? tr("the key page could not be fetched")
+			                    : m_transfer_error);
+			return;
+		}
 
-	const QString key = extract_key(page);
-
-	if (key.isEmpty()) {
 		/*
-		 * Said as what it is. This is the failure sec 2.2 predicted --
-		 * the page reorganised, or the key moved -- and it is a
-		 * different thing from the network being down, so it must not
-		 * share a message with it.
+		 * Said as what it is: the page arrived and carried no key a
+		 * weather endpoint was seen using. That is a different thing
+		 * from the network being down, so it must not share a message
+		 * with it -- and it is not necessarily the pattern's fault,
+		 * which is what this said until the shell page showed a page
+		 * can lack the key while the pattern is fine.
 		 */
-		emit failed(tr("no API key found in the page; the extraction "
-		               "pattern has stopped matching"));
+		emit failed(tr("the key page carried no weather key on %n attempt(s)", nullptr,
+		               m_attempts));
 		return;
 	}
 
@@ -232,30 +252,25 @@ QString bbq_wu_key_source::extract_key(const QString &page) {
 	        QStringLiteral("api\\.weather\\.com/(?:v[23])/[^\"'\\s]*?"
 	                       "apiKey=([0-9a-f]{32})"));
 
-	QRegularExpressionMatch match = weather_url.match(page);
+	const QRegularExpressionMatch match = weather_url.match(page);
 	if (match.hasMatch()) {
 		return match.captured(1);
 	}
 
 	/*
-	 * Failing that, any apiKey= in a URL at all. Still a key the site
-	 * used, just not one seen against a path we recognise -- which is
-	 * what a reorganisation would look like before anybody has updated
-	 * the pattern above.
+	 * NOTHING ELSE, and there was something else until 2026-10-22
+	 * (sec 2.6.1.3): any apiKey= in any URL. WU began serving a 99 KB
+	 * shell of its pages most of the time, whose one key belongs to an
+	 * advertising-config URL on weather.com and is refused by every
+	 * weather endpoint. The fallback took it, every station request
+	 * came back 401, and the round said "Host requires authentication"
+	 * where the truth was "the page carried no weather key".
 	 *
-	 * Deliberately NOT falling back to the config blob's named keys.
-	 * Those are the ones that look right and do not work, and a
-	 * fallback that silently supplies a broken key is worse than
-	 * failing: it turns "the scrape broke" into "the endpoints all
-	 * return 401 for no visible reason".
+	 * Which is the failure the next paragraph already warned of, one
+	 * level out: a fallback that silently supplies a broken key is
+	 * worse than failing, because it turns "the scrape broke" into "the
+	 * endpoints all return 401 for no visible reason". The config
+	 * blob's named keys were refused for the same reason.
 	 */
-	static const QRegularExpression any_url(
-	        QStringLiteral("apiKey=([0-9a-f]{32})"));
-
-	match = any_url.match(page);
-	if (match.hasMatch()) {
-		return match.captured(1);
-	}
-
 	return QString();
 }

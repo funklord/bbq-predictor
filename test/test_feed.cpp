@@ -8,6 +8,7 @@
 #include "store/history.h"
 #include "wu/feed.h"
 #include "wu/fetch_verdict.h"
+#include "wu/key_source.h"
 
 /*
  * Which coordinate the forecast bands are aimed at (project.md sec
@@ -46,6 +47,7 @@ private slots:
 	void a_first_fix_and_a_distant_one_both_do();
 	void the_origin_moves_only_when_an_answer_arrives();
 	void a_reader_who_never_moves_still_rediscovers_eventually();
+	void the_key_outlives_the_process_until_it_is_refused();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -1116,6 +1118,42 @@ void test_feed::a_reader_who_never_moves_still_rediscovers_eventually() {
 	                                            now - 8 * 24 * 3600));
 	QCOMPARE(feed.discover_stations_if_moved(59.3293, 18.0686), true);
 	QVERIFY2(feed.is_busy(), "a week-old list is never refreshed standing still");
+}
+
+/*
+ * The publisher is a new process every round, so a key held in memory
+ * alone was scraped every five minutes from a page that, on 2026-10-22,
+ * carried one about one fetch in ten (sec 2.6.1.3). Three feeds on one
+ * store stand in for three rounds.
+ */
+void test_feed::the_key_outlives_the_process_until_it_is_refused() {
+	QTemporaryDir directory;
+	QVERIFY(directory.isValid());
+	const QString store = directory.filePath(QStringLiteral("h.sqlite"));
+	const QString key = QStringLiteral("ff90f200000000000000000000000000");
+
+	{
+		bbq_wu_feed first;
+		QVERIFY(first.open_history(store));
+		QVERIFY2(!first.m_keys->has_key(), "an empty store gave a key");
+
+		/* What a successful scrape announces. */
+		emit first.m_keys->acquired(key);
+	}
+
+	{
+		bbq_wu_feed second;
+		QVERIFY(second.open_history(store));
+		QCOMPARE(second.m_keys->key(), key);
+
+		/* A 401: the client throws it away. */
+		second.m_keys->invalidate();
+	}
+
+	bbq_wu_feed third;
+	QVERIFY(third.open_history(store));
+	QVERIFY2(!third.m_keys->has_key(),
+	         "a refused key was offered to the next round");
 }
 
 QTEST_GUILESS_MAIN(test_feed)

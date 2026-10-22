@@ -64,9 +64,23 @@ public:
 	 */
 	void invalidate();
 
+	/*
+	 * Hold a key kept from an earlier process, without fetching anything
+	 * (sec 2.6.1.3). Refused unless it is 32 lowercase hex, so a damaged
+	 * store cannot hand the endpoints a string that was never a key.
+	 * Returns whether it was taken.
+	 */
+	bool remember(const QString &key);
+
 signals:
 	void acquired(const QString &key);
 	void failed(const QString &reason);
+
+	/*
+	 * A held key was thrown away, so whoever kept a copy of it should
+	 * stop offering it to the next process.
+	 */
+	void invalidated();
 
 private:
 	/* One transfer of the key page; acquire() may spend several. */

@@ -405,13 +405,20 @@ public:
 
 	/*
 	 * What has been taken from vibes.se (sec 15.12): each applied month
-	 * file's digest, by month number, and named values the client keeps
-	 * across restarts.
+	 * file's digest, by month number.
 	 */
 	std::map<int, QByteArray> server_months(const QString &station) const;
 	bool set_server_month(const QString &station, int month, const QByteArray &digest);
-	QByteArray server_value(const QString &name) const;
-	bool set_server_value(const QString &name, const QByteArray &value);
+
+	/*
+	 * Named values the program keeps across restarts: the server policy
+	 * and the last head (sec 15.12), and the WU key (sec 2.6.1.3). Null
+	 * when absent. The table is still called server_state, after what it
+	 * held first; renaming a table is a migration, and the name is
+	 * nowhere a reader of this API meets it.
+	 */
+	QByteArray state_value(const QString &name) const;
+	bool set_state_value(const QString &name, const QByteArray &value);
 
 	/*
 	 * The newest observation for `station` inside [from, to), or 0 when
