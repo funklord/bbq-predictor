@@ -44,6 +44,8 @@ deps/
 # ignoring debian/ wholesale, because the sources live there too.
 /debian/.debhelper/
 /debian/bbq-predictor/
+/debian/bbq-predictor-server/
+/debian/tmp/
 /debian/files
 /debian/debhelper-build-stamp
 /debian/*.substvars

@@ -1,8 +1,21 @@
-# Configuration for the bbq-predictor fetch timer.
+# Configuration for the bbq-predictor fetch, run every five minutes by the
+# systemd timer or, where systemd is not running, by cron.
 #
-# BBQ_STATION is required: the service refuses to run without it rather
-# than fetching for a station nobody named. It is a Weather Underground
+# BBQ_STATION is required: nothing is fetched without it rather than
+# fetching for a station nobody named. It is a Weather Underground
 # personal weather station id -- the applet's station list shows the
 # ones near you, and its "Find..." button searches elsewhere.
 #
 #BBQ_STATION=ISTOCK877
+#
+# Publishing (project.md sec 15.12). Set BBQ_PUBLISH_DIR to write the
+# station's signed files there after every round, for bbq-predictor-serve
+# to serve. The key is made once, as the account that publishes:
+#
+#   sudo -u bbq-predictor bbq-predictor \
+#           --generate-signing-key /var/lib/bbq-predictor/signing.key
+#
+# and the public key it prints is what the applet is built with.
+#
+#BBQ_PUBLISH_DIR=/var/lib/bbq-predictor/published
+#BBQ_SIGNING_KEY=/var/lib/bbq-predictor/signing.key

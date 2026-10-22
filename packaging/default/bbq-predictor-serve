@@ -1,0 +1,7 @@
+# Arguments for bbq-predictor-serve, read by its init script.
+#
+# Ports default to 7227 and 443. If something else holds 443, name the
+# ports you want, e.g. "--port 7227"; clients also try HTTPS on 443, so a
+# web server there can serve the same tree instead (project.md 15.12.2).
+#
+#BBQ_SERVE_ARGS="--dir /var/lib/bbq-predictor/published --user bbq-predictor-serve"

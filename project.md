@@ -7222,6 +7222,59 @@ round, a minute after the first, all four WU bands failed on HTTP 404
 from the key page: the scraping fragility this server exists to absorb,
 observed while building it.
 
+### 15.12.5 Deploying it without systemd, and with it
+
+**Two packages, because the applet's must never open a port.** Installing
+`bbq-predictor` for the window gets the applet, the fetch timer and a
+cron entry; `bbq-predictor-server` adds the daemon, its init script, its
+systemd unit and its account. The server is registered for boot but **not
+started on install**: 443 may belong to something else, and until the
+publisher has run there is nothing to serve.
+
+**One fetch command, two schedulers.** `packaging/fetch` is what the
+systemd timer and `packaging/cron/bbq-predictor` both run, reading
+`/etc/default/bbq-predictor`; the cron line skips itself where
+`/run/systemd/system` exists, so a host never fetches twice. Quiet when
+no station is set, because under cron an error is a mail every five
+minutes; `flock -n` refuses a second round while one runs. The round's
+report goes to syslog through `logger`. `tool/man_options.py` now reads
+the wrapper's `set --` lines as a caller, continuation lines joined --
+its first version missed `--signing-key` on a continuation, and a
+renamed option sailed through until the sabotage showed it.
+
+**One LSB script for sysvinit and for OpenRC on Devuan**, with a native
+`openrc-run` script for OpenRC hosts without LSB support. Accounts come
+from sysusers.d, which Devuan satisfies with opensysusers.
+
+**Measured in containers, 2026-10-22:**
+
+- **Debian trixie, the package and its LSB script.** The account is
+  made, the rc links registered, and started as root without `--user`
+  the daemon refuses with 2. Through the script it runs as
+  `bbq-predictor-serve` with no capabilities and NoNewPrivs; its `/` is
+  the published tree and all it can see there is what was published;
+  it serves on 7227 and 443 and stops cleanly. This is the first run of
+  the root path at all -- the chroot and the drop -- since nothing on
+  the desk runs as root.
+- **Devuan excalibur, the same package under OpenRC**: `rc-service`
+  runs the LSB script, with the same confinement and answers.
+- **Alpine, the native OpenRC script**, the daemon built there under
+  musl with no warnings.
+- **The wrapper**, against a stub: quiet unconfigured, publish options
+  added only when a publish directory is set, and a second round
+  refused while the first holds the lock.
+
+**Two traps the containers set, worth knowing before the next test.**
+A process the script started looked alive after `stop` because the
+test's own shell was PID 1 and never reaped it -- a zombie, which
+`--init` cleared; and `/proc/<pid>/root` reads empty without
+`SYS_PTRACE`, which is no evidence about a chroot either way.
+
+**Not yet tested: a real boot.** Each init system ran its script by
+hand, not from boot. hull, the workspace's machine runtime, is the
+natural home for that test once it hands PID 1 to the guest's init,
+which its own adoption note says it does not yet do (2026-10-22).
+
 ## 16. The home-screen widget
 
 A resizable Android app widget showing the forecast graph. Asked for by

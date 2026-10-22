@@ -14,17 +14,28 @@ override_dh_auto_build:
 	$(MAKE) DEBUG_INFO=1
 
 # PREFIX is /usr/local by default, which is right for a hand-built copy
-# and wrong for a package.
+# and wrong for a package. Into debian/tmp, because two packages now take
+# their files from one install: each .install file names its own.
 override_dh_auto_install:
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/bbq-predictor PREFIX=/usr
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp PREFIX=/usr
+
+# The archive server's LSB script, installed by its .install file from
+# packaging/ so there is one copy of it; this adds only the update-rc.d
+# registration. Not started on install: port 443 may belong to something
+# else, and until the publisher has run there is nothing to serve.
+override_dh_installinit:
+	dh_installinit -pbbq-predictor-server --name=bbq-predictor-serve \
+	        --onlyscripts --no-start
 
 # The service is oneshot and triggered by the timer, so it carries no
 # [Install] section and is never started on install -- an install-time
 # start would fetch before anybody had named a station. The timer is what
 # gets enabled and started, and it is what makes the archive advance.
 override_dh_installsystemd:
-	dh_installsystemd --no-start bbq-predictor-fetch.service
-	dh_installsystemd --restart-after-upgrade bbq-predictor-fetch.timer
+	dh_installsystemd -pbbq-predictor --no-start bbq-predictor-fetch.service
+	dh_installsystemd -pbbq-predictor --restart-after-upgrade bbq-predictor-fetch.timer
+	dh_installsystemd -pbbq-predictor-server --no-start --no-enable \
+	        bbq-predictor-serve.service
 
 # Both units carry Documentation=file:///usr/share/doc/bbq-predictor/
 # project.md, and dh_compress would gzip anything over 4k in that

@@ -1,0 +1,34 @@
+[Unit]
+# The archive server (project.md sec 15.12.2), for hosts that run
+# systemd. Hosts that do not run packaging/sysvinit/bbq-predictor-serve,
+# and both read the same /etc/default/bbq-predictor-serve.
+Description=Serve the published bbq-predictor archive
+Documentation=man:bbq-predictor-serve(8)
+After=network.target
+
+[Service]
+# Started as root ONLY so it can bind 443; the daemon itself chroots
+# into the published tree and becomes --user before reading a byte from
+# anybody, and refuses to serve as root. So systemd's User= is not used:
+# with it, port 443 could not be bound at all.
+Environment="BBQ_SERVE_ARGS=--dir /var/lib/bbq-predictor/published --user bbq-predictor-serve"
+EnvironmentFile=-/etc/default/bbq-predictor-serve
+ExecStart=/usr/sbin/bbq-predictor-serve $BBQ_SERVE_ARGS
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictRealtime=yes
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

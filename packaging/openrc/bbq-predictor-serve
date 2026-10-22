@@ -1,0 +1,27 @@
+#!/sbin/openrc-run
+# Serve the published bbq-predictor archive (project.md sec 15.12.2), for
+# an OpenRC host without LSB support. Devuan and Debian run the LSB script
+# in packaging/sysvinit under OpenRC as well, and use that one.
+#
+# The daemon starts as root only to bind 443, then chroots into the
+# published tree as bbq-predictor-serve.
+
+name="bbq-predictor archive server"
+command=/usr/sbin/bbq-predictor-serve
+command_args="${BBQ_SERVE_ARGS:---dir /var/lib/bbq-predictor/published --user bbq-predictor-serve}"
+command_background=yes
+pidfile=/run/bbq-predictor-serve.pid
+output_log=/var/log/bbq-predictor-serve.log
+error_log=/var/log/bbq-predictor-serve.log
+extra_started_commands="reload"
+
+depend() {
+	need net
+	after firewall
+}
+
+reload() {
+	ebegin "Reloading $name"
+	start-stop-daemon --signal HUP --pidfile "$pidfile"
+	eend $?
+}

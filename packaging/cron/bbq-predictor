@@ -1,0 +1,12 @@
+# Fetch every five minutes where systemd is not running (project.md sec
+# 15.12.2). On a systemd host the timer does this, so the line skips
+# itself there rather than fetching twice.
+#
+# The round's report goes to syslog through logger rather than to cron,
+# which would mail it every five minutes: a partial round is ordinary.
+# Configure it in /etc/default/bbq-predictor.
+
+SHELL=/bin/sh
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+*/5 * * * * bbq-predictor [ -d /run/systemd/system ] || /usr/lib/bbq-predictor/fetch 2>&1 | logger -t bbq-predictor

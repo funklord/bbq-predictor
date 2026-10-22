@@ -58,7 +58,7 @@ StateDirectoryMode=0755
 # look broken. 78 is EX_CONFIG, so the skip names its own reason.
 ExecCondition=/bin/sh -c 'test -n "$BBQ_STATION" || { echo "BBQ_STATION is unset: set it in /etc/default/bbq-predictor" >&2; exit 78; }'
 
-ExecStart=/usr/bin/bbq-predictor --fetch-once --station ${BBQ_STATION} --history-path ${STATE_DIRECTORY}/history.sqlite
+ExecStart=/usr/lib/bbq-predictor/fetch
 
 # It talks to three weather APIs and writes one file. Nothing else.
 NoNewPrivileges=yes

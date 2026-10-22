@@ -84,12 +84,32 @@ UNIT_DIR = Path("packaging/systemd")
 IN_UNIT = re.compile(r"(--[a-z][a-z-]*)")
 
 
+# And the wrapper both schedulers run, which is where the unit's command
+# line went: the timer and cron share it, so the options live there now
+# (project.md sec 15.12). Its arguments are built with `set --`, and only
+# those lines are read -- its comments name options too, and a comment
+# is not a call.
+WRAPPER = Path("packaging/fetch")
+
+
 def options_in_units(texts):
 	found = set()
 	for text in texts:
 		for line in text.splitlines():
 			if line.startswith("Exec"):
 				found.update(IN_UNIT.findall(line))
+	return found
+
+
+def options_in_wrapper(text):
+	"""Continued lines joined first: the first version read one physical
+	line at a time and never saw --signing-key, which sits on the
+	continuation of its `set --`, so renaming it passed this gate."""
+	found = set()
+	for line in text.replace("\\\n", " ").splitlines():
+		code = line.strip()
+		if code.startswith("set -- "):
+			found.update(IN_UNIT.findall(code))
 	return found
 
 
@@ -125,8 +145,14 @@ def control_passes():
 	# And the unit comparison, which is silent in the same way.
 	unit = "ExecStart=/usr/bin/thing --real --gone\nUser=nobody\n"
 	seen = options_in_units([unit])
-	return (seen == {"--real", "--gone"} and
-	        unit_only(seen, {"--real"}) == ["--gone"])
+	if not (seen == {"--real", "--gone"} and
+	        unit_only(seen, {"--real"}) == ["--gone"]):
+		return False
+
+	# And the wrapper: its `set --` lines, never its comments.
+	wrapper = ("# --commented\nset -- --real \"$x\"\n"
+	           "\tset -- \"$@\" --gone \\\n\t        --continued x\n")
+	return options_in_wrapper(wrapper) == {"--real", "--gone", "--continued"}
 
 
 def main():
@@ -173,14 +199,19 @@ def main():
 		return 2
 
 	in_units = options_in_units(unit_texts)
+	if not WRAPPER.is_file():
+		print(f"man-options: {WRAPPER} is missing, so nothing checked what "
+		      "the schedulers invoke", file=sys.stderr)
+		return 2
+	in_units |= options_in_wrapper(WRAPPER.read_text(encoding="utf-8"))
 	if not in_units:
-		print("man-options: no unit file names an option, so the Exec "
-		      "pattern has stopped matching", file=sys.stderr)
+		print("man-options: neither a unit nor the wrapper names an option, "
+		      "so the patterns have stopped matching", file=sys.stderr)
 		return 2
 
 	unmatched = unit_only(in_units, in_source)
 	for option in unmatched:
-		print("man-options: %s is passed by a systemd unit and the program "
+		print("man-options: %s is passed by the packaging and the program "
 		      "does not accept it" % option, file=sys.stderr)
 
 	undocumented, invented = compare(source_text, page_text)

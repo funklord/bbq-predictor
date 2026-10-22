@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+#DEBHELPER#
+
+# The tree the daemon chroots into. It belongs to the publisher's account
+# when that exists, so the daemon -- which runs as bbq-predictor-serve --
+# can read it and write nothing (project.md sec 15.12.2).
+if [ "$1" = "configure" ]; then
+	owner=root
+	if getent passwd bbq-predictor >/dev/null; then
+		owner=bbq-predictor
+	fi
+	install -d -m 0755 /var/lib/bbq-predictor
+	install -d -o "$owner" -g "$owner" -m 0755 /var/lib/bbq-predictor/published
+fi

@@ -1,0 +1,82 @@
+.TH BBQ\-PREDICTOR\-SERVE 8 2026\-10\-22 "bbq\-predictor" "System Administration"
+.SH NAME
+bbq\-predictor\-serve \- serve the published bbq\-predictor archive
+.SH SYNOPSIS
+.B bbq\-predictor\-serve
+.B \-\-dir
+.I DIR
+.RB [ \-\-port
+.IR N ]...
+.RB [ \-\-user
+.IR NAME ]
+.RB [ \-\-max\-connections
+.IR N ]
+.RB [ \-\-per\-address
+.IR N ]
+.SH DESCRIPTION
+Answers bbq\-predictor clients from the signed files that
+.B bbq\-predictor \-\-fetch\-once \-\-publish
+writes under
+.IR DIR .
+A request is 48 bytes naming a file; the reply is that file, prebuilt
+and held in memory. There is no HTTP and no TLS: the files are signed
+with Ed25519 and the applet checks every one, so the transport is not
+what is trusted, and this program never holds the signing key.
+.PP
+Nothing a client sends becomes a path. The tree is loaded into memory at
+start, again when the publisher replaces its
+.I stations
+manifest, and at once on SIGHUP.
+.PP
+Started as root it binds its ports, then chroots into
+.I DIR
+and becomes
+.I NAME
+before reading anything from anybody; it refuses to serve as root at all.
+It stays in the foreground and logs to standard error, leaving
+backgrounding and log files to the init system.
+.SH OPTIONS
+.TP
+.BI \-\-dir " DIR"
+The published tree.
+.TP
+.BI \-\-port " N"
+A port to listen on, IPv6 and IPv4 alike; up to four. Defaults to 7227
+and 443.
+.TP
+.BI \-\-user " NAME"
+The account to serve as. Required when started as root, refused
+otherwise.
+.TP
+.BI \-\-max\-connections " N"
+Connections held at once; 512 by default, and fewer if the descriptor
+limit allows fewer.
+.TP
+.BI \-\-per\-address " N"
+Connections held at once from one address; 8 by default. A client past
+either limit is answered busy and closed.
+.TP
+.B \-\-help
+Print a summary and exit.
+.SH SIGNALS
+.TP
+.B SIGHUP
+Reload the tree now.
+.TP
+.BR SIGTERM ", " SIGINT
+Close every connection and exit.
+.SH FILES
+.TP
+.I /etc/default/bbq\-predictor\-serve
+The arguments the init script passes.
+.TP
+.I /var/lib/bbq\-predictor/published
+The tree the packaged service serves.
+.TP
+.I /var/log/bbq\-predictor\-serve.log
+Where the init script sends the log: a line at start and stop, and one
+whenever what is served changes.
+.SH SEE ALSO
+.BR bbq\-predictor (1)
+.SH AUTHOR
+Nabeel Sowan <nabeel@vibes.se>

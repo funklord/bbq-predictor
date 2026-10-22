@@ -1,0 +1,6 @@
+usr/sbin/bbq-predictor-serve
+usr/share/man/man8
+packaging/sysvinit/bbq-predictor-serve        etc/init.d
+packaging/default/bbq-predictor-serve         etc/default
+packaging/sysusers/bbq-predictor-serve.conf  usr/lib/sysusers.d
+packaging/systemd/bbq-predictor-serve.service usr/lib/systemd/system

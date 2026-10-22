@@ -194,12 +194,15 @@ SERVE_ARTIFACT = $(SERVE_TARGET)
 else
 SERVE_ARTIFACT = $(BUILD_DIR)/$(SERVE_TARGET)
 endif
+# After CFLAGS on the command line, not before: dpkg-buildflags hands
+# over -O2, and the last -O wins -- the package was built for speed until
+# the order changed. Size is this workspace's rule (build-and-commit.md).
 SERVE_CFLAGS = -std=c11 -Os -Wall -Wextra -Isrc
 
 $(SERVE_ARTIFACT): src/serve/serve.c src/serve/serve_loop.c \
                    src/serve/serve_core.c $(wildcard src/serve/*.h)
 	@mkdir -p $(dir $@)
-	$(CC) $(SERVE_CFLAGS) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) \
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(SERVE_CFLAGS) $(LDFLAGS) \
 	        -o $@.new $(filter %.c,$^)
 	mv -f $@.new $@
 
@@ -641,11 +644,24 @@ install: all
 	install -m 0644 packaging/$(TARGET).1 \
 	        $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
 
+	# The archive server (project.md sec 15.12.2): a daemon, so sbin and
+	# section 8. The scheduler's wrapper goes beside it, under lib,
+	# because nobody types it.
+	mkdir -p $(DESTDIR)$(PREFIX)/sbin $(DESTDIR)$(PREFIX)/share/man/man8
+	install -m 0755 $(SERVE_ARTIFACT) $(DESTDIR)$(PREFIX)/sbin/$(SERVE_TARGET)
+	install -m 0644 packaging/$(SERVE_TARGET).8 \
+	        $(DESTDIR)$(PREFIX)/share/man/man8/$(SERVE_TARGET).8
+	mkdir -p $(DESTDIR)$(PREFIX)/lib/$(TARGET)
+	install -m 0755 packaging/fetch $(DESTDIR)$(PREFIX)/lib/$(TARGET)/fetch
+
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/$(DESKTOP_ID).desktop
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
 	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
+	rm -f $(DESTDIR)$(PREFIX)/sbin/$(SERVE_TARGET)
+	rm -f $(DESTDIR)$(PREFIX)/share/man/man8/$(SERVE_TARGET).8
+	rm -f $(DESTDIR)$(PREFIX)/lib/$(TARGET)/fetch
 
 # clean removes intermediates only; $(TARGET) survives, so `make install`
 # stays possible without a rebuild.

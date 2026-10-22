@@ -1,0 +1,75 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          bbq-predictor-serve
+# Required-Start:    $network $remote_fs $syslog
+# Required-Stop:     $network $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: serve the published bbq-predictor archive
+# Description:       Answers bbq-predictor clients from the signed files
+#                    the publisher writes (project.md sec 15.12.2).
+### END INIT INFO
+#
+# One LSB script for sysvinit and for OpenRC on Devuan and Debian, which
+# runs these. A host with OpenRC and no LSB support uses
+# packaging/openrc/bbq-predictor-serve instead.
+#
+# The daemon starts as root only to bind 443, then chroots into the
+# published tree as bbq-predictor-serve; it refuses to serve as root.
+# It stays in the foreground and start-stop-daemon backgrounds it, so
+# the pidfile names the daemon itself rather than a parent that exited.
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+NAME=bbq-predictor-serve
+DAEMON=/usr/sbin/$NAME
+PIDFILE=/run/$NAME.pid
+LOG=/var/log/$NAME.log
+
+BBQ_SERVE_ARGS="--dir /var/lib/bbq-predictor/published --user bbq-predictor-serve"
+if [ -r /etc/default/$NAME ]; then
+	. /etc/default/$NAME
+fi
+
+[ -x "$DAEMON" ] || exit 0
+
+. /lib/lsb/init-functions
+
+case "$1" in
+start)
+	log_daemon_msg "Starting bbq-predictor archive server" "$NAME"
+	# shellcheck disable=SC2086 -- the arguments are words on purpose
+	start-stop-daemon --start --quiet --oknodo --background \
+	        --make-pidfile --pidfile "$PIDFILE" --output "$LOG" \
+	        --exec "$DAEMON" -- $BBQ_SERVE_ARGS
+	log_end_msg $?
+	;;
+stop)
+	log_daemon_msg "Stopping bbq-predictor archive server" "$NAME"
+	# SIGTERM, which the daemon handles by closing every connection and
+	# exiting; the retry waits for it rather than racing a restart.
+	start-stop-daemon --stop --quiet --oknodo --retry TERM/10/KILL/5 \
+	        --pidfile "$PIDFILE" --exec "$DAEMON"
+	status=$?
+	rm -f "$PIDFILE"
+	log_end_msg $status
+	;;
+reload|force-reload)
+	# SIGHUP reloads the published tree at once; it is also picked up on
+	# its own within half a minute of a publish.
+	log_daemon_msg "Reloading bbq-predictor archive server" "$NAME"
+	start-stop-daemon --stop --quiet --signal HUP --pidfile "$PIDFILE" \
+	        --exec "$DAEMON"
+	log_end_msg $?
+	;;
+restart)
+	"$0" stop
+	"$0" start
+	;;
+status)
+	status_of_proc -p "$PIDFILE" "$DAEMON" "$NAME"
+	;;
+*)
+	echo "usage: /etc/init.d/$NAME {start|stop|restart|reload|force-reload|status}" >&2
+	exit 3
+	;;
+esac

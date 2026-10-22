@@ -56,6 +56,16 @@ struct state {
 	/* What the manifest looked like at the last load. */
 	struct stat manifest;
 	int have_manifest;
+
+	/*
+	 * What the last load held, so a reload that changes nothing says
+	 * nothing. A publish every five minutes would otherwise write a line
+	 * every five minutes for ever, into a log nothing rotates.
+	 */
+	size_t last_stations;
+	size_t last_months;
+	int last_had_manifest;
+	int said_anything;
 };
 
 static int64_t now_ms(void) {
@@ -126,9 +136,16 @@ static void reload(struct state *state) {
 	for (size_t i = 0; i < table->station_count; ++i) {
 		months += table->station_list[i].month_count;
 	}
-	say(state, "loaded %zu station(s), %zu month file(s)%s",
-	    table->station_count, months,
-	    table->stations ? "" : ", and no manifest");
+	const int has_manifest = table->stations != NULL;
+	if (!state->said_anything || table->station_count != state->last_stations ||
+	    months != state->last_months || has_manifest != state->last_had_manifest) {
+		say(state, "loaded %zu station(s), %zu month file(s)%s",
+		    table->station_count, months, has_manifest ? "" : ", and no manifest");
+	}
+	state->said_anything = 1;
+	state->last_stations = table->station_count;
+	state->last_months = months;
+	state->last_had_manifest = has_manifest;
 }
 
 static void close_connection(struct state *state, size_t index) {

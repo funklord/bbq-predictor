@@ -21,6 +21,8 @@ Depends: ${shlibs:Depends},
 # header and dpkg-shlibdeps cannot see it. Without this the archive
 # cannot be opened at all, which is the whole of what the timer does.
          libqt6sql6-sqlite
+# Where systemd is not running, cron runs the fetch instead of the timer.
+Recommends: cron | cron-daemon
 Description: weather applet and forecast-verification archive
  A Qt Widgets applet that draws high-resolution temperature and rain
  graphs from several providers at once, and answers whether an afternoon
@@ -32,3 +34,22 @@ Description: weather applet and forecast-verification archive
  also installs a systemd timer that fetches on its own clock, so the
  archive advances and verification accumulates without anybody opening
  the window.
+
+Package: bbq-predictor-server
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+# The publisher is bbq-predictor --publish; this serves what it writes,
+# which can as well be a tree published elsewhere and copied here.
+Recommends: bbq-predictor
+Description: server for the bbq-predictor weather archive
+ A small daemon that answers bbq-predictor clients from the signed files
+ the publisher writes: a fixed 48-byte request, and a prebuilt file held
+ in memory in reply. There is no HTTP and no TLS; every file is signed
+ with Ed25519 and checked by the applet, and the daemon never holds the
+ signing key.
+ .
+ It binds its ports as root, then chroots into the published tree as an
+ account of its own. The init script runs under sysvinit and OpenRC, and
+ the service is not started on install: configure the ports in
+ /etc/default/bbq-predictor-serve, then start it.
