@@ -17,6 +17,13 @@ bbq\-predictor \- weather applet and forecast\-verification archive
 .IR LAT , LON ]
 .RB [ \-\-history\-path
 .IR FILE ]
+.RB [ \-\-publish
+.I DIR
+.B \-\-signing\-key
+.IR FILE ]
+.br
+.B bbq\-predictor \-\-generate\-signing\-key
+.I FILE
 .br
 .B bbq\-predictor \-\-shot
 .I FILE
@@ -74,6 +81,34 @@ which refuses to run without it.
 Fetch every band once, archive what arrives, verify what can be
 verified, report what happened, and exit. This is what the systemd timer
 runs.
+.TP
+.BI \-\-publish " DIR"
+With
+.BR \-\-fetch\-once ,
+also write the station's signed files under
+.IR DIR :
+a file per month of observations, an index of them, the bands this
+round fetched, and a
+.I stations
+manifest written last. Each file is written aside and renamed into
+place, a month whose rows have not changed is not rewritten, and a round
+in which no band arrived leaves the last bands in place.
+.BR bbq\-predictor\-serve (8)
+serves the directory. Needs
+.BR \-\-signing\-key .
+.TP
+.BI \-\-signing\-key " FILE"
+The Ed25519 key that signs what
+.B \-\-publish
+writes: its 32\-byte seed and nothing else. Refused if any other user
+can read it.
+.TP
+.BI \-\-generate\-signing\-key " FILE"
+Create a new signing key at
+.IR FILE ,
+readable by its owner alone, print its public half in hex, and exit.
+Never overwrites an existing file: losing a key strands every client
+built with its public half.
 .TP
 .B \-\-android\-service
 Fetch once and exit, building no window and no
@@ -193,7 +228,9 @@ advanced. The systemd timer forgives this by name.
 Nothing covers now: the run stored nothing usable.
 .TP
 .B 2
-A configuration error.
+A configuration error, including a
+.B \-\-signing\-key
+that cannot be used. A publish that fails after the fetch exits 1.
 .PP
 Other modes exit 0 on success and non\-zero otherwise.
 .SH FILES

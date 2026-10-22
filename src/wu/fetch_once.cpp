@@ -213,7 +213,8 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 } // namespace
 
 int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
-                      int timeout_s, const QString &history_path) {
+                      int timeout_s, const QString &history_path,
+                      const bbq_after_round &after_round) {
 	QTextStream out(stdout);
 	QTextStream error(stderr);
 
@@ -455,6 +456,20 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	const bbq_fetch_outcome outcome = bbq_fetch_verdict(
 	        failures, timed_out, forecast_bands_asked,
 	        composite.at(now).is_valid());
+
+	/*
+	 * Whatever the round's outcome: the months come from the store,
+	 * which a failed round leaves as it was, and the publisher keeps the
+	 * last head when no band arrived. A publish that fails is an error
+	 * of its own, never folded into a partial fetch.
+	 */
+	if (after_round) {
+		out.flush();
+		const int published = after_round(composite, feed.history());
+		if (published != 0) {
+			return published;
+		}
+	}
 
 	if (outcome == bbq_fetch_outcome::complete) {
 		out << "fetch-once: every band answered\n";

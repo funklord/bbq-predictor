@@ -382,6 +382,27 @@ public:
 	qint64 earliest_observation(const QString &station) const;
 
 	/*
+	 * The publisher's two reads (sec 15.12). A month file records which
+	 * provider reported each row, which observations() drops, and the
+	 * summary lets a publish skip every month whose rows have not
+	 * changed rather than re-reading a decade every five minutes.
+	 */
+	struct observation_row {
+		bbq_sample sample;
+		QString provider;
+	};
+	std::vector<observation_row> observation_rows(const QString &station,
+	                                              qint64 from, qint64 to) const;
+
+	struct observation_month {
+		qint64 begin_utc = 0;     /* the month's first second, UTC */
+		int rows = 0;
+		qint64 first_utc = 0;
+		qint64 last_utc = 0;
+	};
+	std::vector<observation_month> observation_months(const QString &station) const;
+
+	/*
 	 * The newest observation for `station` inside [from, to), or 0 when
 	 * the store holds none in that window.
 	 *

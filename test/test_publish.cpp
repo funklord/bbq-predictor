@@ -3,8 +3,17 @@
 #include <cmath>
 #include <cstring>
 
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
+
+#include <sys/stat.h>
+
+#include "model/composite.h"
 #include "publish/encode.h"
+#include "publish/publish.h"
 #include "publish/signing_key.h"
+#include "store/history.h"
 
 #include "wire/vendor/bbq.hpp"
 
@@ -32,6 +41,12 @@ private slots:
 	void what_the_format_cannot_carry_is_refused();
 	void band_codes_are_a_contract();
 	void month_numbers_and_names_agree();
+
+	void publishing_twice_rewrites_nothing();
+	void a_new_observation_rewrites_only_its_month();
+	void a_round_with_no_bands_keeps_the_last_head();
+	void a_station_that_cannot_be_a_path_is_refused();
+	void a_key_others_can_read_is_refused();
 
 private:
 	bbq_signing_key m_key;
@@ -493,6 +508,176 @@ void test_publish::month_numbers_and_names_agree() {
 	QCOMPARE(bbq_wire_month_name(december), QStringLiteral("2026-12"));
 	QCOMPARE(bbq_wire_month_name(uint16_t(december + 1)), QStringLiteral("2027-01"));
 	QCOMPARE(bbq_wire_month_of(bbq_wire_month_end(december) - 1), december);
+}
+
+namespace {
+
+/* A store holding two months of one station's observations. */
+bool seed_history(bbq_history &history, const QString &path, const QString &station) {
+	if (!history.open(path)) {
+		return false;
+	}
+	for (uint16_t month : {uint16_t(2026 * 12 + 7), uint16_t(2026 * 12 + 8)}) {
+		bbq_series series(bbq_band::observed, QStringLiteral("wunderground"));
+		series.set_samples(observations(month, 300));
+		if (history.record_observations(station, series) <= 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+QByteArray contents(const QString &path) {
+	QFile in(path);
+	return in.open(QIODevice::ReadOnly) ? in.readAll() : QByteArray();
+}
+
+qint64 inode(const QString &path) {
+	struct stat info;
+	return ::stat(QFile::encodeName(path).constData(), &info) == 0 ? qint64(info.st_ino) : -1;
+}
+
+bbq_composite one_band() {
+	bbq_series hourly(bbq_band::hourly, QStringLiteral("wunderground"));
+	std::vector<bbq_sample> hours(24);
+	for (int i = 0; i < 24; ++i) {
+		hours[size_t(i)].start_utc = 1790000000 + i * 3600;
+		hours[size_t(i)].duration_s = 3600;
+		hours[size_t(i)].temperature = 10.0 + i;
+	}
+	hourly.set_samples(hours);
+	hourly.set_fetched_utc(1789999000);
+	bbq_composite composite;
+	composite.set_series(hourly);
+	return composite;
+}
+
+} // namespace
+
+void test_publish::publishing_twice_rewrites_nothing() {
+	QTemporaryDir root;
+	bbq_history history;
+	QVERIFY(seed_history(history, root.filePath("history.sqlite"), "ISTOCK877"));
+	const QString dir = root.filePath("pub");
+	QString out_text, error_text;
+	QTextStream out(&out_text), error(&error_text);
+
+	const bbq_composite composite = one_band();
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &composite, history, m_key, 1790000100, out, error), 0);
+
+	const QStringList files = {"ISTOCK877/2026-08", "ISTOCK877/2026-09", "ISTOCK877/index",
+	                           "ISTOCK877/head", "stations"};
+	for (const QString &file : files) {
+		QVERIFY2(QFile::exists(dir + "/" + file), qPrintable(file + " " + error_text));
+	}
+
+	/*
+	 * Same rows, same bands: every station file keeps its inode, which is
+	 * what an untouched file looks like -- rewriting even identical bytes
+	 * would rename a new file into place. The manifest is the exception
+	 * by design: it carries the publish time and is the daemon's signal.
+	 */
+	std::map<QString, qint64> before;
+	for (const QString &file : files) {
+		before[file] = inode(dir + "/" + file);
+	}
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &composite, history, m_key, 1790000200, out, error), 0);
+	for (const QString &file : files) {
+		if (file != "stations") {
+			QVERIFY2(inode(dir + "/" + file) == before[file], qPrintable(file));
+		}
+	}
+	QVERIFY(inode(dir + "/stations") != before["stations"]);
+}
+
+void test_publish::a_new_observation_rewrites_only_its_month() {
+	QTemporaryDir root;
+	bbq_history history;
+	QVERIFY(seed_history(history, root.filePath("history.sqlite"), "ISTOCK877"));
+	const QString dir = root.filePath("pub");
+	QString text;
+	QTextStream out(&text), error(&text);
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", nullptr, history, m_key, 1790000100, out, error), 0);
+
+	const QByteArray august = contents(dir + "/ISTOCK877/2026-08");
+	const QByteArray september = contents(dir + "/ISTOCK877/2026-09");
+	const QByteArray index = contents(dir + "/ISTOCK877/index");
+
+	/* One more reading, late in September. */
+	bbq_series late(bbq_band::observed, QStringLiteral("wunderground"));
+	bbq_sample sample;
+	sample.start_utc = bbq_wire_month_end(uint16_t(2026 * 12 + 8)) - 600;
+	sample.duration_s = 300;
+	sample.temperature = 4.5;
+	late.set_samples({sample});
+	QCOMPARE(history.record_observations("ISTOCK877", late), 1);
+
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", nullptr, history, m_key, 1790000200, out, error), 0);
+	QCOMPARE(contents(dir + "/ISTOCK877/2026-08"), august);
+	QVERIFY(contents(dir + "/ISTOCK877/2026-09") != september);
+	QVERIFY(contents(dir + "/ISTOCK877/index") != index);
+
+	/* And no head was written, since no round was given. */
+	QVERIFY(!QFile::exists(dir + "/ISTOCK877/head"));
+}
+
+void test_publish::a_round_with_no_bands_keeps_the_last_head() {
+	QTemporaryDir root;
+	bbq_history history;
+	QVERIFY(seed_history(history, root.filePath("history.sqlite"), "ISTOCK877"));
+	const QString dir = root.filePath("pub");
+	QString text;
+	QTextStream out(&text), error(&text);
+
+	const bbq_composite good = one_band();
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &good, history, m_key, 1790000100, out, error), 0);
+	const QByteArray head = contents(dir + "/ISTOCK877/head");
+	QVERIFY(!head.isEmpty());
+
+	const bbq_composite nothing;
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &nothing, history, m_key, 1790000200, out, error), 0);
+	QCOMPARE(contents(dir + "/ISTOCK877/head"), head);
+}
+
+void test_publish::a_station_that_cannot_be_a_path_is_refused() {
+	QTemporaryDir root;
+	bbq_history history;
+	QVERIFY(history.open(root.filePath("history.sqlite")));
+	const QString dir = root.filePath("pub");
+	QString text;
+	QTextStream out(&text), error(&text);
+
+	for (const char *station : {"../ETC", "istock877", "", "A/B"}) {
+		QCOMPARE(bbq_publish(dir, QString::fromLatin1(station), nullptr, history, m_key,
+		                     1790000100, out, error),
+		         1);
+	}
+	/* Refused before anything was created. */
+	QVERIFY(!QDir(dir).exists());
+}
+
+void test_publish::a_key_others_can_read_is_refused() {
+	QTemporaryDir root;
+	const QString path = root.filePath("signing.key");
+
+	bbq_signing_key made;
+	QString why;
+	QVERIFY2(made.generate(path, &why), qPrintable(why));
+	QCOMPARE(QFile::permissions(path) & (QFile::ReadGroup | QFile::ReadOther),
+	         QFileDevice::Permissions());
+
+	bbq_signing_key loaded;
+	QVERIFY2(loaded.load(path, &why), qPrintable(why));
+	QCOMPARE(loaded.public_key(), made.public_key());
+
+	/* Never overwritten. */
+	bbq_signing_key again;
+	QVERIFY(!again.generate(path, &why));
+
+	QVERIFY(::chmod(QFile::encodeName(path).constData(), 0644) == 0);
+	bbq_signing_key exposed;
+	QVERIFY(!exposed.load(path, &why));
+	QVERIFY2(why.contains("readable by others"), qPrintable(why));
 }
 
 QTEST_GUILESS_MAIN(test_publish)

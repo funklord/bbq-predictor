@@ -3,6 +3,11 @@
 
 #include <QString>
 
+#include <functional>
+
+class bbq_composite;
+class bbq_history;
+
 /*
  * Fetch every band once, report what arrived, and exit.
  *
@@ -33,7 +38,17 @@
  * away real observations because they arrived through a diagnostic
  * would be the wrong way round (project.md sec 12.11).
  */
+/*
+ * `after_round`, when given, runs once the round has settled, with what
+ * it fetched and the store it wrote to, and its result replaces a zero
+ * or partial exit when it fails. It is how --publish rides on a fetch
+ * without this file knowing the publisher exists, which keeps the
+ * Android build, where nothing publishes, free of it.
+ */
+using bbq_after_round = std::function<int(const bbq_composite &, const bbq_history &)>;
+
 int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
-                      int timeout_s, const QString &history_path = QString());
+                      int timeout_s, const QString &history_path = QString(),
+                      const bbq_after_round &after_round = {});
 
 #endif

@@ -7181,6 +7181,47 @@ happens.
 its own 48-byte request (`src/serve/serve_core.c`), which is hand-written
 C, tested, and fuzzed by `make fuzz-serve`.
 
+### 15.12.4 The publisher, and what the client must do with a head
+
+`--fetch-once --publish DIR --signing-key FILE` publishes after every
+round (`src/publish/`); `--generate-signing-key FILE` makes the key and
+prints the public half the applet is built with. Desktop and server
+only: nothing publishes from a phone, and getrandom() is not in bionic
+before API 28.
+
+- **A month is re-encoded only when its row count or first or last
+  reading differs from the last index**, which the store answers with
+  one grouped query; the previous index is read back and its signature
+  checked first, and anything wrong with it costs a full re-encode.
+- **Unchanged bytes are not rewritten**, so an unchanged month keeps its
+  inode and its signature, which is what lets the daemon answer a client
+  "unchanged". Encoding and Ed25519 are both deterministic, so this
+  holds without bookkeeping.
+- **The head is stamped with its newest band's FETCH time**, not the
+  publish time. The stamp is for refusing a head older than one already
+  held, which the fetch time does equally well, and a publish-time stamp
+  made identical bands differ on every run -- the suite's same-bytes
+  case found it.
+- **A round where no band arrived keeps the last head.** One where SOME
+  arrived publishes those alone, so **the client must keep a band a new
+  head omits**, under that band's old fetch time, and let the staleness
+  instrument judge it (sec 2.4). Carrying old bands forward on the
+  server instead would put a fetch the server did not make this round
+  into a file stamped by it.
+- **The manifest is written last** and always, since it is the daemon's
+  signal to reload; every file is written aside and renamed.
+
+**Measured end to end, 2026-10-22**, from one real fetch against a copy
+of the desktop archive: 3,108 ISTOCK877 observations published as three
+months in 8,031 bytes, 2.6 bytes a row against sec 15.5's estimate of
+2.5. Served by `bbq-predictor-serve` and fetched by a Python client
+using its own Ed25519 and BLAKE2b, every signature and digest verified,
+and a month asked for again with its signature held came back
+"unchanged". A second publish rewrote only the head. In that second
+round, a minute after the first, all four WU bands failed on HTTP 404
+from the key page: the scraping fragility this server exists to absorb,
+observed while building it.
+
 ## 16. The home-screen widget
 
 A resizable Android app widget showing the forecast graph. Asked for by

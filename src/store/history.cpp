@@ -1516,6 +1516,80 @@ bbq_series bbq_history::observations(const QString &station, qint64 from,
 	return series;
 }
 
+std::vector<bbq_history::observation_row>
+bbq_history::observation_rows(const QString &station, qint64 from, qint64 to) const {
+	std::vector<observation_row> rows;
+	if (!m_open) {
+		return rows;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "SELECT valid_utc, duration_s, temperature, precip_rate, wind_kph, "
+	        "provider FROM observation WHERE station = ? AND valid_utc >= ? "
+	        "AND valid_utc < ? ORDER BY valid_utc"));
+	query.addBindValue(station);
+	query.addBindValue(from);
+	query.addBindValue(to);
+
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return rows;
+	}
+
+	while (query.next()) {
+		observation_row row;
+		row.sample.start_utc = query.value(0).toLongLong();
+		row.sample.duration_s = query.value(1).toInt();
+		if (!query.value(2).isNull()) {
+			row.sample.temperature = query.value(2).toDouble();
+		}
+		if (!query.value(3).isNull()) {
+			row.sample.precip_rate = query.value(3).toDouble();
+		}
+		if (!query.value(4).isNull()) {
+			row.sample.wind_kph = query.value(4).toDouble();
+		}
+		row.provider = query.value(5).toString();
+		rows.push_back(std::move(row));
+	}
+	return rows;
+}
+
+std::vector<bbq_history::observation_month>
+bbq_history::observation_months(const QString &station) const {
+	std::vector<observation_month> months;
+	if (!m_open) {
+		return months;
+	}
+
+	/*
+	 * Grouped by UTC month in SQL, so the whole archive is summarised by
+	 * the primary key's index without a row leaving the database.
+	 */
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "SELECT strftime('%s', valid_utc, 'unixepoch', 'start of month'), "
+	        "COUNT(*), MIN(valid_utc), MAX(valid_utc) FROM observation "
+	        "WHERE station = ? GROUP BY 1 ORDER BY 1"));
+	query.addBindValue(station);
+
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return months;
+	}
+
+	while (query.next()) {
+		observation_month month;
+		month.begin_utc = query.value(0).toLongLong();
+		month.rows = query.value(1).toInt();
+		month.first_utc = query.value(2).toLongLong();
+		month.last_utc = query.value(3).toLongLong();
+		months.push_back(month);
+	}
+	return months;
+}
+
 qint64 bbq_history::earliest_observation(const QString &station) const {
 	if (!m_open) {
 		return 0;

@@ -192,3 +192,20 @@ HEADERS += \
 	src/wu/fetch_once.h \
 	src/wu/key_source.h \
 	src/wu/reader.h
+
+# The publisher (project.md sec 15.12): desktop and server only. Nothing
+# publishes from a phone, and keeping it out keeps getrandom(), which
+# bionic has only from API 28 against a minSdk of 26, out of the package.
+!android {
+	INCLUDEPATH += monocypher/src monocypher/src/optional
+	SOURCES += \
+		src/publish/encode.cpp \
+		src/publish/publish.cpp \
+		src/publish/signing_key.cpp \
+		monocypher/src/monocypher.c \
+		monocypher/src/optional/monocypher-ed25519.c
+	HEADERS += \
+		src/publish/encode.h \
+		src/publish/publish.h \
+		src/publish/signing_key.h
+}
