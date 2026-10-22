@@ -7129,9 +7129,10 @@ data is public, and that was judged acceptable rather than overlooked.
 reading, the signature checked before parsing, the decompressed size
 declared and bounded before inflation, every count bounded, and a file
 failing any check discarded whole in favour of what the store holds. The
-parser is generated from the situ schema, so its bounds come from one
-description, and the daemon's request parser and the applet's file
-parser are both fuzzed.
+parser is meant to be generated from the situ schema, so that its bounds
+come from one description -- not yet, for the reason sec 15.12.3 gives
+-- and the daemon's request parser and the applet's file parser are
+both fuzzed.
 
 **fuzznet was considered and does not fit**: it serves files only to
 contacts that have exchanged keys, and its owner rejected serving any
