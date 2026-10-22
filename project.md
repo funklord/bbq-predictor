@@ -6103,7 +6103,9 @@ client side and expensive on the other.
 **Static files rather than an API**, which is the holder's framing and
 the right one: no dynamic server, no request handling, no attack
 surface, and any web server or object store will do. The fetcher writes
-a directory; something else serves it.
+a directory; something else serves it. **That something is now this
+project's own daemon, not a web server (sec 15.12.2)**; the files are
+still prebuilt, so the request handling stays trivial.
 
 ### 15.3 The trap to design against first
 
@@ -7070,35 +7072,66 @@ sabotage fails it.
 The numbers are defaults chosen here, not measured, and are the
 holder's to move.
 
-### 15.12.2 What "only static files" does and does not secure
+### 15.12.2 A purpose-built daemon, not a web server
 
-Static files remove the request handler, which is most of a server's
-attack surface, but three parts remain, and each is designed rather
-than assumed:
+**The holder ruled out a web server, 2026-10-22**: none on these
+machines is trusted, one is too heavy for requests this simple, there is
+no reverse proxy, and the point is a smaller attack surface. So the
+published files are served by a daemon of this project's own, which
+does one thing:
 
-- **The publisher can only write what it generates.** It names files
-  from station ids, which come from the configuration and from WU, so
-  an id must match `[A-Z0-9]{1,32}` before it becomes a path -- that
-  is what stops `../` reaching outside the published tree. It writes
-  each file to a temporary name and renames it, so a client never reads
-  half a file, and it runs unprivileged, able to write only there.
-- **The web server should serve only that directory**, with no listing
-  and no symlinks followed, so nothing else on the machine can be
-  fetched through it. That is configuration on the server, outside
-  this tree, and is listed for whoever deploys it.
-- **The client treats every byte as hostile.** Thousands of clients
-  parsing one file is where a parser bug becomes everybody's. Every file
-  carries a CRC-32 and a size cap checked before parsing, the
-  decompressed size is bounded and declared before inflation, counts
-  are bounded, and a file that fails any check is discarded in favour
-  of what the store already holds -- never partly applied. The parser
-  is generated from the situ schema rather than written by hand, so
-  that its bounds come from one description, and it is fuzzed.
+- **Plain TCP, a fixed 48-byte request, a prebuilt file in reply.** No
+  HTTP, no TLS, no header parsing; a request of any other length, or
+  one not complete within a few seconds, is closed. TCP rather than UDP
+  because a public UDP server answering a small request with a large
+  file is a ready-made amplifier for attacks on third parties, and the
+  defences against that (address cookies, chunking, retransmission) are
+  exactly the code this design is avoiding.
+- **Nothing a client sends becomes a path.** The daemon loads the
+  published files into memory at start and on reload, and a request is
+  a lookup in that table. A station id that is not in it is answered
+  "not served"; there is no filesystem access to steer.
+- **It drops everything it can after binding**: starts as root only to
+  bind 443, then confines itself to the published directory and runs
+  as an unprivileged user. Connection counts are capped in total and
+  per address.
+- **Two ports, the holder's choice**: 7227 (B-B-Q on a phone keypad,
+  absent from `/etc/services` -- which is not the same as unassigned)
+  and 443, which crosses networks that block everything else.
+- **And HTTPS on 443 as a third route**, also the holder's, in case a
+  web server ever has to take that port. The publisher's tree is laid
+  out so that any web server could serve it as it stands, and since
+  the files are signed, a copy fetched over HTTPS is checked exactly as
+  one from the daemon -- the transport is not what is trusted. So a
+  client tries 7227, then the daemon's protocol on 443, then HTTPS on
+  443, and remembers which route last worked so it starts there next
+  time. Whichever is on 443, one of the last two finds it.
+- **Started by sysvinit or OpenRC**, both of which the holder's machines
+  use; the systemd units stay for hosts that have it. The fetcher and
+  publisher run from cron.
 
-HTTPS provides transport integrity. **Signing the files** would protect
-against a compromised web server or a mirror, at the cost of a key to
-keep; it is not designed in, and whether it is wanted is the holder's
-question.
+**Integrity comes from signatures, because there is no TLS.** The
+publisher signs every file with Ed25519 (monocypher, vendored as
+fuzzypickles does), and the applet carries the public key. **The daemon
+never holds the signing key**, so taking it over lets an attacker refuse
+service but not forge a forecast. A head file carries when it was
+generated, and the applet refuses one older than what it holds, so a
+replayed old file cannot roll a client back. What is not protected is
+privacy: which station a client asks for is visible on the wire. The
+data is public, and that was judged acceptable rather than overlooked.
+
+**The applet still treats every byte as hostile**: a size cap before
+reading, the signature checked before parsing, the decompressed size
+declared and bounded before inflation, every count bounded, and a file
+failing any check discarded whole in favour of what the store holds. The
+parser is generated from the situ schema, so its bounds come from one
+description, and the daemon's request parser and the applet's file
+parser are both fuzzed.
+
+**fuzznet was considered and does not fit**: it serves files only to
+contacts that have exchanged keys, and its owner rejected serving any
+peer that asks. The holder's word on it was that it has almost no
+overlap with this project.
 
 ## 16. The home-screen widget
 
