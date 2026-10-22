@@ -96,7 +96,13 @@ android {
 	# Play requires for an upload moves independently of them. A build that
 	# hardcodes it fails on a machine whose SDK is one release behind, and
 	# fails talking about Gradle rather than about the SDK.
-	isEmpty(BBQ_TARGET_API): BBQ_TARGET_API = 33
+	#
+	# The fallback is only for a qmake run that does not come through the
+	# Makefile -- Qt Creator, or qmake by hand. It said 33, which Play has
+	# refused for new apps and updates since 2026-08-31, so such a build
+	# made an app that could not be uploaded (sec 11.12). 36 matches
+	# tool/android.mk's default.
+	isEmpty(BBQ_TARGET_API): BBQ_TARGET_API = 36
 	ANDROID_MIN_SDK_VERSION = 26
 	ANDROID_TARGET_SDK_VERSION = $$BBQ_TARGET_API
 
