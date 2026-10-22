@@ -12,7 +12,7 @@
 
 TEMPLATE = subdirs
 SUBDIRS = interpolate model reader providers layout client feed history correction view seed \
-          window cli server serve serve_loop
+          window cli server serve serve_loop publish
 
 interpolate.file = test_interpolate.pro
 model.file = test_model.pro
@@ -30,3 +30,4 @@ cli.file = test_cli.pro
 server.file = test_server.pro
 serve.file = test_serve.pro
 serve_loop.file = test_serve_loop.pro
+publish.file = test_publish.pro

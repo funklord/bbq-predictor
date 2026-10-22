@@ -205,7 +205,42 @@ $(SERVE_ARTIFACT): src/serve/serve.c src/serve/serve_loop.c \
 
 all: $(ARTIFACT) $(SERVE_ARTIFACT)
 
-$(BUILD_DIR)/Makefile: bbq-predictor.pro
+# The vendored submodules, fetched when absent and never moved
+# (makefile-hazards: the build fetches what it vendors, and fails loudly
+# when it cannot). monocypher signs and verifies the published archive
+# (project.md sec 15.12.2); without it the build would stop on a missing
+# header much later, naming nothing useful.
+#
+# Asks git nothing when every directory is populated, so an ordinary build
+# spawns nothing. A submodule present at another commit is left alone:
+# that is somebody's work, and moving a pin is a reviewed commit.
+SUBMODULE_PATHS = monocypher
+
+submodules:
+	@missing=''; \
+	for p in $(SUBMODULE_PATHS); do \
+		if [ ! -d "$$p" ] || [ -z "$$(ls -A "$$p" 2>/dev/null)" ]; then \
+			missing="$$missing $$p"; \
+		fi; \
+	done; \
+	if [ -z "$$missing" ]; then exit 0; fi; \
+	if ! command -v git >/dev/null 2>&1; then \
+		echo "error: not checked out:$$missing, and git is not installed" >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$$(git rev-parse --git-common-dir 2>/dev/null)" ]; then \
+		echo "error: not checked out:$$missing, and this is not a git" >&2; \
+		echo "       checkout (git archive carries none of their contents)" >&2; \
+		exit 1; \
+	fi; \
+	echo "==> fetching submodules:$$missing"; \
+	git submodule update --init -- $$missing || { \
+		echo "error: fetching$$missing failed; it is public HTTPS and" >&2; \
+		echo "       wants only a network" >&2; \
+		exit 1; \
+	}
+
+$(BUILD_DIR)/Makefile: bbq-predictor.pro | submodules
 	mkdir -p $(BUILD_DIR)
 	cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor.pro $(QMAKE_CONFIG) \
 	        QMAKE_CXX=$(CXX) BBQ_VERSION=$(VERSION)
@@ -318,7 +353,7 @@ android-aab: $(ANDROID_BUILD_DIR)/Makefile
 TEST_BUILD_DIR ?= build-test
 TEST_SOURCES = $(wildcard test/*.cpp test/*.pro test/*.pri)
 
-$(TEST_BUILD_DIR)/Makefile: test/tests.pro $(TEST_SOURCES)
+$(TEST_BUILD_DIR)/Makefile: test/tests.pro $(TEST_SOURCES) | submodules
 	mkdir -p $(TEST_BUILD_DIR)
 	cd $(TEST_BUILD_DIR) && $(QMAKE) $(CURDIR)/test/tests.pro $(QMAKE_CONFIG) \
 	        QMAKE_CXX=$(CXX)
@@ -666,5 +701,6 @@ help:
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
         style-wiring style-setup style-tests style-links test-clocks fuzz-serve \
+        submodules \
         android android-aab \
         install uninstall clean veryclean distclean help

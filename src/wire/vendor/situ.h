@@ -1,0 +1,1940 @@
+/* situ.h -- minimal runtime for generated situ accessors: views, bounds,
+ * generation tracking.
+ *
+ * Nothing here allocates, recurses, or uses a VLA, and a RELEASE build pulls
+ * in <stdint.h> and <stddef.h> and nothing else. Generated code depends on
+ * this file and on nothing else.
+ *
+ * A SITU_CHECKED build adds <stdlib.h>, for the `abort()` that a stale view
+ * traps through -- a getter returns a value and has no error channel to
+ * report a caller bug through. Define `SITU_STALE()` before including this
+ * to route the trap somewhere a freestanding target can use, and the
+ * include goes with it.
+ *
+ * SITU_CHECKED enables bounds and generation checking. Checked and unchecked
+ * builds are ABI-compatible: no structure layout below depends on the flag,
+ * so a checked caller can link against an unchecked library and vice versa.
+ */
+
+#ifndef SITU_H
+#define SITU_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define SITU_VERSION_MAJOR	0
+#define SITU_VERSION_MINOR	1
+
+/* Failure classes. One code per class; generated code never sets errno and
+ * never longjmps. */
+typedef enum situ_err {
+	SITU_OK		    = 0,
+	SITU_ERR_BOUNDS	    = 1,  /* access outside the buffer or view	*/
+	SITU_ERR_CONSTRAINT = 2,  /* must_eq, max, must_be_zero violated	*/
+	SITU_ERR_VERSION    = 3,  /* unknown version or variant discriminant	*/
+	SITU_ERR_TAG	    = 4,  /* authentication tag stale or unverified	*/
+	SITU_ERR_STAGE	    = 5,  /* region's stage gate has not been passed	*/
+	SITU_ERR_STALE	    = 6,  /* view outlived a layout-shifting mutation	*/
+	/* Not an error in the way the others are: the bytes so far are a valid
+	 * prefix and more are needed. A caller reading from a stream gets this
+	 * on every partial read, which is why it is not SITU_ERR_BOUNDS -- that
+	 * one means a read went outside the buffer, which is a bug or an attack.
+	 * Conflating them makes a receiver treat normal progress as hostile. */
+	SITU_ERR_TRUNCATED  = 7,
+	/* A checksum does not match the bytes it covers (0053). Distinct from
+	 * SITU_ERR_TAG, which means a cryptographic gate refused: a CRC
+	 * mismatch says the message is corrupt or truncated, and a receiver
+	 * that logs the two the same way reports a disk error as an attack. */
+	SITU_ERR_CHECKSUM   = 8,
+	/* A recursive type nested deeper than THIS BUILD will follow (0054).
+	 *
+	 * Separate from SITU_ERR_CONSTRAINT on purpose, and the separation is
+	 * why `[limit]` is a second attribute rather than a smaller `[depth]`.
+	 * A message deeper than the format's own `[depth]` is malformed and
+	 * gets CONSTRAINT, as a thirteenth month does. One deeper than
+	 * `[limit]` is *well formed* and refused anyway, because this build
+	 * declines to spend the stack -- a statement about the reader, not
+	 * about the bytes.
+	 *
+	 * A receiver logging the two alike would report its own configuration
+	 * as an attack and go hunting a malformed sender that does not exist.
+	 * That is the argument SITU_ERR_TRUNCATED already carries against
+	 * SITU_ERR_BOUNDS. */
+	SITU_ERR_DEPTH      = 9
+} situ_err_t;
+
+/* A message: the caller's buffer plus the generation counter that detects
+ * views outliving a mutation that shifted layout (section 12.3), and the set
+ * of authentication tags currently stale (section 14.2). The caller owns the
+ * buffer; this structure never takes a copy. */
+typedef struct situ_msg {
+	uint8_t	 *base;
+	uint32_t  size;
+	uint32_t  generation;
+	/* One bit per tag or checksum declared in the struct, set when a covered
+	 * field is written and cleared when that tag is recomputed. Thirty-two is
+	 * a generous ceiling: coverage must be disjoint or nested, so a schema
+	 * with more tags than this has other problems. */
+	uint32_t  dirty;
+} situ_msg_t;
+
+/* Mark tags stale. Generated setters for covered fields call this; the mask is
+ * the OR of the tag bits declared in the generated header. */
+static inline void situ_msg_mark_dirty(situ_msg_t *msg, uint32_t tags)
+{
+	msg->dirty |= tags;
+}
+
+static inline void situ_msg_clear_dirty(situ_msg_t *msg, uint32_t tags)
+{
+	msg->dirty &= ~tags;
+}
+
+/* Whether the buffer is fit to transmit. A stale tag means the bytes no longer
+ * authenticate, so handing them out would produce a message the receiver
+ * rejects -- or worse, one it accepts because the tag was never checked. */
+static inline situ_err_t situ_msg_transmittable(const situ_msg_t *msg)
+{
+	return msg->dirty == 0u ? SITU_OK : SITU_ERR_TAG;
+}
+
+/* A view: a resolved frame base plus a bounds limit, passed by value. Field
+ * access inside a view is a constant offset from base, with the bounds check
+ * amortized at acquisition. The generation is the one the owning message had
+ * when this view was taken. */
+typedef struct situ_view {
+	uint8_t	 *base;
+	uint32_t  limit;
+	uint32_t  generation;
+	/* The message this is a view OF, so that the generation above has
+	 * something to be compared against.
+	 *
+	 * Without it the check was impossible rather than merely absent: an
+	 * ordinary getter takes a view and returns a value, so it had no way
+	 * to reach the current generation and no way to report a mismatch.
+	 * Generated code promised "a stale view is caught on use in a
+	 * SITU_CHECKED build" 258 times and implemented it nowhere (26.306).
+	 *
+	 * A pointer per view rather than a parameter per accessor: the view
+	 * is the thing that goes stale, so it is the thing that should know
+	 * what it belongs to -- which is how the Python backend has always
+	 * been the one where 12.3 holds. `situ_view_sub` carries it down, so
+	 * a sub-view is checkable too, and that is the case that actually
+	 * goes wrong. */
+	const struct situ_msg *owner;
+} situ_view_t;
+
+/* One run of bytes a scattered transform runs over (13.2b).
+ *
+ * `base` is mutable because the scattered form of the tier-1 ABI works in
+ * place: it exists for a transform that covers spans with something
+ * uncovered between them, and the only reason to reach for it is to avoid
+ * gathering those spans into a temporary. A codec that wrote its answer
+ * somewhere else would have copied them after all.
+ *
+ * That is why the scattered form is confined to length-preserving codecs,
+ * which is what section 14.1a already requires of a `covers` clause: in
+ * place is only meaningful where the answer is the same size as the
+ * question. */
+typedef struct situ_span {
+	uint8_t	 *base;
+	uint32_t  len;
+} situ_span_t;
+
+/* Bind a message to a caller-supplied buffer. Generation starts at 1 so that
+ * a zero-initialised view is never mistaken for a live one. */
+void situ_msg_init(situ_msg_t *msg, uint8_t *buf, uint32_t size);
+
+/* Record that the layout may have shifted, invalidating every outstanding
+ * view. Generated setters call this on any mutation that can move subsequent
+ * members; it wraps, which is harmless because a stale view has to survive
+ * exactly 2^32 mutations to alias. */
+void situ_msg_touch(situ_msg_t *msg);
+
+/* Acquire a view of [offset, offset+extent) within the message. This is the
+ * one bounds check; the accesses within the view are unchecked constant
+ * offsets. */
+situ_err_t situ_view_at(const situ_msg_t *msg, uint32_t offset, uint32_t extent, situ_view_t *out);
+
+/* Narrow a view to a sub-range, preserving its generation. */
+situ_err_t situ_view_sub(situ_view_t view, uint32_t offset, uint32_t extent, situ_view_t *out);
+
+/* True when a range lies inside the view. Kept out of the checked-only path
+ * because dynamic sizes need it in release builds too. */
+static inline int situ_in_bounds(situ_view_t view, uint32_t offset, uint32_t extent)
+{
+	return extent <= view.limit && offset <= view.limit - extent;
+}
+
+#ifdef SITU_CHECKED
+
+/* Whether a view still matches the message it was taken from.
+ *
+ * One argument now, the view carrying its own owner: a getter takes a view
+ * and nothing else, so a two-argument form could not be called from the
+ * place that needed it and never was -- zero call sites across the corpus,
+ * under a comment claiming generated accessors called it on entry. */
+static inline situ_err_t situ_view_check(situ_view_t view)
+{
+	if (view.base == NULL) {
+		return SITU_ERR_STALE;	/* a zero-initialised view is never live */
+	}
+	/* A view with no owner cannot be stale, because there is no message to
+	 * have moved under it. That is not a hole: the framing path builds one
+	 * over bytes that have merely ARRIVED, before any message exists, and
+	 * reads lengths through the ordinary accessors. Nothing can invalidate
+	 * what nothing owns. */
+	if (view.owner == NULL) {
+		return SITU_OK;
+	}
+	return view.generation == view.owner->generation
+	     ? SITU_OK : SITU_ERR_STALE;
+}
+
+static inline situ_err_t situ_bounds_check(situ_view_t view, uint32_t off, uint32_t ext)
+{
+	return situ_in_bounds(view, off, ext) ? SITU_OK : SITU_ERR_BOUNDS;
+}
+
+/* What a generated accessor calls on entry.
+ *
+ * A stale view is a CALLER BUG and not a message condition -- the same
+ * class as a use-after-free, which is why the Python backend raises rather
+ * than returning an error for it. A getter returns a value and has no error
+ * channel to report one through, so this traps instead, and only in a
+ * checked build.
+ *
+ * `SITU_STALE()` is the hook: define it before including this header to
+ * route the trap somewhere a freestanding target can use, and the
+ * <stdlib.h> below goes with it. A release build pulls in neither. */
+#ifndef SITU_STALE
+#include <stdlib.h>
+#define SITU_STALE() abort()
+#endif
+
+static inline void situ_view_assert(situ_view_t view)
+{
+	if (situ_view_check(view) != SITU_OK) {
+		SITU_STALE();
+	}
+}
+
+/* The bytes a view maps, checked on the way past.
+ *
+ * Every generated read and write goes through this rather than touching
+ * `view.base`, which is what makes the check REAL rather than promised:
+ * there is no single point where an accessor begins -- the emitter has 38
+ * of them -- and there is exactly one point where the bytes are reached.
+ * Section 12.3's guarantee follows the data instead of a list somebody
+ * has to keep complete.
+ *
+ * Compiles to `view.base` in a release build. */
+static inline uint8_t *situ_base(situ_view_t view)
+{
+	situ_view_assert(view);
+	return view.base;
+}
+
+#else
+
+static inline situ_err_t situ_view_check(situ_view_t view)
+{
+	(void)view;
+	return SITU_OK;
+}
+
+static inline void situ_view_assert(situ_view_t view)
+{
+	(void)view;
+}
+
+static inline uint8_t *situ_base(situ_view_t view)
+{
+	return view.base;
+}
+
+static inline situ_err_t situ_bounds_check(situ_view_t view, uint32_t off, uint32_t ext)
+{
+	(void)view;
+	(void)off;
+	(void)ext;
+	return SITU_OK;
+}
+
+#endif /* SITU_CHECKED */
+
+/* ------------------------------------------------------------------------
+ * Host byte order
+ *
+ * Decided by the compiler building this translation unit, and deliberately not
+ * by whatever machine ran situc. Those are different machines whenever anyone
+ * cross-compiles, and a generator that baked its own order into the output
+ * would produce code that reads the wrong bytes on the target while compiling
+ * without a murmur.
+ *
+ * Where it cannot be determined, this refuses rather than assuming little
+ * endian. A wrong guess here is undetectable until the bytes are on the wire.
+ * ------------------------------------------------------------------------ */
+
+#ifndef SITU_HOST_BIG
+#  if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__)
+#    define SITU_HOST_BIG (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#  elif defined(_WIN32)
+#    define SITU_HOST_BIG 0
+#  else
+#    error "situ cannot determine the host byte order; define SITU_HOST_BIG to 0 or 1"
+#  endif
+#endif
+
+/* ------------------------------------------------------------------------
+ * Byte-order access
+ *
+ * Generated accessors go through these rather than casting a pointer, which
+ * would be both an alignment fault and a strict-aliasing violation on the
+ * targets that matter. Every one of them compiles to a load plus a byte swap
+ * on a machine that has one.
+ *
+ * The `ne` forms are host order. `SITU_HOST_BIG` is a compile-time constant, so
+ * the branch folds away and the call costs exactly what the fixed-order one
+ * does.
+ * ------------------------------------------------------------------------ */
+
+static inline uint16_t situ_get_be16(const uint8_t *p)
+{
+	return (uint16_t)(((uint16_t)p[0] << 8) | (uint16_t)p[1]);
+}
+
+static inline uint32_t situ_get_be32(const uint8_t *p)
+{
+	return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16)
+	     | ((uint32_t)p[2] <<  8) | ((uint32_t)p[3]);
+}
+
+static inline uint64_t situ_get_be64(const uint8_t *p)
+{
+	return ((uint64_t)situ_get_be32(p) << 32) | (uint64_t)situ_get_be32(p + 4);
+}
+
+static inline uint16_t situ_get_le16(const uint8_t *p)
+{
+	return (uint16_t)(((uint16_t)p[1] << 8) | (uint16_t)p[0]);
+}
+
+static inline uint32_t situ_get_le32(const uint8_t *p)
+{
+	return ((uint32_t)p[3] << 24) | ((uint32_t)p[2] << 16)
+	     | ((uint32_t)p[1] <<  8) | ((uint32_t)p[0]);
+}
+
+static inline uint64_t situ_get_le64(const uint8_t *p)
+{
+	return ((uint64_t)situ_get_le32(p + 4) << 32) | (uint64_t)situ_get_le32(p);
+}
+
+static inline void situ_put_be16(uint8_t *p, uint16_t v)
+{
+	p[0] = (uint8_t)(v >> 8);
+	p[1] = (uint8_t)(v);
+}
+
+static inline void situ_put_be32(uint8_t *p, uint32_t v)
+{
+	p[0] = (uint8_t)(v >> 24);
+	p[1] = (uint8_t)(v >> 16);
+	p[2] = (uint8_t)(v >>  8);
+	p[3] = (uint8_t)(v);
+}
+
+static inline void situ_put_be64(uint8_t *p, uint64_t v)
+{
+	situ_put_be32(p,     (uint32_t)(v >> 32));
+	situ_put_be32(p + 4, (uint32_t)(v));
+}
+
+static inline void situ_put_le16(uint8_t *p, uint16_t v)
+{
+	p[0] = (uint8_t)(v);
+	p[1] = (uint8_t)(v >> 8);
+}
+
+static inline void situ_put_le32(uint8_t *p, uint32_t v)
+{
+	p[0] = (uint8_t)(v);
+	p[1] = (uint8_t)(v >>  8);
+	p[2] = (uint8_t)(v >> 16);
+	p[3] = (uint8_t)(v >> 24);
+}
+
+static inline void situ_put_le64(uint8_t *p, uint64_t v)
+{
+	situ_put_le32(p,     (uint32_t)(v));
+	situ_put_le32(p + 4, (uint32_t)(v >> 32));
+}
+
+static inline uint16_t situ_get_ne16(const uint8_t *p)
+{
+	return SITU_HOST_BIG ? situ_get_be16(p) : situ_get_le16(p);
+}
+
+static inline uint32_t situ_get_ne32(const uint8_t *p)
+{
+	return SITU_HOST_BIG ? situ_get_be32(p) : situ_get_le32(p);
+}
+
+static inline uint64_t situ_get_ne64(const uint8_t *p)
+{
+	return SITU_HOST_BIG ? situ_get_be64(p) : situ_get_le64(p);
+}
+
+static inline void situ_put_ne16(uint8_t *p, uint16_t v)
+{
+	if (SITU_HOST_BIG) {
+		situ_put_be16(p, v);
+	} else {
+		situ_put_le16(p, v);
+	}
+}
+
+static inline void situ_put_ne32(uint8_t *p, uint32_t v)
+{
+	if (SITU_HOST_BIG) {
+		situ_put_be32(p, v);
+	} else {
+		situ_put_le32(p, v);
+	}
+}
+
+static inline void situ_put_ne64(uint8_t *p, uint64_t v)
+{
+	if (SITU_HOST_BIG) {
+		situ_put_be64(p, v);
+	} else {
+		situ_put_le64(p, v);
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Bit-field access
+ *
+ * Offsets are bit-valued because the solver's are (project.md section 26.2).
+ * `off` is measured in bits from the start of the view, and `width` runs 1 to
+ * 64. Straddling fields are handled by the same code as contained ones, which
+ * is why there is no separate path for them.
+ *
+ * The two bit orders differ in how a byte's bits are numbered, and therefore
+ * in which byte holds a multi-byte field's most significant bits:
+ *
+ *   msb_first  fills from bit 7 of each byte downward, so the byte stream
+ *              reads as one big-endian bit string.
+ *   lsb_first  fills from bit 0 upward, so an earlier byte holds the *less*
+ *              significant bits.
+ * ------------------------------------------------------------------------ */
+
+/* Force inlining where the whole point of a helper is to fold at its call
+ * site. Generated accessors pass a literal bit offset and width, and the
+ * body below collapses to two loads and a mask once those are constants.
+ *
+ * `static inline` is not enough. At -Os -- which is what these projects
+ * build with -- gcc declines to inline the bit helpers at all: it emits one
+ * out-of-line copy, the constants arrive in registers instead of folding,
+ * the byte-at-a-time loop survives, and every bit-field read becomes a call
+ * into a run-time loop. Measured on IPv4's seven bit fields at -Os: 252
+ * bytes of .text against 77 for the same reads written by hand, and 78 with
+ * the attribute. The byte-aligned accessors were already identical to
+ * hand-written code at both levels; this is the one construct that was not.
+ *
+ * A compiler without the attribute gets an empty definition and correct but
+ * larger code, which is the right way for this to degrade. */
+#if defined(__has_attribute)
+#	if __has_attribute(always_inline)
+#		define SITU_ALWAYS_INLINE __attribute__((always_inline))
+#	endif
+#endif
+#ifndef SITU_ALWAYS_INLINE
+#	define SITU_ALWAYS_INLINE
+#endif
+
+SITU_ALWAYS_INLINE static inline uint64_t situ_bits_get_msb(const uint8_t *base, uint32_t off, uint32_t width)
+{
+	uint32_t first = off / 8u;
+	uint32_t last  = (off + width - 1u) / 8u;
+	uint32_t skip  = off - first * 8u;
+	uint64_t acc   = 0;
+	uint32_t i;
+
+	for (i = first; i <= last; i++) {
+		acc = (acc << 8) | (uint64_t)base[i];
+	}
+
+	/* The accumulator holds (last - first + 1) whole bytes; drop the bits
+	 * below the field and mask off the ones above it. */
+	acc >>= ((last - first + 1u) * 8u) - skip - width;
+	return width == 64u ? acc : acc & (((uint64_t)1 << width) - 1u);
+}
+
+SITU_ALWAYS_INLINE static inline void situ_bits_set_msb(uint8_t *base, uint32_t off, uint32_t width, uint64_t v)
+{
+	uint32_t first = off / 8u;
+	uint32_t last  = (off + width - 1u) / 8u;
+	uint32_t skip  = off - first * 8u;
+	uint32_t span  = (last - first + 1u) * 8u;
+	uint64_t mask  = width == 64u ? ~(uint64_t)0 : (((uint64_t)1 << width) - 1u);
+	uint64_t acc   = 0;
+	uint32_t i;
+
+	for (i = first; i <= last; i++) {
+		acc = (acc << 8) | (uint64_t)base[i];
+	}
+
+	acc &= ~(mask << (span - skip - width));
+	acc |= (v & mask) << (span - skip - width);
+
+	for (i = last + 1u; i > first; i--) {
+		base[i - 1u] = (uint8_t)(acc & 0xFFu);
+		acc >>= 8;
+	}
+}
+
+SITU_ALWAYS_INLINE static inline uint64_t situ_bits_get_lsb(const uint8_t *base, uint32_t off, uint32_t width)
+{
+	uint32_t first = off / 8u;
+	uint32_t last  = (off + width - 1u) / 8u;
+	uint32_t skip  = off - first * 8u;
+	uint64_t acc   = 0;
+	uint32_t i;
+
+	/* Earlier bytes carry the less significant bits, so assemble downward. */
+	for (i = last + 1u; i > first; i--) {
+		acc = (acc << 8) | (uint64_t)base[i - 1u];
+	}
+
+	acc >>= skip;
+	return width == 64u ? acc : acc & (((uint64_t)1 << width) - 1u);
+}
+
+SITU_ALWAYS_INLINE static inline void situ_bits_set_lsb(uint8_t *base, uint32_t off, uint32_t width, uint64_t v)
+{
+	uint32_t first = off / 8u;
+	uint32_t last  = (off + width - 1u) / 8u;
+	uint32_t skip  = off - first * 8u;
+	uint64_t mask  = width == 64u ? ~(uint64_t)0 : (((uint64_t)1 << width) - 1u);
+	uint64_t acc   = 0;
+	uint32_t i;
+
+	for (i = last + 1u; i > first; i--) {
+		acc = (acc << 8) | (uint64_t)base[i - 1u];
+	}
+
+	acc &= ~(mask << skip);
+	acc |= (v & mask) << skip;
+
+	for (i = first; i <= last; i++) {
+		base[i] = (uint8_t)(acc & 0xFFu);
+		acc >>= 8;
+	}
+}
+
+static inline uint64_t situ_bits_get_ne(const uint8_t *base, uint32_t off, uint32_t width)
+{
+	return SITU_HOST_BIG ? situ_bits_get_msb(base, off, width)
+	                     : situ_bits_get_lsb(base, off, width);
+}
+
+static inline void situ_bits_set_ne(uint8_t *base, uint32_t off, uint32_t width,
+        uint64_t v)
+{
+	if (SITU_HOST_BIG) {
+		situ_bits_set_msb(base, off, width, v);
+	} else {
+		situ_bits_set_lsb(base, off, width, v);
+	}
+}
+
+/* Sign-extend a value of `width` bits held in the low bits of `raw`. */
+static inline int64_t situ_sign_extend(uint64_t raw, uint32_t width)
+{
+	if (width >= 64u) {
+		return (int64_t)raw;
+	}
+	{
+		uint64_t sign = (uint64_t)1 << (width - 1u);
+		return (int64_t)((raw ^ sign) - sign);
+	}
+}
+
+/* ------------------------------------------------------------------------
+ * Text validation (section 8.6)
+ *
+ * situ has no string type: text is `u8 name[N]`, and `[encoding]` says what
+ * the bytes are supposed to be. Saying it is only worth anything if something
+ * checks, so the generated validator calls these.
+ *
+ * Strict, in the sense RFC 3629 requires and for the reason it gives: an
+ * overlong encoding or a surrogate is a second spelling of a character that
+ * already has one, and a receiver that accepts both accepts two byte
+ * sequences for one value. That is the malleability problem reserved bits have
+ * (section 8.8), in a different costume.
+ * ------------------------------------------------------------------------ */
+
+/* The content length of a nul-terminated field whose declared size is its
+ * capacity: the offset of the first zero byte, or `capacity` if there is none.
+ *
+ * Returning the capacity for an unterminated field rather than reading past it
+ * is the whole point: the field is a fixed number of bytes and this must not
+ * be the function that leaves it. `situ_nul_terminated` is what asks whether
+ * the terminator was actually there. */
+static inline uint32_t situ_nul_len(const uint8_t *data, uint32_t capacity)
+{
+	uint32_t i;
+
+	for (i = 0; i < capacity; i++) {
+		if (data[i] == 0u) {
+			return i;
+		}
+	}
+	return capacity;
+}
+
+static inline int situ_nul_terminated(const uint8_t *data, uint32_t capacity)
+{
+	return situ_nul_len(data, capacity) < capacity;
+}
+
+static inline uint32_t situ_min_u32(uint32_t a, uint32_t b)
+{
+	return a < b ? a : b;
+}
+
+/* The bound every leaf of a size expression is held to (14.2b).
+ *
+ * A length at or past the view's limit saturates against the frame anyway, so
+ * holding a *field* to this changes nothing a caller can observe -- and it is
+ * what keeps the arithmetic that follows inside `int64_t`. Without it a varint
+ * a lying message set to 1.6e19 made `(n + 1) * 2` overflow, wrap negative,
+ * and read as *zero* once clamped: the member after it then landed a few bytes
+ * in, well inside the frame, and was read rather than refused. An overflow
+ * must saturate high, where the frame clamps it, and never collapse to zero.
+ */
+#define SITU_LEAF_MAX 0x7FFFFFFF
+
+/* One leaf of a size expression, held to `SITU_LEAF_MAX`. Two spellings
+ * because the sign matters: a `u64` varint above the bound is a huge length,
+ * and an `i16` below zero is a negative one, and casting the first to signed
+ * would turn it into the second. */
+static inline int64_t situ_leaf_u64(uint64_t value)
+{
+	if (value > (uint64_t)SITU_LEAF_MAX) {
+		return SITU_LEAF_MAX;
+	}
+	return (int64_t)value;
+}
+
+/* A declared length widened without wrapping, saturating at the SIGNED
+ * maximum. `situ_leaf_u64`'s sibling, and the two differ only in where they
+ * stop: a leaf of a size expression is held to `SITU_LEAF_MAX` so that four
+ * backends place a member identically, while a byte count handed to a caller
+ * must saturate at the type's own maximum instead -- `required`'s, set by the
+ * copyright holder (26.651).
+ *
+ * Needed rather than a plain cast because `int64_t` cannot hold every
+ * `uint64_t`: a varint a lying message sets to 1.6e19 becomes NEGATIVE on the
+ * cast, and the clamp after it then reads zero -- so `required` would answer
+ * "five bytes" for a message claiming nine exabytes. That is 14.2b's own
+ * named failure, reached by the one path that does not want its bound. The
+ * caller's `situ_nonneg_u32` brings it the rest of the way to `UINT32_MAX`.
+ */
+static inline int64_t situ_saturate_i64(uint64_t value)
+{
+	if (value > (uint64_t)INT64_MAX) {
+		return INT64_MAX;
+	}
+	return (int64_t)value;
+}
+
+static inline int64_t situ_leaf_i64(int64_t value)
+{
+	if (value >  SITU_LEAF_MAX) { return  SITU_LEAF_MAX; }
+	if (value < -SITU_LEAF_MAX) { return -SITU_LEAF_MAX; }
+	return value;
+}
+
+/* A computed length, with a negative result read as zero (14.2b).
+ *
+ * Zero rather than a refusal: a member of negative length is a member with
+ * nothing in it, every backend can say that, and `validate` still refuses the
+ * message for the constraint that made it negative -- which is the error the
+ * reader wants, rather than one about arithmetic.
+ */
+static inline uint32_t situ_nonneg_u32(int64_t value)
+{
+	if (value <= 0) {
+		return 0u;
+	}
+	/* Saturating at the top as well, and this half was missed once: bounded
+	 * leaves keep the arithmetic inside `int64_t`, and the *result* can
+	 * still exceed `uint32_t` -- `(SITU_LEAF_MAX + 1) * 2` does. Casting
+	 * truncated it to zero, which put the member after it a few bytes in
+	 * rather than past the frame: the exact failure the bound was added to
+	 * prevent, one step further along. */
+	return value > (int64_t)UINT32_MAX ? UINT32_MAX : (uint32_t)value;
+}
+
+/* How many bytes remain in a view from `at`. Saturating, and that is the whole
+ * of it: `at` is arithmetic over length fields the message controls, so it can
+ * exceed the limit whatever the schema says. `limit - at` in `uint32_t` then
+ * reports about four billion bytes remaining, and a `[remaining]` member hands
+ * out that length with a pointer aimed past the end of the buffer.
+ *
+ * Found by fuzzing a schema that had a `[remaining]` tail after two
+ * attacker-controlled lengths -- and found only once every schema started
+ * being fuzzed rather than two of them. */
+static inline uint32_t situ_remaining_u32(uint32_t limit, uint32_t at)
+{
+	return at >= limit ? 0u : limit - at;
+}
+
+/* Advance an offset by a length the message chose, and stop at the view.
+ *
+ * The other half of the same hole, one step further on. `situ_remaining_u32`
+ * keeps a *length* inside the frame; this keeps an *offset* there. A member
+ * placed after a variable-length region has an offset that is the sum of what
+ * precedes it, and one of those terms is a field an attacker fills in: for
+ * `example/packet`, `hdr.length = 0xffff` puts the tag 65581 bytes into a
+ * 62-byte view, and the accessor handed back that pointer.
+ *
+ * Saturating rather than wrapping, and that is the point: `at + by` in
+ * `uint32_t` with a 32-bit length field wraps to a small number, which is an
+ * offset inside the frame pointing at bytes that are not the member. A
+ * clamped offset is wrong in a way `validate` can report; a wrapped one is
+ * wrong in a way nothing can see.
+ *
+ * Found by fuzzing `example/packet` under an address sanitizer, three seconds
+ * into the first run that was fuzzing rather than eight random inputs. */
+static inline uint32_t situ_advance_u32(uint32_t at, uint32_t by, uint32_t limit)
+{
+	const uint32_t room = situ_remaining_u32(limit, at);
+
+	return at + (by < room ? by : room);
+}
+
+/* `at + by`, clamped at UINT32_MAX rather than wrapping. For `required` and
+ * nothing else.
+ *
+ * `situ_advance_u32` clamps to the view, which is right wherever the question
+ * is which bytes are in the frame. `required` asks the opposite question --
+ * how many a whole message needs -- so it must be able to answer with a
+ * number larger than what has arrived, and it used a plain `+`.
+ *
+ * A plain `+` wraps. `raidcfgd` reported seven bytes declaring a `u32`
+ * length of 0xFFFFFFFF: `7 + 0xFFFFFFFF` is 6 in `uint32_t`, so `*need`
+ * came back 6, the function returned `SITU_OK`, and a framer read those
+ * seven bytes as a complete message (26.556). Saturating makes the answer
+ * UINT32_MAX, which no caller can satisfy, so the verdict is TRUNCATED --
+ * the honest reading of a length nobody can have sent.
+ */
+static inline uint32_t situ_need_u32(uint32_t at, uint32_t by)
+{
+	return by > UINT32_MAX - at ? UINT32_MAX : at + by;
+}
+
+/* The same question asked of a product. A counted run of variable-size
+ * elements reports, as its lower bound, a minimum for every element the count
+ * still promises -- `remaining * SIZE_MIN`, which is a declared count times a
+ * compile-time constant and so is exactly the multiplication a hostile count
+ * controls. Saturating it keeps the bound a bound: a product that wraps is
+ * SMALLER than the truth, which is the one direction that turns a short
+ * message into a complete one (26.557).
+ */
+static inline uint32_t situ_need_mul_u32(uint32_t count, uint32_t each)
+{
+	return each != 0u && count > UINT32_MAX / each ? UINT32_MAX : count * each;
+}
+
+/* How many bytes of padding reach the next multiple of `n` (decision 0043).
+ *
+ * Unsaturated, and that is the whole reason it is its own function: a READER
+ * wants the aligned offset clamped to its view, because an offset past a
+ * short frame is a truncated message for `validate` to report. A WRITER
+ * wants the distance, and a clamp there would silently shorten the pad
+ * instead of refusing for want of room -- a message whose following member
+ * sits on no boundary at all, built and reported as SITU_OK. One expression
+ * with two callers, so the two cannot disagree about where the next member
+ * starts.
+ *
+ * PRECONDITION: `n` is positive, as below. */
+static inline uint32_t situ_pad_to_u32(uint32_t at, uint32_t n)
+{
+	return (n - (at % n)) % n;
+}
+
+/* `pad_to(n)` (decision 0043): advance `at` to the next multiple of `n`,
+ * clamped to the view. The padding is `align_up(at, n) - at`; a member after
+ * a pad starts on an n-byte boundary from the base of the struct that
+ * declares it -- its own view's, not the message's, which is 0043's
+ * amendment of 2026-09-04 and is what makes a struct's extent a property of
+ * the struct. Clamped for the same reason `situ_advance_u32` is: `at` is a
+ * sum of lengths the message chose, so the aligned offset may sit past a
+ * short frame, and `validate` reports that rather than the accessor running
+ * off the end.
+ *
+ * PRECONDITION: `n` is positive. `at % 0` is undefined, and the guarantee
+ * comes from the front end rather than from here -- `pad_to(n)` is a
+ * statement and the parser refuses a non-positive literal, so generated code
+ * cannot produce the case. Measured across the corpus, every call passes
+ * `4u`.
+ *
+ * Stated because this header ships and a hand-written caller has nothing
+ * else to read: a precondition that is true and unwritten is
+ * indistinguishable from one nobody thought of (26.592). */
+static inline uint32_t situ_align_up_u32(uint32_t at, uint32_t n, uint32_t limit)
+{
+	return situ_advance_u32(at, situ_pad_to_u32(at, n), limit);
+}
+
+/* Delimited members (section 8.6.1).
+ *
+ * `situ_scan` returns the offset of the first occurrence of `delim` within
+ * `limit` bytes, or `limit` when it is not there. The caller distinguishes the
+ * two: a member whose delimiter is absent is truncated, not empty, and a
+ * getter is not the place to decide what to do about that.
+ *
+ * Naive matching, deliberately. A delimiter is one or two bytes in every
+ * format this targets, so the setup cost of anything cleverer exceeds the scan
+ * it would save, and the generated code stays something a reader can check
+ * against the spec they are implementing.
+ */
+static inline uint32_t situ_scan(const uint8_t *data, uint32_t limit,
+        const uint8_t *delim, uint32_t delim_len)
+{
+	uint32_t i;
+	uint32_t j;
+
+	if (delim_len == 0u || delim_len > limit) {
+		return limit;
+	}
+
+	for (i = 0u; i + delim_len <= limit; i++) {
+		for (j = 0u; j < delim_len; j++) {
+			if (data[i + j] != delim[j]) {
+				break;
+			}
+		}
+		if (j == delim_len) {
+			return i;
+		}
+	}
+	return limit;
+}
+
+/* The same over several delimiters: where the first of ANY of them is.
+ *
+ * A scalar in a text format usually ends at whichever of a set comes first --
+ * a JSON number at `,`, `]`, `}` or a space; a shell word at a space, a tab
+ * or a newline. `until "," | "]" | "}"` is that, and this is the scan it
+ * compiles to.
+ *
+ * `*took` is the length of the alternative that matched, and zero where none
+ * did. The caller needs it because a delimited member's span INCLUDES its
+ * delimiter, so which one matched decides where the next member starts --
+ * with one delimiter that length is a constant and the generated code uses
+ * `situ_scan` instead, which is why every schema written before this one
+ * compiles to exactly what it did.
+ *
+ * The LONGEST match at the earliest offset wins. Two alternatives can match
+ * in the same place -- `"\r"` and `"\r\n"` -- and taking the shorter would
+ * leave the newline as the next member's first byte. Earliest first, longest
+ * second, and both are the caller's to rely on.
+ */
+static inline uint32_t situ_scan_any(const uint8_t *data, uint32_t limit,
+        const uint8_t *const *delims, const uint8_t *lens, uint32_t count,
+        uint32_t *took)
+{
+	uint32_t i;
+	uint32_t d;
+
+	*took = 0u;
+	for (i = 0u; i < limit; i++) {
+		uint32_t best = 0u;
+
+		for (d = 0u; d < count; d++) {
+			const uint32_t n = lens[d];
+			uint32_t       j;
+
+			if (n == 0u || n <= best || i + n > limit) {
+				continue;
+			}
+			for (j = 0u; j < n; j++) {
+				if (data[i + j] != delims[d][j]) {
+					break;
+				}
+			}
+			if (j == n) {
+				best = n;
+			}
+		}
+		if (best != 0u) {
+			*took = best;
+			return i;
+		}
+	}
+	return limit;
+}
+
+/* How many leading bytes are in a set: the lead a `skip` member owns.
+ *
+ * The inverse question to `situ_scan`, and it needs its own function rather
+ * than a delimiter list because it is a MEMBERSHIP test repeated -- "while
+ * the next byte is one of these" -- where a scan matches a sequence. So the
+ * set is bytes rather than strings, and one that ran to the end of the
+ * buffer returns `limit` rather than failing: whitespace to the end of a
+ * message is a message with no member after it, which the member's own
+ * bounds check is what reports.
+ */
+static inline uint32_t situ_skip(const uint8_t *data, uint32_t limit,
+        const uint8_t *set, uint32_t count)
+{
+	uint32_t i;
+	uint32_t d;
+
+	for (i = 0u; i < limit; i++) {
+		for (d = 0u; d < count; d++) {
+			if (data[i] == set[d]) {
+				break;
+			}
+		}
+		if (d == count) {
+			return i;
+		}
+	}
+	return limit;
+}
+
+/* The same, with a byte that makes the delimiter inert.
+ *
+ * `quote` toggles: inside a quoted run the delimiter is content. `escape`
+ * applies to the byte after it, including a quote byte and including itself.
+ * Either may be `SITU_NO_BYTE` to say the format does not have one.
+ *
+ * A quoted run left open at the end of the buffer finds no delimiter, which
+ * is the same answer as a delimiter that is not there -- and the right one,
+ * since the content the schema describes has not been terminated.
+ */
+#define SITU_NO_BYTE 0x100u
+
+static inline uint32_t situ_scan_relaxed(const uint8_t *data, uint32_t limit,
+        const uint8_t *delim, uint32_t delim_len,
+        uint32_t quote, uint32_t escape)
+{
+	uint32_t i;
+	uint32_t j;
+	int      quoted = 0;
+
+	if (delim_len == 0u || delim_len > limit) {
+		return limit;
+	}
+
+	for (i = 0u; i + delim_len <= limit; i++) {
+		if (escape != SITU_NO_BYTE && data[i] == (uint8_t)escape) {
+			i++;		/* the next byte is content, whatever it is */
+			continue;
+		}
+		if (quote != SITU_NO_BYTE && data[i] == (uint8_t)quote) {
+			quoted = !quoted;
+			continue;
+		}
+		if (quoted) {
+			continue;
+		}
+		for (j = 0u; j < delim_len; j++) {
+			if (data[i + j] != delim[j]) {
+				break;
+			}
+		}
+		if (j == delim_len) {
+			return i;
+		}
+	}
+	return limit;
+}
+
+/* Whether the content of a bare delimited member is representable.
+ *
+ * Without a quote or escape byte the content may not contain the delimiter:
+ * writing back content that did would produce different framing, so such a
+ * field did not come from this schema. For a CRLF-framed protocol this is the
+ * header-injection check.
+ *
+ * NOTHING CALLS THIS, and the comment here said "which is why it is
+ * generated rather than remembered" -- a claim about the emitters, made in
+ * the runtime, and false in all four. It is kept rather than deleted because
+ * it is not wrong, only not yet needed, and the reason is worth having
+ * written down: on the READ path it cannot fail. A delimited member's
+ * content is whatever the scan returned, the scan stops at the first
+ * delimiter, and the language refuses any other length source for one --
+ * `u8 v[4] until ","` is "`v` says twice where it stops". So content never
+ * contains the delimiter, by construction rather than by checking.
+ *
+ * What would make it live is a WRITE path for a delimited member. There is
+ * none today: `mutate = Shifting` means no setter is emitted, because a
+ * longer value moves everything after it. The day situ re-encodes a frame,
+ * this is the check that has to run before the bytes go out (26.308). */
+static inline int situ_delimiter_absent(const uint8_t *data, uint32_t len,
+        const uint8_t *delim, uint32_t delim_len)
+{
+	return situ_scan(data, len, delim, delim_len) == len;
+}
+
+/* Text-encoded numbers (section 8.6.2).
+ *
+ * Returns 0 on success. A conversion that can fail is why `repr` reports
+ * TextConverted rather than ValueConverted: a byte swap is total, and `12x4`
+ * is not a number.
+ *
+ * Refused, each for a reason a protocol cares about:
+ *
+ *   - an empty run, because no digits is not the number zero
+ *   - a byte that is not a digit in this base, including trailing space
+ *   - a value above `max`, which is the declared type's range
+ *
+ * Overflow is checked before it happens rather than after. Detecting it by
+ * looking for a result that got smaller is a wrap, which is undefined for
+ * signed types and merely wrong for unsigned ones.
+ */
+static inline int situ_parse_uint(const uint8_t *data, uint32_t len,
+        uint32_t radix, uint64_t max, uint64_t *out)
+{
+	uint64_t value = 0u;
+	uint32_t i;
+
+	if (len == 0u || radix < 2u || radix > 16u) {
+		return -1;
+	}
+
+	for (i = 0u; i < len; i++) {
+		uint8_t  c = data[i];
+		uint32_t digit;
+
+		if (c >= (uint8_t)'0' && c <= (uint8_t)'9') {
+			digit = (uint32_t)(c - (uint8_t)'0');
+		} else if (c >= (uint8_t)'a' && c <= (uint8_t)'f') {
+			digit = (uint32_t)(c - (uint8_t)'a') + 10u;
+		} else if (c >= (uint8_t)'A' && c <= (uint8_t)'F') {
+			digit = (uint32_t)(c - (uint8_t)'A') + 10u;
+		} else {
+			return -1;
+		}
+
+		if (digit >= radix) {
+			return -1;
+		}
+		if (value > (max - digit) / radix) {
+			return -1;
+		}
+		value = value * radix + digit;
+	}
+
+	*out = value;
+	return 0;
+}
+
+/* Optional whitespace, and case-insensitive tokens (section 8.6.4).
+ *
+ * The SET IS PASSED IN, and that is the whole of what changed here. It was
+ * `situ_is_ows` -- space and horizontal tab, and nothing else -- which is
+ * right for HTTP and SIP, where CR and LF are framing and trimming them
+ * would eat it. It is wrong for a format that calls them whitespace: JSON
+ * does, by RFC 8259 section 2, so a number followed by a newline kept the
+ * newline in its value.
+ *
+ * A schema states its set with `whitespace`, and a file that states none
+ * gets HTTP's, which is what every schema written before this one meant.
+ * Passing it also retires four other copies of the same constant -- one per
+ * runtime and one in the walker, whose own comment said that a second copy
+ * of "what does `[trim]` remove" is how two readers of one attribute start
+ * disagreeing.
+ */
+static inline int situ_in_set(uint8_t byte, const uint8_t *set, uint32_t count)
+{
+	uint32_t i;
+
+	for (i = 0u; i < count; i++) {
+		if (byte == set[i]) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static inline uint32_t situ_trim_start(const uint8_t *data, uint32_t len,
+        const uint8_t *set, uint32_t count)
+{
+	uint32_t i = 0u;
+
+	while (i < len && situ_in_set(data[i], set, count)) {
+		i++;
+	}
+	return i;
+}
+
+/* The length of the content with the whitespace at both ends removed. */
+static inline uint32_t situ_trim_len(const uint8_t *data, uint32_t len,
+        const uint8_t *set, uint32_t count)
+{
+	uint32_t start = situ_trim_start(data, len, set, count);
+	uint32_t end   = len;
+
+	while (end > start && situ_in_set(data[end - 1u], set, count)) {
+		end--;
+	}
+	return end - start;
+}
+
+/* The same for a signed text number: an optional leading `-`, then digits.
+ *
+ * A SEPARATE function rather than a flag, so every schema written before
+ * signed text numbers existed calls exactly what it called before. The
+ * unsigned path is the common one and stays a magnitude parse with no sign
+ * to consider.
+ *
+ * `-` and never `+`, and no `-0`. Both are the same rule `[minimal]` already
+ * states about leading zeros: `+5` and `5` are two spellings of one value,
+ * and so are `-0` and `0`. Refusing them is what keeps a signed text number
+ * `Canonical`, which the unsigned form is and which would be a poor thing to
+ * lose for a character nobody needs (8.6.2).
+ *
+ * `-` with nothing after it is refused for the reason an empty run is: no
+ * digits is not the number zero.
+ */
+static inline int situ_parse_int(const uint8_t *data, uint32_t len,
+        uint32_t radix, int64_t min, int64_t max, int64_t *out)
+{
+	uint64_t magnitude = 0u;
+	int      negative  = 0;
+	uint64_t ceiling;
+
+	if (len == 0u) {
+		return -1;
+	}
+	if (data[0] == (uint8_t)'-') {
+		negative = 1;
+		data     = data + 1;
+		len      = len - 1u;
+	}
+
+	/* The magnitude a signed value may reach is one larger going down than
+	 * going up, and writing it as `-min` would overflow at the bottom of the
+	 * range. Built from the bound instead. */
+	ceiling = negative ? (uint64_t)(-(min + 1)) + 1u : (uint64_t)max;
+
+	if (situ_parse_uint(data, len, radix, ceiling, &magnitude) != 0) {
+		return -1;
+	}
+	if (negative && magnitude == 0u) {
+		return -1;	/* `-0` is a second spelling of zero */
+	}
+
+	*out = negative ? -(int64_t)magnitude : (int64_t)magnitude;
+	return 0;
+}
+
+/* Parse a decimal number that may carry a point and an exponent (0056).
+ *
+ * EXACT, and never a float: reports a significand and a power of ten, so
+ * that `value = *out * 10^*scale`. `12.5e3` is 125 and 2; `-0.004` is -4
+ * and -3; `1.50` is 150 and -2.
+ *
+ * The pair reflects the bytes rather than the value, which is why `1.50`
+ * and `1.5` differ here and are the same number. Normalising would make a
+ * reading of the bytes into a rewriting of them, and `[minimal]` is how a
+ * schema says the spelling is already canonical.
+ *
+ * No float, and the reason is not difficulty. `strtod` is locale-dependent
+ * -- where the decimal point is a comma it stops at the point -- so a wire
+ * format read through it would mean different things to readers in
+ * different environments; and it is not available to a freestanding
+ * runtime anyway. Correct rounding written four times, once per backend,
+ * is four chances to disagree about `0.1`. Whoever wants a double can
+ * compute one from the pair and own the error.
+ *
+ * The grammar, which is JSON's minus its refusal of a leading zero:
+ *
+ *     [ "-" ] digit+ [ "." digit+ ] [ ("e" | "E") [ "+" | "-" ] digit+ ]
+ *
+ * Refused: an empty run, a point with no digits after it, an exponent
+ * marker with no digits after it, a leading point, any byte that is not
+ * part of the grammar, a significand outside [min, max], and an exponent
+ * that does not fit an `int32_t`.
+ *
+ * `-0` is ACCEPTED, where `situ_parse_int` refuses it. That refusal buys
+ * the integer form `Canonical`, and it cannot buy it here: `1.50` and
+ * `1.5` are already two spellings of one value, so a scaled number is
+ * NonCanonical whatever this does with the sign. What is left is that
+ * real formats emit `-0`, JSON among them. `[minimal]` refuses it.
+ */
+static inline int situ_parse_scaled(const uint8_t *data, uint32_t len,
+        int64_t min, int64_t max, int64_t *out, int32_t *scale)
+{
+	uint64_t magnitude = 0u;
+	uint64_t ceiling;
+	int      negative  = 0;
+	int32_t  fraction  = 0;
+	int64_t  exponent  = 0;
+	uint32_t i         = 0u;
+	uint32_t digits    = 0u;
+
+	if (len == 0u) {
+		return -1;
+	}
+	if (data[0] == (uint8_t)'-') {
+		negative = 1;
+		i        = 1u;
+	}
+
+	/* The magnitude a signed value may reach is one larger going down than
+	 * going up; built from the bound for `situ_parse_int`'s reason. */
+	ceiling = negative ? (uint64_t)(-(min + 1)) + 1u : (uint64_t)max;
+
+	/* The integer part. At least one digit: a leading point is refused,
+	 * because no digits is not the number zero -- the rule the empty run
+	 * already follows. */
+	for (; i < len; i++) {
+		uint8_t c = data[i];
+
+		if (c < (uint8_t)'0' || c > (uint8_t)'9') {
+			break;
+		}
+		if (magnitude > (ceiling - (uint64_t)(c - (uint8_t)'0')) / 10u) {
+			return -1;
+		}
+		magnitude = magnitude * 10u + (uint64_t)(c - (uint8_t)'0');
+		digits++;
+	}
+	if (digits == 0u) {
+		return -1;
+	}
+
+	/* The fraction, which moves the point rather than the value: every
+	 * digit here is one more digit of the significand and one less power
+	 * of ten. */
+	if (i < len && data[i] == (uint8_t)'.') {
+		uint32_t before = digits;
+
+		for (i++; i < len; i++) {
+			uint8_t c = data[i];
+
+			if (c < (uint8_t)'0' || c > (uint8_t)'9') {
+				break;
+			}
+			if (magnitude > (ceiling - (uint64_t)(c - (uint8_t)'0')) / 10u) {
+				return -1;
+			}
+			magnitude = magnitude * 10u + (uint64_t)(c - (uint8_t)'0');
+			digits++;
+			fraction++;
+		}
+		if (digits == before) {
+			return -1;	/* a point with nothing after it */
+		}
+	}
+
+	/* The exponent. Its own sign, and `+` is allowed here where the
+	 * significand's is not: `1e+3` is what a great many formats write, and
+	 * refusing it in the parse would lose them. `[minimal]` refuses it. */
+	if (i < len && (data[i] == (uint8_t)'e' || data[i] == (uint8_t)'E')) {
+		int      down  = 0;
+		uint32_t shown = 0u;
+
+		i++;
+		if (i < len && (data[i] == (uint8_t)'+' || data[i] == (uint8_t)'-')) {
+			down = data[i] == (uint8_t)'-';
+			i++;
+		}
+		for (; i < len; i++) {
+			uint8_t c = data[i];
+
+			if (c < (uint8_t)'0' || c > (uint8_t)'9') {
+				break;
+			}
+			/* Bounded well inside `int64_t` so the sum below cannot
+			 * overflow before the `int32_t` check refuses it. */
+			if (exponent > 1000000000) {
+				return -1;
+			}
+			exponent = exponent * 10 + (int64_t)(c - (uint8_t)'0');
+			shown++;
+		}
+		if (shown == 0u) {
+			return -1;	/* `1e`, `1e+` */
+		}
+		if (down) {
+			exponent = -exponent;
+		}
+	}
+
+	if (i != len) {
+		return -1;	/* a byte the grammar does not have */
+	}
+
+	exponent -= (int64_t)fraction;
+	if (exponent < INT32_MIN || exponent > INT32_MAX) {
+		return -1;
+	}
+
+	*out   = negative ? -(int64_t)magnitude : (int64_t)magnitude;
+	*scale = (int32_t)exponent;
+	return 0;
+}
+
+/* Write a value as fixed-width digits, which is `situ_parse_uint` backwards.
+ *
+ * Fixed width, so the leading zeros are mandatory rather than optional: a
+ * field declared `hex u32 x[8]` is eight digits whatever the value, and that
+ * is what makes one value one byte sequence. The only spelling freedom left
+ * is case, and this writes upper -- cpio's `newc` header, ASN.1's and
+ * SMTP's numbers are all upper, and a lower-case digit is refused on the way
+ * in rather than tolerated here (26.86).
+ *
+ * Returns 0, or -1 where the value needs more digits than the field has.
+ */
+static inline int situ_format_uint(uint8_t *data, uint32_t len, uint32_t radix,
+        uint64_t value)
+{
+	uint32_t i;
+
+	if (len == 0u || radix < 2u || radix > 16u) {
+		return -1;
+	}
+
+	for (i = len; i > 0u; i--) {
+		const uint32_t digit = (uint32_t)(value % radix);
+
+		data[i - 1u] = (uint8_t)(digit < 10u
+		    ? (uint32_t)'0' + digit
+		    : (uint32_t)'A' + digit - 10u);
+		value /= radix;
+	}
+	return value == 0u ? 0 : -1;
+}
+
+/* Format a signed value: `situ_parse_int` backwards.
+ *
+ * `-` and never `+`, and no `-0`, which is what that parser accepts and what
+ * keeps a signed text number canonical -- `+5` and `5` are two spellings of
+ * one value, and zero has one. A caller passing zero gets `0` whatever the
+ * sign of the variable it came from.
+ *
+ * `len` is the WHOLE field including the sign, as `situ_format_uint`'s is
+ * including its leading zeros, so a four-byte field holding -42 reads
+ * `-042`. Returns 0, or -1 where the value does not fit the width -- which
+ * for a negative value includes having no room for the sign.
+ *
+ * A separate function for the reason `situ_parse_int` is one: every schema
+ * written before signed text numbers existed calls what it called before.
+ */
+static inline int situ_format_int(uint8_t *data, uint32_t len, uint32_t radix,
+        int64_t value)
+{
+	/* `-(value + 1) + 1` rather than `-value`, which is undefined at
+	 * INT64_MIN: the magnitude of the most negative value is one past the
+	 * most positive one. */
+	const uint64_t magnitude = value < 0
+	    ? (uint64_t)(-(value + 1)) + 1u
+	    : (uint64_t)value;
+
+	if (value >= 0) {
+		return situ_format_uint(data, len, radix, magnitude);
+	}
+	if (len < 2u) {
+		return -1;
+	}
+	data[0] = (uint8_t)'-';
+	return situ_format_uint(data + 1, len - 1u, radix, magnitude);
+}
+
+/* Whether these digits are the spelling `situ_format_uint` would write.
+ *
+ * The owned form stores a *value*, so it can only give back the one spelling
+ * of it. A field carrying another -- a lower-case hex digit -- is a second
+ * encoding of the same number, which is what `canonical` exists to report,
+ * and the honest answer is to refuse the decode rather than to round-trip it
+ * into something else.
+ */
+static inline int situ_digits_canonical(const uint8_t *data, uint32_t len)
+{
+	uint32_t i;
+
+	for (i = 0u; i < len; i++) {
+		if (data[i] >= (uint8_t)'a' && data[i] <= (uint8_t)'f') {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+/* ASCII case folding, and only ASCII.
+ *
+ * `tolower` is locale dependent: in a Turkish locale it maps `I` to a dotless
+ * form, so a header name would stop matching itself. A protocol token is
+ * ASCII by definition, and this folds exactly that range.
+ */
+static inline uint8_t situ_ascii_fold(uint8_t byte)
+{
+	return (byte >= (uint8_t)'A' && byte <= (uint8_t)'Z')
+	       ? (uint8_t)(byte + 32u) : byte;
+}
+
+static inline int situ_bytes_eq(const uint8_t *a, uint32_t alen,
+        const uint8_t *b, uint32_t blen)
+{
+	uint32_t i;
+
+	if (alen != blen) {
+		return 0;
+	}
+	for (i = 0u; i < alen; i++) {
+		if (a[i] != b[i]) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static inline int situ_ascii_ci_eq(const uint8_t *a, uint32_t alen,
+        const uint8_t *b, uint32_t blen)
+{
+	uint32_t i;
+
+	if (alen != blen) {
+		return 0;
+	}
+	for (i = 0u; i < alen; i++) {
+		if (situ_ascii_fold(a[i]) != situ_ascii_fold(b[i])) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+/* Whether digits are the one spelling of their value (section 8.6.2).
+ *
+ * A leading zero is another spelling of the same number, and for hexadecimal
+ * so is a change of case. `[minimal]` is what asks for this; without it the
+ * field is NonCanonical and the map says so, which is the honest default --
+ * most formats do permit `007`, and refusing it would reject valid data.
+ *
+ * A leading `-` is skipped before the question is asked. It belongs to the
+ * spelling of a signed text number, so `-042` is non-minimal for the same
+ * reason `042` is -- and it can only reach here from a signed field, an
+ * unsigned one refusing the byte at the parse. All six implementations skip
+ * it identically, which is what keeps them naming the same check when a
+ * frame is refused.
+ */
+static inline int situ_digits_minimal(const uint8_t *data, uint32_t len,
+        uint32_t radix)
+{
+	uint32_t i;
+
+	if (len > 0u && data[0] == (uint8_t)'-') {
+		data += 1;
+		len  -= 1u;
+	}
+	if (len == 0u) {
+		return 0;
+	}
+	if (len > 1u && data[0] == (uint8_t)'0') {
+		return 0;		/* a leading zero, and the value is not zero */
+	}
+	if (radix > 10u) {
+		for (i = 0u; i < len; i++) {
+			if (data[i] >= (uint8_t)'A' && data[i] <= (uint8_t)'F') {
+				return 0;	/* upper case is the second spelling */
+			}
+		}
+	}
+	return 1;
+}
+
+static inline int situ_ascii_valid(const uint8_t *data, uint32_t len)
+{
+	uint32_t i;
+
+	for (i = 0; i < len; i++) {
+		if (data[i] > 0x7Fu) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static inline int situ_utf8_valid(const uint8_t *data, uint32_t len)
+{
+	uint32_t i = 0;
+
+	while (i < len) {
+		uint8_t  lead  = data[i];
+		uint32_t extra;
+		uint32_t code;
+		uint32_t least;
+		uint32_t k;
+
+		if (lead < 0x80u) {
+			i++;
+			continue;
+		}
+
+		if (lead >= 0xC2u && lead <= 0xDFu) {
+			extra = 1u; code = lead & 0x1Fu; least = 0x80u;
+		} else if (lead >= 0xE0u && lead <= 0xEFu) {
+			extra = 2u; code = lead & 0x0Fu; least = 0x800u;
+		} else if (lead >= 0xF0u && lead <= 0xF4u) {
+			extra = 3u; code = lead & 0x07u; least = 0x10000u;
+		} else {
+			return 0;	/* 0x80-0xC1 continuation or overlong lead, 0xF5+ */
+		}
+
+		if (i + extra >= len) {
+			return 0;	/* truncated: the sequence runs off the end */
+		}
+
+		for (k = 1u; k <= extra; k++) {
+			if ((data[i + k] & 0xC0u) != 0x80u) {
+				return 0;
+			}
+			code = (code << 6) | (uint32_t)(data[i + k] & 0x3Fu);
+		}
+
+		if (code < least) {
+			return 0;	/* overlong: a second spelling of a shorter form */
+		}
+		if (code >= 0xD800u && code <= 0xDFFFu) {
+			return 0;	/* a surrogate half, which UTF-8 may not carry */
+		}
+		if (code > 0x10FFFFu) {
+			return 0;
+		}
+
+		i += extra + 1u;
+	}
+	return 1;
+}
+
+/* UTF-16 (decision 0044). The code unit's byte order is the encoding's, not
+ * the field's, so LE and BE are separate names and separate validators; the
+ * shared core takes the order. A lone surrogate -- a high or low half with no
+ * partner -- decodes to no character and is the UTF-16 analogue of utf8's
+ * overlong form (section 8.8), so it is rejected the same way. */
+static inline int situ_utf16_valid(const uint8_t *data, uint32_t len, int big)
+{
+	uint32_t i = 0;
+
+	if ((len & 1u) != 0u) {
+		return 0;	/* an odd byte count is not whole code units */
+	}
+	while (i < len) {
+		const uint32_t hi   = big ? data[i] : data[i + 1u];
+		const uint32_t lo   = big ? data[i + 1u] : data[i];
+		const uint32_t unit = (hi << 8) | lo;
+
+		if (unit >= 0xD800u && unit <= 0xDBFFu) {
+			/* A high surrogate needs a low one right after it. */
+			uint32_t low;
+
+			if (i + 4u > len) {
+				return 0;	/* no room for the pair */
+			}
+			low = big ? (uint32_t)((data[i + 2u] << 8) | data[i + 3u])
+			          : (uint32_t)((data[i + 3u] << 8) | data[i + 2u]);
+			if (low < 0xDC00u || low > 0xDFFFu) {
+				return 0;	/* a high surrogate not followed by a low one */
+			}
+			i += 4u;
+			continue;
+		}
+		if (unit >= 0xDC00u && unit <= 0xDFFFu) {
+			return 0;	/* a low surrogate with no high one before it */
+		}
+		i += 2u;
+	}
+	return 1;
+}
+
+static inline int situ_utf16le_valid(const uint8_t *data, uint32_t len)
+{
+	return situ_utf16_valid(data, len, 0);
+}
+
+static inline int situ_utf16be_valid(const uint8_t *data, uint32_t len)
+{
+	return situ_utf16_valid(data, len, 1);
+}
+
+/* ------------------------------------------------------------------------
+ * Checksums (section 26.15)
+ *
+ * A `checksum` field tells a caller which bytes are covered and when the value
+ * has gone stale; it does not compute anything, because the algorithm is not
+ * something the layout knows. These are the algorithms small enough to ship:
+ * a few lines each, no tables, no library. Anything needing a real
+ * implementation behind it -- a cryptographic hash, deflate -- stays tier-1
+ * and optional.
+ *
+ * They are `static inline`, so a schema that names none of them emits none of
+ * them. That is what makes the optional tier actually optional.
+ * ------------------------------------------------------------------------ */
+
+/* The internet checksum of RFC 1071: the one's complement of the one's
+ * complement sum of 16-bit big-endian words, with an odd trailing byte padded.
+ *
+ * Its defining property is that a block carrying its own checksum sums to
+ * zero, which is how a receiver verifies without recomputing separately. */
+static inline uint16_t situ_checksum_internet(const uint8_t *data, uint32_t len)
+{
+	uint32_t total = 0;
+	uint32_t i;
+
+	for (i = 0; i + 1u < len; i += 2u) {
+		total += ((uint32_t)data[i] << 8) | (uint32_t)data[i + 1u];
+	}
+	if ((len & 1u) != 0u) {
+		total += (uint32_t)data[len - 1u] << 8;	/* pad the odd byte low */
+	}
+
+	/* End-around carry, twice: folding can itself carry. */
+	total = (total & 0xFFFFu) + (total >> 16);
+	total = (total & 0xFFFFu) + (total >> 16);
+
+	return (uint16_t)(~total & 0xFFFFu);
+}
+
+/* Fletcher-16 over bytes, modulo 255. */
+static inline uint16_t situ_fletcher16(const uint8_t *data, uint32_t len)
+{
+	uint32_t a = 0;
+	uint32_t b = 0;
+	uint32_t i;
+
+	for (i = 0; i < len; i++) {
+		a = (a + (uint32_t)data[i]) % 255u;
+		b = (b + a) % 255u;
+	}
+	return (uint16_t)((b << 8) | a);
+}
+
+/* Fletcher-32 over 16-bit *little-endian* words, modulo 65535.
+ *
+ * The word order is not a free choice: the published test vectors only come
+ * out right this way, and reading the words big-endian gives a byte-swapped
+ * near-miss that looks plausible. */
+static inline uint32_t situ_fletcher32(const uint8_t *data, uint32_t len)
+{
+	uint32_t a = 0;
+	uint32_t b = 0;
+	uint32_t i;
+
+	for (i = 0; i + 1u < len; i += 2u) {
+		a = (a + (((uint32_t)data[i + 1u] << 8) | (uint32_t)data[i])) % 0xFFFFu;
+		b = (b + a) % 0xFFFFu;
+	}
+	if ((len & 1u) != 0u) {
+		a = (a + (uint32_t)data[len - 1u]) % 0xFFFFu;
+		b = (b + a) % 0xFFFFu;
+	}
+	return (b << 16) | a;
+}
+
+/* Adler-32 (RFC 1950), the checksum zlib carries. */
+static inline uint32_t situ_adler32(const uint8_t *data, uint32_t len)
+{
+	uint32_t a = 1;
+	uint32_t b = 0;
+	uint32_t i;
+
+	for (i = 0; i < len; i++) {
+		a = (a + (uint32_t)data[i]) % 65521u;
+		b = (b + a) % 65521u;
+	}
+	return (b << 16) | a;
+}
+
+/* ------------------------------------------------------------------------
+ * Packed binary-coded decimal (section 8.1)
+ *
+ * Each nibble holds one decimal digit, most significant first, which is what
+ * RTC chips and financial formats put on the wire. The conversion lives here
+ * rather than in generated code because it is a loop, and because a loop that
+ * is written once and tested once is better than one emitted per field.
+ *
+ * A nibble above nine is a bit pattern that is not a number. Decoding cannot
+ * report that, so `situ_bcd_valid` exists to be asked first; the generated
+ * validator asks it.
+ * ------------------------------------------------------------------------ */
+
+/* Whether every nibble of `packed` below `digits` is a decimal digit.
+ *
+ * PRECONDITION: `digits` is at most 16, which the scalar table enforces --
+ * `bcd<digits>` is `digits * 4` bits wide and widths run to 64, so 16 is the
+ * largest the language can name. Above it this shifts a `uint64_t` by 64 or
+ * more, which is undefined. Measured: every generated call passes 1 or 2.
+ *
+ * The same bound applies to `situ_bcd_decode` below, for the same shift and
+ * from the same place (26.592). */
+static inline int situ_bcd_valid(uint64_t packed, uint32_t digits)
+{
+	uint32_t i;
+
+	for (i = 0; i < digits; i++) {
+		if (((packed >> (4u * i)) & 0xFu) > 9u) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+/* The number `packed` spells. Nibbles above nine contribute their value, so
+ * the result of decoding invalid input is unspecified but bounded; check with
+ * situ_bcd_valid first where that matters. */
+static inline uint64_t situ_bcd_decode(uint64_t packed, uint32_t digits)
+{
+	uint64_t value = 0;
+	uint32_t i;
+
+	for (i = digits; i > 0u; i--) {
+		value = value * 10u + ((packed >> (4u * (i - 1u))) & 0xFu);
+	}
+	return value;
+}
+
+/* The packed form of `value`, truncated to `digits` digits. */
+static inline uint64_t situ_bcd_encode(uint64_t value, uint32_t digits)
+{
+	uint64_t packed = 0;
+	uint32_t i;
+
+	for (i = 0; i < digits; i++) {
+		packed |= (value % 10u) << (4u * i);
+		value  /= 10u;
+	}
+	return packed;
+}
+
+/* ------------------------------------------------------------------------
+ * Variable-length integers
+ *
+ * LEB128: base-128 groups, least significant first, with the top bit of each
+ * byte set on every group but the last. `minimal` is a schema property rather
+ * than a decoder one -- a decoder that rejected non-minimal encodings could not
+ * read protobuf -- so these accept them, and the capability map records that
+ * the format is not canonical as a result.
+ * ------------------------------------------------------------------------ */
+
+/* Decode one varint. Returns bytes consumed, or 0 if the buffer ends mid-value
+ * or the value needs more than `max_bytes`. */
+static inline uint32_t situ_varint_get(const uint8_t *p, uint32_t avail,
+        uint32_t max_bytes, uint64_t *out)
+{
+	uint64_t acc   = 0;
+	uint32_t shift = 0;
+	uint32_t i;
+
+	for (i = 0; i < avail && i < max_bytes; i++) {
+		uint8_t byte = p[i];
+
+		if (shift < 64u) {
+			acc |= (uint64_t)(byte & 0x7Fu) << shift;
+		}
+		shift += 7u;
+
+		if ((byte & 0x80u) == 0u) {
+			*out = acc;
+			return i + 1u;
+		}
+	}
+
+	return 0;
+}
+
+/* Decode one big-endian base-128 varint: the high group first, otherwise the
+ * same shape as leb128. ASN.1's identifier octets, MIDI's delta times and
+ * SQLite's record varints are all this.
+ *
+ * `max_bytes` is where the encoding stops, and `terminal_bits` is what the last
+ * permitted byte carries. Where that is eight there is no spare bit for a
+ * continuation flag, so the byte is read whole and ends the value whatever its
+ * high bit says -- SQLite's ninth byte, and the reason a nine-byte varint holds
+ * sixty-four bits where seven-bit groups would need ten.
+ *
+ * Returns bytes consumed, or 0 if the buffer ends mid-value. */
+static inline uint32_t situ_varint_be_get(const uint8_t *p, uint32_t avail,
+        uint32_t max_bytes, uint32_t terminal_bits, uint64_t *out)
+{
+	uint64_t acc = 0;
+	uint32_t i;
+
+	for (i = 0; i < avail && i < max_bytes; i++) {
+		uint8_t byte = p[i];
+
+		if (terminal_bits == 8u && i + 1u == max_bytes) {
+			*out = (acc << 8) | (uint64_t)byte;
+			return i + 1u;
+		}
+
+		acc = (acc << 7) | (uint64_t)(byte & 0x7Fu);
+		if ((byte & 0x80u) == 0u) {
+			*out = acc;
+			return i + 1u;
+		}
+	}
+
+	return 0;
+}
+
+/* Encoded length of a value under `situ_varint_be_get`'s rules, for the
+ * minimality check: a longer encoding of the same value is a second encoding. */
+static inline uint32_t situ_varint_be_len(uint64_t value, uint32_t max_bytes,
+        uint32_t terminal_bits)
+{
+	uint32_t n = 1;
+
+	while (value >= 0x80u) {
+		value >>= 7;
+		n++;
+	}
+
+	/* The whole-byte terminal form encodes one more value per length than the
+	 * grouped one, so a value needing every grouped byte fits in the terminal
+	 * byte instead. */
+	if (terminal_bits == 8u && n > max_bytes) {
+		n = max_bytes;
+	}
+	return n;
+}
+
+/* Encode one big-endian base-128 varint: `situ_varint_be_get` backwards.
+ *
+ * High group first, continuation bit set on every byte but the last, and
+ * the length is `situ_varint_be_len`'s -- the same function the minimality
+ * check reads, so a value is written at the length a reader calls minimal
+ * rather than at one this computed again.
+ *
+ * `terminal_bits == 8` is SQLite's ninth byte, which carries all eight of
+ * its bits and ends the value whatever its high bit says. The decoder takes
+ * the byte at `max_bytes - 1` whole unconditionally, so the encoder must
+ * too: at that length the low eight bits go down as they are, and the seven-
+ * bit groups above them carry the continuation flag as usual.
+ *
+ * Returns bytes written, or 0 where they do not fit.
+ *
+ * PRECONDITION: `max_bytes` is positive and `terminal_bits` is between one
+ * and eight, which `VarintDecl.max_bytes` and `.terminal_bits` guarantee --
+ * they are derived from a declared `max_bits` the front end has checked. */
+static inline uint32_t situ_varint_be_put(uint8_t *p, uint32_t avail,
+        uint64_t value, uint32_t max_bytes, uint32_t terminal_bits)
+{
+	const uint32_t n = situ_varint_be_len(value, max_bytes, terminal_bits);
+	uint64_t rest = value;
+	uint32_t i;
+
+	if (n > avail || n > max_bytes) {
+		return 0;
+	}
+
+	if (terminal_bits == 8u && n == max_bytes) {
+		p[n - 1u] = (uint8_t)(rest & 0xFFu);
+		rest >>= 8;
+	} else {
+		p[n - 1u] = (uint8_t)(rest & 0x7Fu);
+		rest >>= 7;
+	}
+
+	for (i = n - 1u; i > 0u; i--) {
+		p[i - 1u] = (uint8_t)((rest & 0x7Fu) | 0x80u);
+		rest >>= 7;
+	}
+
+	/* A value too wide for the format is a refusal rather than a truncated
+	 * encoding: `situ_varint_be_len` clamps its answer to `max_bytes`, so
+	 * the loop above would otherwise drop the high bits silently and write
+	 * a different number. */
+	return rest == 0u ? n : 0u;
+}
+
+/* Encoded length of a value, so a writer can tell whether it still fits. */
+static inline uint32_t situ_varint_len(uint64_t value)
+{
+	uint32_t n = 1;
+
+	while (value >= 0x80u) {
+		value >>= 7;
+		n++;
+	}
+	return n;
+}
+
+/* Encode one varint minimally. Returns bytes written, or 0 if too small. */
+static inline uint32_t situ_varint_put(uint8_t *p, uint32_t avail, uint64_t value)
+{
+	uint32_t n = situ_varint_len(value);
+	uint32_t i;
+
+	if (n > avail) {
+		return 0;
+	}
+
+	for (i = 0; i + 1u < n; i++) {
+		p[i] = (uint8_t)((value & 0x7Fu) | 0x80u);
+		value >>= 7;
+	}
+	p[n - 1u] = (uint8_t)(value & 0x7Fu);
+	return n;
+}
+
+/* ZigZag, as protobuf's sint32 and sint64 use it: a small magnitude stays short
+ * whether it is positive or negative. */
+static inline uint64_t situ_zigzag_encode(int64_t value)
+{
+	return ((uint64_t)value << 1) ^ (uint64_t)(value >> 63);
+}
+
+static inline int64_t situ_zigzag_decode(uint64_t raw)
+{
+	return (int64_t)((raw >> 1) ^ (~(raw & 1u) + 1u));
+}
+
+/* ------------------------------------------------------------------------
+ * Tag-length-value iteration
+ *
+ * There is none here, deliberately. A cursor over a tlv region used to live in
+ * this file with `tag >> 3`, `tag & 0x7` and protobuf's four wire types written
+ * into it -- which is a description of one format, in the runtime, beside the
+ * schema language whose whole purpose is to describe formats. Generated code
+ * never called it; the only caller was a test that hand-wrote the field
+ * dispatch its schema already declared.
+ *
+ * A tlv region's items are found the way its schema says they are, so the walk
+ * is generated per region from `tag_decode` and `value_size` (section 9.5).
+ * What belongs here is what that walk is built out of: `situ_varint_get`
+ * above, and the bounds-checked view operations.
+ * ------------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------------
+ * Secret material
+ * ------------------------------------------------------------------------ */
+
+/* Overwrite a buffer so the compiler may not elide the store (section 14.6).
+ * A plain memset over storage that is about to die is dead code by the
+ * standard's rules, and compilers do remove it; the volatile pointer is what
+ * keeps this one. */
+void situ_zeroize(void *buf, uint32_t len);
+
+/* Human-readable name for a code, for tests and diagnostics. Never NULL. */
+const char *situ_err_str(situ_err_t err);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* SITU_H */
