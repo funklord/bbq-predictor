@@ -15582,6 +15582,27 @@ Built from clean with the script, both libraries read 4 x 0x4000, libssl
 needs `libcrypto_3.so`, and the size check holds. `make android` then
 produced an APK whose 67 libraries carry 205 LOAD segments, every one
 0x4000. The copies in the APK differ from `deps/` only because Gradle
-strips their debug symbols. Not yet run on the phone; `make
-android-play-check` reads the same property from a release bundle when
-one is built.
+strips their debug symbols. `make android-play-check` reads the same
+property from a release bundle when one is built.
+
+**On the phone, the same day** (SM-F926B, installed with `make
+android-install`): both libraries pulled back from the package's
+extracted library directory read 4 x 0x4000, and the probe of sec
+11.6.1 reported
+
+    supportsSsl        yes
+    found at runtime   OpenSSL 3.5.7 9 Jun 2026
+    active backend     openssl
+    0 of 6 failed      wunderground, met.no and open-meteo over HTTPS
+
+and a normal launch logged `libssl_3.so` loading with no TLS error.
+**What this does not show is the 16 KB case itself**: this phone runs
+4 KB pages (`getconf PAGE_SIZE` is 4096), so it proves the realigned
+libraries still work, not that they load on a 16 KB device. That needs
+a 16 KB emulator image or such a phone, and the readelf result is the
+evidence until then.
+
+The package id on the device is `se.vibes.bbq_predictor`, underscore,
+where sec 0 states `se.vibes.bbq-predictor` -- an Android package name
+cannot carry a hyphen. Worth knowing before typing it into `run-as` or
+`dumpsys`, where the hyphenated form silently matches nothing.
