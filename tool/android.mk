@@ -784,6 +784,15 @@ android-uninstall:
 # which display that is on a folding phone is unmeasured; on failure the
 # mTopFocusedDisplayId line is printed with the focus lines, to say so.
 #
+# The screen is kept on for the run and woken at its start: with the
+# phone's stay-awake setting off it locked between runs, and the target
+# then failed at the first view (fuzzypickles, Fold3, 2026-10-23). The
+# setting is put back on exit. It holds only while the phone is on
+# power, which a USB cable is and wireless adb is not. Waking cannot get
+# past a PIN or pattern,
+# so a locked phone still needs its person, and the focus check names
+# the lock screen when it is in front.
+#
 # The app is force-stopped on exit as well. The last view's process
 # otherwise stays alive, and a plain launch or a tap on the icon only
 # brings it forward: fuzzypickles' Fold run, 2026-10-22, left the phone
@@ -814,8 +823,11 @@ android-screenshots: android-install
 	mkdir -p "$$out" || exit 1; \
 	old_size=$$($$adb shell wm size | sed -n 's/^Override size: //p' | tr -d '\r'); \
 	old_demo=$$($$adb shell settings get global sysui_demo_allowed | tr -d '\r'); \
+	old_awake=$$($$adb shell settings get global stay_on_while_plugged_in | tr -d '\r'); \
 	restore() { \
 		$$adb shell am force-stop $(APP_ID); \
+		case "$$old_awake" in null|'') $$adb shell settings delete global stay_on_while_plugged_in >/dev/null 2>&1;; \
+			*) $$adb shell settings put global stay_on_while_plugged_in "$$old_awake" >/dev/null 2>&1;; esac; \
 		$$adb shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null 2>&1; \
 		case "$$old_demo" in 1) ;; null|'') $$adb shell settings delete global sysui_demo_allowed >/dev/null 2>&1;; \
 			*) $$adb shell settings put global sysui_demo_allowed "$$old_demo" >/dev/null 2>&1;; esac; \
@@ -824,6 +836,8 @@ android-screenshots: android-install
 	}; \
 	trap restore EXIT; trap 'exit 1' INT TERM; \
 	$$adb shell wm size $(STORE_SCREEN_SIZE) || exit 1; \
+	$$adb shell settings put global stay_on_while_plugged_in 7; \
+	$$adb shell input keyevent KEYCODE_WAKEUP; \
 	$$adb shell settings put global sysui_demo_allowed 1; \
 	demo() { $$adb shell am broadcast -a com.android.systemui.demo -e command "$$@" >/dev/null; }; \
 	demo enter; demo clock -e hhmm 1200; \
