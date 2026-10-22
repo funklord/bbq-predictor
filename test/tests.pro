@@ -12,7 +12,7 @@
 
 TEMPLATE = subdirs
 SUBDIRS = interpolate model reader providers layout client feed history correction view seed \
-          window cli
+          window cli server
 
 interpolate.file = test_interpolate.pro
 model.file = test_model.pro
@@ -27,3 +27,4 @@ view.file = test_view.pro
 seed.file = test_seed.pro
 window.file = test_window.pro
 cli.file = test_cli.pro
+server.file = test_server.pro

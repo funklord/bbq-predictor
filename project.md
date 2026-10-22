@@ -6181,11 +6181,11 @@ about 90 in SQLite (sec 12.1). That is roughly 260 KB per station-year.
 n is one station in one fortnight of late summer, so it sizes the
 design and does not promise a number.
 
-Still open:
-
-- **Whether clients keep their own archive at all** once the server has
-  one, or become readers. That decides whether sec 12's store stays the
-  centre of the program or becomes a cache.
+The fourth, whether clients keep their own archive, was answered the
+same day: **the applet reads from vibes.se and scrapes only when the
+server is gone** (sec 15.12). Its store stays, as the cache the graph
+already reads from (sec 12.8) and as the archive of whatever it had to
+scrape for itself.
 
 ## 18. Three gates that can report success having checked nothing
 
@@ -7029,6 +7029,76 @@ The conversion that passed uses `tokenize` to find the lines inside
 multi-line strings and leaves them alone. **The proof is what made the
 difference, not the care**: the first version was written with the same
 attention and was wrong.
+
+## 15.12 The client reads vibes.se first, and scrapes only when it is gone
+
+**Decided by the holder 2026-10-22**, together with sec 15.5's answers:
+month blocks, situ for the format, and the applet reading from vibes.se
+with today's scraping kept as the fallback. **It must be persistent
+before it falls back**, so that an outage of an hour or a week abroad
+does not turn every client into a scraper at once, which is the thing
+the server exists to prevent.
+
+### 15.12.1 When to give up on the server
+
+`src/server/policy.h` holds the rule as plain data and free functions,
+the suite's usual shape for a decision only a reply could otherwise
+reach. Three conditions at once, each guarding one way a client could
+fall back wrongly:
+
+- **At least 12 failures**, so a long window holding two is not enough.
+- **Failures seen across 6 hours**: the span from the first OBSERVED
+  failure to the latest, never from the first failure to now. A phone
+  that failed once on a plane and opens two days later has seen one
+  failure, not two days of outage.
+- **Another host answered over HTTPS during the outage**, so the
+  network was up and the server was what was missing. Without this, a
+  traveller with no connection would fall back the moment one returned.
+
+Retries back off 1, 2, 5, 10 minutes and then every 15. The server is
+still asked first on every round after the fallback starts, and one
+success ends it. Each condition was sabotaged in turn and each is caught
+by the case named for it.
+
+**The first version of the suite passed one case for the wrong
+reason.** The state uses 0 for "no outage", and the cases started their
+clocks at 0, so the first failure vanished into the sentinel. Disabling
+the window check should have failed the restart-storm case and did not;
+every absolute time is now offset from a real epoch, and the same
+sabotage fails it.
+
+The numbers are defaults chosen here, not measured, and are the
+holder's to move.
+
+### 15.12.2 What "only static files" does and does not secure
+
+Static files remove the request handler, which is most of a server's
+attack surface, but three parts remain, and each is designed rather
+than assumed:
+
+- **The publisher can only write what it generates.** It names files
+  from station ids, which come from the configuration and from WU, so
+  an id must match `[A-Z0-9]{1,32}` before it becomes a path -- that
+  is what stops `../` reaching outside the published tree. It writes
+  each file to a temporary name and renames it, so a client never reads
+  half a file, and it runs unprivileged, able to write only there.
+- **The web server should serve only that directory**, with no listing
+  and no symlinks followed, so nothing else on the machine can be
+  fetched through it. That is configuration on the server, outside
+  this tree, and is listed for whoever deploys it.
+- **The client treats every byte as hostile.** Thousands of clients
+  parsing one file is where a parser bug becomes everybody's. Every file
+  carries a CRC-32 and a size cap checked before parsing, the
+  decompressed size is bounded and declared before inflation, counts
+  are bounded, and a file that fails any check is discarded in favour
+  of what the store already holds -- never partly applied. The parser
+  is generated from the situ schema rather than written by hand, so
+  that its bounds come from one description, and it is fuzzed.
+
+HTTPS provides transport integrity. **Signing the files** would protect
+against a compromised web server or a mirror, at the cost of a key to
+keep; it is not designed in, and whether it is wanted is the holder's
+question.
 
 ## 16. The home-screen widget
 
