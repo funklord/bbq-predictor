@@ -772,6 +772,14 @@ android-uninstall:
 # clearing by itself. So a transient window gets time to go, and a
 # window that stays is named.
 #
+# Every display's focus line is read, not the first. A Galaxy Z Fold3,
+# folded, prints mCurrentFocus once per display and the first is always
+# `null`, so `grep -m1` refused an app that was in front -- hydra's first
+# run on a phone, 2026-10-22, failed twice that way after the view had
+# logged ready. What screencap captures is the default display, and
+# which display that is on a folding phone is unmeasured; on failure the
+# mTopFocusedDisplayId line is printed with the focus lines, to say so.
+#
 # Each PNG's size is read back from its header and held to Play's rules:
 # 320 to 3840 px a side, long side at most twice the short.
 STORE_SCREEN_SIZE   ?= 1080x1920
@@ -828,12 +836,12 @@ android-screenshots: android-install
 			sleep 1; \
 		done; \
 		t=0; \
-		while focus=$$($$adb shell dumpsys window | grep -m1 mCurrentFocus | tr -d '\r'); \
-		      ! echo "$$focus" | grep -qF "$(APP_ID)"; do \
+		while focus=$$($$adb shell dumpsys window | grep -E 'mCurrentFocus|mTopFocusedDisplayId' | tr -d '\r'); \
+		      ! echo "$$focus" | grep mCurrentFocus | grep -qF "$(APP_ID)"; do \
 			t=$$((t + 1)); \
 			if [ $$t -ge 10 ]; then \
-				echo "screenshots: $$v: after 10s the focus is not $(APP_ID):" >&2; \
-				echo "screenshots:  $$focus" >&2; \
+				echo "screenshots: $$v: after 10s no display's focus is $(APP_ID):" >&2; \
+				echo "$$focus" | sed 's/^/screenshots:  /' >&2; \
 				fail=1; break 2; \
 			fi; \
 			sleep 1; \
