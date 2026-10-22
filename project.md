@@ -4089,13 +4089,13 @@ The accessibility factory of sec 11.6 stays regardless. It costs
 nothing, it is tested, and it is the belt to this braces on exactly the
 devices that still need one.
 
-### 11.11 Play screenshots: asked for through the inbox, not yet confirmed
+### 11.11 Play screenshots: deferred by the holder
 
-**Relayed 2026-10-22 from claude-guidelines (inbox 20261022T1617Z) as
-the holder's request, and not yet confirmed first-hand**, so nothing is
-built: add the `store_view` hook so `make android-screenshots` makes the
-Play listing's pictures from the current build. Which views to show is
-the holder's choice.
+**Relayed 2026-10-22 from claude-guidelines (inbox 20261022T1617Z); the
+holder, asked first-hand the same day, said to skip it for now.** So
+nothing is built: the `store_view` hook that would let `make
+android-screenshots` make the Play listing's pictures from the current
+build. Which views to show stays the holder's choice when it comes back.
 
 The contract, from `tool/android.mk` and the play-store skill: the
 target starts the activity once per name in `STORE_VIEWS` (2 to 8, in
