@@ -468,6 +468,23 @@ style-signals:
 # point of the target that failed until then.
 check: style test
 
+# The daemon's request path under libFuzzer (project.md sec 15.12.2).
+#
+# Bounded by FUZZ_SECONDS inside the fuzzer, not by a wrapper, so a run
+# typed by hand stops as well. Not part of check: it needs clang and
+# takes a minute, and a fuzz run that found nothing yesterday proves
+# little about today. A crash leaves its input in the corpus directory.
+FUZZ_SECONDS ?= 60
+FUZZ_DIR ?= $(TEST_BUILD_DIR)/fuzz
+
+fuzz-serve: test/fuzz_serve.c src/serve/serve_core.c src/serve/serve_core.h
+	mkdir -p $(FUZZ_DIR)/corpus
+	clang -std=c11 -g -O1 -fsanitize=fuzzer,address,undefined \
+	        -fno-sanitize-recover=undefined -Isrc \
+	        test/fuzz_serve.c src/serve/serve_core.c -o $(FUZZ_DIR)/fuzz_serve
+	cd $(FUZZ_DIR) && ./fuzz_serve -max_total_time=$(FUZZ_SECONDS) \
+	        -max_len=96 -rss_limit_mb=1024 corpus
+
 # The commit-msg hook lives in the tree so it is reviewable, survives a
 # clone, and can be kept in sync. .git/hooks is untracked, so a hook that
 # exists only there enforces a rule nobody can see and vanishes silently
@@ -626,6 +643,6 @@ help:
 
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
-        style-wiring style-setup style-tests style-links test-clocks \
+        style-wiring style-setup style-tests style-links test-clocks fuzz-serve \
         android android-aab \
         install uninstall clean veryclean distclean help
