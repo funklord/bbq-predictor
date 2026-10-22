@@ -289,7 +289,7 @@ int main(int argc, char *argv[]) {
 
 			outcome = bbq_wu_fetch_once(watched,
 			                            bbq_settings::geocode_override(), 10,
-			                            QString());
+			                            QString(), {}, true);
 
 			qWarning("bbq-predictor: service fetch returned %d", outcome);
 			QCoreApplication::quit();

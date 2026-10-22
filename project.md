@@ -7316,6 +7316,66 @@ hand, not from boot. hull, the workspace's machine runtime, is the
 natural home for that test once it hands PID 1 to the guest's init,
 which its own adoption note says it does not yet do (2026-10-22).
 
+### 15.12.6 The applet reads it
+
+**Off until a key is built in.** `bbq_server_built_in_key()` in
+`src/server/transport.cpp` is empty until the holder makes the
+publishing key and gives its public half; `server/public_key` in the
+settings file overrides it for anybody running their own publisher.
+With no key the applet is exactly what it was. The window and the
+Android service turn the server on; the command line's `--fetch-once`
+never does, since it is what the publisher runs.
+
+**A round** asks for the manifest, the station's index and its head in
+one pipelined exchange (`src/server/transport.cpp`, routes 7227, then
+the daemon on 443, then HTTPS on 443, starting from the one that last
+answered). The head's bands replace their own and no other, so a band
+a head omits keeps the copy held under its older fetch time. Then the
+months the archive lacks or holds older, newest first, twelve a round,
+each checked against the index's digest as well as its own signature --
+so a validly signed month that is not the one the index names is
+refused. Rows go into the store under the provider each came from.
+The last head is kept in the store and applied at launch, so an
+offline start shows the forecast it last had.
+
+**When the server does not answer**, the policy of sec 15.12.1 counts
+it; the keyless bands (MET, Open-Meteo) are still fetched directly,
+which is not scraping and keeps the graph alive; and a HEAD request to
+api.open-meteo.com supplies the "network was up" the policy needs,
+whether or not a geocode is known. Only when the policy says so are the
+providers asked, and the server is still asked first on every round.
+**A station the manifest does not list is not an outage**: it goes to
+the providers at once, and the server is not counted as failing.
+
+**The reader** (`src/wire/read.cpp`) parses with situ's generated code
+at 56dcad1 -- validate, check and accessors only -- after a size cap
+and the signature, and checks every rule situ cannot state. Two of
+those rules are there because situ's own guard failed: its `trailing()`
+reported no trailing bytes with one present, so every body and column
+stream is held to the exact length its decoded content implies, which
+also refuses padded varints. `make fuzz-wire` fuzzes the parser
+directly, bypassing the signature, seeded from real bodies: 1.46
+million inputs in five minutes, no report.
+
+**Tested** by `test_wire` (every rule, one case each), `test_server_client`
+(the routes against the real daemon loop and a refused port, a silent
+one, a captive portal, an impostor in the daemon's own shape, a web
+server and an oversized body) and `test_feed_server` (the feed against
+the daemon end to end, hermetic: loopback direct, everything else into
+a dead proxy). Every check was sabotaged in turn; four the first cases
+did not catch -- the magic bytes, the padding bit, the month digest, the
+held months -- each got a case that does, except the padding bit, which
+the count and the length already hold.
+
+**Three things the building found.** Two source files called
+`client.cpp` (`src/wu/` and `src/server/`) built to one `client.o` in
+qmake's flat object directory and the second silently replaced the
+first; the server's became `transport.cpp`. On loopback an oversized
+HTTPS body arrived whole before the streaming cap could abort it, so
+the cap is enforced on what arrived as well. And a 290 ms bound on a
+300 ms coarse QTimer failed about one run in two, since such a timer may
+fire 5% early.
+
 ## 16. The home-screen widget
 
 A resizable Android app widget showing the forecast graph. Asked for by

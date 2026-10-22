@@ -9,7 +9,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDataStream>
 #include <QNetworkAccessManager>
+#include <QNetworkReply>
 #include <QTimer>
 
 #include "wu/client.h"
@@ -18,6 +20,7 @@
 #include "openmeteo/forecast.h"
 #include "wu/reader.h"
 #include "model/correction.h"
+#include "wire/read.h"
 
 namespace {
 
@@ -78,6 +81,12 @@ int freshness_s(bbq_wu_product product) {
  */
 const int radar_freshness_s = 10 * 60;
 const int extended_freshness_s = 60 * 60;
+
+/*
+ * vibes.se publishes after every five-minute fetch (sec 15.12), so a
+ * client asking more often than that is told "unchanged" for nothing.
+ */
+const int server_freshness_s = 5 * 60;
 
 /*
  * Yesterday's observations, asked for on their own schedule (sec 12.13).
@@ -579,6 +588,21 @@ void bbq_wu_feed::tick() {
 
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
 
+	/*
+	 * The server first, every five minutes and no sooner than its own
+	 * retry delay allows (sec 15.12.1). The providers below are asked
+	 * only while the policy says the server is gone.
+	 */
+	if (server_active()) {
+		if (overdue(m_server_attempted, server_freshness_s, now) &&
+		    bbq_server_may_attempt(m_server_state, now)) {
+			start_server_round(now);
+		}
+		if (!m_scraping) {
+			return;
+		}
+	}
+
 	if (!m_station_id.isEmpty()) {
 		if (due(bbq_wu_product::observed, now)) {
 			attempt(bbq_wu_product::observed, now);
@@ -740,6 +764,13 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 	 */
 	m_attempted.remove(static_cast<int>(bbq_wu_product::observed));
 	m_attempted.remove(static_cast<int>(bbq_wu_product::current_station));
+
+	/* What the server said about the old station says nothing about this one. */
+	m_station_not_served = false;
+	m_server_head.clear();
+	m_server_head_generated = 0;
+	m_server_attempted = 0;
+	load_server_state();
 }
 
 void bbq_wu_feed::forget_location_freshness() {
@@ -1484,6 +1515,18 @@ void bbq_wu_feed::refresh() {
 
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
 
+	if (server_active()) {
+		start_server_round(now);
+		if (m_scraping) {
+			start_provider_round(now);
+		}
+		return;
+	}
+
+	start_provider_round(now);
+}
+
+void bbq_wu_feed::start_provider_round(qint64 now) {
 	if (!m_station_id.isEmpty()) {
 		attempt(bbq_wu_product::observed, now);
 		attempt(bbq_wu_product::current_station, now);
@@ -1517,12 +1560,346 @@ void bbq_wu_feed::refresh() {
 	}
 }
 
+/* --- vibes.se (project.md sec 15.12) ----------------------------------- */
+
+void bbq_wu_feed::set_server(const QByteArray &public_key,
+                             std::vector<bbq_server_route> routes) {
+	m_server_key = public_key.size() == 32 ? public_key : QByteArray();
+	if (m_server_key.isEmpty()) {
+		return;
+	}
+
+	if (m_server == nullptr) {
+		m_server = new bbq_server_client(m_net, this);
+		connect(m_server, &bbq_server_client::finished, this,
+		        [this](const std::vector<bbq_server_result> &results) {
+			if (m_fetching_months) {
+				months_done(results);
+			} else {
+				server_round_done(results);
+			}
+		});
+	}
+	m_server->set_routes(std::move(routes));
+	load_server_state();
+}
+
+bool bbq_wu_feed::server_active() const {
+	/*
+	 * Not for a coordinate somebody pinned: the server's bands are for
+	 * the station's own place, and a pinned point is somewhere else.
+	 */
+	return m_server != nullptr && !m_server_key.isEmpty() &&
+	       bbq_wire_station_valid(m_station_id) && !m_station_not_served &&
+	       !m_geocode_pinned;
+}
+
+void bbq_wu_feed::start_server_round(qint64 now_utc) {
+	if (m_server->is_busy()) {
+		return;
+	}
+	m_server_attempted = now_utc;
+	m_fetching_months = false;
+	++m_outstanding;
+
+	bbq_server_request manifest;
+	manifest.kind = bbq_wire_kind::stations;
+	bbq_server_request index;
+	index.kind = bbq_wire_kind::index;
+	index.station = m_station_id;
+	bbq_server_request head;
+	head.kind = bbq_wire_kind::head;
+	head.station = m_station_id;
+	head.have = m_server_head;
+	m_server->fetch({manifest, index, head});
+}
+
+void bbq_wu_feed::apply_head(const QByteArray &file, bool remember) {
+	QString why;
+	bbq_wire_head head;
+	if (!bbq_wire_read_head(file, m_server_key, m_station_id, &head, &why)) {
+		return;
+	}
+
+	/* Never backwards: an older head than the one held is a replay or a stale cache. */
+	if (head.generated_utc < m_server_head_generated) {
+		return;
+	}
+	m_server_head = file;
+	m_server_head_generated = head.generated_utc;
+
+	/*
+	 * Each band replaces its own and no other, so a band this head omits
+	 * keeps the copy already held, under its own older fetch time, for
+	 * the staleness instrument to judge (sec 15.12.4).
+	 */
+	for (bbq_series &band : head.bands) {
+		if (band.band() == bbq_band::observed) {
+			note_partial_store(int(band.size()),
+			                   m_history.record_observations(m_station_id, band));
+			m_observed_fetched_utc = band.fetched_utc();
+		} else if (band.band() != bbq_band::current) {
+			m_history.record_forecast(m_station_id, band, band.fetched_utc());
+		}
+		const bool observed = band.band() == bbq_band::observed;
+		m_composite.set_series(std::move(band));
+		if (observed) {
+			load_observations();
+		}
+	}
+
+	if (remember) {
+		m_history.set_server_value(QStringLiteral("head/") + m_station_id, file);
+	}
+	emit updated();
+}
+
+void bbq_wu_feed::server_round_done(const std::vector<bbq_server_result> &results) {
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	QString why;
+
+	if (results.size() != 3 || results[0].status != bbq_server_status::ok) {
+		server_failed(now, tr("vibes.se did not answer"));
+		finish_one();
+		return;
+	}
+
+	/*
+	 * A manifest that verifies is the server answering, whatever else
+	 * happens; one that does not is no better than silence, since it is
+	 * exactly what a captive portal or an impostor would send.
+	 */
+	QStringList stations;
+	if (!bbq_wire_read_stations(results[0].file, m_server_key, &stations, &why)) {
+		server_failed(now, tr("vibes.se sent a manifest that does not verify: %1").arg(why));
+		finish_one();
+		return;
+	}
+
+	/*
+	 * Not served is not an outage: the server is up and simply does not
+	 * publish this station, so the providers are asked straight away
+	 * rather than after half an hour of waiting for nothing.
+	 */
+	if (!stations.contains(m_station_id)) {
+		bbq_server_record_success(m_server_state, now);
+		m_scraping = false;
+		m_station_not_served = true;
+		save_server_state();
+		start_provider_round(now);
+		finish_one();
+		return;
+	}
+
+	/* The head: applied when new, kept when unchanged. */
+	const bbq_server_result &head = results[2];
+	if (head.status == bbq_server_status::ok) {
+		apply_head(head.file, true);
+	} else if (head.status != bbq_server_status::unchanged) {
+		server_failed(now, tr("vibes.se has no head for %1").arg(m_station_id));
+		finish_one();
+		return;
+	}
+
+	std::vector<bbq_wire_index_entry> entries;
+	if (results[1].status != bbq_server_status::ok ||
+	    !bbq_wire_read_index(results[1].file, m_server_key, m_station_id, &entries, &why)) {
+		server_failed(now, tr("vibes.se sent no usable index: %1").arg(why));
+		finish_one();
+		return;
+	}
+
+	bbq_server_record_success(m_server_state, now);
+	m_scraping = false;
+	save_server_state();
+
+	/*
+	 * The months this archive lacks or holds an older copy of, newest
+	 * first, a dozen a round: a fresh install catches up over a few
+	 * rounds rather than in one long download.
+	 */
+	const std::map<int, QByteArray> held = m_history.server_months(m_station_id);
+	m_months_wanted.clear();
+	for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
+		const auto found = held.find(it->month);
+		if (found == held.end() || found->second != it->digest) {
+			m_months_wanted.push_back(*it);
+			if (m_months_wanted.size() == 12) {
+				break;
+			}
+		}
+	}
+
+	m_months_requested = int(m_months_wanted.size());
+	if (m_months_wanted.empty()) {
+		finish_one();
+		return;
+	}
+
+	std::vector<bbq_server_request> requests;
+	for (const bbq_wire_index_entry &entry : m_months_wanted) {
+		bbq_server_request month;
+		month.kind = bbq_wire_kind::month;
+		month.station = m_station_id;
+		month.month = entry.month;
+		requests.push_back(month);
+	}
+	m_fetching_months = true;
+	m_server->fetch(std::move(requests));
+}
+
+void bbq_wu_feed::months_done(const std::vector<bbq_server_result> &results) {
+	m_fetching_months = false;
+	int applied = 0;
+
+	for (size_t i = 0; i < results.size() && i < m_months_wanted.size(); ++i) {
+		const bbq_wire_index_entry &entry = m_months_wanted[i];
+		const bbq_server_result &result = results[i];
+		QString why;
+		bbq_wire_month_rows rows;
+
+		/*
+		 * The index's digest ties the month to the signed index as well
+		 * as to its own signature: a validly signed but OLDER month cannot
+		 * be passed off as the one the index names.
+		 */
+		if (result.status != bbq_server_status::ok ||
+		    uint32_t(result.file.size()) != entry.bytes ||
+		    bbq_wire_digest(result.file) != entry.digest ||
+		    !bbq_wire_read_month(result.file, m_server_key, m_station_id, entry.month,
+		                         &rows, &why)) {
+			continue;
+		}
+
+		/* Stored per provider, so each row keeps who reported it. */
+		size_t start = 0;
+		while (start < rows.samples.size()) {
+			size_t end = start;
+			while (end < rows.samples.size() && rows.provider[end] == rows.provider[start]) {
+				++end;
+			}
+			bbq_series run(bbq_band::observed, rows.providers.at(rows.provider[start]));
+			run.set_samples(std::vector<bbq_sample>(rows.samples.begin() + long(start),
+			                                        rows.samples.begin() + long(end)));
+			m_history.record_observations(m_station_id, run);
+			start = end;
+		}
+		m_history.set_server_month(m_station_id, entry.month, entry.digest);
+		++applied;
+	}
+
+	m_months_wanted.clear();
+	if (applied > 0) {
+		load_observations();
+		emit updated();
+	}
+	finish_one();
+}
+
+void bbq_wu_feed::server_failed(qint64 now_utc, const QString &reason) {
+	bbq_server_record_failure(m_server_state, now_utc, m_server_policy);
+	emit band_failed(QStringLiteral("server"), reason);
+
+	/*
+	 * The keyless bands still come straight from their providers while
+	 * the server is away -- that is not scraping, and it keeps the graph
+	 * alive through an outage. The probe is what tells an outage from a
+	 * traveller with no network at all (sec 15.12.1).
+	 */
+	if (m_have_geocode) {
+		if (overdue(m_radar_attempted, radar_freshness_s, now_utc)) {
+			attempt_radar(now_utc);
+		}
+		if (overdue(m_extended_attempted, extended_freshness_s, now_utc)) {
+			attempt_extended(now_utc);
+		}
+	}
+	probe_network(now_utc);
+
+	if (!m_scraping && bbq_server_should_scrape(m_server_state, m_server_policy)) {
+		m_scraping = true;
+		start_provider_round(now_utc);
+	}
+	save_server_state();
+}
+
+void bbq_wu_feed::probe_network(qint64 now_utc) {
+	/*
+	 * Any HTTP answer at all from a host that is not the server: the
+	 * status does not matter, only that something on the internet
+	 * replied. open-meteo, because it is already a provider here and
+	 * asking it for its root costs it nothing.
+	 */
+	QNetworkReply *reply = m_net->head(
+	        QNetworkRequest(QUrl(QStringLiteral("https://api.open-meteo.com/"))));
+	connect(reply, &QNetworkReply::finished, this, [this, reply, now_utc]() {
+		reply->deleteLater();
+		if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() <= 0) {
+			return;
+		}
+		bbq_server_record_network_ok(m_server_state, now_utc);
+		if (!m_scraping && bbq_server_should_scrape(m_server_state, m_server_policy)) {
+			m_scraping = true;
+			start_provider_round(QDateTime::currentSecsSinceEpoch());
+		}
+		save_server_state();
+	});
+}
+
+void bbq_wu_feed::load_server_state() {
+	if (m_server_key.isEmpty()) {
+		return;
+	}
+
+	QByteArray bytes = m_history.server_value(QStringLiteral("policy"));
+	QDataStream in(&bytes, QIODevice::ReadOnly);
+	qint32 route = 0;
+	qint32 failures = 0;
+	in >> m_server_state.last_success_utc >> m_server_state.outage_since_utc >>
+	        m_server_state.last_failure_utc >> failures >> m_server_state.network_ok_utc >>
+	        m_server_state.next_attempt_utc >> route;
+	if (in.status() != QDataStream::Ok) {
+		m_server_state = bbq_server_state();
+		route = 0;
+	} else {
+		m_server_state.failures = failures;
+	}
+	if (m_server) {
+		m_server->set_preferred_route(route);
+	}
+	m_scraping = bbq_server_should_scrape(m_server_state, m_server_policy);
+
+	/*
+	 * The last head this station was sent, applied again at once: an
+	 * offline launch shows the forecast it last had rather than nothing,
+	 * each band under its own fetch time.
+	 */
+	if (bbq_wire_station_valid(m_station_id)) {
+		const QByteArray head = m_history.server_value(QStringLiteral("head/") + m_station_id);
+		if (!head.isEmpty()) {
+			apply_head(head, false);
+		}
+	}
+}
+
+void bbq_wu_feed::save_server_state() {
+	QByteArray bytes;
+	QDataStream out(&bytes, QIODevice::WriteOnly);
+	out << m_server_state.last_success_utc << m_server_state.outage_since_utc
+	    << m_server_state.last_failure_utc << qint32(m_server_state.failures)
+	    << m_server_state.network_ok_utc << m_server_state.next_attempt_utc
+	    << qint32(m_server ? m_server->preferred_route() : 0);
+	m_history.set_server_value(QStringLiteral("policy"), bytes);
+}
+
 bool bbq_wu_feed::open_history(const QString &path) {
 	if (!m_history.open(path)) {
 		m_history_error = m_history.last_error();
 		return false;
 	}
 
+	/* The server's state lives in the store, so it can only be read now. */
+	load_server_state();
 	return true;
 }
 

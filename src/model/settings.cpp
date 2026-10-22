@@ -1,5 +1,7 @@
 #include "model/settings.h"
 
+#include "server/transport.h"
+
 #include <QDir>
 #include <QSettings>
 #include <QStringList>
@@ -82,6 +84,16 @@ QString bbq_settings::geocode_override() {
 
 void bbq_settings::set_geocode_override(const QString &geocode) {
 	open().setValue(QString::fromLatin1(key_override), geocode.trimmed());
+}
+
+QByteArray bbq_settings::server_public_key() {
+	const QByteArray hex = open().value(QStringLiteral("server/public_key")).toString()
+	                               .trimmed().toLatin1();
+	if (!hex.isEmpty()) {
+		const QByteArray key = QByteArray::fromHex(hex);
+		return key.size() == 32 ? key : QByteArray();
+	}
+	return bbq_server_built_in_key();
 }
 
 int bbq_settings::interpolation(int fallback) {

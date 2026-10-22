@@ -18,7 +18,7 @@
 #include "publish/encode.h"
 #include "publish/signing_key.h"
 #include "serve/serve_loop.h"
-#include "server/client.h"
+#include "server/transport.h"
 
 Q_DECLARE_METATYPE(std::vector<bbq_server_result>)
 

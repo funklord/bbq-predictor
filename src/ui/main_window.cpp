@@ -1056,6 +1056,8 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 		m_last_error = tr("history: ") + m_feed->history_error();
 	}
 
+	/* vibes.se first, when a key is known (project.md sec 15.12). */
+	m_feed->set_server(bbq_settings::server_public_key());
 	m_feed->set_station(station);
 	refresh_station_list();
 

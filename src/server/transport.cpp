@@ -1,4 +1,4 @@
-#include "server/client.h"
+#include "server/transport.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -23,6 +23,18 @@ QByteArray have_of(const QByteArray &held) {
 }
 
 } // namespace
+
+QByteArray bbq_server_built_in_key() {
+	/*
+	 * The hex `bbq-predictor --generate-signing-key` prints as "public
+	 * key". Empty until the publishing key exists; a wrong one is no
+	 * worse than none, since nothing would verify and the providers are
+	 * still asked once the policy gives up.
+	 */
+	static const char hex[] = "";
+	const QByteArray key = QByteArray::fromHex(QByteArray(hex));
+	return key.size() == 32 ? key : QByteArray();
+}
 
 std::vector<bbq_server_route> bbq_server_default_routes() {
 	std::vector<bbq_server_route> routes(3);

@@ -214,7 +214,7 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 
 int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
                       int timeout_s, const QString &history_path,
-                      const bbq_after_round &after_round) {
+                      const bbq_after_round &after_round, bool use_server) {
 	QTextStream out(stdout);
 	QTextStream error(stderr);
 
@@ -279,6 +279,9 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 		      << "\n";
 	}
 
+	if (use_server) {
+		feed.set_server(bbq_settings::server_public_key());
+	}
 	feed.set_station(station);
 
 	if (!point.isEmpty()) {

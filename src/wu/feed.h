@@ -8,6 +8,8 @@
 #include <QStringList>
 
 #include "model/composite.h"
+#include "server/transport.h"
+#include "server/policy.h"
 #include "store/history.h"
 #include "met/nowcast.h"
 #include "openmeteo/forecast.h"
@@ -225,6 +227,24 @@ public:
 	void start_auto_refresh();
 	void stop_auto_refresh();
 
+	/*
+	 * Read from vibes.se before anything else (project.md sec 15.12).
+	 *
+	 * An empty key turns it off, and off is the state until the
+	 * publisher's public key is built in: then every band comes from the
+	 * providers as it always has. The publisher's own --fetch-once never
+	 * calls this, since a server reading itself would publish nothing new.
+	 */
+	void set_server(const QByteArray &public_key,
+	                std::vector<bbq_server_route> routes = bbq_server_default_routes());
+
+	/* Whether this round goes to the server rather than to the providers. */
+	bool server_active() const;
+
+	/* The server has been gone long enough that the providers are asked too. */
+	bool scraping() const { return m_scraping; }
+	const bbq_server_state &server_state() const { return m_server_state; }
+
 	const bbq_composite &composite() const { return m_composite; }
 	bool is_busy() const { return m_outstanding > 0; }
 
@@ -255,6 +275,18 @@ signals:
 
 private:
 	void start_forecast_bands();
+
+	/* What refresh() did before the server: every provider band. */
+	void start_provider_round(qint64 now_utc);
+
+	void start_server_round(qint64 now_utc);
+	void server_round_done(const std::vector<bbq_server_result> &results);
+	void months_done(const std::vector<bbq_server_result> &results);
+	void server_failed(qint64 now_utc, const QString &reason);
+	void apply_head(const QByteArray &file, bool remember);
+	void load_server_state();
+	void save_server_state();
+	void probe_network(qint64 now_utc);
 
 	/*
 	 * The radar and extended bands are not Weather Underground's and so
@@ -362,6 +394,22 @@ private:
 	void load_observations();
 
 	bbq_history m_history;
+
+	/* vibes.se (sec 15.12): off while the key is empty. */
+	bbq_server_client *m_server = nullptr;
+	QByteArray m_server_key;
+	bbq_server_policy m_server_policy;
+	bbq_server_state m_server_state;
+	bool m_scraping = false;
+	bool m_station_not_served = false;
+	bool m_fetching_months = false;
+	qint64 m_server_attempted = 0;
+	qint64 m_server_head_generated = 0;
+	QByteArray m_server_head;
+	std::vector<bbq_wire_index_entry> m_months_wanted;
+
+	/* Months asked for in the last round: what "fetch only what changed" is checked by. */
+	int m_months_requested = 0;
 	QString m_history_error;
 	qint64 m_observed_fetched_utc = 0;
 
@@ -431,6 +479,7 @@ private:
 	 * Same device as bbq_wu_key_source's, for the same reason.
 	 */
 	friend class test_feed;
+	friend class test_feed_server;
 
 	/*
 	 * The window's suite exists to check the WIRING between the parts

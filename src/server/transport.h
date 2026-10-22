@@ -1,5 +1,5 @@
-#ifndef BBQ_SERVER_CLIENT_H
-#define BBQ_SERVER_CLIENT_H
+#ifndef BBQ_SERVER_TRANSPORT_H
+#define BBQ_SERVER_TRANSPORT_H
 
 #include <QByteArray>
 #include <QObject>
@@ -60,6 +60,13 @@ struct bbq_server_route {
 	quint16 port = 0;
 	QUrl base;                /* https only: where the tree is served */
 };
+
+/*
+ * The publisher's Ed25519 public key, built in: 32 bytes, or empty until
+ * the holder has made the key and given its public half (project.md sec
+ * 15.12). Empty keeps the server off and the applet on its providers.
+ */
+QByteArray bbq_server_built_in_key();
 
 /* vibes.se:7227, vibes.se:443, then https://vibes.se/bbq-predictor/. */
 std::vector<bbq_server_route> bbq_server_default_routes();

@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QtGlobal>
 
+#include <map>
 #include <vector>
 
 #include "model/series.h"
@@ -401,6 +402,16 @@ public:
 		qint64 last_utc = 0;
 	};
 	std::vector<observation_month> observation_months(const QString &station) const;
+
+	/*
+	 * What has been taken from vibes.se (sec 15.12): each applied month
+	 * file's digest, by month number, and named values the client keeps
+	 * across restarts.
+	 */
+	std::map<int, QByteArray> server_months(const QString &station) const;
+	bool set_server_month(const QString &station, int month, const QByteArray &digest);
+	QByteArray server_value(const QString &name) const;
+	bool set_server_value(const QString &name, const QByteArray &value);
 
 	/*
 	 * The newest observation for `station` inside [from, to), or 0 when

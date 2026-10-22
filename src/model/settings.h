@@ -54,6 +54,15 @@ public:
 	static void set_geocode_override(const QString &geocode);
 
 	/*
+	 * The key vibes.se's files are checked against (project.md sec
+	 * 15.12): `server/public_key` in hex when set, for somebody running
+	 * their own publisher, and the built-in key otherwise. Read-only from
+	 * the program: changing whose files are trusted is an edit somebody
+	 * makes on purpose, not a control.
+	 */
+	static QByteArray server_public_key();
+
+	/*
 	 * ============================================================
 	 * NOT WIRED TO ANYTHING. THERE IS NO SERVER AND NO PROTOCOL.
 	 * ============================================================

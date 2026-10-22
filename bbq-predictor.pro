@@ -196,13 +196,23 @@ HEADERS += \
 # The published format, in every build: the applet reads and verifies
 # what vibes.se serves, on a phone as much as anywhere (project.md sec
 # 15.12). monocypher is for the signature and the index's digests.
-INCLUDEPATH += monocypher/src monocypher/src/optional
+INCLUDEPATH += monocypher/src monocypher/src/optional src/wire/vendor
 SOURCES += \
+	src/server/transport.cpp \
+	src/server/policy.cpp \
 	src/wire/format.cpp \
+	src/wire/read.cpp \
+	src/wire/vendor/situ.c \
 	monocypher/src/monocypher.c \
 	monocypher/src/optional/monocypher-ed25519.c
 HEADERS += \
-	src/wire/format.h
+	src/server/transport.h \
+	src/server/policy.h \
+	src/wire/format.h \
+	src/wire/read.h \
+	src/wire/vendor/bbq.hpp \
+	src/wire/vendor/situ.h \
+	src/wire/vendor/situ.hpp
 
 # The publisher: desktop and server only. Nothing publishes from a phone,
 # and keeping it out keeps getrandom(), which bionic has only from API 28

@@ -621,7 +621,93 @@ bool bbq_history::create_schema() {
 	                           "id INTEGER PRIMARY KEY CHECK (id = 0),"
 	                           "latitude REAL NOT NULL,"
 	                           "longitude REAL NOT NULL,"
-	                           "ran_utc INTEGER NOT NULL)"));
+	                           "ran_utc INTEGER NOT NULL)")) &&
+
+	       /*
+	        * What the applet has taken from vibes.se (sec 15.12): the
+	        * digest of every month file applied, so a launch fetches only
+	        * months that changed rather than a station's whole decade,
+	        * and a few named values -- the outage the retry policy is
+	        * counting, the route that last answered -- that have to
+	        * outlive a restart for the policy to mean anything. Beside the
+	        * rows they describe, for the reason the discovery origin is.
+	        */
+	       exec(QStringLiteral("CREATE TABLE IF NOT EXISTS server_month ("
+	                           "station TEXT NOT NULL,"
+	                           "month INTEGER NOT NULL,"
+	                           "digest BLOB NOT NULL,"
+	                           "PRIMARY KEY (station, month))")) &&
+	       exec(QStringLiteral("CREATE TABLE IF NOT EXISTS server_state ("
+	                           "name TEXT PRIMARY KEY,"
+	                           "value BLOB NOT NULL)"));
+}
+
+std::map<int, QByteArray> bbq_history::server_months(const QString &station) const {
+	std::map<int, QByteArray> months;
+	if (!m_open) {
+		return months;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral("SELECT month, digest FROM server_month WHERE station = ?"));
+	query.addBindValue(station);
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return months;
+	}
+	while (query.next()) {
+		months[query.value(0).toInt()] = query.value(1).toByteArray();
+	}
+	return months;
+}
+
+bool bbq_history::set_server_month(const QString &station, int month, const QByteArray &digest) {
+	if (!m_open) {
+		return false;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "INSERT OR REPLACE INTO server_month (station, month, digest) VALUES (?, ?, ?)"));
+	query.addBindValue(station);
+	query.addBindValue(month);
+	query.addBindValue(digest);
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return false;
+	}
+	return true;
+}
+
+QByteArray bbq_history::server_value(const QString &name) const {
+	if (!m_open) {
+		return QByteArray();
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral("SELECT value FROM server_state WHERE name = ?"));
+	query.addBindValue(name);
+	if (!query.exec() || !query.next()) {
+		return QByteArray();
+	}
+	return query.value(0).toByteArray();
+}
+
+bool bbq_history::set_server_value(const QString &name, const QByteArray &value) {
+	if (!m_open) {
+		return false;
+	}
+
+	QSqlQuery query(QSqlDatabase::database(m_connection));
+	query.prepare(QStringLiteral(
+	        "INSERT OR REPLACE INTO server_state (name, value) VALUES (?, ?)"));
+	query.addBindValue(name);
+	query.addBindValue(value);
+	if (!query.exec()) {
+		m_last_error = query.lastError().text();
+		return false;
+	}
+	return true;
 }
 
 bool bbq_history::discovery_origin(double *latitude, double *longitude) const {
