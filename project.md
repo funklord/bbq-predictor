@@ -4089,6 +4089,31 @@ The accessibility factory of sec 11.6 stays regardless. It costs
 nothing, it is tested, and it is the belt to this braces on exactly the
 devices that still need one.
 
+### 11.11 Play screenshots: asked for through the inbox, not yet confirmed
+
+**Relayed 2026-10-22 from claude-guidelines (inbox 20261022T1617Z) as
+the holder's request, and not yet confirmed first-hand**, so nothing is
+built: add the `store_view` hook so `make android-screenshots` makes the
+Play listing's pictures from the current build. Which views to show is
+the holder's choice.
+
+The contract, from `tool/android.mk` and the play-store skill: the
+target starts the activity once per name in `STORE_VIEWS` (2 to 8, in
+listing order) with a string extra `store_view`, and the app must open
+that view on **demo content kept in the tree**, never the user's cooks,
+location or settings, since the pictures are published; then log
+`store-view-ready <name>` once it has drawn. The target waits for that
+line up to 30 s, at 1080x1920 with the status bar in demo mode.
+
+What the two siblings learned, kept here because it is cheaper than
+relearning: beerssh's first demo would have shown the user's real data,
+because Qt's test mode moves only what `QStandardPaths` names; and its
+demo reached the network although it was meant never to. This applet
+fetches over HTTPS on start, so a demo run must fetch nothing -- no
+band, no location lookup -- or every run's pictures differ and a real
+location leaks into a public listing. hydra seeds its demo from the
+package and checked nothing outside test mode is reached (its c160ced).
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
