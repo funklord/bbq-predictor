@@ -4114,6 +4114,22 @@ band, no location lookup -- or every run's pictures differ and a real
 location leaks into a public listing. hydra seeds its demo from the
 package and checked nothing outside test mode is reached (its c160ced).
 
+### 11.12 targetSdk 36: built already, one fallback still says 33
+
+**Relayed 2026-10-22 from claude-guidelines (inbox 20261022T1820Z) as
+the holder's request, not yet confirmed first-hand.** Play has required
+targetSdk 36 for new apps and updates since 2026-08-31.
+
+Measured here the same day: the built APK already reads
+`targetSdkVersion:'36'`, because the Makefile passes
+`BBQ_TARGET_API=$(ANDROID_TARGET_API)` and `tool/android.mk` defaults
+that to 36. **The one 33 left is `bbq-predictor.pro`'s fallback**,
+`isEmpty(BBQ_TARGET_API): BBQ_TARGET_API = 33`, which only a qmake run
+outside the Makefile reaches -- Qt Creator, or qmake by hand -- and which
+would build an app Play refuses. The change waiting on confirmation is
+that line: 36, or no fallback at all so a missing value fails rather
+than choosing a number.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
