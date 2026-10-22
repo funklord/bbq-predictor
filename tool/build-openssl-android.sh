@@ -247,11 +247,25 @@ rm -f "$src/libcrypto.so" "$src/libssl.so"
 	# no-tests because nothing here runs them on the device, and they are
 	# most of the build. no-apps for the same reason: the applet links
 	# the libraries and never executes the openssl command.
+	#
+	# The two -z flags align every LOAD segment at 16 KB. NDK r27, which
+	# the kit names, links at 4 KB unless told otherwise (r28 defaults to
+	# 16 KB), and a 4 KB library is refused by Play from 2027-02-01 and
+	# will not dlopen on a device running 16 KB pages -- which here would
+	# read as TLS failing, not as a crash. Configure takes -Wl options as
+	# linker flags, so both libraries get them.
 	./Configure "qt-$target" -D__ANDROID_API__="$api" \
+		-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 \
 		no-tests no-apps shared \
 		--prefix="$prefix" --openssldir="$prefix/ssl"
 
-	# libcrypto first, on its own, so that the symlink below exists
+	# The generated headers first. A bare libcrypto_3.so target does not
+	# depend on them -- OpenSSL hangs them off build_libs instead -- so
+	# from a clean tree every object failed on a missing opensslv.h. The
+	# step had only ever run in a tree an earlier build had prepared.
+	make -j4 build_generated
+
+	# libcrypto next, on its own, so that the symlink below exists
 	# before anything links against it.
 	make -j4 libcrypto_3.so
 
@@ -324,6 +338,23 @@ for lib in crypto ssl; do
 		echo "openssl: lib${lib}_3.so has soname $soname, which will not resolve" >&2
 		exit 1
 	fi
+
+	# Every LOAD segment must be aligned at 16 KB or more; see the
+	# Configure line. Read from the file rather than trusted from the
+	# flags, and a library with no LOAD segment at all fails too, so the
+	# check cannot pass by having read nothing.
+	aligns=$(llvm-readelf -lW "$target_file" | awk '$1 == "LOAD" { print $NF }')
+	if [ -z "$aligns" ]; then
+		echo "openssl: lib${lib}_3.so shows no LOAD segment to check" >&2
+		exit 1
+	fi
+	for align in $aligns; do
+		if [ $((align)) -lt 16384 ]; then
+			echo "openssl: lib${lib}_3.so has a LOAD aligned at $align," >&2
+			echo "  below the 16 KB that Play and 16 KB-page devices need." >&2
+			exit 1
+		fi
+	done
 done
 
 # Everything libssl asks for must either be in the package or be part of

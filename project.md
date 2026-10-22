@@ -15537,3 +15537,51 @@ somebody arriving cold does not have to find them.
 - `bbq_write_widget_picture`'s two JNI questions cannot be tested here
   (sec 16.119); everything else about the picture now can be.
 - `--shot`'s cursor message cannot be reached offline (sec 16.108.2).
+
+## 16.124 OpenSSL was linked for 4 KB pages, and the script could not build from clean
+
+**Reported through this tree's inbox 2026-10-22 from claude-guidelines,
+relayed at the copyright holder's request; the instruction was confirmed
+with the holder first-hand the same day.** Measured on the debug APK with `readelf
+-lW`, taking the LOAD alignment of every `lib/*.so`:
+
+    65 x 0x4000   the Qt libraries and libbbq-predictor_arm64-v8a.so
+     2 x 0x1000   libcrypto_3.so, libssl_3.so
+
+**Who it reaches.** Play refuses updates without 16 KB support from
+2027-02-01 for an app targeting 35 or above with native code, and this
+one targets 36. On a device running 16 KB pages a 4 KB library will not
+`dlopen` -- and since TLS is the only thing loaded that way, the applet
+would start and draw no graph, failing as "TLS initialization failed",
+which sec 11.6 shows reads as everything except an alignment fault.
+
+**Why only OpenSSL.** NDK r27 (27.2.12479018, the one the kit names)
+links at 4 KB unless told otherwise; r28 defaults to 16 KB. Qt's kit was
+built aligned, so the only libraries affected were the two
+`tool/build-openssl-android.sh` links itself. The fix is Google's own
+remedy for r27, `-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384`,
+passed to `Configure`, which takes `-Wl` options as linker flags and puts
+them in the generated `LDFLAGS` -- confirmed in the Makefile it wrote.
+
+**The script now refuses a library below 16 KB**, read from the file
+with `llvm-readelf` rather than trusted from the flags, and it fails as
+well on a library showing no LOAD segment, so it cannot pass by having
+read nothing. Positive control: run against the old libraries it
+named all eight segments at 0x1000.
+
+**The rebuild found a second fault, older than this one.** From a clean
+tree the script had never worked: `make libcrypto_3.so` does not depend
+on OpenSSL's generated headers -- those hang off `build_libs` -- so every
+object failed on a missing `openssl/opensslv.h`. It had only ever run in
+a source tree that an earlier build had already prepared, which is the
+stale-state trap sec 11.5 keeps finding. A `make build_generated` step
+now comes first.
+
+**Verified from the artifact.** apt now serves 3.5.7 (`3.5.6` before).
+Built from clean with the script, both libraries read 4 x 0x4000, libssl
+needs `libcrypto_3.so`, and the size check holds. `make android` then
+produced an APK whose 67 libraries carry 205 LOAD segments, every one
+0x4000. The copies in the APK differ from `deps/` only because Gradle
+strips their debug symbols. Not yet run on the phone; `make
+android-play-check` reads the same property from a release bundle when
+one is built.
