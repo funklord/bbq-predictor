@@ -763,6 +763,15 @@ android-uninstall:
 # android-build skill's instrument note), and a focus check is what
 # separates the app from the lock screen without a person looking.
 #
+# Waited for, up to ten seconds, and on failure the focus line is
+# printed rather than guessed at. beerssh's first emulator run,
+# 2026-10-22, stopped here under a message saying "locked?", and the
+# phone was not locked: System UI had an ANR dialog up after a cold
+# boot, which a capture would have photographed. On the passing run
+# Android's "viewing full screen" hint held focus for a moment before
+# clearing by itself. So a transient window gets time to go, and a
+# window that stays is named.
+#
 # Each PNG's size is read back from its header and held to Play's rules:
 # 320 to 3840 px a side, long side at most twice the short.
 STORE_SCREEN_SIZE   ?= 1080x1920
@@ -818,10 +827,17 @@ android-screenshots: android-install
 			fi; \
 			sleep 1; \
 		done; \
-		if ! $$adb shell dumpsys window | grep mCurrentFocus | grep -qF "$(APP_ID)"; then \
-			echo "screenshots: $$v: the focused window is not $(APP_ID) -- locked?" >&2; \
-			fail=1; break; \
-		fi; \
+		t=0; \
+		while focus=$$($$adb shell dumpsys window | grep -m1 mCurrentFocus | tr -d '\r'); \
+		      ! echo "$$focus" | grep -qF "$(APP_ID)"; do \
+			t=$$((t + 1)); \
+			if [ $$t -ge 10 ]; then \
+				echo "screenshots: $$v: after 10s the focus is not $(APP_ID):" >&2; \
+				echo "screenshots:  $$focus" >&2; \
+				fail=1; break 2; \
+			fi; \
+			sleep 1; \
+		done; \
 		$$adb shell screencap -p /sdcard/store-shot.png && \
 		$$adb pull -q /sdcard/store-shot.png "$$f" >/dev/null || { fail=1; break; }; \
 		set -- $$(od -An -tu1 -j16 -N8 "$$f"); \
