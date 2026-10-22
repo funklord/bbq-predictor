@@ -7138,6 +7138,48 @@ contacts that have exchanged keys, and its owner rejected serving any
 peer that asks. The holder's word on it was that it has almost no
 overlap with this project.
 
+### 15.12.3 The format in situ, and why the parser waits
+
+**`src/wire/bbq.situ` is the format's specification**, written with the
+tree's situc (f9fa599) and compiling to C++. situ described all of it
+once the draft took five changes, each marked SPEC CHANGE in the schema
+with the compiler's own words, and each one a better format regardless:
+
+- **A `u32` length before each compressed blob.** Nothing reports where
+  a zlib stream ends, so in a head file nothing after the first band
+  could be located without inflating it. With the length, any reader
+  can skip a band, and can refuse a blob longer than the file before
+  zlib sees it.
+- **`present` before `rows`** in the inflated stream, since bit fields
+  cannot follow a variable-length member.
+- **A count before each optional column**, because "one value per set
+  bit" needs a popcount, which situ's expressions lack. The count must
+  equal the popcount -- a caller check, and a cheap corruption check.
+- **One row cap, 44640**; the head's 4096 is the caller's.
+- **The trailer is an Ed25519 signature** situ describes as a region
+  over exactly the bytes it covers. Verifying it stays the caller's,
+  by situ's design: key handling is not a layout compiler's.
+
+What situ cannot state stays the caller's: the `[A-Z0-9]` class, index
+months sorted without duplicates, provider runs summing to the row
+count, samples inside their month and ascending, zero padding bits.
+
+**The generated C++ is not yet safe for untrusted input, so the client
+parser is not generated from it yet.** Its `validate()` reads past the
+end of a hostile buffer -- reproduced here under AddressSanitizer at
+f9fa599, a heap overflow in `situ_get_le32` reached from a generated
+`extent()` -- and truncated element runs pass validation. A parser that
+can be made to read out of bounds is the one thing a format for
+thousands of anonymous clients cannot ship, so both, with four smaller
+defects, went to situ through its inbox (20261022T1621Z) rather than
+being worked around here. Neither the C++ builder nor any backend writes
+a signed file, so the publisher writes the format by hand whatever
+happens.
+
+**The daemon is unaffected**: it never parses a published file, only
+its own 48-byte request (`src/serve/serve_core.c`), which is hand-written
+C, tested, and fuzzed by `make fuzz-serve`.
+
 ## 16. The home-screen widget
 
 A resizable Android app widget showing the forecast graph. Asked for by

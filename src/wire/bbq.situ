@@ -1,0 +1,289 @@
+// bbq-predictor published format, v1 (project.md sec 15.12.3).
+//
+// This file IS the format's specification. Where it departs from the
+// first prose draft it says so at the member, tagged SPEC CHANGE, with
+// the compiler's reason quoted.
+//
+// NOT YET USED TO GENERATE THE CLIENT'S PARSER. situ's generated C++
+// reads out of bounds on hostile input at f9fa599 (reported to situ,
+// inbox 20261022T1621Z), and `u8 x[remaining] max 0` after a dynamic
+// member is not enforced, so every `trailing` guard below is also the
+// caller's check until that is fixed. Regenerate with the tree's
+// compiler, never /usr/bin/situc:
+//
+//     python3 ~/src/situ/bin/situc build --target cpp --out gen bbq.situ
+//
+// Reading model. Three acquisitions, each over a span the previous one
+// handed back:
+//
+//   1. bbq_file over the whole download: magic, kind, body_len, and the
+//      Ed25519 signature with the exact span it covers.
+//   2. <kind>_body over bbq_file.body.
+//   3. columns over the bytes qUncompress produced from a `packed` member.
+//
+// Step 3 is the caller's inflate, not situ's: situ generates a decoder
+// only for kernels it derives (tables, permutations, shift registers,
+// stuffing), and deflate is none of those.
+
+target buffer;
+endian little;
+bit_order lsb_first;
+
+// Every file is signed: Ed25519 over every byte before the signature.
+// situ describes WHERE the signature is and WHAT it covers (a `tag` over
+// an `authenticated` region); verifying it is the caller's, by design --
+// situ refuses `is <codec>` on a tag ("constant-time behaviour and key
+// handling are not a layout compiler's to own", section 14.1).
+
+// varint: unsigned LEB128, at most 10 bytes. zvarint: the same, zigzag.
+// Not `minimal`: the draft does not forbid a padded encoding. Adding it
+// would make every varint canonical and is proposed separately.
+varint_type varint {
+	encoding  = leb128;
+	max_bits  = 64;
+	max_bytes = 10;
+}
+
+varint_type zvarint {
+	encoding  = leb128;
+	transform = zigzag;
+	max_bits  = 64;
+	max_bytes = 10;
+}
+
+enum file_kind : u8 {
+	stations = 1,
+	index    = 2,
+	head     = 3,
+	month    = 4,
+	default  = error,
+}
+
+// ---------------------------------------------------------------------
+// The container.
+// ---------------------------------------------------------------------
+
+// The per-kind cap is a file-size cap; body_len is the file minus the
+// 10-byte header and the 64-byte signature. 4 MiB - 74 is the month cap
+// and the largest any kind may have; the 1 MiB kinds are held by `when`.
+
+struct bbq_file {
+	authenticated signed {
+		preamble u8[4] = "BBQ1";
+		file_kind  kind;
+		u8         reserved_zero  [must_eq = 0];
+		u32        body_len       [max = 4194230];
+		u8         body[body_len];
+	}
+	// Ed25519 over every byte before it. signature_covered() returns
+	// exactly that span; crypto_sign_verify_detached() is the caller's.
+	tag u8 signature[64] covers(signed);
+}
+
+when bbq_file.kind != 4 && bbq_file.body_len > 1048502
+	refuse body_over_cap
+	"stations, index and head files are capped at 1 MiB";
+
+require absolute_static(bbq_file.body_len);
+require max_size(bbq_file, 4194304);
+
+// ---------------------------------------------------------------------
+// Shared pieces.
+// ---------------------------------------------------------------------
+
+struct nothing { }
+
+// STATION matches [A-Z0-9]{1,32}. situ has no character-class constraint;
+// `ascii` is the narrowest encoding it validates, so [A-Z0-9] stays the
+// caller's check.
+struct station_id {
+	u8  len   [min = 1, max = 32];
+	u8  id[len]  [encoding = ascii];
+}
+
+struct provider_name {
+	u8  len   [min = 1, max = 32];
+	u8  name[len]  [encoding = ascii];
+}
+
+// A run of varints is wrapped in a one-member struct. `varint x[n]`
+// directly is what the format means and what situ's own section 8.1
+// allows, but every backend generates it as ONE varint (see the report),
+// so a run is spelled as a run of structs until that is fixed.
+struct v1  { varint  v; }
+struct zv1 { zvarint v; }
+
+// SPEC CHANGE (packed length): the draft has the qCompress blob with no
+// length of its own and expects its end to be found by inflating it. In
+// `head` a band's columns are followed by the next band, and situ says:
+//
+//     band.after: its offset cannot be resolved.
+//
+// for anything after a compressed `coded` region -- the encoded extent is
+// "qcompress's to report", and nothing reports it. A u32 before the blob
+// fixes that for every reader, not only situ's: a parser can skip a band
+// without inflating it, and can refuse a blob larger than the file before
+// touching zlib. The blob itself is unchanged, so qUncompress() still
+// takes `packed` as it stands.
+struct packed_columns {
+	u32  packed_len  [min = 5, max = 4194230];
+	u8   packed[packed_len];
+}
+
+// The first four bytes of `packed`: qCompress's own big-endian length.
+// Acquire this over `packed` and validate it BEFORE calling qUncompress,
+// which allocates raw_len bytes up front.
+struct qcompressed {
+	u32  raw_len  [endian = big, max = 8388608];
+	u8   zlib[remaining];
+}
+
+// ---------------------------------------------------------------------
+// The inflated column stream.
+// ---------------------------------------------------------------------
+
+// SPEC CHANGE (present first): the draft has `rows varint` then
+// `present u8`. situ refuses bit fields after a variable-length member:
+//
+//     `u1` is bit-packed and cannot follow a dynamically sized member
+//
+// and without bit fields a variant cannot switch on one bit of `present`
+// ("variant needs a field as its discriminant" -- `present & 1` is an
+// expression). Swapping the two costs nothing and lets each optional
+// column's bitmap be described as present-or-absent.
+//
+// SPEC CHANGE (per-column count): the draft sizes each optional value
+// column as "per present sample", i.e. popcount(bitmap). situ's
+// expressions have no popcount and cannot reference decoded bitmap
+// contents, so the run's extent cannot be computed. Each present column
+// gains a leading `count varint`, which must equal the bitmap's popcount
+// -- a check the caller makes, and a redundancy that lets a reader reject
+// a corrupt column without walking the bitmap.
+
+struct optional_column {
+	varint  count  [max = 44640];
+	zv1     delta[count];
+}
+
+struct columns {
+	u1   has_temperature;
+	u1   has_precip_rate;
+	u1   has_precip_chance;
+	u1   has_wind_kph;
+	reserved u4 [must_be_zero];
+
+	// month: at most 44640 (31 days of minutes). head bands: 4096, which
+	// the caller checks -- one struct serves both.
+	varint  rows  [max = 44640];
+
+	variant temperature_map switch (has_temperature) {
+		case 0:  nothing  temperature_map_absent;
+		default: u8       temperature_map_bits[(rows + 7) / 8];
+	}
+	variant precip_rate_map switch (has_precip_rate) {
+		case 0:  nothing  precip_rate_map_absent;
+		default: u8       precip_rate_map_bits[(rows + 7) / 8];
+	}
+	variant precip_chance_map switch (has_precip_chance) {
+		case 0:  nothing  precip_chance_map_absent;
+		default: u8       precip_chance_map_bits[(rows + 7) / 8];
+	}
+	variant wind_kph_map switch (has_wind_kph) {
+		case 0:  nothing  wind_kph_map_absent;
+		default: u8       wind_kph_map_bits[(rows + 7) / 8];
+	}
+
+	zv1  start_utc[rows];        // delta from previous, first from 0
+	v1   duration_s[rows];
+
+	variant temperature switch (has_temperature) {       // 0.1 degC
+		case 0:  nothing          temperature_absent;
+		default: optional_column  temperature_values;
+	}
+	variant precip_rate switch (has_precip_rate) {       // 0.01 mm/h
+		case 0:  nothing          precip_rate_absent;
+		default: optional_column  precip_rate_values;
+	}
+	variant precip_chance switch (has_precip_chance) {   // 1 percent
+		case 0:  nothing          precip_chance_absent;
+		default: optional_column  precip_chance_values;
+	}
+	variant wind_kph switch (has_wind_kph) {             // 0.1 km/h
+		case 0:  nothing          wind_kph_absent;
+		default: optional_column  wind_kph_values;
+	}
+
+	// "Trailing bytes after the last column are an error."
+	u8   trailing[remaining] max 0;
+}
+
+// ---------------------------------------------------------------------
+// The four bodies. Each is acquired over bbq_file.body.
+// ---------------------------------------------------------------------
+
+struct stations_body {
+	i64         generated_utc;
+	u16         count  [max = 4096];
+	station_id  ids[count];
+	u8          trailing[remaining] max 0;
+}
+
+struct index_entry {
+	u16  month;          // year*12 + (month-1)
+	u32  rows   [max = 44640];
+	u32  bytes  [min = 74, max = 4194304];
+	u8   digest[16];     // BLAKE2b-128 of the whole month file, signature included
+	i64  first_utc;
+	i64  last_utc;
+}
+
+require size(index_entry) == 42;
+
+when index_entry.first_utc > index_entry.last_utc
+	refuse index_range_reversed
+	"a month's first sample cannot follow its last";
+
+// Sorted ascending by month, no duplicates: a relation between
+// neighbouring elements, which situ cannot state. The caller checks it.
+struct index_body {
+	station_id   station;
+	i64          generated_utc;
+	u16          count  [max = 2400];
+	index_entry  months[count];
+	u8           trailing[remaining] max 0;
+}
+
+struct provider_run {
+	varint  run_len  [min = 1, max = 44640];
+	u8      provider [max = 15];     // < provider_count: caller's check
+}
+
+// The runs sum to `rows`, and every start_utc falls inside the month and
+// ascends strictly: relations over decoded values, the caller's checks.
+struct month_body {
+	station_id      station;
+	u16             month;
+	u8              provider_count  [min = 1, max = 16];
+	provider_name   providers[provider_count];
+	varint          run_count  [max = 44640];
+	provider_run    runs[run_count];
+	packed_columns  columns;
+	u8              trailing[remaining] max 0;
+}
+
+struct band {
+	u8              band;            // bbq_band value
+	provider_name   provider;
+	i64             fetched_utc;     // when fetched, never when published
+	u32             nominal_step_s;
+	u32             max_duration_s;
+	packed_columns  columns;
+}
+
+struct head_body {
+	station_id  station;
+	i64         generated_utc;
+	u8          band_count  [max = 16];
+	band        bands[band_count];
+	u8          trailing[remaining] max 0;
+}
