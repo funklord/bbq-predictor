@@ -903,7 +903,12 @@ android-screenshots: android-install
 #                        holder's choice: create it with
 #                          avdmanager create avd -n store \
 #                            -k 'system-images;android-34;google_apis;x86_64' \
-#                            -d pixel_6
+#                            -d 'Nexus 5X'
+#                        A device with NO display cutout, by the holder's
+#                        choice: pixel_6 declares a camera hole, and the
+#                        apps kept a 102 px band clear under it in every
+#                        capture. The Nexus 5X has none, and its 1080x1920
+#                        panel is the capture size, so nothing is scaled.
 #   STORE_EMULATOR_PORT  its port, refused if adb already sees it: an
 #                        emulator on that serial is somebody else's
 #   STORE_ABI            the AVD's ABI, x86_64; the build is for it
