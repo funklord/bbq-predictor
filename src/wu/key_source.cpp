@@ -130,13 +130,13 @@ void bbq_wu_key_source::send() {
 	 * object is a crash rather than a wasted fetch.
 	 */
 	QPointer<bbq_wu_key_source> alive(this);
-	const char *const page = key_page(m_attempts);
+	const char *const address = key_page(m_attempts);
 
-	std::thread([alive, page]() {
+	std::thread([alive, address]() {
 		const QJniObject page = QJniObject::callStaticObjectMethod(
 		        "se/vibes/bbq_predictor/PageFetch", "get",
 		        "(Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/String;",
-		        QJniObject::fromString(QString::fromLatin1(page))
+		        QJniObject::fromString(QString::fromLatin1(address))
 		                .object<jstring>(),
 		        QJniObject::fromString(QString::fromLatin1(browser_agent))
 		                .object<jstring>(),

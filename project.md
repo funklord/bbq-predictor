@@ -553,6 +553,13 @@ evening a fresh install waits for the timer to come round, and sec
 2.6.1.3's stored key is what makes that a one-off. `test_client` reads
 the three requests and fails if they repeat a page.
 
+**It broke the Android build, unseen for half a day.** The Android branch
+of `send()` gained `const char *const page` for the attempt's URL, and
+the result inside the thread is also called `page`, which shadows it in
+its own initialiser; nothing the desktop builds compiles that branch,
+so every gate passed. Found by building the APK, fixed by naming the URL
+`address`. No desktop package was affected.
+
 **Two options this did not take** -- more attempts on a cold start, and
 a key built into the binary -- were put to the holder and are moot:
 sec 2.6.1.5 found that every page carries a working key after all.
