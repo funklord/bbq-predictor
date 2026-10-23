@@ -1,3 +1,12 @@
+bbq-predictor (0.1.0-6) unstable; urgency=low
+
+  * Take the Weather Underground key from the site's own API_KEY rather
+    than any key-shaped string, and read the body of an error page too.
+  * The applet depends on ca-certificates, as the server does.
+  * The file reader is generated from situ b186326.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Fri, 23 Oct 2026 17:58:42 +0200
+
 bbq-predictor (0.1.0-5) unstable; urgency=low
 
   * The publisher fetches each band at its own interval, remembered across
