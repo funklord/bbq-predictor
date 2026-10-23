@@ -35,6 +35,8 @@
 #   make hooks        -- install the commit-msg hook from tool/hooks/
 #   make install      -- install the binary, desktop entry, icon and
 #                        manual page under PREFIX
+#   make check-boot   -- boot the server package under sysvinit and
+#                        OpenRC in hull vms (docker, KVM, hull)
 #   make deb          -- a Debian package: the applet, a systemd timer
 #                        that fetches on its own clock, and the
 #                        bbq-predictor account it runs as. Lands in
@@ -765,6 +767,40 @@ DEB_DIR ?= $(BUILD_DIR)/deb
 deb-daedalus:
 	tool/build-in-container.sh debian:bookworm-slim daedalus1 pkg.bbq-predictor.server-only
 
+# The server package booted, not run by hand (project.md sec 15.12.5): the
+# package in DEB_DIR installed into Devuan excalibur, baked once under
+# sysvinit and once under OpenRC, and each image booted in a hull vm whose
+# PID 1 is its own init. test/boot/payload.sh then checks what init did --
+# the daemon up, dropped and chrooted, answering, cron running -- and
+# starts nothing itself. Not part of check: it needs docker, KVM, hull and
+# the network, and takes some minutes. `make deb` first.
+#
+# hull is a sibling checkout, not vendored, so HULL names the binary.
+# Terminates: each bake is under timeout 900 and removes its container by
+# name; each boot under timeout 300, and a vm ends with its hull run.
+HULL ?= $(HOME)/src/hull/build/hull
+BOOT_INITS ?= sysvinit openrc
+
+check-boot:
+	@command -v $(HULL) >/dev/null 2>&1 || { \
+		echo "check-boot: $(HULL) is not runnable; hull is a sibling" >&2; \
+		echo "check-boot:   project -- build it there, or set HULL=" >&2; \
+		exit 1; }
+	@deb=$(DEB_DIR)/bbq-predictor-server_$$(dpkg-parsechangelog -S Version)_$$(dpkg --print-architecture).deb; \
+	if [ ! -f "$$deb" ]; then \
+		echo "check-boot: no $$deb; run make deb first" >&2; exit 1; \
+	fi; \
+	mkdir -p $(BUILD_DIR)/boot; \
+	for init in $(BOOT_INITS); do \
+		echo "check-boot: $$init"; \
+		TMPDIR=$(BUILD_DIR)/boot HULL=$(HULL) \
+			sh test/boot/bake.sh $$init "$$deb" bbq-boot-$$init || exit 1; \
+		timeout 300 $(HULL) run -f test/boot/$$init.conf \
+			2>$(BUILD_DIR)/boot/$$init.log || { \
+			echo "check-boot: $$init failed; hull said:" >&2; \
+			grep -v emulated $(BUILD_DIR)/boot/$$init.log >&2; exit 1; }; \
+	done
+
 deb:
 	dpkg-buildpackage -b -us -uc
 	mkdir -p $(DEB_DIR)
@@ -918,4 +954,4 @@ help:
         style-wiring style-setup style-tests style-links test-clocks fuzz-serve fuzz-wire \
         submodules check-publish-libraries check-android-compile \
         android android-aab \
-        deb-daedalus install install-applet install-server uninstall clean veryclean distclean help
+        deb-daedalus check-boot install install-applet install-server uninstall clean veryclean distclean help

@@ -7492,10 +7492,37 @@ test's own shell was PID 1 and never reaped it -- a zombie, which
 `--init` cleared; and `/proc/<pid>/root` reads empty without
 `SYS_PTRACE`, which is no evidence about a chroot either way.
 
-**Not yet tested: a real boot.** Each init system ran its script by
-hand, not from boot. hull, the workspace's machine runtime, is the
-natural home for that test once it hands PID 1 to the guest's init,
-which its own adoption note says it does not yet do (2026-10-22).
+**A real boot, since 2026-10-23: `make check-boot`.** The scripts above
+were run by hand; this boots them. The package in `DEB_DIR` is installed
+into Devuan excalibur twice, beside sysvinit and beside OpenRC
+(`test/boot/bake.sh`), and each image is booted in a hull vm whose PID 1
+is the image's own init (hull's `(init ...)`, hull at 1fa1331).
+`test/boot/payload.sh` starts nothing; it checks what init did: the
+daemon started by init with init its parent, running as
+bbq-predictor-serve with no capabilities and NoNewPrivs, chrooted, on
+7227 and 443, answering "not served" for an unpublished station and
+recording it as demand; cron running with the round in `/etc/cron.d`;
+and a way for shutdown to stop it, a K link or OpenRC's runlevel. 0.1.0-6
+passed all of it under both. Sabotaged by baking with the script's links
+removed (`update-rc.d disable`, `rc-update del`): both boots failed,
+"init did not start the daemon within 60 s".
+
+It is outside `check`, since it needs docker, KVM, hull and the network.
+Two things it cannot see, and where they are checked instead:
+
+- **Owners.** A vm's materialized root shows every file as root's, so the
+  bake asserts that the postinst made `/var/lib/bbq-predictor`, its tree
+  and the demand file the publisher's, and the demand file empty.
+- **A round.** Fetching is not booted here; the containers above run one.
+
+**The bake is docker's, not `hull build`'s, because a hull build step
+has no `/dev/null`.** The first `>/dev/null` makes a regular file, and
+it is committed. Found because the postinst's
+`getent passwd bbq-predictor >/dev/null` wrote a passwd line into it and
+`install /dev/null .../demand` copied it: a 91-byte "empty" demand file
+that read as this package's bug. Reported to hull (inbox
+20261023T1630Z); `hull commit --tar` of docker's export carries the
+owners, so nothing here waits on it.
 
 ### 15.12.6 The applet reads it
 
