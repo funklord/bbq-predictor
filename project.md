@@ -6391,11 +6391,17 @@ the style gates all refuse rather than pass.
 ## 19. Two messages that name a cause the code never tested
 
 Reported from claude-guidelines 2026-09-03, from a second sweep of all
-seventeen trees. Recorded, not fixed. Section 16 has this project's three
-gates that can pass having checked nothing; these are the messages.
+seventeen trees. **All three fixed 2026-10-23**, each noted below.
+Section 16 has this project's three gates that can pass having checked
+nothing; these are the messages.
 
-**`src/wu/fetch_once.cpp:343-364` — "they had not failed, they had not
-answered yet" about bands that failed.**
+~~**`src/wu/fetch_once.cpp:343-364` — "they had not failed, they had not
+answered yet" about bands that failed.**~~ **Fixed 2026-10-23:** the
+bands `band_failed` named are collected and left out of the list, and
+when none is left the message says what was outstanding was not a band
+rather than printing an empty list under the old sentence. Read rather
+than staged: the round's thirty-second bound cannot be shortened from
+outside, so the timeout path has no test.
 
 The list it prints is built from `composite.band(band) == nullptr`, which
 is absence from the composite. A **failed** band looks identical:
@@ -6412,8 +6418,9 @@ calling a timeout a failure. **The fix over-corrected into asserting the
 negative**: it now says what did not happen, from evidence that cannot
 tell the two apart.
 
-**`tool/build-openssl-android.sh:107-110` — a remedy for a case that
-cannot reach it.**
+~~**`tool/build-openssl-android.sh:107-110` — a remedy for a case that
+cannot reach it.**~~ **Fixed 2026-10-23:** the message says apt fetched
+a source it did not unpack and names dpkg-dev.
 
     "apt-get source produced no source directory.
      Check that a deb-src line is configured"
@@ -6424,9 +6431,12 @@ exiting 0 without leaving an `openssl-*` directory -- apt's own "Check if
 the 'dpkg-dev' package is installed" case. Those readers are sent to edit
 a `sources.list` that is already correct.
 
-**Lower confidence, recorded without a claim:** `fetch_once.cpp:275-278`
+~~**Lower confidence, recorded without a claim:** `fetch_once.cpp:275-278`
 prints "`--geocode wants LAT,LON`" for a malformed value read from the INI
-file, naming a flag that was never passed. `src/main.cpp:456-459` phrases
+file, naming a flag that was never passed.~~ **Fixed 2026-10-23,** and
+confirmed: the value now travels with where it came from, so a bad
+settings override is reported as "the geocode override in <file> is
+'59.3', which is not LAT,LON", seen with one written there. `src/main.cpp:456-459` phrases
 the parallel case correctly.
 
 Also workspace-wide rather than this project's: `Makefile:328` uses

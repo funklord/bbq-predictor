@@ -3,6 +3,7 @@
 #include <QDate>
 #include <QDateTime>
 #include <QEventLoop>
+#include <QSet>
 #include <QTextStream>
 #include <QTimeZone>
 #include <QTimer>
@@ -238,12 +239,21 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		station = bbq_settings::station();
 	}
 
+	/*
+	 * Where the point came from goes with it, so a malformed one is
+	 * reported against the place it was written: this said "--geocode
+	 * wants LAT,LON" for a bad value in the settings file, naming a flag
+	 * nobody had passed (sec 19).
+	 */
 	QString point = geocode;
+	QString point_from = QStringLiteral("--geocode");
 	if (point.isEmpty()) {
 		point = bbq_settings::geocode_override();
+		point_from = QStringLiteral("the geocode override in ") + bbq_settings::location();
 	}
 	if (point.isEmpty()) {
 		point = bbq_settings::derived_geocode();
+		point_from = QStringLiteral("the derived geocode in ") + bbq_settings::location();
 	}
 
 	if (station.isEmpty() && point.isEmpty()) {
@@ -292,13 +302,15 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 	if (!point.isEmpty()) {
 		const QStringList parts = point.split(QLatin1Char(','));
 		if (parts.size() != 2) {
-			error << "fetch-once: --geocode wants LAT,LON\n";
+			error << "fetch-once: " << point_from << " is '" << point
+			      << "', which is not LAT,LON\n";
 			return 2;
 		}
 		feed.set_geocode(parts.at(0).toDouble(), parts.at(1).toDouble());
 	}
 
 	int failures = 0;
+	QSet<QString> failed_bands;
 	QEventLoop loop;
 
 	QObject::connect(&feed, &bbq_wu_feed::band_failed, &loop,
@@ -309,6 +321,7 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		error << "\n";
 		error.flush();
 		++failures;
+		failed_bands.insert(band);
 	});
 
 	QObject::connect(&feed, &bbq_wu_feed::settled, &loop, &QEventLoop::quit);
@@ -360,8 +373,14 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 	};
 
 	if (timed_out) {
-		error << QStringLiteral("fetch-once: no answer within %1s from: ")
-		                 .arg(timeout_s);
+		/*
+		 * Only the bands that neither arrived nor FAILED (sec 19).
+		 * Absence from the composite was the test, and a failed band is
+		 * absent too, so a band printed FAIL above was named here as one
+		 * that "had not failed" -- asserting the negative from evidence
+		 * that could not tell the two apart.
+		 */
+		QStringList unanswered;
 
 		/*
 		 * NOT missing_bands(), which is the display's question and a
@@ -373,14 +392,24 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		 * and read as though nothing were outstanding.
 		 */
 		for (bbq_band band : order) {
-			if (composite.band(band) == nullptr) {
-				error << QString::fromLatin1(bbq_band_name(band)) << " ";
+			const QString name = QString::fromLatin1(bbq_band_name(band));
+			if (composite.band(band) == nullptr && !failed_bands.contains(name)) {
+				unanswered << name;
 			}
 		}
 
-		error << "\n";
-		error << "fetch-once: they had not failed -- they had not "
-		         "answered yet\n";
+		if (unanswered.isEmpty()) {
+			error << QStringLiteral("fetch-once: no answer within %1s, though every band "
+			                        "had arrived or failed -- what was outstanding was "
+			                        "not a band\n")
+			                 .arg(timeout_s);
+		} else {
+			error << QStringLiteral("fetch-once: no answer within %1s from: %2\n")
+			                 .arg(timeout_s)
+			                 .arg(unanswered.join(QLatin1Char(' ')));
+			error << "fetch-once: they had not failed -- they had not "
+			         "answered yet\n";
+		}
 	}
 
 	for (bbq_band band : order) {

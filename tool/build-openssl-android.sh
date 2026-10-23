@@ -104,9 +104,16 @@ else
 
 	src=$(find "$work" -maxdepth 1 -type d -name 'openssl-*' -print -quit)
 fi
+# Reached only when apt-get source SUCCEEDED and left nothing: a missing
+# deb-src line makes it fail, and set -e stops the script there first.
+# What does reach here is apt fetching the source and not unpacking it,
+# which is apt's own "Check if the 'dpkg-dev' package is installed" case.
+# This used to send the reader to sources.list, which was already right
+# (project.md sec 19).
 if [ -z "$src" ]; then
-	echo "openssl: apt-get source produced no source directory." >&2
-	echo "  Check that a deb-src line is configured in /etc/apt/sources.list." >&2
+	echo "openssl: apt-get source finished without leaving an openssl-*" >&2
+	echo "  directory in $work. It can fetch a source it cannot unpack:" >&2
+	echo "  check that dpkg-dev is installed." >&2
 	exit 1
 fi
 
