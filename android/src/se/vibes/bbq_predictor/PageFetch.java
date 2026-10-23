@@ -35,11 +35,17 @@ public class PageFetch {
 			link.setReadTimeout(timeoutMs);
 			link.setInstanceFollowRedirects(true);
 
-			if (link.getResponseCode() != HttpURLConnection.HTTP_OK) {
+			/*
+			 * An error's body as well, when the server sent one: WU's 404
+			 * page carries the site's API_KEY like every page it serves
+			 * (project.md sec 2.6.1.5). No body is null, as a refusal is.
+			 */
+			InputStream body = link.getResponseCode() == HttpURLConnection.HTTP_OK
+			                           ? link.getInputStream()
+			                           : link.getErrorStream();
+			if (body == null) {
 				return null;
 			}
-
-			InputStream body = link.getInputStream();
 			ByteArrayOutputStream held = new ByteArrayOutputStream();
 			byte[] chunk = new byte[16384];
 			int read;

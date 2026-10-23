@@ -165,7 +165,17 @@ void bbq_wu_key_source::send() {
 	connect(reply, &QNetworkReply::finished, this, [this, reply]() {
 		reply->deleteLater();
 
-		const QString body = reply->error() == QNetworkReply::NoError
+		/*
+		 * THE BODY OF AN ERROR TOO, WHEN THE SERVER SENT ONE
+		 * (sec 2.6.1.5). WU's 404 page carries the site's API_KEY like
+		 * every other page it serves, and /forecast answers 404 most of
+		 * the time now, so discarding error bodies threw away a key that
+		 * had arrived. Only a reply with no HTTP status -- refused, timed
+		 * out, never reached a server -- is a transfer with nothing in it.
+		 */
+		const int status =
+		        reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		const QString body = reply->error() == QNetworkReply::NoError || status > 0
 		                             ? QString::fromUtf8(reply->readAll())
 		                             : QString();
 
@@ -281,6 +291,29 @@ QString bbq_wu_key_source::extract_key(const QString &page) {
 	}
 
 	/*
+	 * FAILING THAT, THE SITE'S OWN "API_KEY", BY THAT NAME AND NO OTHER
+	 * (sec 2.6.1.5). The shell WU serves most of the time now carries no
+	 * request URLs, and does carry `const data = {"API_KEY":"..."}` --
+	 * a different key from the URLs' one, measured 2026-10-23 answering
+	 * 200 on every endpoint this program calls, the station's current
+	 * and history, hourly, fifteen-minute, point current and both
+	 * discovery endpoints. In twenty spaced fetches of four pages, every
+	 * page carried one of the two.
+	 *
+	 * By name, because the same blob holds other 32-hex values -- a
+	 * payment page id, an ad script, a place id -- all refused by the
+	 * weather endpoints, and those are the trap sec 2.6.1 refused the
+	 * blob outright for, when the key it looked at there did not work.
+	 * This one does, and is the only one taken.
+	 */
+	static const QRegularExpression site_key(
+	        QStringLiteral("\"API_KEY\"\\s*:\\s*\"([0-9a-f]{32})\""));
+	const QRegularExpressionMatch named = site_key.match(page);
+	if (named.hasMatch()) {
+		return named.captured(1);
+	}
+
+	/*
 	 * NOTHING ELSE, and there was something else until 2026-10-22
 	 * (sec 2.6.1.3): any apiKey= in any URL. WU began serving a 99 KB
 	 * shell of its pages most of the time, whose one key belongs to an
@@ -289,11 +322,11 @@ QString bbq_wu_key_source::extract_key(const QString &page) {
 	 * came back 401, and the round said "Host requires authentication"
 	 * where the truth was "the page carried no weather key".
 	 *
-	 * Which is the failure the next paragraph already warned of, one
-	 * level out: a fallback that silently supplies a broken key is
-	 * worse than failing, because it turns "the scrape broke" into "the
-	 * endpoints all return 401 for no visible reason". The config
-	 * blob's named keys were refused for the same reason.
+	 * Which is the failure sec 2.6.1 warned of, one level out: a
+	 * fallback that silently supplies a broken key is worse than
+	 * failing, because it turns "the scrape broke" into "the endpoints
+	 * all return 401 for no visible reason". The blob's other named
+	 * values stay refused for the same reason.
 	 */
 	return QString();
 }

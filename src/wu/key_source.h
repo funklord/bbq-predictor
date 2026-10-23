@@ -102,13 +102,13 @@ private:
 	 * Static and free of any network so it can be exercised against a
 	 * saved page without touching the site.
 	 *
-	 * Takes the key from an embedded REQUEST URL rather than from the
-	 * page's config blob, which is sec 2.6.1's finding and not a
-	 * stylistic preference: the config object holds several named keys
-	 * with different scopes, and one of them is a perfectly plausible
-	 * 32-hex string that does not work on the weather endpoints. A key
-	 * lifted from a URL is one the site itself just used successfully
-	 * against that endpoint family.
+	 * A key from an embedded REQUEST URL first: one the site itself just
+	 * used against that endpoint family. Failing that, the config blob's
+	 * field named API_KEY and no other (sec 2.6.1.5), which the shell
+	 * WU now mostly serves carries in place of request URLs, and which
+	 * answers on every endpoint this program calls. The blob's other
+	 * values are refused as sec 2.6.1 refused the whole blob: they are
+	 * plausible 32-hex strings, and the weather endpoints reject them.
 	 */
 	static QString extract_key(const QString &page);
 

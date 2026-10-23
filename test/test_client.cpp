@@ -39,6 +39,7 @@ private slots:
 	void a_query_parameter_is_read_back_by_name();
 	void a_failed_key_page_says_what_the_server_answered();
 	void only_a_key_a_weather_endpoint_used_is_taken();
+	void the_site_key_is_taken_by_name_and_nothing_else_from_the_blob();
 	void a_page_without_a_key_is_tried_again();
 	void a_remembered_key_must_look_like_one();
 	void each_attempt_asks_another_page();
@@ -206,6 +207,33 @@ void test_client::only_a_key_a_weather_endpoint_used_is_taken() {
 
 	/* Not the advertising key, even though it is the only one there. */
 	QCOMPARE(bbq_wu_key_source::extract_key(QString::fromLatin1(shell_page)), QString());
+}
+
+/*
+ * Sec 2.6.1.5: the shell WU mostly serves carries the site's API_KEY in a
+ * config blob, beside other 32-hex values the weather endpoints refuse.
+ * The layout is the page's own, 2026-10-23, the values made up.
+ */
+static const char site_shell[] =
+        "<script>(function () { const data = {\"API_KEY\":\"f6d2ef00000000000000000000000000\","
+        "\"ZUORA_PAYMENT_PAGE_ID\":\"8a128800000000000000000000000000\"}; })();</script>"
+        "<script>{\"rulesUrl\":\"https://weather.com/api/v1/mew/entity/"
+        "ad_third_party_config/6c750bdb?apiKey=5c241d00000000000000000000000000\"}</script>";
+
+void test_client::the_site_key_is_taken_by_name_and_nothing_else_from_the_blob() {
+	QCOMPARE(bbq_wu_key_source::extract_key(QString::fromLatin1(site_shell)),
+	         QStringLiteral("f6d2ef00000000000000000000000000"));
+
+	/* A request URL's key still wins where the page has both. */
+	const QString both = QString::fromLatin1(site_shell) + QString::fromLatin1(full_page);
+	QCOMPARE(bbq_wu_key_source::extract_key(both),
+	         QStringLiteral("ff90f200000000000000000000000000"));
+
+	/* The blob's other values are not keys, however much they look like one. */
+	QCOMPARE(bbq_wu_key_source::extract_key(QStringLiteral(
+	                 "{\"ZUORA_PAYMENT_PAGE_ID\":\"8a128800000000000000000000000000\","
+	                 "\"API_KEY_OLD\":\"0123456789abcdef0123456789abcdef\"}")),
+	         QString());
 }
 
 void test_client::a_page_without_a_key_is_tried_again() {

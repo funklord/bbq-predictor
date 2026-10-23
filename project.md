@@ -553,14 +553,45 @@ evening a fresh install waits for the timer to come round, and sec
 2.6.1.3's stored key is what makes that a one-off. `test_client` reads
 the three requests and fails if they repeat a page.
 
-**Two options this does not take, and whose they are.** More attempts
-on a cold start would raise the odds, at the cost of more fetches of a
-page sec 2.5 asks to be fetched sparingly; the three is the holder's
-number. And the working key has been the same one for as long as it
-has been watched, so it could be built in as a starting point and
-replaced on a 401 -- which would put a key this project is not licensed
-to hold (sec 2.5) into every copy of the binary. Both are the holder's
-decision.
+**Two options this did not take** -- more attempts on a cold start, and
+a key built into the binary -- were put to the holder and are moot:
+sec 2.6.1.5 found that every page carries a working key after all.
+
+#### 2.6.1.5 Every page carries a key: the shell has the site's own
+
+Found 2026-10-23 looking for a source more reliable than the full
+render. The shell WU mostly serves carries no request URLs, and does
+carry a config blob, `const data = {"API_KEY":"..."}`, beside other
+32-hex values. Each was tried once against the station endpoint: the
+`API_KEY` value answered 200, every other one -- a payment page id, an
+ad script, a place id, the advertising key of sec 2.6.1.3 -- 401. The
+`API_KEY` value is a different key from the request URLs' one, and it
+answered on every endpoint this program calls: the station's current
+and history, hourly, fifteen-minute, point current, and both discovery
+endpoints. (A 400 from `location/near` in the first pass was the
+`units` parameter those two refuse, recorded in `client.cpp`.)
+
+**Twenty spaced fetches of four pages, and every one carried one of the
+two keys:** the full render the URL key, every shell and every 404 the
+site key. So the key page's unreliability of the last two sections was
+never the pages lacking a key -- it was this program reading one place
+in them, and throwing away the bodies of 404s.
+
+Two changes, then. `extract_key` takes a request URL's key first and
+otherwise the blob's field named `API_KEY` and no other, since the
+blob's other values are exactly the plausible strings sec 2.6.1 refused
+it for. And the body of an HTTP error reply is read rather than
+discarded, on both transports -- WU's 404 page carries the site key
+like any other -- while a reply that never reached a server is still a
+transfer failure.
+
+**Measured cold** -- four publisher rounds, each with no stored key, the
+same test that managed one in four an hour earlier: four in four, each
+on its first page, three with the URL key and one with the site key, six
+WU requests a round. `test_client` holds the extractor to the real
+shell's layout: the site key taken, the URL key preferred where both
+are present, and nothing taken from the blob's other names; disabling
+the site-key branch failed it.
 
 ### 2.6.2 The three traps
 
@@ -7684,6 +7715,8 @@ so the next try is the timer's next one, five minutes on; at the rate
 the page carried a key that evening, about one fetch in ten and three
 fetches a round, a fresh server should expect its first key within the
 hour, and to keep it afterwards.
+**Superseded the same day by sec 2.6.1.5**: every page carries a working
+key, and a fresh server now gets one on its first round.
 
 **And cold, on `0.1.0-4`** (the page rotation of sec 2.6.1.4), with no
 seeded key and rounds five minutes apart as the timer runs them: three
