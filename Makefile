@@ -678,8 +678,9 @@ FUZZ_DIR ?= $(TEST_BUILD_DIR)/fuzz
 # The applet's reader under libFuzzer (project.md sec 15.12), bounded by
 # FUZZ_SECONDS the same way. Seeded from real bodies the encoder writes,
 # so the run starts inside every structure. Refuses to start if the
-# reader calls framed() or required(), which read out of bounds at the
-# vendored situ commit (src/wire/vendor/README.md).
+# reader calls framed() or required(), which read out of bounds before
+# the vendored situ commit and which this run does not cover
+# (src/wire/vendor/README.md).
 WIRE_FUZZ_FLAGS = -std=c++17 -g -O1 -fPIC -Isrc -Isrc/wire/vendor \
                   -Imonocypher/src -Imonocypher/src/optional \
                   $(shell pkg-config --cflags Qt6Core)

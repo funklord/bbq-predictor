@@ -288,7 +288,7 @@ void test_wire::a_file_over_its_cap_is_refused_unread() {
 void test_wire::bytes_after_the_last_column_are_refused() {
 	/*
 	 * situ does not enforce `trailing[remaining] max 0` after a dynamic
-	 * member at 56dcad1, so this is the reader's own check.
+	 * member at b186326, so this is the reader's own check.
 	 */
 	QString why;
 	bbq_wire_month_rows rows;

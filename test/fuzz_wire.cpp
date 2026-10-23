@@ -6,9 +6,9 @@
  * Built and run by `make fuzz-wire`, under ASan and UBSan, from a corpus
  * of real bodies the encoder writes (fuzz_wire_seed.cpp).
  *
- * This is also what holds the reader to the generated calls that are
- * safe at situ 56dcad1: a framed() or required() reached from here
- * would read out of bounds and stop the run.
+ * This is also what holds the reader to the generated calls this run
+ * covers: a framed() or required() reached from here would be code no
+ * fuzz run has exercised (src/wire/vendor/README.md).
  */
 #include <QByteArray>
 #include <QtGlobal>

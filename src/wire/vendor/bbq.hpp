@@ -1617,20 +1617,45 @@ public:
 			at += size;
 			n  += 1;
 		}
-
-		/* A run whose declared count does not fit is
-		 * malformed, and the honest span is one no frame
-		 * can satisfy. Returning the bytes that DID fit
-		 * told `check` the run was shorter than it claims,
-		 * so `validate` answered OK for nine bytes whose
-		 * one element declared 203 (26.676). A run sized
-		 * by bytes rather than by a count has nothing to
-		 * fall short of, which is why this is conditional
-		 * on the same `count` the loop bound is. */
-		if (n < delta_count()) {
-			return UINT32_MAX;
-		}
 		return at - start;
+	}
+
+	/** Whether every one of `delta`'s declared elements is inside
+	 * the frame. `check` asks this; a span cannot answer it, being
+	 * summed into the enclosing extent (26.676). A zero extent is a
+	 * `[depth]` cap or a degenerate element rather than a short
+	 * frame, so stopping there answers yes and leaves it to the
+	 * nesting guard.
+	 */
+	[[nodiscard]] bool delta_fits() const noexcept
+	{
+		const std::uint32_t total = delta_count();
+		std::uint32_t at = delta_offset();
+		std::uint32_t n  = 0;
+
+		while (n < total) {
+			situ_view_t raw;
+
+			if (at >= raw_.limit) {
+				return false;
+			}
+			if (situ_view_sub(this->raw(), at,
+					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
+				return false;
+			}
+			const ::situ::zv1 element(raw);
+			const std::uint32_t size = element.extent();
+
+			if (size == 0) {
+				return true;
+			}
+			if (size > situ_remaining_u32(raw_.limit, at)) {
+				return false;
+			}
+			at += size;
+			n  += 1;
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::uint32_t delta_span() const noexcept
@@ -1682,8 +1707,12 @@ public:
 				if (n >= delta_count()) {
 					break;
 				}
+				if (have < at) {
+					need = at;
+					return ::situ::rt::err::truncated;
+				}
 				const ::situ::rt::err e = ::situ::zv1::required(situ_base(raw_) + at,
-					have - at, part);
+					situ_remaining_u32(have, at), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -1768,9 +1797,24 @@ public:
 				return ::situ::rt::err::constraint;
 			}
 		}
+		/* optional_column.delta: every element the count declares is
+		 * in the frame. No span check can see this -- a span is how
+		 * far the run REACHED (26.676). */
+		if (!delta_fits()) {
+			*which_ = check_delta;
+			return ::situ::rt::err::bounds;
+		}
 		/* optional_column.delta: the length the message declares has to
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, situ_advance_u32(0, count_len(), raw_.limit)) < (delta_span())) {
+			*which_ = check_delta;
+			return ::situ::rt::err::bounds;
+		}
+		/* optional_column.delta: and every element the count
+		 * declares is in the frame, which the comparison above
+		 * cannot see -- it holds the frame against how far the
+		 * walk REACHED (26.676). */
+		if (!delta_fits()) {
 			*which_ = check_delta;
 			return ::situ::rt::err::bounds;
 		}
@@ -2062,20 +2106,45 @@ public:
 			at += size;
 			n  += 1;
 		}
-
-		/* A run whose declared count does not fit is
-		 * malformed, and the honest span is one no frame
-		 * can satisfy. Returning the bytes that DID fit
-		 * told `check` the run was shorter than it claims,
-		 * so `validate` answered OK for nine bytes whose
-		 * one element declared 203 (26.676). A run sized
-		 * by bytes rather than by a count has nothing to
-		 * fall short of, which is why this is conditional
-		 * on the same `count` the loop bound is. */
-		if (n < start_utc_count()) {
-			return UINT32_MAX;
-		}
 		return at - start;
+	}
+
+	/** Whether every one of `start_utc`'s declared elements is inside
+	 * the frame. `check` asks this; a span cannot answer it, being
+	 * summed into the enclosing extent (26.676). A zero extent is a
+	 * `[depth]` cap or a degenerate element rather than a short
+	 * frame, so stopping there answers yes and leaves it to the
+	 * nesting guard.
+	 */
+	[[nodiscard]] bool start_utc_fits() const noexcept
+	{
+		const std::uint32_t total = start_utc_count();
+		std::uint32_t at = start_utc_offset();
+		std::uint32_t n  = 0;
+
+		while (n < total) {
+			situ_view_t raw;
+
+			if (at >= raw_.limit) {
+				return false;
+			}
+			if (situ_view_sub(this->raw(), at,
+					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
+				return false;
+			}
+			const ::situ::zv1 element(raw);
+			const std::uint32_t size = element.extent();
+
+			if (size == 0) {
+				return true;
+			}
+			if (size > situ_remaining_u32(raw_.limit, at)) {
+				return false;
+			}
+			at += size;
+			n  += 1;
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::uint32_t start_utc_span() const noexcept
@@ -2181,20 +2250,45 @@ public:
 			at += size;
 			n  += 1;
 		}
-
-		/* A run whose declared count does not fit is
-		 * malformed, and the honest span is one no frame
-		 * can satisfy. Returning the bytes that DID fit
-		 * told `check` the run was shorter than it claims,
-		 * so `validate` answered OK for nine bytes whose
-		 * one element declared 203 (26.676). A run sized
-		 * by bytes rather than by a count has nothing to
-		 * fall short of, which is why this is conditional
-		 * on the same `count` the loop bound is. */
-		if (n < duration_s_count()) {
-			return UINT32_MAX;
-		}
 		return at - start;
+	}
+
+	/** Whether every one of `duration_s`'s declared elements is inside
+	 * the frame. `check` asks this; a span cannot answer it, being
+	 * summed into the enclosing extent (26.676). A zero extent is a
+	 * `[depth]` cap or a degenerate element rather than a short
+	 * frame, so stopping there answers yes and leaves it to the
+	 * nesting guard.
+	 */
+	[[nodiscard]] bool duration_s_fits() const noexcept
+	{
+		const std::uint32_t total = duration_s_count();
+		std::uint32_t at = duration_s_offset();
+		std::uint32_t n  = 0;
+
+		while (n < total) {
+			situ_view_t raw;
+
+			if (at >= raw_.limit) {
+				return false;
+			}
+			if (situ_view_sub(this->raw(), at,
+					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
+				return false;
+			}
+			const ::situ::v1 element(raw);
+			const std::uint32_t size = element.extent();
+
+			if (size == 0) {
+				return true;
+			}
+			if (size > situ_remaining_u32(raw_.limit, at)) {
+				return false;
+			}
+			at += size;
+			n  += 1;
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::uint32_t duration_s_span() const noexcept
@@ -2676,8 +2770,12 @@ public:
 				if (n >= start_utc_count()) {
 					break;
 				}
+				if (have < at) {
+					need = at;
+					return ::situ::rt::err::truncated;
+				}
 				const ::situ::rt::err e = ::situ::zv1::required(situ_base(raw_) + at,
-					have - at, part);
+					situ_remaining_u32(have, at), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -2705,8 +2803,12 @@ public:
 				if (n >= duration_s_count()) {
 					break;
 				}
+				if (have < at) {
+					need = at;
+					return ::situ::rt::err::truncated;
+				}
 				const ::situ::rt::err e = ::situ::v1::required(situ_base(raw_) + at,
-					have - at, part);
+					situ_remaining_u32(have, at), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -2906,15 +3008,45 @@ public:
 				return got;
 			}
 		}
+		/* columns.start_utc: every element the count declares is
+		 * in the frame. No span check can see this -- a span is how
+		 * far the run REACHED (26.676). */
+		if (!start_utc_fits()) {
+			*which_ = check_start_utc;
+			return ::situ::rt::err::bounds;
+		}
 		/* columns.start_utc: the length the message declares has to
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit)) < (start_utc_span())) {
 			*which_ = check_start_utc;
 			return ::situ::rt::err::bounds;
 		}
+		/* columns.start_utc: and every element the count
+		 * declares is in the frame, which the comparison above
+		 * cannot see -- it holds the frame against how far the
+		 * walk REACHED (26.676). */
+		if (!start_utc_fits()) {
+			*which_ = check_start_utc;
+			return ::situ::rt::err::bounds;
+		}
+		/* columns.duration_s: every element the count declares is
+		 * in the frame. No span check can see this -- a span is how
+		 * far the run REACHED (26.676). */
+		if (!duration_s_fits()) {
+			*which_ = check_duration_s;
+			return ::situ::rt::err::bounds;
+		}
 		/* columns.duration_s: the length the message declares has to
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit)) < (duration_s_span())) {
+			*which_ = check_duration_s;
+			return ::situ::rt::err::bounds;
+		}
+		/* columns.duration_s: and every element the count
+		 * declares is in the frame, which the comparison above
+		 * cannot see -- it holds the frame against how far the
+		 * walk REACHED (26.676). */
+		if (!duration_s_fits()) {
 			*which_ = check_duration_s;
 			return ::situ::rt::err::bounds;
 		}
@@ -3467,20 +3599,45 @@ public:
 			at += size;
 			n  += 1;
 		}
-
-		/* A run whose declared count does not fit is
-		 * malformed, and the honest span is one no frame
-		 * can satisfy. Returning the bytes that DID fit
-		 * told `check` the run was shorter than it claims,
-		 * so `validate` answered OK for nine bytes whose
-		 * one element declared 203 (26.676). A run sized
-		 * by bytes rather than by a count has nothing to
-		 * fall short of, which is why this is conditional
-		 * on the same `count` the loop bound is. */
-		if (n < bands_count()) {
-			return UINT32_MAX;
-		}
 		return at - start;
+	}
+
+	/** Whether every one of `bands`'s declared elements is inside
+	 * the frame. `check` asks this; a span cannot answer it, being
+	 * summed into the enclosing extent (26.676). A zero extent is a
+	 * `[depth]` cap or a degenerate element rather than a short
+	 * frame, so stopping there answers yes and leaves it to the
+	 * nesting guard.
+	 */
+	[[nodiscard]] bool bands_fits() const noexcept
+	{
+		const std::uint32_t total = bands_count();
+		std::uint32_t at = bands_offset();
+		std::uint32_t n  = 0;
+
+		while (n < total) {
+			situ_view_t raw;
+
+			if (at >= raw_.limit) {
+				return false;
+			}
+			if (situ_view_sub(this->raw(), at,
+					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
+				return false;
+			}
+			const ::situ::band element(raw);
+			const std::uint32_t size = element.extent();
+
+			if (size == 0) {
+				return true;
+			}
+			if (size > situ_remaining_u32(raw_.limit, at)) {
+				return false;
+			}
+			at += size;
+			n  += 1;
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::uint32_t bands_span() const noexcept
@@ -3532,8 +3689,12 @@ public:
 				if (n >= bands_count()) {
 					break;
 				}
+				if (have < at) {
+					need = at;
+					return ::situ::rt::err::truncated;
+				}
 				const ::situ::rt::err e = ::situ::band_::required(situ_base(raw_) + at,
-					have - at, part);
+					situ_remaining_u32(have, at), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -3635,9 +3796,24 @@ public:
 			*which_ = check_band_count;
 			return ::situ::rt::err::constraint;
 		}
+		/* head_body.bands: every element the count declares is
+		 * in the frame. No span check can see this -- a span is how
+		 * far the run REACHED (26.676). */
+		if (!bands_fits()) {
+			*which_ = check_bands;
+			return ::situ::rt::err::bounds;
+		}
 		/* head_body.bands: the length the message declares has to
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, situ_advance_u32(9, station_extent(), raw_.limit)) < (bands_span())) {
+			*which_ = check_bands;
+			return ::situ::rt::err::bounds;
+		}
+		/* head_body.bands: and every element the count
+		 * declares is in the frame, which the comparison above
+		 * cannot see -- it holds the frame against how far the
+		 * walk REACHED (26.676). */
+		if (!bands_fits()) {
 			*which_ = check_bands;
 			return ::situ::rt::err::bounds;
 		}
@@ -4592,20 +4768,45 @@ public:
 			at += size;
 			n  += 1;
 		}
-
-		/* A run whose declared count does not fit is
-		 * malformed, and the honest span is one no frame
-		 * can satisfy. Returning the bytes that DID fit
-		 * told `check` the run was shorter than it claims,
-		 * so `validate` answered OK for nine bytes whose
-		 * one element declared 203 (26.676). A run sized
-		 * by bytes rather than by a count has nothing to
-		 * fall short of, which is why this is conditional
-		 * on the same `count` the loop bound is. */
-		if (n < providers_count()) {
-			return UINT32_MAX;
-		}
 		return at - start;
+	}
+
+	/** Whether every one of `providers`'s declared elements is inside
+	 * the frame. `check` asks this; a span cannot answer it, being
+	 * summed into the enclosing extent (26.676). A zero extent is a
+	 * `[depth]` cap or a degenerate element rather than a short
+	 * frame, so stopping there answers yes and leaves it to the
+	 * nesting guard.
+	 */
+	[[nodiscard]] bool providers_fits() const noexcept
+	{
+		const std::uint32_t total = providers_count();
+		std::uint32_t at = providers_offset();
+		std::uint32_t n  = 0;
+
+		while (n < total) {
+			situ_view_t raw;
+
+			if (at >= raw_.limit) {
+				return false;
+			}
+			if (situ_view_sub(this->raw(), at,
+					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
+				return false;
+			}
+			const ::situ::provider_name element(raw);
+			const std::uint32_t size = element.extent();
+
+			if (size == 0) {
+				return true;
+			}
+			if (size > situ_remaining_u32(raw_.limit, at)) {
+				return false;
+			}
+			at += size;
+			n  += 1;
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::uint32_t providers_span() const noexcept
@@ -4762,20 +4963,45 @@ public:
 			at += size;
 			n  += 1;
 		}
-
-		/* A run whose declared count does not fit is
-		 * malformed, and the honest span is one no frame
-		 * can satisfy. Returning the bytes that DID fit
-		 * told `check` the run was shorter than it claims,
-		 * so `validate` answered OK for nine bytes whose
-		 * one element declared 203 (26.676). A run sized
-		 * by bytes rather than by a count has nothing to
-		 * fall short of, which is why this is conditional
-		 * on the same `count` the loop bound is. */
-		if (n < runs_count()) {
-			return UINT32_MAX;
-		}
 		return at - start;
+	}
+
+	/** Whether every one of `runs`'s declared elements is inside
+	 * the frame. `check` asks this; a span cannot answer it, being
+	 * summed into the enclosing extent (26.676). A zero extent is a
+	 * `[depth]` cap or a degenerate element rather than a short
+	 * frame, so stopping there answers yes and leaves it to the
+	 * nesting guard.
+	 */
+	[[nodiscard]] bool runs_fits() const noexcept
+	{
+		const std::uint32_t total = runs_count();
+		std::uint32_t at = runs_offset();
+		std::uint32_t n  = 0;
+
+		while (n < total) {
+			situ_view_t raw;
+
+			if (at >= raw_.limit) {
+				return false;
+			}
+			if (situ_view_sub(this->raw(), at,
+					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
+				return false;
+			}
+			const ::situ::provider_run element(raw);
+			const std::uint32_t size = element.extent();
+
+			if (size == 0) {
+				return true;
+			}
+			if (size > situ_remaining_u32(raw_.limit, at)) {
+				return false;
+			}
+			at += size;
+			n  += 1;
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::uint32_t runs_span() const noexcept
@@ -4861,8 +5087,12 @@ public:
 				if (n >= providers_count()) {
 					break;
 				}
+				if (have < at) {
+					need = at;
+					return ::situ::rt::err::truncated;
+				}
 				const ::situ::rt::err e = ::situ::provider_name::required(situ_base(raw_) + at,
-					have - at, part);
+					situ_remaining_u32(have, at), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -4898,8 +5128,12 @@ public:
 				if (n >= runs_count()) {
 					break;
 				}
+				if (have < at) {
+					need = at;
+					return ::situ::rt::err::truncated;
+				}
 				const ::situ::rt::err e = ::situ::provider_run::required(situ_base(raw_) + at,
-					have - at, part);
+					situ_remaining_u32(have, at), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -5017,9 +5251,24 @@ public:
 			*which_ = check_provider_count;
 			return ::situ::rt::err::constraint;
 		}
+		/* month_body.providers: every element the count declares is
+		 * in the frame. No span check can see this -- a span is how
+		 * far the run REACHED (26.676). */
+		if (!providers_fits()) {
+			*which_ = check_providers;
+			return ::situ::rt::err::bounds;
+		}
 		/* month_body.providers: the length the message declares has to
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, situ_advance_u32(3, station_extent(), raw_.limit)) < (providers_span())) {
+			*which_ = check_providers;
+			return ::situ::rt::err::bounds;
+		}
+		/* month_body.providers: and every element the count
+		 * declares is in the frame, which the comparison above
+		 * cannot see -- it holds the frame against how far the
+		 * walk REACHED (26.676). */
+		if (!providers_fits()) {
 			*which_ = check_providers;
 			return ::situ::rt::err::bounds;
 		}
@@ -5040,9 +5289,24 @@ public:
 				return ::situ::rt::err::constraint;
 			}
 		}
+		/* month_body.runs: every element the count declares is
+		 * in the frame. No span check can see this -- a span is how
+		 * far the run REACHED (26.676). */
+		if (!runs_fits()) {
+			*which_ = check_runs;
+			return ::situ::rt::err::bounds;
+		}
 		/* month_body.runs: the length the message declares has to
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit)) < (runs_span())) {
+			*which_ = check_runs;
+			return ::situ::rt::err::bounds;
+		}
+		/* month_body.runs: and every element the count
+		 * declares is in the frame, which the comparison above
+		 * cannot see -- it holds the frame against how far the
+		 * walk REACHED (26.676). */
+		if (!runs_fits()) {
 			*which_ = check_runs;
 			return ::situ::rt::err::bounds;
 		}
@@ -5346,20 +5610,45 @@ public:
 			at += size;
 			n  += 1;
 		}
-
-		/* A run whose declared count does not fit is
-		 * malformed, and the honest span is one no frame
-		 * can satisfy. Returning the bytes that DID fit
-		 * told `check` the run was shorter than it claims,
-		 * so `validate` answered OK for nine bytes whose
-		 * one element declared 203 (26.676). A run sized
-		 * by bytes rather than by a count has nothing to
-		 * fall short of, which is why this is conditional
-		 * on the same `count` the loop bound is. */
-		if (n < ids_count()) {
-			return UINT32_MAX;
-		}
 		return at - start;
+	}
+
+	/** Whether every one of `ids`'s declared elements is inside
+	 * the frame. `check` asks this; a span cannot answer it, being
+	 * summed into the enclosing extent (26.676). A zero extent is a
+	 * `[depth]` cap or a degenerate element rather than a short
+	 * frame, so stopping there answers yes and leaves it to the
+	 * nesting guard.
+	 */
+	[[nodiscard]] bool ids_fits() const noexcept
+	{
+		const std::uint32_t total = ids_count();
+		std::uint32_t at = ids_offset();
+		std::uint32_t n  = 0;
+
+		while (n < total) {
+			situ_view_t raw;
+
+			if (at >= raw_.limit) {
+				return false;
+			}
+			if (situ_view_sub(this->raw(), at,
+					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
+				return false;
+			}
+			const ::situ::station_id element(raw);
+			const std::uint32_t size = element.extent();
+
+			if (size == 0) {
+				return true;
+			}
+			if (size > situ_remaining_u32(raw_.limit, at)) {
+				return false;
+			}
+			at += size;
+			n  += 1;
+		}
+		return true;
 	}
 
 	[[nodiscard]] std::uint32_t ids_span() const noexcept
@@ -5403,8 +5692,12 @@ public:
 				if (n >= ids_count()) {
 					break;
 				}
+				if (have < at) {
+					need = at;
+					return ::situ::rt::err::truncated;
+				}
 				const ::situ::rt::err e = ::situ::station_id::required(situ_base(raw_) + at,
-					have - at, part);
+					situ_remaining_u32(have, at), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -5481,9 +5774,24 @@ public:
 			*which_ = check_count;
 			return ::situ::rt::err::constraint;
 		}
+		/* stations_body.ids: every element the count declares is
+		 * in the frame. No span check can see this -- a span is how
+		 * far the run REACHED (26.676). */
+		if (!ids_fits()) {
+			*which_ = check_ids;
+			return ::situ::rt::err::bounds;
+		}
 		/* stations_body.ids: the length the message declares has to
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, 10) < (ids_span())) {
+			*which_ = check_ids;
+			return ::situ::rt::err::bounds;
+		}
+		/* stations_body.ids: and every element the count
+		 * declares is in the frame, which the comparison above
+		 * cannot see -- it holds the frame against how far the
+		 * walk REACHED (26.676). */
+		if (!ids_fits()) {
 			*which_ = check_ids;
 			return ::situ::rt::err::bounds;
 		}

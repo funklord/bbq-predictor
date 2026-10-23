@@ -7345,10 +7345,9 @@ data is public, and that was judged acceptable rather than overlooked.
 reading, the signature checked before parsing, the decompressed size
 declared and bounded before inflation, every count bounded, and a file
 failing any check discarded whole in favour of what the store holds. The
-parser is meant to be generated from the situ schema, so that its bounds
-come from one description -- not yet, for the reason sec 15.12.3 gives
--- and the daemon's request parser and the applet's file parser are
-both fuzzed.
+parser is generated from the situ schema, so that its bounds come from
+one description (sec 15.12.3), and the daemon's request parser and the
+applet's file parser are both fuzzed.
 
 **fuzznet was considered and does not fit**: it serves files only to
 contacts that have exchanged keys, and its owner rejected serving any
@@ -7381,15 +7380,21 @@ What situ cannot state stays the caller's: the `[A-Z0-9]` class, index
 months sorted without duplicates, provider runs summing to the row
 count, samples inside their month and ascending, zero padding bits.
 
-**The generated C++ is not yet safe for untrusted input, so the client
-parser is not generated from it yet.** Its `validate()` reads past the
-end of a hostile buffer -- reproduced here under AddressSanitizer at
-f9fa599, a heap overflow in `situ_get_le32` reached from a generated
-`extent()` -- and truncated element runs pass validation. A parser that
-can be made to read out of bounds is the one thing a format for
-thousands of anonymous clients cannot ship, so both, with four smaller
-defects, went to situ through its inbox (20261022T1621Z) rather than
-being worked around here. Neither the C++ builder nor any backend writes
+**The client parser is generated from it, through calls situ has made
+safe for untrusted input.** At f9fa599 the generated `validate()` read
+past the end of a hostile buffer -- a heap overflow in `situ_get_le32`
+reached from a generated `extent()`, reproduced here under
+AddressSanitizer -- and truncated element runs passed validation. A
+parser that can be made to read out of bounds is the one thing a format
+for thousands of anonymous clients cannot ship, so that and four smaller
+defects went to situ through its inbox (20261022T1621Z) rather than
+being worked around here. situ fixed validate, check and the accessors
+by 56dcad1, which the reader was first generated from, and `framed()`
+and `required()` by b186326, vendored since 2026-10-23
+(`src/wire/vendor/README.md` has what was measured). The reader still
+calls only the first three, because nothing here fuzzes the other two;
+and situ still does not enforce `max 0` on a trailing run after a
+dynamic member, so the reader checks exact lengths itself. Neither the C++ builder nor any backend writes
 a signed file, so the publisher writes the format by hand whatever
 happens.
 
@@ -7524,7 +7529,7 @@ providers asked, and the server is still asked first on every round.
 the providers at once, and the server is not counted as failing.
 
 **The reader** (`src/wire/read.cpp`) parses with situ's generated code
-at 56dcad1 -- validate, check and accessors only -- after a size cap
+at b186326 -- validate, check and accessors only -- after a size cap
 and the signature, and checks every rule situ cannot state. Two of
 those rules are there because situ's own guard failed: its `trailing()`
 reported no trailing bytes with one present, so every body and column

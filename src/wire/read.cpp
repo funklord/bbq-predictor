@@ -6,9 +6,9 @@
 
 /*
  * Only at(), validate(), check() and the field accessors of the generated
- * code are used here. framed() and required() still read out of bounds at
- * situ 56dcad1 (src/wire/vendor/README.md); a call to either in this file
- * is a defect, whatever it is for.
+ * code are used here. framed() and required() read out of bounds before
+ * situ b186326 and nothing here fuzzes them (src/wire/vendor/README.md);
+ * a call to either in this file is a defect, whatever it is for.
  */
 
 namespace {
@@ -166,7 +166,7 @@ bool columns(const situ::packed_columns &packed_columns, uint32_t rows_max,
 
 	/*
 	 * NOT c.trailing(): situ does not enforce `trailing[remaining] max 0`
-	 * after a dynamic member at 56dcad1, and its accessor reported no
+	 * after a dynamic member at b186326, and its accessor reported no
 	 * trailing bytes with one there -- test_wire's case found it. So the
 	 * stream's exact length is computed below from what was decoded, and
 	 * must equal what was inflated: that refuses trailing bytes and
