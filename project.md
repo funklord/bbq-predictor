@@ -518,6 +518,50 @@ rounds, and fails with either the reload or the clearing removed;
 `test_client` covers the shell and the full page, the keyless retry and
 what `remember()` refuses.
 
+#### 2.6.1.4 Each attempt asks a different page
+
+Asked for by the copyright holder 2026-10-23, after a fresh server
+package published nothing because every round failed at the key page
+(sec 15.14). The three attempts of sec 2.6.1.1 had asked one page three
+times; they now ask `/forecast`, then the hourly page, then the city
+weather page, the holder's three-attempt budget unchanged.
+
+**What the pages serve changes by the minute, which decides what this
+can buy.** Three spaced curl fetches each of eight pages, then again
+twenty minutes later:
+
+    /hourly/se/stockholm     3 of 3 with a key, then 0 of 6 (127 KB shell)
+    /forecast                2 of 3, then 3 of 6, the rest 404
+    /weather/se/stockholm    1 of 3
+    /forecast/se/stockholm   1 of 3
+    / , /dashboard/pws/..., /history/..., /maps    0 of 3 each
+    /10day, /hourly          404 every time
+
+Encoding was ruled out on the second pass (identity and gzip alike,
+since sec 2.6.5 had found a gzip-only stale variant once): the same page
+gave the same variant either way. So there is no page that reliably
+carries the key, and a ranking is a guess about the next few minutes.
+Three pages are three different draws where one page asked three times
+was three draws on whatever it was serving at that moment, and that is
+the whole of the gain.
+
+**Measured, cold** -- four publisher rounds each with no stored key, 20
+s apart: one acquired a key on its second page, three found no key on
+any of the three. That is no better than the single page managed from
+this desk the evening before, and is the honest result: on a bad
+evening a fresh install waits for the timer to come round, and sec
+2.6.1.3's stored key is what makes that a one-off. `test_client` reads
+the three requests and fails if they repeat a page.
+
+**Two options this does not take, and whose they are.** More attempts
+on a cold start would raise the odds, at the cost of more fetches of a
+page sec 2.5 asks to be fetched sparingly; the three is the holder's
+number. And the working key has been the same one for as long as it
+has been watched, so it could be built in as a starting point and
+replaced on a 401 -- which would put a key this project is not licensed
+to hold (sec 2.5) into every copy of the binary. Both are the holder's
+decision.
+
 ### 2.6.2 The three traps
 
 Each of these was found by inspecting real responses, and each would

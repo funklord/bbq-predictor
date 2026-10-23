@@ -1,5 +1,6 @@
 #include <QNetworkAccessManager>
 #include <QNetworkProxy>
+#include <QSet>
 #include <QSignalSpy>
 #include <QTest>
 
@@ -40,6 +41,7 @@ private slots:
 	void only_a_key_a_weather_endpoint_used_is_taken();
 	void a_page_without_a_key_is_tried_again();
 	void a_remembered_key_must_look_like_one();
+	void each_attempt_asks_another_page();
 };
 
 void test_client::requests_wait_when_there_is_no_key() {
@@ -254,6 +256,42 @@ void test_client::a_remembered_key_must_look_like_one() {
 	keys.invalidate();
 	QCOMPARE(thrown.count(), 1);
 	QVERIFY(!keys.has_key());
+}
+
+/*
+ * Three attempts, three pages (sec 2.6.1.4). WU's CDN hands any one page
+ * out fully rendered or as a shell, so asking one page three times was
+ * three draws on that page's odds; the pages differ in how often they
+ * carry a key, and asking each in turn spreads the draws. Read from the
+ * requests themselves, against a proxy that refuses all three.
+ */
+void test_client::each_attempt_asks_another_page() {
+	QNetworkAccessManager net;
+	net.setProxy(QNetworkProxy(QNetworkProxy::HttpProxy,
+	                           QStringLiteral("127.0.0.1"), 1));
+	bbq_wu_key_source keys(&net);
+
+	/*
+	 * Read as each reply finishes, not afterwards: the key source deletes
+	 * a reply once it has handled it, so a spy's pointers are dangling by
+	 * the time the wait returns -- which is how this test first crashed.
+	 */
+	QStringList pages;
+	connect(&net, &QNetworkAccessManager::finished, this,
+	        [&pages](QNetworkReply *reply) { pages << reply->request().url().toString(); });
+	QSignalSpy failures(&keys, &bbq_wu_key_source::failed);
+	keys.acquire();
+	QVERIFY2(failures.wait(15000), "the key source never gave up");
+	QCOMPARE(pages.size(), 3);
+	QCOMPARE(QSet<QString>(pages.begin(), pages.end()).size(), 3);
+	for (const QString &page : pages) {
+		QVERIFY2(page.startsWith(QStringLiteral("https://www.wunderground.com/")),
+		         qPrintable(page));
+	}
+
+	/* The page measured most often to carry a key goes first. */
+	QCOMPARE(pages.first(), QStringLiteral("https://www.wunderground.com/forecast"));
+	QCOMPARE(keys.sent(), 3);
 }
 
 QTEST_GUILESS_MAIN(test_client)

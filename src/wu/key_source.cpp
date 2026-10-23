@@ -17,11 +17,6 @@
 namespace {
 
 /*
- * The page the key is taken from. Any forecast page carries the
- * server-rendered payload this needs; the location in it is irrelevant,
- * since only the embedded request URLs are read.
- */
-/*
  * How many transfers one acquisition may spend, and how long it waits
  * between them (sec 2.6.1.1). Three by the copyright holder's
  * instruction, after the page was measured refusing half the time.
@@ -30,7 +25,33 @@ const int key_attempts = 3;
 const int key_retry_pause_ms = 900;
 const int key_timeout_ms = 15000;
 
-const char *const key_page_url = "https://www.wunderground.com/forecast";
+/*
+ * THE PAGES THE KEY IS TAKEN FROM, ONE PER ATTEMPT (sec 2.6.1.4).
+ *
+ * WU's CDN hands any page out either fully rendered, with the request
+ * URLs a key is read from, or as a shell without them, and which a page
+ * gets changes within minutes: the hourly page carried a key 3 times of 3
+ * and twenty minutes later 0 of 6. So one page asked three times was
+ * three draws on whatever that page was serving at the time, and three
+ * pages are three different draws. Ordered by the tally over two
+ * evenings: /forecast about half, the hourly page sometimes, the city
+ * weather page one in three. The home page, a station's dashboard,
+ * history, maps and /10day carried it in none.
+ *
+ * The city is incidental: only the embedded request URLs are read, never
+ * anything about the place, so Stockholm serves a client anywhere.
+ */
+const char *const key_pages[] = {
+	"https://www.wunderground.com/forecast",
+	"https://www.wunderground.com/hourly/se/stockholm",
+	"https://www.wunderground.com/weather/se/stockholm",
+};
+
+/* Attempt 1 asks the first page, 2 the second, and round again past the end. */
+const char *key_page(int attempt) {
+	const int count = int(sizeof key_pages / sizeof key_pages[0]);
+	return key_pages[(attempt > 0 ? attempt - 1 : 0) % count];
+}
 
 /*
  * A browser User-Agent, and the honesty of this is worth stating rather
@@ -109,12 +130,13 @@ void bbq_wu_key_source::send() {
 	 * object is a crash rather than a wasted fetch.
 	 */
 	QPointer<bbq_wu_key_source> alive(this);
+	const char *const page = key_page(m_attempts);
 
-	std::thread([alive]() {
+	std::thread([alive, page]() {
 		const QJniObject page = QJniObject::callStaticObjectMethod(
 		        "se/vibes/bbq_predictor/PageFetch", "get",
 		        "(Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/String;",
-		        QJniObject::fromString(QString::fromLatin1(key_page_url))
+		        QJniObject::fromString(QString::fromLatin1(page))
 		                .object<jstring>(),
 		        QJniObject::fromString(QString::fromLatin1(browser_agent))
 		                .object<jstring>(),
@@ -132,7 +154,7 @@ void bbq_wu_key_source::send() {
 		        Qt::QueuedConnection);
 	}).detach();
 #else
-	QNetworkRequest request((QUrl(QString::fromLatin1(key_page_url))));
+	QNetworkRequest request((QUrl(QString::fromLatin1(key_page(m_attempts)))));
 	request.setHeader(QNetworkRequest::UserAgentHeader,
 	                  QString::fromLatin1(browser_agent));
 	request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
