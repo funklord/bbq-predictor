@@ -611,7 +611,60 @@ style-signals:
 #
 # `test` joined this the moment test/ became real, which was the whole
 # point of the target that failed until then.
-check: style test check-publish-libraries
+check: style test check-publish-libraries check-android-compile
+
+# THE ANDROID-ONLY CODE, COMPILED (project.md sec 11.13).
+#
+# A branch under Q_OS_ANDROID is compiled by nothing else in `check`, so
+# a mistake there passes every gate and the whole suite: one did, for
+# half a day, until an APK was built (sec 2.6.1.4). This compiles exactly
+# the sources holding such a branch, with the kit's own flags taken from
+# the Makefile qmake writes for Android, and links and packages nothing.
+#
+# In a directory of its own, so it neither waits on nor disturbs the APK
+# build's. Without an Android kit it FAILS, naming why, rather than
+# passing over nothing; ANDROID_COMPILE=no skips it on purpose.
+ANDROID_COMPILE ?= yes
+ANDROID_COMPILE_DIR = build-android-compile-$(ANDROID_ABI)
+ANDROID_ONLY_SOURCES = $(shell grep -lE 'Q_OS_ANDROID|__ANDROID__' $(SOURCES))
+ANDROID_ONLY_OBJECTS = $(patsubst %.cpp,%.o,$(notdir $(ANDROID_ONLY_SOURCES)))
+
+$(ANDROID_COMPILE_DIR)/Makefile: bbq-predictor.pro core.pri
+	mkdir -p $(ANDROID_COMPILE_DIR)
+	cd $(ANDROID_COMPILE_DIR) && $(QT_ANDROID_ROOT)/bin/qmake \
+	        $(CURDIR)/bbq-predictor.pro $(QMAKE_CONFIG) \
+	        BBQ_VERSION=$(VERSION) BBQ_VERSION_CODE=$(ANDROID_VERSION_CODE) \
+	        BBQ_TARGET_API=$(ANDROID_TARGET_API)
+
+check-android-compile:
+ifeq ($(ANDROID_COMPILE),no)
+	@echo "check-android-compile: skipped, because ANDROID_COMPILE=no"
+else
+	@if [ -z "$(ANDROID_ONLY_OBJECTS)" ]; then \
+		echo "check-android-compile: no source holds Q_OS_ANDROID, which" >&2; \
+		echo "  is not the same as having no Android code -- the" >&2; \
+		echo "  pattern has stopped matching" >&2; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory android-check >/dev/null || { \
+		echo "check-android-compile: no usable Android kit (make android-check" >&2; \
+		echo "  says why). Install one, or skip this with ANDROID_COMPILE=no." >&2; \
+		exit 1; \
+	}
+	@$(MAKE) --no-print-directory $(ANDROID_COMPILE_DIR)/Makefile >/dev/null 2>&1 || { \
+		echo "check-android-compile: qmake could not configure the Android tree" >&2; \
+		exit 1; \
+	}
+	@$(MAKE) --no-print-directory -C $(ANDROID_COMPILE_DIR) $(ANDROID_ONLY_OBJECTS) \
+	        >$(ANDROID_COMPILE_DIR)/compile.log 2>&1 || { \
+		grep -E 'error' $(ANDROID_COMPILE_DIR)/compile.log >&2; \
+		echo "check-android-compile: an Android-only source does not compile;" >&2; \
+		echo "  $(ANDROID_COMPILE_DIR)/compile.log has the rest" >&2; \
+		exit 1; \
+	}
+	@echo "check-android-compile: $(words $(ANDROID_ONLY_OBJECTS)) Android-only" \
+	      "source(s) compile for $(ANDROID_ABI): $(notdir $(ANDROID_ONLY_SOURCES))"
+endif
 
 # The daemon's request path under libFuzzer (project.md sec 15.12.2).
 #
@@ -840,7 +893,8 @@ define bbq_remove_tree
 endef
 
 veryclean: clean
-	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) build-test-server $(ANDROID_BUILD_DIR))
+	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) build-test-server $(ANDROID_BUILD_DIR) \
+	        $(ANDROID_COMPILE_DIR))
 	rm -f $(TARGET) $(SERVE_TARGET) $(PUBLISH_TARGET)
 
 # `distclean` removes what the build generated and `veryclean` does not.
@@ -861,6 +915,6 @@ help:
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
         style-wiring style-setup style-tests style-links test-clocks fuzz-serve fuzz-wire \
-        submodules check-publish-libraries \
+        submodules check-publish-libraries check-android-compile \
         android android-aab \
         deb-daedalus install install-applet install-server uninstall clean veryclean distclean help

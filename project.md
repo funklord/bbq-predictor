@@ -4272,6 +4272,27 @@ outside the Makefile reaches -- Qt Creator, or qmake by hand -- and which
 would build an app Play refuses. The holder chose 36 over removing the
 fallback, so a hand-run qmake still builds something installable.
 
+### 11.13 `make check` compiles the Android-only code
+
+**Asked for by the copyright holder 2026-10-23**, after a branch under
+`Q_OS_ANDROID` in the key source stopped compiling and every gate and
+the whole suite passed over it for half a day (sec 2.6.1.4): nothing in
+`check` compiled that branch, and only building an APK found it.
+
+`make check-android-compile`, part of `check`, compiles exactly the
+sources that hold a `Q_OS_ANDROID` or `__ANDROID__` branch -- five,
+2026-10-23: the key source and four of the window's -- with the kit's
+own flags, from the Makefile qmake writes for Android in a directory of
+its own (`build-android-compile-<ABI>`), so it neither waits on nor
+disturbs the APK build. It links and packages nothing: 35 s from cold
+against about fifteen minutes for the APK.
+
+It fails rather than passing over nothing in each of the ways it could:
+no source matching the pattern says the pattern stopped matching, and
+no usable kit says so and names `ANDROID_COMPILE=no` as the deliberate
+skip. With the half-day's bug put back it failed naming the file, and
+passed again with it removed.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
