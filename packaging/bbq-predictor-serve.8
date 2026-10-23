@@ -9,13 +9,15 @@ bbq\-predictor\-serve \- serve the published bbq\-predictor archive
 .IR N ]...
 .RB [ \-\-user
 .IR NAME ]
+.RB [ \-\-demand
+.IR FILE ]
 .RB [ \-\-max\-connections
 .IR N ]
 .RB [ \-\-per\-address
 .IR N ]
 .SH DESCRIPTION
 Answers bbq\-predictor clients from the signed files that
-.B bbq\-predictor \-\-fetch\-once \-\-publish
+.BR bbq\-predictor\-publish (1)
 writes under
 .IR DIR .
 A request is 48 bytes naming a file; the reply is that file, prebuilt
@@ -48,6 +50,17 @@ and 443.
 The account to serve as. Required when started as root, refused
 otherwise.
 .TP
+.BI \-\-demand " FILE"
+Append a line for the stations clients ask for, so the publisher can add
+the ones it does not yet publish and stop fetching the ones nobody asks
+for any more. The file must exist; it is opened before the chroot and
+never created, since root would own it. A station is written at most
+once an hour; one that is not published is written only for an address
+that has not already introduced three others that day, an IPv6 address
+counting by its /64; and nothing is written while the file holds a
+megabyte, which means the publisher has stopped emptying it. No address
+is written.
+.TP
 .BI \-\-max\-connections " N"
 Connections held at once; 512 by default, and fewer if the descriptor
 limit allows fewer.
@@ -73,10 +86,15 @@ The arguments the init script passes.
 .I /var/lib/bbq\-predictor/published
 The tree the packaged service serves.
 .TP
+.I /var/lib/bbq\-predictor/demand
+The demand the packaged service records, which the publisher reads and
+empties every round.
+.TP
 .I /var/log/bbq\-predictor\-serve.log
 Where the init script sends the log: a line at start and stop, and one
 whenever what is served changes.
 .SH SEE ALSO
+.BR bbq\-predictor\-publish (1),
 .BR bbq\-predictor (1)
 .SH AUTHOR
 Nabeel Sowan <nabeel@vibes.se>

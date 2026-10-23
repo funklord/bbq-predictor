@@ -131,6 +131,78 @@ enum bbq_serve_status bbq_serve_answer(const struct bbq_serve_table *table,
                                        const struct bbq_serve_request *request,
                                        struct bbq_serve_blob **out);
 
+/* Whether the table publishes `station`, a NUL-terminated valid id. */
+int bbq_serve_table_has(const struct bbq_serve_table *table, const char *station);
+
+/*
+ * DEMAND (project.md sec 15.14): which stations clients ask for, so the
+ * publisher can fetch the ones it does not yet publish and stop fetching
+ * the ones nobody asks for any more.
+ *
+ * A request is the signal; nothing is added to the protocol. What this
+ * decides is which requests become a line in the demand file, and it is
+ * the part that faces the internet, so every table is bounded and a full
+ * one refuses rather than grows:
+ *
+ *   - a station is written at most once an hour, whoever asks;
+ *   - a station the table does not publish is written only for an
+ *     address that has not already introduced three others today, so a
+ *     stranger cannot hand the publisher a list of thousands. An IPv6
+ *     address counts by its /64, which is what one subscriber is given;
+ *   - when the address table is full of addresses still inside their day,
+ *     an unknown address introduces nothing.
+ *
+ * A line is "<STATION> <epoch seconds>
+". No address is written: the
+ * limit is enforced here, so the file has no need of one.
+ */
+#define BBQ_SERVE_DEMAND_STATIONS 1024
+#define BBQ_SERVE_DEMAND_ADDRESSES 4096
+#define BBQ_SERVE_DEMAND_NEW_PER_DAY 3
+#define BBQ_SERVE_DEMAND_EVERY_S 3600
+#define BBQ_SERVE_DEMAND_DAY_S 86400
+#define BBQ_SERVE_DEMAND_LINE_MAX 64
+#define BBQ_SERVE_DEMAND_KEY_SIZE 16
+
+/* The file stops growing here, until the publisher has read and emptied it. */
+#define BBQ_SERVE_DEMAND_FILE_MAX (1u << 20)
+
+struct bbq_serve_demand_station {
+	char id[BBQ_SERVE_STATION_MAX + 1];
+	int64_t written_s;
+};
+
+struct bbq_serve_demand_address {
+	uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE];
+	int64_t since_s;
+	uint8_t count;
+	char introduced[BBQ_SERVE_DEMAND_NEW_PER_DAY][BBQ_SERVE_STATION_MAX + 1];
+};
+
+struct bbq_serve_demand {
+	size_t station_count;
+	struct bbq_serve_demand_station stations[BBQ_SERVE_DEMAND_STATIONS];
+	size_t address_count;
+	struct bbq_serve_demand_address addresses[BBQ_SERVE_DEMAND_ADDRESSES];
+};
+
+/*
+ * The key an address is limited by: an IPv4 address whole (4 bytes), an
+ * IPv6 one by its first 8. Any other length gives the all-zero key, which
+ * every such address then shares.
+ */
+void bbq_serve_demand_key(const uint8_t *address, size_t length,
+                          uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE]);
+
+/*
+ * Note a request for `station` from `key` at `now_s`. Returns the length
+ * of the line to write into `line`, or 0 when nothing is to be written.
+ */
+size_t bbq_serve_demand_note(struct bbq_serve_demand *demand,
+                             const uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE],
+                             const char *station, int published, int64_t now_s,
+                             char line[BBQ_SERVE_DEMAND_LINE_MAX]);
+
 #ifdef __cplusplus
 }
 #endif

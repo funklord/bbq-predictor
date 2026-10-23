@@ -1,3 +1,13 @@
+bbq-predictor (0.1.0-3) unstable; urgency=low
+
+  * bbq-predictor-serve records the stations clients ask for, with
+    --demand, and bbq-predictor-publish fetches them: up to 50 beside the
+    configured one, dropped after 14 days unasked, within 2000 Weather
+    Underground requests an hour. The applet asks again about a station
+    the server does not publish, hourly, so it notices one being added.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Fri, 23 Oct 2026 02:20:32 +0200
+
 bbq-predictor (0.1.0-2) unstable; urgency=low
 
   * Publish from bbq-predictor-publish, built on QtCore, QtNetwork and

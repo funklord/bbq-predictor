@@ -7534,6 +7534,95 @@ depends on it now, since every provider is HTTPS. With the trust store
 in place the round there still stored nothing: WU's key page had begun
 answering 404 or a keyless shell, which is sec 2.6.1.3.
 
+## 15.14 The server fetches the stations clients ask for, within a budget
+
+**Raised by the copyright holder 2026-10-23: the applet moves, so the
+server has to learn which stations to fetch -- without the stations
+mounting up until the one address and the one key are refused for the
+traffic.** Until then the server published the one station in
+`/etc/default/bbq-predictor`, and a client anywhere else went straight
+to scraping, which nothing ever told the server about. Numbers chosen by
+the holder: one request admits a station, three new stations per
+address per day, fifty stations at most, two weeks without a request
+before a station stops being fetched, 2000 Weather Underground requests
+an hour.
+
+**The request is the signal; the protocol is unchanged.** A client
+already asks for its station's index and head every round, pipelined
+with the manifest. `bbq-predictor-serve --demand FILE` appends
+`<STATION> <epoch>` for them, deciding in its pure core which requests
+become a line, since that is the part a stranger steers:
+
+- a station at most once an hour, whoever asks;
+- a station not published only for an address that has not introduced
+  three others today, an IPv6 address counting by its /64 and an IPv4
+  client on the dual-stack socket by its IPv4 address;
+- a full table of addresses still inside their day introduces nothing
+  rather than evicting one, which would hand it a fresh allowance;
+- nothing while the file holds a megabyte, which means the publisher
+  has stopped emptying it; and no address is ever written.
+
+The file is opened before the chroot, never created by the daemon (root
+would own it and the publisher could not empty it), and is the
+publisher's: made by the server postinst, 0600. Under systemd the unit
+names it in `ReadWritePaths=`, since `ProtectSystem=strict` would make
+the open fail.
+
+**The publisher schedules** (`src/publish/demand.cpp`, pure). Each run
+reads and empties the file, admits up to the ceiling, expires what
+nobody asked for in two weeks, and fetches the configured station first
+and the rest by who was asked for most recently -- each at five minutes,
+or proportionally less often when the stations together would spend
+more than the hour's budget, and stopping where the hour's remaining
+budget would not cover the next. The cost of a station is what its last
+round actually sent, counted by the key source and the API client: the
+key page and the API, not the server or the keyless providers. A run
+stops starting stations after four minutes. The schedule is kept in the
+archive's named values.
+
+**A station id that does not exist is the thing a stranger could fill
+the ceiling with,** so a station that says nothing for three rounds in
+which some other station answered is dropped and refused for a week.
+"In which some other station answered" is the important half: when the
+key page fails every station is silent, and blaming them all would drop
+the lot.
+
+**The client asks again.** It marked a station the server did not
+publish and never asked the server about it again until the station
+changed -- so it would never have noticed the station being added, and
+its demand would have been one request ever. It now asks again after
+an hour (`bbq_unserved_recheck_s`, the daemon's own rate), and the
+providers keep running meanwhile, so a server that is down at the
+recheck costs nothing: the obvious version switched the station to the
+server's outage policy and lost up to half an hour of its bands.
+
+**Two things the live run found.** A run where the only station due was
+a silent asked-for one exited 1, which the timer reads as failure; 1 is
+now the configured station storing nothing or a publish failing, and an
+asked-for station's silence is 3. And publishing a station with nothing
+created its directory before finding there was nothing to write, so
+every bogus id would have left one behind; nothing is now no publish.
+
+**Measured.** In scratch, unconfined, on loopback: the daemon served
+ISTOCK877 and answered ISTOCK822 not served, and both became demand
+lines; the next round admitted ISTOCK822, which WU answered 204 -- it
+has stopped reporting -- and published nothing for it; a request for
+IJOHAN69 was admitted and fetched the following round, every band, five
+WU requests, and the daemon served it after a reload. `test_serve` holds
+each demand limit at its edge, `test_serve_loop` runs it through the
+real loop with a real file (and a full one), `test_demand` the schedule,
+and `test_feed_server` the recheck both ways. `make fuzz-serve` drives
+the demand tracker with the address and the clock taken from the
+request's bytes: three million runs, no report.
+
+**What it does not do yet.** The forecast bands are fetched per station
+although they depend only on the place, so stations within a few
+kilometres could share them; with fifty stations at about five requests
+a round the budget stretches the interval to nine minutes rather than
+being exceeded, so this is freshness, not safety. And WU's real limits
+are unknown: 2000 an hour is a starting point to raise or lower by what
+the publisher's log shows, a 401 or 429 being the first sign.
+
 ## 16. The home-screen widget
 
 A resizable Android app widget showing the forecast graph. Asked for by

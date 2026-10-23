@@ -1,3 +1,4 @@
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QNetworkProxyFactory>
@@ -39,6 +40,7 @@ private slots:
 	void a_month_the_index_does_not_name_is_not_applied();
 	void an_offline_launch_shows_the_last_head();
 	void a_station_the_server_does_not_publish_is_not_an_outage();
+	void a_station_the_server_has_since_added_is_taken_up();
 	void a_server_that_does_not_answer_is_counted_not_abandoned();
 	void a_file_signed_by_another_key_is_not_applied();
 	void no_key_means_no_server();
@@ -331,6 +333,39 @@ void test_feed_server::a_station_the_server_does_not_publish_is_not_an_outage() 
 	/* The server answered, so no failure; and this station now goes to the providers. */
 	QCOMPARE(feed.server_state().failures, 0);
 	QVERIFY(!feed.server_active());
+
+	/*
+	 * But not for ever (sec 15.14): the server adds stations clients ask
+	 * for, so an hour on it is asked again, and a client told no once
+	 * would otherwise never notice the station being added.
+	 */
+	feed.m_station_not_served_utc -= bbq_unserved_recheck_s;
+	QVERIFY(feed.server_active());
+	QVERIFY(settle(feed));
+	QVERIFY2(!feed.server_active(), "still unserved, so told no again");
+	QVERIFY(feed.m_station_not_served_utc > QDateTime::currentSecsSinceEpoch() - 60);
+}
+
+/*
+ * The other half of sec 15.14: a station the server did not publish an
+ * hour ago, and does now. The recheck must take it up -- the head
+ * applied and the not-served mark cleared -- or the server's adding it
+ * would reach nobody who had asked.
+ */
+void test_feed_server::a_station_the_server_has_since_added_is_taken_up() {
+	QTemporaryDir scratch;
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath("history.sqlite")));
+	feed.set_server(m_key.public_key(), {daemon(m_port)});
+	feed.set_station(station);
+
+	feed.m_station_not_served_utc =
+	        QDateTime::currentSecsSinceEpoch() - bbq_unserved_recheck_s - 1;
+	QVERIFY(feed.server_active());
+	QVERIFY(settle(feed));
+
+	QCOMPARE(feed.m_station_not_served_utc, qint64(0));
+	QVERIFY2(feed.composite().band(bbq_band::hourly) != nullptr, "the head was not applied");
 }
 
 void test_feed_server::a_server_that_does_not_answer_is_counted_not_abandoned() {

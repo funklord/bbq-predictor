@@ -72,6 +72,9 @@ public:
 	 */
 	bool remember(const QString &key);
 
+	/* Key pages requested so far, by either transport (sec 15.14). */
+	int sent() const { return m_sent; }
+
 signals:
 	void acquired(const QString &key);
 	void failed(const QString &reason);
@@ -119,6 +122,7 @@ private:
 	 * round because nothing else in it can run without a key.
 	 */
 	int m_attempts = 0;
+	int m_sent = 0;
 
 	/* Qt's word for the last refusal, where Qt did the fetching. */
 	QString m_transfer_error;

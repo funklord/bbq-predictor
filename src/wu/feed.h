@@ -70,6 +70,14 @@ bool bbq_observed_day_has_ended(qint64 newest_utc, qint64 today_began_utc);
 bool bbq_history_is_behind(qint64 behind_s, qint64 reported_utc,
                            qint64 now_utc);
 
+/*
+ * How long a station the server does not publish is left before the
+ * server is asked about it again (sec 15.14). The asking is the demand
+ * the server admits stations by, and the hour is the daemon's own rate
+ * for writing a station down, so asking oftener would add nothing.
+ */
+const qint64 bbq_unserved_recheck_s = 3600;
+
 class bbq_wu_feed : public QObject {
 	Q_OBJECT
 
@@ -101,6 +109,13 @@ public:
 	void set_geocode(double latitude, double longitude, bool pinned = true);
 
 	bool has_geocode() const { return m_have_geocode; }
+
+	/*
+	 * Requests this feed has sent to Weather Underground, key pages
+	 * included: what a round costs against the publisher's hourly budget
+	 * (sec 15.14). The server and the keyless providers are not counted.
+	 */
+	int wu_requests() const;
 
 	void refresh();
 
@@ -401,7 +416,14 @@ private:
 	bbq_server_policy m_server_policy;
 	bbq_server_state m_server_state;
 	bool m_scraping = false;
-	bool m_station_not_served = false;
+	/*
+	 * When the manifest last said the server does not publish this
+	 * station, or 0. Not a flag (sec 15.14): the server adds stations
+	 * clients ask for, so an unserved station is asked about again
+	 * after bbq_unserved_recheck_s -- which is also what keeps its
+	 * demand alive -- and its providers keep running meanwhile.
+	 */
+	qint64 m_station_not_served_utc = 0;
 	bool m_fetching_months = false;
 	qint64 m_server_attempted = 0;
 	qint64 m_server_head_generated = 0;

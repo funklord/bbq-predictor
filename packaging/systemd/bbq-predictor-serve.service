@@ -11,7 +11,7 @@ After=network.target
 # into the published tree and becomes --user before reading a byte from
 # anybody, and refuses to serve as root. So systemd's User= is not used:
 # with it, port 443 could not be bound at all.
-Environment="BBQ_SERVE_ARGS=--dir /var/lib/bbq-predictor/published --user bbq-predictor-serve"
+Environment="BBQ_SERVE_ARGS=--dir /var/lib/bbq-predictor/published --user bbq-predictor-serve --demand /var/lib/bbq-predictor/demand"
 EnvironmentFile=-/etc/default/bbq-predictor-serve
 ExecStart=/usr/sbin/bbq-predictor-serve $BBQ_SERVE_ARGS
 ExecReload=/bin/kill -HUP $MAINPID
@@ -26,6 +26,12 @@ ProtectHome=yes
 ProtectKernelModules=yes
 ProtectKernelTunables=yes
 ProtectSystem=strict
+
+# The one file outside the tree it writes, the demand (project.md sec
+# 15.14): opened before the chroot and appended to. Strict would make it
+# read-only and the open would fail; the leading - lets the unit start
+# when the file is missing, and the daemon then says so itself.
+ReadWritePaths=-/var/lib/bbq-predictor/demand
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictRealtime=yes
 SystemCallFilter=@system-service

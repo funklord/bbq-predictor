@@ -239,6 +239,7 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
 	request.setRawHeader("Accept-Encoding", "identity");
 
 	QNetworkReply *reply = m_net->get(request);
+	++m_sent;
 
 	connect(reply, &QNetworkReply::finished, this,
 	        [this, reply, product, path, query, may_retry]() {

@@ -1,7 +1,11 @@
 # Arguments for bbq-predictor-serve, read by its init script.
 #
+# --demand records the stations clients ask for, which the publisher adds
+# (project.md sec 15.14); leave it out and only the configured station is
+# ever published.
+#
 # Ports default to 7227 and 443. If something else holds 443, name the
 # ports you want, e.g. "--port 7227"; clients also try HTTPS on 443, so a
 # web server there can serve the same tree instead (project.md 15.12.2).
 #
-#BBQ_SERVE_ARGS="--dir /var/lib/bbq-predictor/published --user bbq-predictor-serve"
+#BBQ_SERVE_ARGS="--dir /var/lib/bbq-predictor/published --user bbq-predictor-serve --demand /var/lib/bbq-predictor/demand"

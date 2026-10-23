@@ -23,4 +23,12 @@ if [ "$1" = "configure" ]; then
 	fi
 	install -d -o "$owner" -g "$owner" -m 0755 /var/lib/bbq-predictor
 	install -d -o "$owner" -g "$owner" -m 0755 /var/lib/bbq-predictor/published
+
+	# The demand file (sec 15.14): the daemon appends to it, opening it as
+	# root before it drops, and the publisher reads and empties it, so it
+	# is the publisher's. Made only if absent, never truncated by an
+	# upgrade. The daemon refuses to create it, since root would own it.
+	if [ ! -e /var/lib/bbq-predictor/demand ]; then
+		install -o "$owner" -g "$owner" -m 0600 /dev/null /var/lib/bbq-predictor/demand
+	fi
 fi

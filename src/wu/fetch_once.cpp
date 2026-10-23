@@ -212,11 +212,16 @@ void report_holes(QTextStream &out, const bbq_composite &composite, qint64 now_u
 
 } // namespace
 
-int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
-                      int timeout_s, const QString &history_path,
-                      const bbq_after_round &after_round, bool use_server) {
+int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int timeout_s,
+                      const bbq_fetch_options &options) {
 	QTextStream out(stdout);
 	QTextStream error(stderr);
+
+	/* Quiet keeps the failures and drops the report (sec 15.14). */
+	QString discarded;
+	if (options.quiet) {
+		out.setString(&discarded);
+	}
 
 	/*
 	 * Falls back to the configuration, in the same order the window
@@ -274,12 +279,12 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	 * holes. A store that will not open is reported and not fatal: the
 	 * check is still a check.
 	 */
-	if (!feed.open_history(history_path)) {
+	if (!feed.open_history(options.history_path)) {
 		error << "fetch-once: history unavailable: " << feed.history_error()
 		      << "\n";
 	}
 
-	if (use_server) {
+	if (options.use_server) {
 		feed.set_server(bbq_settings::server_public_key());
 	}
 	feed.set_station(station);
@@ -466,16 +471,34 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	 * last head when no band arrived. A publish that fails is an error
 	 * of its own, never folded into a partial fetch.
 	 */
-	if (after_round) {
+	if (options.report) {
+		options.report->wu_requests = feed.wu_requests();
+		const bbq_series *observed = composite.band(bbq_band::observed);
+		const bbq_series *current = composite.band(bbq_band::current);
+		options.report->station_data =
+		        (observed && !observed->is_empty()) || (current && !current->is_empty());
+	}
+
+	/* The one line a quiet round prints, whatever it ends as. */
+	const auto summary = [&](const char *verdict) {
+		if (options.quiet) {
+			QTextStream(stdout) << "fetch-once: " << station << ": " << verdict << ", "
+			                    << feed.wu_requests() << " WU request(s)\n";
+		}
+	};
+
+	if (options.after_round) {
 		out.flush();
-		const int published = after_round(composite, feed.history());
+		const int published = options.after_round(composite, feed.history());
 		if (published != 0) {
+			summary("fetched, and the publish failed");
 			return published;
 		}
 	}
 
 	if (outcome == bbq_fetch_outcome::complete) {
 		out << "fetch-once: every band answered\n";
+		summary("every band answered");
 		return 0;
 	}
 
@@ -502,10 +525,12 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
 	if (outcome == bbq_fetch_outcome::partial) {
 		out << "fetch-once: partial -- something was missing, but the "
 		       "composite still covers now\n";
+		summary("partial");
 		return 3;
 	}
 
 	error << "fetch-once: nothing covers now, so this run stored "
 	         "nothing usable\n";
+	summary("nothing usable");
 	return 1;
 }

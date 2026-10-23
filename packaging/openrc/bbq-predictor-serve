@@ -8,7 +8,7 @@
 
 name="bbq-predictor archive server"
 command=/usr/sbin/bbq-predictor-serve
-command_args="${BBQ_SERVE_ARGS:---dir /var/lib/bbq-predictor/published --user bbq-predictor-serve}"
+command_args="${BBQ_SERVE_ARGS:---dir /var/lib/bbq-predictor/published --user bbq-predictor-serve --demand /var/lib/bbq-predictor/demand}"
 command_background=yes
 pidfile=/run/bbq-predictor-serve.pid
 output_log=/var/log/bbq-predictor-serve.log

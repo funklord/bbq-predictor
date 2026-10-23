@@ -29,8 +29,12 @@ fi
 
 # A station without a key is a misconfiguration rather than a quiet
 # state, so the publisher is left to say so: it refuses before fetching.
+# The demand is what bbq-predictor-serve recorded clients asking for; the
+# publisher adds those stations within its budget (sec 15.14), and an
+# absent file is no demand.
 set -- --station "$BBQ_STATION" --history-path "$state/history.sqlite" \
         --dir "${BBQ_PUBLISH_DIR:-$state/published}" \
-        --signing-key "${BBQ_SIGNING_KEY:-$state/signing.key}"
+        --signing-key "${BBQ_SIGNING_KEY:-$state/signing.key}" \
+        --demand "$state/demand"
 
 exec flock -n "$state/.fetch.lock" /usr/bin/bbq-predictor-publish "$@"

@@ -48,14 +48,41 @@ class bbq_history;
 using bbq_after_round = std::function<int(const bbq_composite &, const bbq_history &)>;
 
 /*
- * `use_server` reads from vibes.se first, as the applet does (sec 15.12).
- * The Android service sets it; the command line does not, because the
- * command line is what the publisher runs, and a publisher reading its
- * own output would never fetch anything new.
+ * What a round cost and found, for a caller that schedules rounds against
+ * a budget (bbq-predictor-publish, sec 15.14).
  */
-int bbq_wu_fetch_once(const QString &station_id, const QString &geocode,
-                      int timeout_s, const QString &history_path = QString(),
-                      const bbq_after_round &after_round = {},
-                      bool use_server = false);
+struct bbq_round_report {
+	/* Requests sent to Weather Underground: the key page and the API. */
+	int wu_requests = 0;
+
+	/* Whether the station itself said anything: observed or current. */
+	bool station_data = false;
+};
+
+struct bbq_fetch_options {
+	QString history_path;
+	bbq_after_round after_round;
+
+	/*
+	 * Read from vibes.se first, as the applet does (sec 15.12). The
+	 * Android service sets it; the command line does not, because the
+	 * command line is what the publisher runs, and a publisher reading
+	 * its own output would never fetch anything new.
+	 */
+	bool use_server = false;
+
+	/*
+	 * Only the failures and one summary line, for a publisher running
+	 * fifty stations every five minutes into syslog. The exit code is
+	 * the same either way.
+	 */
+	bool quiet = false;
+
+	/* Filled in when given. */
+	bbq_round_report *report = nullptr;
+};
+
+int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int timeout_s,
+                      const bbq_fetch_options &options = {});
 
 #endif

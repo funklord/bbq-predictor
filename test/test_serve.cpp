@@ -4,7 +4,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 
 #include "serve/serve_core.h"
@@ -30,6 +32,12 @@ private slots:
 	void the_table_refuses_what_it_should_not_serve();
 	void a_client_holding_the_file_is_told_unchanged();
 	void an_empty_table_answers_nothing_served();
+
+	void demand_writes_a_station_once_an_hour();
+	void an_address_introduces_three_stations_a_day();
+	void ipv6_is_limited_by_its_prefix();
+	void a_full_address_table_introduces_nothing();
+	void a_published_station_needs_no_allowance();
 
 private:
 	static QByteArray request(uint8_t kind, uint16_t month,
@@ -365,6 +373,134 @@ void test_serve::a_client_holding_the_file_is_told_unchanged() {
 	bbq_serve_blob_unref(blob);
 
 	bbq_serve_table_free(table);
+}
+
+/*
+ * DEMAND (sec 15.14). The part of the daemon a stranger can steer, so
+ * each limit is asserted at its edge: the request that is allowed and
+ * the one after it that is not.
+ */
+static std::string note(bbq_serve_demand *demand, const uint8_t *key, const char *station,
+                        int published, int64_t now) {
+	char line[BBQ_SERVE_DEMAND_LINE_MAX];
+	const size_t length = bbq_serve_demand_note(demand, key, station, published, now, line);
+	return std::string(line, length);
+}
+
+static const int64_t noon = 1792000000;
+
+void test_serve::demand_writes_a_station_once_an_hour() {
+	auto demand = std::make_unique<bbq_serve_demand>();
+	std::memset(demand.get(), 0, sizeof *demand);
+	uint8_t a[BBQ_SERVE_DEMAND_KEY_SIZE];
+	const uint8_t v4[4] = {192, 0, 2, 1};
+	bbq_serve_demand_key(v4, 4, a);
+
+	QCOMPARE(note(demand.get(), a, "ISTOCK877", 1, noon), std::string("ISTOCK877 1792000000\n"));
+	QCOMPARE(note(demand.get(), a, "ISTOCK877", 1, noon + 3599), std::string());
+	QCOMPARE(note(demand.get(), a, "ISTOCK877", 1, noon + 3600),
+	         std::string("ISTOCK877 1792003600\n"));
+
+	/* Not a station id: nothing, whatever reached here. */
+	QCOMPARE(note(demand.get(), a, "istock877", 1, noon), std::string());
+	QCOMPARE(note(demand.get(), a, "", 1, noon), std::string());
+}
+
+void test_serve::an_address_introduces_three_stations_a_day() {
+	auto demand = std::make_unique<bbq_serve_demand>();
+	std::memset(demand.get(), 0, sizeof *demand);
+	uint8_t a[BBQ_SERVE_DEMAND_KEY_SIZE];
+	uint8_t b[BBQ_SERVE_DEMAND_KEY_SIZE];
+	const uint8_t first[4] = {192, 0, 2, 1};
+	const uint8_t second[4] = {192, 0, 2, 2};
+	bbq_serve_demand_key(first, 4, a);
+	bbq_serve_demand_key(second, 4, b);
+
+	QVERIFY(!note(demand.get(), a, "IONE1", 0, noon).empty());
+	QVERIFY(!note(demand.get(), a, "ITWO2", 0, noon).empty());
+	QVERIFY(!note(demand.get(), a, "ITHREE3", 0, noon).empty());
+	QCOMPARE(note(demand.get(), a, "IFOUR4", 0, noon), std::string());
+
+	/* One already introduced is still signalled, an hour on. */
+	QVERIFY(!note(demand.get(), a, "IONE1", 0, noon + 3600).empty());
+
+	/* Another address has its own three. */
+	QVERIFY(!note(demand.get(), b, "IFOUR4", 0, noon).empty());
+
+	/* And the first gets three more once its day is over. */
+	QCOMPARE(note(demand.get(), a, "IFIVE5", 0, noon + 86399), std::string());
+	QVERIFY(!note(demand.get(), a, "IFIVE5", 0, noon + 86400).empty());
+}
+
+void test_serve::ipv6_is_limited_by_its_prefix() {
+	auto demand = std::make_unique<bbq_serve_demand>();
+	std::memset(demand.get(), 0, sizeof *demand);
+
+	/* Two addresses in one /64: one subscriber, one allowance. */
+	uint8_t one[16] = {0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 1};
+	uint8_t two[16] = {0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 1};
+	one[15] = 1;
+	two[15] = 2;
+	uint8_t a[BBQ_SERVE_DEMAND_KEY_SIZE];
+	uint8_t b[BBQ_SERVE_DEMAND_KEY_SIZE];
+	bbq_serve_demand_key(one, 16, a);
+	bbq_serve_demand_key(two, 16, b);
+	QVERIFY(std::memcmp(a, b, sizeof a) == 0);
+
+	QVERIFY(!note(demand.get(), a, "IONE1", 0, noon).empty());
+	QVERIFY(!note(demand.get(), b, "ITWO2", 0, noon).empty());
+	QVERIFY(!note(demand.get(), a, "ITHREE3", 0, noon).empty());
+	QCOMPARE(note(demand.get(), b, "IFOUR4", 0, noon), std::string());
+
+	/* An IPv4 address is never the same key as an IPv6 one with its bytes. */
+	uint8_t v4[BBQ_SERVE_DEMAND_KEY_SIZE];
+	const uint8_t prefix[4] = {0x20, 0x01, 0x0d, 0xb8};
+	bbq_serve_demand_key(prefix, 4, v4);
+	QVERIFY(std::memcmp(v4, a, sizeof v4) != 0);
+}
+
+void test_serve::a_full_address_table_introduces_nothing() {
+	auto demand = std::make_unique<bbq_serve_demand>();
+	std::memset(demand.get(), 0, sizeof *demand);
+	char station[16];
+
+	for (uint32_t i = 0; i < BBQ_SERVE_DEMAND_ADDRESSES; ++i) {
+		const uint8_t address[4] = {10, uint8_t(i >> 16), uint8_t(i >> 8), uint8_t(i)};
+		uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE];
+		bbq_serve_demand_key(address, 4, key);
+		std::snprintf(station, sizeof station, "IX%u", unsigned(i));
+		QVERIFY(!note(demand.get(), key, station, 0, noon).empty());
+	}
+
+	/*
+	 * Every slot is inside its day. A new address is refused rather than
+	 * given one, since evicting an address would hand it a fresh allowance.
+	 */
+	const uint8_t stranger[4] = {198, 51, 100, 7};
+	uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE];
+	bbq_serve_demand_key(stranger, 4, key);
+	QCOMPARE(note(demand.get(), key, "INEW1", 0, noon + 10), std::string());
+
+	/* A published station needs no slot. */
+	QVERIFY(!note(demand.get(), key, "IPUB1", 1, noon + 10).empty());
+
+	/* A day later the slots are free again. */
+	QVERIFY(!note(demand.get(), key, "INEW1", 0, noon + 86400).empty());
+}
+
+void test_serve::a_published_station_needs_no_allowance() {
+	auto demand = std::make_unique<bbq_serve_demand>();
+	std::memset(demand.get(), 0, sizeof *demand);
+	uint8_t a[BBQ_SERVE_DEMAND_KEY_SIZE];
+	const uint8_t v4[4] = {192, 0, 2, 1};
+	bbq_serve_demand_key(v4, 4, a);
+
+	for (const char *station : {"IONE1", "ITWO2", "ITHREE3", "IFOUR4", "IFIVE5"}) {
+		QVERIFY2(!note(demand.get(), a, station, 1, noon).empty(), station);
+	}
+
+	/* And published requests did not spend the allowance. */
+	QVERIFY(!note(demand.get(), a, "INEW1", 0, noon).empty());
 }
 
 QTEST_GUILESS_MAIN(test_serve)

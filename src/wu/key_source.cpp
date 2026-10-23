@@ -88,6 +88,7 @@ void bbq_wu_key_source::acquire() {
 void bbq_wu_key_source::send() {
 	m_in_flight = true;
 	++m_attempts;
+	++m_sent;
 
 #ifdef Q_OS_ANDROID
 	/*

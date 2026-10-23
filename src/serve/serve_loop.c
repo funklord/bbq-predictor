@@ -50,6 +50,10 @@ struct connection {
 struct state {
 	const struct bbq_serve_loop *loop;
 	struct bbq_serve_table *table;
+
+	/* NULL unless the loop records demand. */
+	struct bbq_serve_demand *demand;
+	int demand_full_said;
 	struct connection *connections;
 	size_t connection_count;
 
@@ -222,6 +226,56 @@ static void accept_all(struct state *state, int listen_fd) {
 	}
 }
 
+/*
+ * One line of demand, appended unless the file has reached its cap, which
+ * means the publisher has stopped emptying it: then the line is dropped,
+ * once said, rather than filling the disk.
+ */
+static void record_demand(struct state *state, const struct connection *connection,
+                          const struct bbq_serve_request *request) {
+	if (!state->demand || request->kind == BBQ_SERVE_STATIONS) {
+		return;
+	}
+
+	uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE];
+	if (connection->peer.ss_family == AF_INET) {
+		const struct sockaddr_in *v4 = (const struct sockaddr_in *)&connection->peer;
+		bbq_serve_demand_key((const uint8_t *)&v4->sin_addr, 4, key);
+	} else if (connection->peer.ss_family == AF_INET6) {
+		const struct sockaddr_in6 *v6 = (const struct sockaddr_in6 *)&connection->peer;
+		const uint8_t *bytes = (const uint8_t *)&v6->sin6_addr;
+		/* An IPv4 client on the dual-stack socket is limited as IPv4. */
+		if (IN6_IS_ADDR_V4MAPPED(&v6->sin6_addr)) {
+			bbq_serve_demand_key(bytes + 12, 4, key);
+		} else {
+			bbq_serve_demand_key(bytes, 16, key);
+		}
+	} else {
+		bbq_serve_demand_key(NULL, 0, key);
+	}
+
+	char line[BBQ_SERVE_DEMAND_LINE_MAX];
+	const size_t length = bbq_serve_demand_note(
+	        state->demand, key, request->station,
+	        bbq_serve_table_has(state->table, request->station), (int64_t)time(NULL), line);
+	if (length == 0) {
+		return;
+	}
+
+	struct stat file;
+	if (fstat(state->loop->demand_fd, &file) != 0 ||
+	    file.st_size >= (off_t)BBQ_SERVE_DEMAND_FILE_MAX) {
+		if (!state->demand_full_said) {
+			say(state, "demand file full or unreadable; dropping demand until "
+			           "the publisher empties it");
+			state->demand_full_said = 1;
+		}
+		return;
+	}
+	state->demand_full_said = 0;
+	(void)!write(state->loop->demand_fd, line, length);
+}
+
 static void answer(struct state *state, struct connection *connection) {
 	struct bbq_serve_request request;
 	enum bbq_serve_status status;
@@ -233,6 +287,7 @@ static void answer(struct state *state, struct connection *connection) {
 		connection->close_after = 1;
 	} else {
 		status = bbq_serve_answer(state->table, &request, &blob);
+		record_demand(state, connection, &request);
 	}
 
 	bbq_serve_response_header(connection->header, status, blob ? blob->size : 0);
@@ -321,8 +376,18 @@ int bbq_serve_run(const struct bbq_serve_loop *loop) {
 		return -1;
 	}
 
+	if (loop->record_demand) {
+		state.demand = calloc(1, sizeof *state.demand);
+		if (!state.demand) {
+			free(state.connections);
+			free(polls);
+			return -1;
+		}
+	}
+
 	reload(&state);
 	if (!state.table) {
+		free(state.demand);
 		free(state.connections);
 		free(polls);
 		return -1;
@@ -429,6 +494,7 @@ int bbq_serve_run(const struct bbq_serve_loop *loop) {
 		close_connection(&state, state.connection_count - 1);
 	}
 	bbq_serve_table_free(state.table);
+	free(state.demand);
 	free(state.connections);
 	free(polls);
 	return 0;

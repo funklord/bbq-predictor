@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -500,4 +501,130 @@ enum bbq_serve_status bbq_serve_answer(const struct bbq_serve_table *table,
 
 	*out = bbq_serve_blob_ref(blob);
 	return BBQ_SERVE_OK;
+}
+
+int bbq_serve_table_has(const struct bbq_serve_table *table, const char *station) {
+	if (!table || table->station_count == 0) {
+		return 0;
+	}
+
+	struct bbq_serve_station key;
+	memset(key.id, 0, sizeof key.id);
+	strncpy(key.id, station, BBQ_SERVE_STATION_MAX);
+	return bsearch(&key, table->station_list, table->station_count,
+	               sizeof *table->station_list, compare_station) != NULL;
+}
+
+void bbq_serve_demand_key(const uint8_t *address, size_t length,
+                          uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE]) {
+	memset(key, 0, BBQ_SERVE_DEMAND_KEY_SIZE);
+	if (length == 4) {
+		key[0] = 4;
+		memcpy(key + 1, address, 4);
+	} else if (length == 16) {
+		key[0] = 6;
+		memcpy(key + 1, address, 8);
+	}
+}
+
+static struct bbq_serve_demand_station *
+demand_station(struct bbq_serve_demand *demand, const char *station) {
+	for (size_t i = 0; i < demand->station_count; ++i) {
+		if (strcmp(demand->stations[i].id, station) == 0) {
+			return &demand->stations[i];
+		}
+	}
+	return NULL;
+}
+
+/*
+ * The address's entry, made if there is room. Room is a free slot or one
+ * whose day is over; an address still inside its day is never pushed out,
+ * since pushing one out would hand it a fresh allowance.
+ */
+static struct bbq_serve_demand_address *
+demand_address(struct bbq_serve_demand *demand,
+               const uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE], int64_t now_s) {
+	struct bbq_serve_demand_address *spent = NULL;
+
+	for (size_t i = 0; i < demand->address_count; ++i) {
+		struct bbq_serve_demand_address *entry = &demand->addresses[i];
+		if (memcmp(entry->key, key, BBQ_SERVE_DEMAND_KEY_SIZE) == 0) {
+			if (now_s - entry->since_s >= BBQ_SERVE_DEMAND_DAY_S || now_s < entry->since_s) {
+				entry->since_s = now_s;
+				entry->count = 0;
+			}
+			return entry;
+		}
+		if (!spent && (now_s - entry->since_s >= BBQ_SERVE_DEMAND_DAY_S ||
+		               now_s < entry->since_s)) {
+			spent = entry;
+		}
+	}
+
+	struct bbq_serve_demand_address *entry = spent;
+	if (!entry) {
+		if (demand->address_count == BBQ_SERVE_DEMAND_ADDRESSES) {
+			return NULL;
+		}
+		entry = &demand->addresses[demand->address_count++];
+	}
+	memset(entry, 0, sizeof *entry);
+	memcpy(entry->key, key, BBQ_SERVE_DEMAND_KEY_SIZE);
+	entry->since_s = now_s;
+	return entry;
+}
+
+size_t bbq_serve_demand_note(struct bbq_serve_demand *demand,
+                             const uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE],
+                             const char *station, int published, int64_t now_s,
+                             char line[BBQ_SERVE_DEMAND_LINE_MAX]) {
+	if (!bbq_serve_station_valid(station, strlen(station))) {
+		return 0;
+	}
+
+	/* Once an hour, whoever asks: a clock that went backwards counts as "due". */
+	struct bbq_serve_demand_station *known = demand_station(demand, station);
+	if (known && now_s >= known->written_s &&
+	    now_s - known->written_s < BBQ_SERVE_DEMAND_EVERY_S) {
+		return 0;
+	}
+
+	if (!published) {
+		struct bbq_serve_demand_address *address = demand_address(demand, key, now_s);
+		if (!address) {
+			return 0;
+		}
+
+		int introduced = 0;
+		for (uint8_t i = 0; i < address->count; ++i) {
+			introduced |= strcmp(address->introduced[i], station) == 0;
+		}
+		if (!introduced) {
+			if (address->count >= BBQ_SERVE_DEMAND_NEW_PER_DAY) {
+				return 0;
+			}
+			strcpy(address->introduced[address->count++], station);
+		}
+	}
+
+	if (!known) {
+		if (demand->station_count < BBQ_SERVE_DEMAND_STATIONS) {
+			known = &demand->stations[demand->station_count++];
+		} else {
+			/* The one written longest ago gives way; it is written again when asked. */
+			known = &demand->stations[0];
+			for (size_t i = 1; i < demand->station_count; ++i) {
+				if (demand->stations[i].written_s < known->written_s) {
+					known = &demand->stations[i];
+				}
+			}
+		}
+		strcpy(known->id, station);
+	}
+	known->written_s = now_s;
+
+	const int written = snprintf(line, BBQ_SERVE_DEMAND_LINE_MAX, "%s %lld\n", station,
+	                             (long long)now_s);
+	return written > 0 && written < BBQ_SERVE_DEMAND_LINE_MAX ? (size_t)written : 0;
 }

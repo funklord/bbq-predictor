@@ -279,9 +279,11 @@ int main(int argc, char *argv[]) {
 			qWarning("bbq-predictor: service fetching for station '%s'",
 			         watched.toUtf8().constData());
 
+			bbq_fetch_options options;
+			options.use_server = true;
 			outcome = bbq_wu_fetch_once(watched,
 			                            bbq_settings::geocode_override(), 10,
-			                            QString(), {}, true);
+			                            options);
 
 			qWarning("bbq-predictor: service fetch returned %d", outcome);
 			QCoreApplication::quit();
@@ -434,10 +436,12 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (arguments.contains(QStringLiteral("--fetch-once"))) {
+		bbq_fetch_options options;
+		options.history_path =
+		        bbq_option_value(arguments, QStringLiteral("--history-path"));
 		return bbq_wu_fetch_once(
 		        bbq_option_value(arguments, QStringLiteral("--station")),
-		        bbq_option_value(arguments, QStringLiteral("--geocode")), 30,
-		        bbq_option_value(arguments, QStringLiteral("--history-path")));
+		        bbq_option_value(arguments, QStringLiteral("--geocode")), 30, options);
 	}
 
 

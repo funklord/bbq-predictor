@@ -20,11 +20,13 @@ CONFIG += console
 
 SOURCES += \
 	src/publish/main.cpp \
+	src/publish/demand.cpp \
 	src/publish/encode.cpp \
 	src/publish/publish.cpp \
 	src/publish/signing_key.cpp
 
 HEADERS += \
+	src/publish/demand.h \
 	src/publish/encode.h \
 	src/publish/publish.h \
 	src/publish/signing_key.h

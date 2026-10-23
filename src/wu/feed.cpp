@@ -620,7 +620,13 @@ void bbq_wu_feed::tick() {
 		    bbq_server_may_attempt(m_server_state, now)) {
 			start_server_round(now);
 		}
-		if (!m_scraping) {
+
+		/*
+		 * A station the server did not publish an hour ago keeps its
+		 * providers while the server is asked again: if the answer is
+		 * still no, or the server is down, nothing was lost waiting.
+		 */
+		if (!m_scraping && m_station_not_served_utc == 0) {
 			return;
 		}
 	}
@@ -788,7 +794,7 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 	m_attempted.remove(static_cast<int>(bbq_wu_product::current_station));
 
 	/* What the server said about the old station says nothing about this one. */
-	m_station_not_served = false;
+	m_station_not_served_utc = 0;
 	m_server_head.clear();
 	m_server_head_generated = 0;
 	m_server_attempted = 0;
@@ -1539,7 +1545,7 @@ void bbq_wu_feed::refresh() {
 
 	if (server_active()) {
 		start_server_round(now);
-		if (m_scraping) {
+		if (m_scraping || m_station_not_served_utc != 0) {
 			start_provider_round(now);
 		}
 		return;
@@ -1611,9 +1617,12 @@ bool bbq_wu_feed::server_active() const {
 	 * Not for a coordinate somebody pinned: the server's bands are for
 	 * the station's own place, and a pinned point is somewhere else.
 	 */
+	const bool unserved_lately =
+	        m_station_not_served_utc != 0 &&
+	        QDateTime::currentSecsSinceEpoch() - m_station_not_served_utc < bbq_unserved_recheck_s;
+
 	return m_server != nullptr && !m_server_key.isEmpty() &&
-	       bbq_wire_station_valid(m_station_id) && !m_station_not_served &&
-	       !m_geocode_pinned;
+	       bbq_wire_station_valid(m_station_id) && !unserved_lately && !m_geocode_pinned;
 }
 
 void bbq_wu_feed::start_server_round(qint64 now_utc) {
@@ -1706,12 +1715,16 @@ void bbq_wu_feed::server_round_done(const std::vector<bbq_server_result> &result
 	if (!stations.contains(m_station_id)) {
 		bbq_server_record_success(m_server_state, now);
 		m_scraping = false;
-		m_station_not_served = true;
+		const bool providers_running = m_station_not_served_utc != 0;
+		m_station_not_served_utc = now;
 		save_server_state();
-		start_provider_round(now);
+		if (!providers_running) {
+			start_provider_round(now);
+		}
 		finish_one();
 		return;
 	}
+	m_station_not_served_utc = 0;
 
 	/* The head: applied when new, kept when unchanged. */
 	const bbq_server_result &head = results[2];
@@ -1912,6 +1925,10 @@ void bbq_wu_feed::save_server_state() {
 	    << m_server_state.network_ok_utc << m_server_state.next_attempt_utc
 	    << qint32(m_server ? m_server->preferred_route() : 0);
 	m_history.set_state_value(QStringLiteral("policy"), bytes);
+}
+
+int bbq_wu_feed::wu_requests() const {
+	return m_client->sent() + m_keys->sent();
 }
 
 bool bbq_wu_feed::open_history(const QString &path) {

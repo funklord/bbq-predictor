@@ -138,6 +138,9 @@ public:
 	 */
 	int waiting() const { return static_cast<int>(m_waiting.size()); }
 
+	/* API requests actually sent, which a queued one is not yet (sec 15.14). */
+	int sent() const { return m_sent; }
+
 signals:
 	/*
 	 * Raw response for a product. Undigested by design -- see above.
@@ -179,6 +182,7 @@ private:
 	QNetworkAccessManager *m_net;
 	bbq_wu_key_source *m_keys;
 	QList<pending> m_waiting;
+	int m_sent = 0;
 };
 
 #endif

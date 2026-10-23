@@ -1,5 +1,6 @@
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -37,9 +38,11 @@ private slots:
 	void a_connection_answers_only_so_many_requests();
 	void a_new_manifest_is_picked_up_without_a_signal();
 	void a_hangup_reloads_at_once();
+	void demand_is_written_for_what_clients_ask();
+	void a_full_demand_file_is_left_alone();
 
 private:
-	void start(const bbq_serve_limits &limits);
+	void start(const bbq_serve_limits &limits, int demand_fd = -1);
 	int connect_client();
 	static QByteArray request(uint8_t kind, const char *station,
 	                          const uint8_t *have = nullptr);
@@ -166,14 +169,16 @@ void test_serve_loop::cleanup() {
 	m_root = nullptr;
 }
 
-void test_serve_loop::start(const bbq_serve_limits &limits) {
-	m_thread = std::thread([this, limits] {
+void test_serve_loop::start(const bbq_serve_limits &limits, int demand_fd) {
+	m_thread = std::thread([this, limits, demand_fd] {
 		bbq_serve_loop loop = {};
 		loop.dir_fd = m_dir_fd;
 		loop.listen_fds = &m_listen_fd;
 		loop.listen_count = 1;
 		loop.wake_fd = m_wake[0];
 		loop.limits = limits;
+		loop.record_demand = demand_fd >= 0;
+		loop.demand_fd = demand_fd;
 		m_result = bbq_serve_run(&loop);
 	});
 }
@@ -381,6 +386,62 @@ void test_serve_loop::a_hangup_reloads_at_once() {
 		::close(fd);
 	}
 	QCOMPARE(body, file(260, 'J'));
+}
+
+/*
+ * Demand through the real loop (sec 15.14): a published station, four
+ * unpublished ones from one address, and the manifest, which names no
+ * station. The demand is written before the answer is, so by the time
+ * the last header has arrived every line that will be written has been.
+ */
+void test_serve_loop::demand_is_written_for_what_clients_ask() {
+	const QString path = m_root->filePath(QStringLiteral("demand"));
+	const int demand_fd = ::open(QFile::encodeName(path).constData(),
+	                             O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+	QVERIFY(demand_fd >= 0);
+	start(bbq_serve_default_limits(), demand_fd);
+
+	const int fd = connect_client();
+	QVERIFY(fd >= 0);
+	for (const char *station : {"ISTOCK877", "INEWA1", "INEWB2", "INEWC3", "INEWD4"}) {
+		QVERIFY(send_all(fd, request(BBQ_SERVE_HEAD, station)));
+		const QByteArray header = read_exactly(fd, BBQ_SERVE_RESPONSE_HEADER_SIZE);
+		QVERIFY(status_of(header) >= 0);
+		QCOMPARE(read_exactly(fd, int(length_of(header))).size(), int(length_of(header)));
+	}
+	QVERIFY(send_all(fd, request(BBQ_SERVE_STATIONS, "")));
+	QCOMPARE(status_of(read_exactly(fd, BBQ_SERVE_RESPONSE_HEADER_SIZE)), int(BBQ_SERVE_OK));
+	::close(fd);
+
+	QFile written(path);
+	QVERIFY(written.open(QIODevice::ReadOnly));
+	QStringList stations;
+	for (const QByteArray &line : written.readAll().split('\n')) {
+		if (!line.isEmpty()) {
+			stations << QString::fromLatin1(line.split(' ').value(0));
+		}
+	}
+	QCOMPARE(stations, QStringList({QStringLiteral("ISTOCK877"), QStringLiteral("INEWA1"),
+	                                QStringLiteral("INEWB2"), QStringLiteral("INEWC3")}));
+	::close(demand_fd);
+}
+
+void test_serve_loop::a_full_demand_file_is_left_alone() {
+	const QString path = m_root->filePath(QStringLiteral("demand"));
+	const int demand_fd = ::open(QFile::encodeName(path).constData(),
+	                             O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+	QVERIFY(demand_fd >= 0);
+	QVERIFY(::ftruncate(demand_fd, off_t(BBQ_SERVE_DEMAND_FILE_MAX)) == 0);
+	start(bbq_serve_default_limits(), demand_fd);
+
+	const int fd = connect_client();
+	QVERIFY(fd >= 0);
+	QVERIFY(send_all(fd, request(BBQ_SERVE_HEAD, "ISTOCK877")));
+	QCOMPARE(status_of(read_exactly(fd, BBQ_SERVE_RESPONSE_HEADER_SIZE)), int(BBQ_SERVE_OK));
+	::close(fd);
+
+	QCOMPARE(QFileInfo(path).size(), qint64(BBQ_SERVE_DEMAND_FILE_MAX));
+	::close(demand_fd);
 }
 
 QTEST_GUILESS_MAIN(test_serve_loop)

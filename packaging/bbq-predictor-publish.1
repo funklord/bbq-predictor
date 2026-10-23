@@ -17,6 +17,8 @@ bbq\-predictor\-publish \- fetch the weather bands once and publish them signed
 .IR LAT , LON ]
 .RB [ \-\-history\-path
 .IR FILE ]
+.RB [ \-\-demand
+.IR FILE ]
 .br
 .B bbq\-predictor\-publish \-\-generate\-signing\-key
 .I FILE
@@ -45,6 +47,33 @@ fetched, and a
 manifest written last. Each file is written aside and renamed into
 place, a month whose rows have not changed is not rewritten, and a round
 in which no band arrived leaves the last bands in place.
+.SS Stations clients ask for
+With
+.BR \-\-demand ,
+a run also fetches the stations
+.BR bbq\-predictor\-serve (8)
+recorded clients asking for, so that a client which moves to a station
+nobody publishes yet finds it published within a round or two:
+.IP \(bu 2
+The configured station is always fetched and never dropped.
+.IP \(bu 2
+Up to 50 other stations are admitted, in the order they are asked for.
+.IP \(bu 2
+A station nobody has asked for in 14 days is no longer fetched. What was
+published for it stays.
+.IP \(bu 2
+A station that says nothing for three rounds in which other stations
+answered is dropped and not admitted again for a week: that is what an
+id that does not exist looks like.
+.IP \(bu 2
+Every Weather Underground request, key pages included, comes out of a
+budget of 2000 an hour. When the stations together want more, each is
+fetched less often rather than the budget being spent; the summary line
+says the interval. A run also stops starting stations after four
+minutes, to end inside the timer's five.
+.PP
+The schedule is kept in the archive. In this mode each station prints
+its failures and one line, and the run one summary line.
 .SH OPTIONS
 .TP
 .BI \-\-dir " DIR"
@@ -66,6 +95,11 @@ omitted.
 .TP
 .BI \-\-history\-path " FILE"
 The archive to fetch into and publish from, instead of the default one.
+.TP
+.BI \-\-demand " FILE"
+The demand
+.BR bbq\-predictor\-serve (8)
+records. Read and emptied at the start of every run; absent is no demand.
 .TP
 .BI \-\-generate\-signing\-key " FILE"
 Create a new signing key at
@@ -93,7 +127,10 @@ advanced. The systemd timer forgives this by name.
 .TP
 .B 1
 Nothing covers now: the run stored nothing usable. A publish that fails
-after the fetch exits 1 as well.
+after the fetch exits 1 as well. With
+.BR \-\-demand ,
+1 is the configured station storing nothing or any publish failing; a
+station a client asked for saying nothing makes the run 3, not 1.
 .TP
 .B 2
 A configuration error, including a
@@ -123,6 +160,9 @@ sudo \-u bbq\-predictor bbq\-predictor\-publish \e
 The tree
 .BR bbq\-predictor\-serve (8)
 serves.
+.TP
+.I /var/lib/bbq-predictor/demand
+What the daemon recorded clients asking for, emptied by every round.
 .TP
 .I /var/lib/bbq-predictor/history.sqlite
 The archive the rounds build. Readable, so the applet's archive

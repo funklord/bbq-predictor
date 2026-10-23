@@ -16,6 +16,13 @@
 
 static struct bbq_serve_table *table;
 
+/*
+ * The demand tracker (sec 15.14) persists across inputs, as it does
+ * across requests in the daemon, so the fuzzer fills its tables and
+ * drives the eviction and full-table paths rather than only empty ones.
+ */
+static struct bbq_serve_demand *demand;
+
 static struct bbq_serve_blob *blob_of(uint32_t size, uint8_t fill) {
 	uint8_t bytes[BBQ_SERVE_FILE_MIN + 16];
 	memset(bytes, fill, sizeof bytes);
@@ -76,6 +83,42 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 			sum = (uint8_t)(sum + blob->data[i]);
 		}
 		bbq_serve_blob_unref(blob);
+	}
+
+	if (!demand) {
+		demand = calloc(1, sizeof *demand);
+	}
+	if (request.kind != BBQ_SERVE_STATIONS) {
+		/*
+		 * The address and the clock come from the request's own bytes,
+		 * so the fuzzer steers them too: `have` as the address, IPv4 or
+		 * IPv6 by its first bit, and the month as hours on the clock.
+		 */
+		uint8_t address[16];
+		memcpy(address, request.have, 8);
+		memcpy(address + 8, request.have, 8);
+		uint8_t key[BBQ_SERVE_DEMAND_KEY_SIZE];
+		bbq_serve_demand_key(address, (request.have[0] & 1) ? 16 : 4, key);
+
+		char line[BBQ_SERVE_DEMAND_LINE_MAX];
+		const int published = bbq_serve_table_has(table, request.station);
+		const size_t written = bbq_serve_demand_note(
+		        demand, key, request.station, published,
+		        1792000000 + (int64_t)request.month * 3600, line);
+
+		/* A line is the station, a space, digits and a newline, and nothing else. */
+		if (written != 0) {
+			const size_t id = strlen(request.station);
+			if (written >= BBQ_SERVE_DEMAND_LINE_MAX || written < id + 3 ||
+			    memcmp(line, request.station, id) != 0 || line[id] != ' ' ||
+			    line[written - 1] != '\n') {
+				abort();
+			}
+		}
+		if (demand->station_count > BBQ_SERVE_DEMAND_STATIONS ||
+		    demand->address_count > BBQ_SERVE_DEMAND_ADDRESSES) {
+			abort();
+		}
 	}
 
 	return 0;

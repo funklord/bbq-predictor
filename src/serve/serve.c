@@ -25,6 +25,7 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <netinet/in.h>
@@ -52,11 +53,14 @@ static void log_line(const char *line) {
 static void usage(FILE *out) {
 	fprintf(out,
 	        "usage: " PROGRAM " --dir DIR [--port N]... [--user NAME]\n"
+	        "                           [--demand FILE]\n"
 	        "                           [--max-connections N] [--per-address N]\n"
 	        "\n"
-	        "Serve the files bbq-predictor --publish wrote under DIR.\n"
+	        "Serve the files bbq-predictor-publish wrote under DIR.\n"
 	        "Ports default to 7227 and 443. Started as root it needs --user,\n"
-	        "and chroots into DIR as that user once the ports are bound.\n");
+	        "and chroots into DIR as that user once the ports are bound.\n"
+	        "--demand appends the stations clients ask for to FILE, which must\n"
+	        "exist, for the publisher to read.\n");
 }
 
 /* A whole decimal number in [low, high], or -1. */
@@ -162,6 +166,7 @@ static int confine(const char *dir, const char *user) {
 int main(int argc, char **argv) {
 	const char *dir = NULL;
 	const char *user = NULL;
+	const char *demand = NULL;
 	int ports[MAX_PORTS];
 	int port_count = 0;
 	struct bbq_serve_limits limits = bbq_serve_default_limits();
@@ -184,6 +189,8 @@ int main(int argc, char **argv) {
 			dir = value;
 		} else if (strcmp(option, "--user") == 0) {
 			user = value;
+		} else if (strcmp(option, "--demand") == 0) {
+			demand = value;
 		} else if (strcmp(option, "--port") == 0 && port_count < MAX_PORTS &&
 		           (parsed = number(value, 1, 65535)) > 0) {
 			ports[port_count++] = (int)parsed;
@@ -234,6 +241,25 @@ int main(int argc, char **argv) {
 				fprintf(stderr, PROGRAM ": too few file descriptors allowed\n");
 				return 1;
 			}
+		}
+	}
+
+	/*
+	 * The demand file (sec 15.14), opened BEFORE the chroot because it
+	 * lives outside the tree, and appended to through this one descriptor
+	 * for the life of the process. Never created here -- root would own
+	 * it and the publisher could not empty it -- and never through a
+	 * symlink. Asked for and unusable is a configuration error, said at
+	 * start rather than discovered as stations that never get added.
+	 */
+	int demand_fd = -1;
+	if (demand) {
+		demand_fd = open(demand, O_WRONLY | O_APPEND | O_NOFOLLOW | O_NOCTTY | O_CLOEXEC);
+		struct stat file;
+		if (demand_fd < 0 || fstat(demand_fd, &file) != 0 || !S_ISREG(file.st_mode)) {
+			fprintf(stderr, PROGRAM ": demand file %s: %s\n", demand,
+			        demand_fd < 0 ? strerror(errno) : "not a regular file");
+			return 2;
 		}
 	}
 
@@ -290,6 +316,8 @@ int main(int argc, char **argv) {
 	loop.listen_count = (size_t)port_count;
 	loop.wake_fd = wake[0];
 	loop.limits = limits;
+	loop.record_demand = demand_fd >= 0;
+	loop.demand_fd = demand_fd;
 	loop.log = log_line;
 
 	const int result = bbq_serve_run(&loop);

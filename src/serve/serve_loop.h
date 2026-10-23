@@ -49,6 +49,15 @@ struct bbq_serve_loop {
 
 	struct bbq_serve_limits limits;
 
+	/*
+	 * Where the demand lines go (sec 15.14): an open, appending
+	 * descriptor in demand_fd, used only when `record_demand` is set --
+	 * a flag rather than a -1, because a loop built with memset would
+	 * otherwise record into descriptor 0.
+	 */
+	int record_demand;
+	int demand_fd;
+
 	/* Where a line of news goes; NULL for nowhere. */
 	void (*log)(const char *line);
 };
