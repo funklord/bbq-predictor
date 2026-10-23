@@ -38,7 +38,8 @@ private:
 	bool m_no_applet = false;
 
 	int run(const QString &binary, const QTemporaryDir &home,
-	        const QStringList &arguments, QString *said);
+	        const QStringList &arguments, QString *said,
+	        QString *standard_output = nullptr);
 };
 
 void test_publisher::initTestCase() {
@@ -62,7 +63,8 @@ void test_publisher::initTestCase() {
 }
 
 int test_publisher::run(const QString &binary, const QTemporaryDir &home,
-                        const QStringList &arguments, QString *said) {
+                        const QStringList &arguments, QString *said,
+                        QString *standard_output) {
 	/*
 	 * Every standard location moved into the temporary directory, so a
 	 * guard that fails lands somewhere harmless and somewhere this test
@@ -78,8 +80,13 @@ int test_publisher::run(const QString &binary, const QTemporaryDir &home,
 	environment.remove(QStringLiteral("WAYLAND_DISPLAY"));
 	environment.remove(QStringLiteral("QT_QPA_PLATFORM"));
 
+	/*
+	 * The channels are read apart, so a check of what a program printed on
+	 * stdout is not broken by what Qt says on stderr: in the C locale, as
+	 * CI runs, Qt warns that it is not UTF-8 before the program prints a
+	 * word, and --version's first line stopped being the first line.
+	 */
 	QProcess process;
-	process.setProcessChannelMode(QProcess::MergedChannels);
 	process.setProcessEnvironment(environment);
 	process.start(binary, arguments);
 	if (!process.waitForFinished(60000)) {
@@ -89,7 +96,11 @@ int test_publisher::run(const QString &binary, const QTemporaryDir &home,
 		return -1;
 	}
 
-	*said = QString::fromLocal8Bit(process.readAll());
+	const QString out = QString::fromLocal8Bit(process.readAllStandardOutput());
+	*said = out + QString::fromLocal8Bit(process.readAllStandardError());
+	if (standard_output != nullptr) {
+		*standard_output = out;
+	}
 	return process.exitStatus() == QProcess::NormalExit ? process.exitCode() : -1;
 }
 
@@ -168,10 +179,11 @@ void test_publisher::the_version_names_the_copyright_holder() {
 	QTemporaryDir home;
 	QVERIFY(home.isValid());
 	QString said;
+	QString out;
 
-	QCOMPARE(run(m_publisher, home, {QStringLiteral("--version")}, &said), 0);
-	QVERIFY2(said.startsWith(QStringLiteral("bbq-predictor-publish ")), qPrintable(said));
-	QVERIFY2(said.contains(QStringLiteral("Copyright (C) 2026 Nabeel Sowan")),
+	QCOMPARE(run(m_publisher, home, {QStringLiteral("--version")}, &said, &out), 0);
+	QVERIFY2(out.startsWith(QStringLiteral("bbq-predictor-publish ")), qPrintable(said));
+	QVERIFY2(out.contains(QStringLiteral("Copyright (C) 2026 Nabeel Sowan")),
 	         qPrintable(said));
 }
 

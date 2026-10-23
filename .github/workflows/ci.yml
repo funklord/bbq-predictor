@@ -122,11 +122,20 @@ jobs:
       #
       # The suites set QT_QPA_PLATFORM themselves rather than trusting the
       # environment, so no display is needed here.
+      #
+      # **Not piped into tee.** A pipeline's status is its last command's, so
+      # `make test | tee` passed this step with a suite failing -- found
+      # 2026-10-23, test_publisher red in the C locale under a green run.
+      # The log is written whole and printed after, and make's own status
+      # is the step's.
       - name: Run the offline suites
         run: |
           useradd -m ci
           chown -R ci:ci .
-          su ci -c "cd '$PWD' && make test 2>&1 | tee test.log"
+          status=0
+          su ci -c "cd '$PWD' && make test > test.log 2>&1" || status=$?
+          cat test.log
+          exit $status
 
       # `make test` refuses a run over zero binaries, which is the collapse it
       # can see. This is the one it cannot: a suite that stopped being listed
