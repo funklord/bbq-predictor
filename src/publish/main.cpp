@@ -153,6 +153,7 @@ int publish_demanded(const QString &station, const QString &geocode,
 		options.history_path = history_path;
 		options.after_round = publishing(id, true);
 		options.quiet = true;
+		options.scheduled = true;
 		options.report = &report;
 
 		const int code = bbq_wu_fetch_once(id, id == station ? geocode : QString(), 30, options);
@@ -301,6 +302,7 @@ int main(int argc, char *argv[]) {
 		bbq_fetch_options options;
 		options.history_path = history_path;
 		options.after_round = publishing(station, false);
+		options.scheduled = true;
 		return bbq_wu_fetch_once(station, geocode, 30, options);
 	}
 

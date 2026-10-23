@@ -4,6 +4,7 @@
 #include "publish/encode.h"
 #include "publish/signing_key.h"
 #include "store/history.h"
+#include "wire/read.h"
 
 #include <QDir>
 #include <QFile>
@@ -280,12 +281,42 @@ int bbq_publish(const QString &dir, const QString &station,
 	 */
 	std::vector<const bbq_series *> bands;
 	bool any_band = false;
+
+	/*
+	 * A BAND THIS ROUND DID NOT FETCH IS CARRIED FROM THE LAST HEAD
+	 * (sec 15.16). The publisher's rounds fetch each band only when its
+	 * interval is up, so most rounds bring the current reading alone, and
+	 * a head of that alone would hand a new client no forecast for up to
+	 * an hour. The last head is read back as a client reads it, signature
+	 * against this key and all, so a damaged one is carried from not at
+	 * all; and each carried band keeps its own fetch time, so a client
+	 * still sees how old it is.
+	 */
+	bbq_wire_head previous_head;
+	{
+		QFile in(station_dir + QStringLiteral("/head"));
+		QString unused;
+		if (!(in.size() <= 1024 * 1024 && in.open(QIODevice::ReadOnly) &&
+		      bbq_wire_read_head(in.readAll(), key.public_key(), station, &previous_head,
+		                         &unused))) {
+			previous_head.bands.clear();
+		}
+	}
+
 	if (composite) {
 		for (bbq_band band : {bbq_band::observed, bbq_band::current, bbq_band::nowcast_fine,
 		                      bbq_band::nowcast, bbq_band::extended, bbq_band::hourly}) {
 			const bbq_series *series = composite->band(band);
+			if (series && !series->is_empty()) {
+				any_band = true;
+			} else {
+				for (const bbq_series &carried : previous_head.bands) {
+					if (carried.band() == band && !carried.is_empty()) {
+						series = &carried;
+					}
+				}
+			}
 			bands.push_back(series);
-			any_band = any_band || (series && !series->is_empty());
 		}
 	}
 	if (any_band) {

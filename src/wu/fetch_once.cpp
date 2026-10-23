@@ -289,6 +289,7 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 	 * holes. A store that will not open is reported and not fatal: the
 	 * check is still a check.
 	 */
+	feed.set_scheduled(options.scheduled);
 	if (!feed.open_history(options.history_path)) {
 		error << "fetch-once: history unavailable: " << feed.history_error()
 		      << "\n";
@@ -338,7 +339,8 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		loop.quit();
 	});
 
-	out << "fetch-once: fetching every band once, through the feed\n";
+	out << (options.scheduled ? "fetch-once: fetching what is due, through the feed\n"
+	                          : "fetch-once: fetching every band once, through the feed\n");
 	out.flush();
 
 	feed.refresh();
@@ -492,7 +494,8 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 
 	const bbq_fetch_outcome outcome = bbq_fetch_verdict(
 	        failures, timed_out, forecast_bands_asked,
-	        composite.at(now).is_valid());
+	        composite.at(now).is_valid() ||
+	                (options.scheduled && feed.current_reading_holds(now)));
 
 	/*
 	 * Whatever the round's outcome: the months come from the store,
@@ -505,7 +508,9 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		const bbq_series *observed = composite.band(bbq_band::observed);
 		const bbq_series *current = composite.band(bbq_band::current);
 		options.report->station_data =
-		        (observed && !observed->is_empty()) || (current && !current->is_empty());
+		        (observed && !observed->is_empty()) || (current && !current->is_empty()) ||
+		        (options.scheduled &&
+		         feed.current_reading_holds(QDateTime::currentSecsSinceEpoch()));
 	}
 
 	/* The one line a quiet round prints, whatever it ends as. */

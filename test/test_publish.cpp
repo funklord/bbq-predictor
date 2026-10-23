@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <map>
 
 #include <QDir>
 #include <QFile>
@@ -12,6 +13,7 @@
 #include "model/composite.h"
 #include "publish/encode.h"
 #include "publish/publish.h"
+#include "wire/read.h"
 #include "publish/signing_key.h"
 #include "store/history.h"
 
@@ -45,6 +47,7 @@ private slots:
 	void publishing_twice_rewrites_nothing();
 	void a_new_observation_rewrites_only_its_month();
 	void a_round_with_no_bands_keeps_the_last_head();
+	void a_band_not_fetched_is_carried_from_the_last_head();
 	void a_station_that_cannot_be_a_path_is_refused();
 	void a_key_others_can_read_is_refused();
 
@@ -637,6 +640,66 @@ void test_publish::a_round_with_no_bands_keeps_the_last_head() {
 	const bbq_composite nothing;
 	QCOMPARE(bbq_publish(dir, "ISTOCK877", &nothing, history, m_key, 1790000200, out, error), 0);
 	QCOMPARE(contents(dir + "/ISTOCK877/head"), head);
+}
+
+/*
+ * Sec 15.16: the publisher's rounds fetch each band only when its interval
+ * is up, so a round that brought the current reading alone must still
+ * publish the hourly band it fetched before -- with that band's own fetch
+ * time, not this round's, or a client would take an hour-old forecast for
+ * a fresh one. And only from a head this key signed.
+ */
+void test_publish::a_band_not_fetched_is_carried_from_the_last_head() {
+	QTemporaryDir root;
+	bbq_history history;
+	QVERIFY(seed_history(history, root.filePath("history.sqlite"), "ISTOCK877"));
+	const QString dir = root.filePath("pub");
+	QString text;
+	QTextStream out(&text), error(&text);
+
+	const bbq_composite hourly = one_band();
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &hourly, history, m_key, 1790000100, out, error), 0);
+
+	bbq_series current(bbq_band::current, QStringLiteral("wunderground"));
+	bbq_sample now;
+	now.start_utc = 1790000400;
+	now.duration_s = 900;
+	now.temperature = 12.5;
+	current.set_samples({now});
+	current.set_fetched_utc(1790000500);
+	bbq_composite only_current;
+	only_current.set_series(current);
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &only_current, history, m_key, 1790000600, out,
+	                     error),
+	         0);
+
+	bbq_wire_head head;
+	QString why;
+	QVERIFY2(bbq_wire_read_head(contents(dir + "/ISTOCK877/head"), m_key.public_key(),
+	                            "ISTOCK877", &head, &why),
+	         qPrintable(why));
+	QCOMPARE(head.generated_utc, qint64(1790000500));
+
+	std::map<bbq_band, qint64> fetched;
+	for (const bbq_series &band : head.bands) {
+		fetched[band.band()] = band.fetched_utc();
+	}
+	QCOMPARE(fetched.size(), size_t(2));
+	QCOMPARE(fetched[bbq_band::current], qint64(1790000500));
+	QCOMPARE(fetched[bbq_band::hourly], qint64(1789999000));
+
+	/* A head another key signed is carried from not at all. */
+	bbq_signing_key other;
+	uint8_t seed[32] = {7, 7, 7};
+	other.set_seed(seed);
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &hourly, history, other, 1790000700, out, error), 0);
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &only_current, history, m_key, 1790000800, out,
+	                     error),
+	         0);
+	QVERIFY(bbq_wire_read_head(contents(dir + "/ISTOCK877/head"), m_key.public_key(),
+	                           "ISTOCK877", &head, &why));
+	QCOMPARE(head.bands.size(), size_t(1));
+	QCOMPARE(head.bands.front().band(), bbq_band::current);
 }
 
 void test_publish::a_station_that_cannot_be_a_path_is_refused() {

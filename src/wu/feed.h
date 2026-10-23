@@ -250,6 +250,25 @@ public:
 	 * providers as it always has. The publisher's own --fetch-once never
 	 * calls this, since a server reading itself would publish nothing new.
 	 */
+	/*
+	 * THE PUBLISHER'S ROUND (sec 15.16): fetch only what is due, by each
+	 * band's own interval of sec 2.5.1, timed from its last SUCCESS and
+	 * remembered in the store, so a new process every five minutes
+	 * honours the intervals a long-lived one does. The station's derived
+	 * coordinate is remembered beside it, since the observed reply that
+	 * would supply it may not be due. Set before open_history and
+	 * set_station; the applet never sets it, because its refresh is a
+	 * person asking for everything now.
+	 */
+	void set_scheduled(bool scheduled) { m_scheduled = scheduled; }
+
+	/*
+	 * Whether a scheduled round's last current reading, which this round
+	 * may not have been due to fetch, still covers now: it arrived within
+	 * its validity of sec 3.9. Always false outside a scheduled round.
+	 */
+	bool current_reading_holds(qint64 now_utc) const;
+
 	void set_server(const QByteArray &public_key,
 	                std::vector<bbq_server_route> routes = bbq_server_default_routes());
 
@@ -301,6 +320,12 @@ private:
 	void apply_head(const QByteArray &file, bool remember);
 	void load_server_state();
 	void save_server_state();
+
+	/* Sec 15.16: whether `band` is due, and the record of what arrived. */
+	bool scheduled_due(const char *band, int interval_s, qint64 now_utc) const;
+	void note_success(const char *band);
+	void load_schedule();
+	void save_schedule();
 	void probe_network(qint64 now_utc);
 
 	/*
@@ -478,6 +503,10 @@ private:
 	QHash<QString, qint64> m_pinned_attempted;
 	qint64 m_radar_attempted = 0;
 	qint64 m_extended_attempted = 0;
+
+	/* Sec 15.16, used only when m_scheduled: band name to last success. */
+	bool m_scheduled = false;
+	QHash<QString, qint64> m_succeeded;
 	int m_outstanding = 0;
 
 	QTimer *m_timer = nullptr;

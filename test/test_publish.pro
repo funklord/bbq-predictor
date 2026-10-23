@@ -7,6 +7,7 @@ INCLUDEPATH += $$PWD/../monocypher/src $$PWD/../monocypher/src/optional \
 SOURCES += test_publish.cpp \
 	$$PWD/../src/publish/encode.cpp \
 	$$PWD/../src/wire/format.cpp \
+	$$PWD/../src/wire/read.cpp \
 	$$PWD/../src/publish/publish.cpp \
 	$$PWD/../src/store/history.cpp \
 	$$PWD/../src/publish/signing_key.cpp \
@@ -16,6 +17,7 @@ SOURCES += test_publish.cpp \
 HEADERS += \
 	$$PWD/../src/publish/encode.h \
 	$$PWD/../src/wire/format.h \
+	$$PWD/../src/wire/read.h \
 	$$PWD/../src/publish/publish.h \
 	$$PWD/../src/store/history.h \
 	$$PWD/../src/publish/signing_key.h \

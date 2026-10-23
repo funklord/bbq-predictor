@@ -78,6 +78,13 @@ struct bbq_fetch_options {
 	 */
 	bool quiet = false;
 
+	/*
+	 * Fetch only what is due by each band's interval, remembered in the
+	 * store across processes (sec 15.16). The publisher's round; the
+	 * diagnostic asks for everything, which is what it is for.
+	 */
+	bool scheduled = false;
+
 	/* Filled in when given. */
 	bbq_round_report *report = nullptr;
 };

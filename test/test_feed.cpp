@@ -1,3 +1,4 @@
+#include <QDateTime>
 #include <QNetworkProxy>
 #include <QTemporaryDir>
 #include <QSignalSpy>
@@ -48,6 +49,7 @@ private slots:
 	void the_origin_moves_only_when_an_answer_arrives();
 	void a_reader_who_never_moves_still_rediscovers_eventually();
 	void the_key_outlives_the_process_until_it_is_refused();
+	void a_scheduled_round_asks_only_for_what_is_due();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -1154,6 +1156,105 @@ void test_feed::the_key_outlives_the_process_until_it_is_refused() {
 	QVERIFY(third.open_history(store));
 	QVERIFY2(!third.m_keys->has_key(),
 	         "a refused key was offered to the next round");
+}
+
+/*
+ * Sec 15.16: the publisher is a new process every round, so the intervals
+ * of sec 2.5.1 hold only if what arrived, and when, outlives it. Three
+ * feeds on one store stand in for three rounds; a dead proxy keeps them
+ * off the network, and what each ATTEMPTS is read from the feed.
+ */
+void test_feed::a_scheduled_round_asks_only_for_what_is_due() {
+	QNetworkProxy::setApplicationProxy(
+	        QNetworkProxy(QNetworkProxy::HttpProxy, QStringLiteral("127.0.0.1"), 1));
+	QTemporaryDir directory;
+	QVERIFY(directory.isValid());
+	const QString store = directory.filePath(QStringLiteral("h.sqlite"));
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	qint64 backfill_asked = 0;
+
+	const auto attempted = [](const bbq_wu_feed &feed) {
+		QStringList names;
+		for (auto it = feed.m_attempted.begin(); it != feed.m_attempted.end(); ++it) {
+			names << QString::fromLatin1(bbq_wu_product_name(bbq_wu_product(it.key())));
+		}
+		if (feed.m_radar_attempted != 0) {
+			names << QStringLiteral("radar");
+		}
+		if (feed.m_extended_attempted != 0) {
+			names << QStringLiteral("extended");
+		}
+		names.sort();
+		return names;
+	};
+
+	{
+		/* Nothing has arrived yet, and the coordinate is not known: the station bands. */
+		bbq_wu_feed first;
+		first.set_scheduled(true);
+		QVERIFY(first.open_history(store));
+		first.set_station(QStringLiteral("ITEST1"));
+		first.refresh();
+		QCOMPARE(attempted(first), QStringList({"current", "observed"}));
+		backfill_asked = first.m_backfill_attempted;
+		QVERIFY(backfill_asked != 0);
+
+		/* The round's answers, as the ready handlers record them, a minute ago. */
+		first.m_latitude = 59.33;
+		first.m_longitude = 18.07;
+		first.m_have_geocode = true;
+		for (const char *band : {"current", "observed", "nowcast", "hourly", "extended"}) {
+			first.m_succeeded.insert(QString::fromLatin1(band), now - 60);
+		}
+		first.save_schedule();
+	}
+
+	{
+		/*
+		 * A minute on: nothing is due but the radar band, which never
+		 * arrived -- and the forecast bands are asked with a coordinate
+		 * the store kept, though no observed reply came to supply one.
+		 */
+		bbq_wu_feed second;
+		second.set_scheduled(true);
+		QVERIFY(second.open_history(store));
+		second.set_station(QStringLiteral("ITEST1"));
+		QVERIFY(second.has_geocode());
+		second.refresh();
+		QCOMPARE(attempted(second), QStringList({"radar"}));
+
+		/* The backfill's six hours held across the process, too. */
+		QCOMPARE(second.m_backfill_attempted, backfill_asked);
+
+		for (const char *band : {"current", "observed", "nowcast", "hourly", "extended"}) {
+			second.m_succeeded.insert(QString::fromLatin1(band), now - 300 + 20);
+		}
+		second.save_schedule();
+	}
+
+	/*
+	 * Everything arrived 280 s ago. The current reading's five minutes,
+	 * less the thirty seconds allowed for the timer's jitter, are up; the
+	 * observed band's ten, the nowcast's fifteen and the hourly band's
+	 * sixty are not; the radar band has still never arrived.
+	 */
+	bbq_wu_feed third;
+	third.set_scheduled(true);
+	QVERIFY(third.open_history(store));
+	third.set_station(QStringLiteral("ITEST1"));
+	third.refresh();
+	QCOMPARE(attempted(third), QStringList({"current", "radar"}));
+
+	/* And the applet's refresh still asks for everything. */
+	bbq_wu_feed applet;
+	QVERIFY(applet.open_history(store));
+	applet.set_station(QStringLiteral("ITEST1"));
+	applet.set_geocode(59.33, 18.07);
+	applet.refresh();
+	QCOMPARE(attempted(applet),
+	         QStringList({"current", "extended", "hourly", "nowcast", "observed", "radar"}));
+
+	QNetworkProxy::setApplicationProxy(QNetworkProxy());
 }
 
 QTEST_GUILESS_MAIN(test_feed)

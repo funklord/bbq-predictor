@@ -2,17 +2,17 @@
 
 #include "model/units.h"
 
+#include <QDataStream>
 #include <QDate>
 #include <QDateTime>
-
-#include <cmath>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QDataStream>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QTimer>
+
+#include <cmath>
 
 #include "wu/client.h"
 #include "wu/key_source.h"
@@ -305,6 +305,7 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		bbq_series series = bbq_openmeteo_read(document);
 
 		if (!series.is_empty()) {
+			note_success("extended");
 			m_history.record_forecast(m_station_id, series,
 			                          QDateTime::currentSecsSinceEpoch());
 			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
@@ -334,6 +335,7 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		bbq_series series = bbq_met_read_nowcast(document);
 
 		if (!series.is_empty()) {
+			note_success("radar");
 			m_history.record_forecast(m_station_id, series,
 			                          QDateTime::currentSecsSinceEpoch());
 			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
@@ -432,6 +434,9 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 
 		bbq_series series = read_for(product, document);
 		series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
+		if (!series.is_empty()) {
+			note_success(bbq_wu_product_name(product));
+		}
 
 		const bool was_observed = product == bbq_wu_product::observed;
 		const bool need_geocode = !m_have_geocode;
@@ -483,6 +488,7 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 					m_longitude = first.value(QStringLiteral("lon")).toDouble();
 					m_have_geocode = true;
 					emit geocode_derived(m_latitude, m_longitude);
+					save_schedule();
 					start_forecast_bands();
 				}
 			}
@@ -799,6 +805,7 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 	m_server_head_generated = 0;
 	m_server_attempted = 0;
 	load_server_state();
+	load_schedule();
 }
 
 void bbq_wu_feed::forget_location_freshness() {
@@ -1471,13 +1478,21 @@ void bbq_wu_feed::attempt_backfill(qint64 now_utc) {
 	 * lands on somebody else's quota (sec 2.5), which is the reason it
 	 * is worth declining rather than merely tidy.
 	 */
+	/*
+	 * In a scheduled round the stamp outlives the process (sec 15.16):
+	 * held in memory alone, every publisher round asked for yesterday
+	 * again, a request every five minutes where six hours was meant.
+	 */
 	const QDate wanted = backfill_day_wanted(m_station_id);
+	m_backfill_attempted = now_utc;
+	if (m_scheduled) {
+		m_succeeded.insert(QStringLiteral("backfill"), now_utc);
+		save_schedule();
+	}
 	if (!wanted.isValid()) {
-		m_backfill_attempted = now_utc;
 		return;
 	}
 
-	m_backfill_attempted = now_utc;
 	++m_outstanding;
 
 	/*
@@ -1523,10 +1538,18 @@ void bbq_wu_feed::attempt_extended(qint64 now_utc) {
 void bbq_wu_feed::start_forecast_bands() {
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
 
-	attempt_radar(now);
-	attempt_extended(now);
-	attempt(bbq_wu_product::nowcast, now);
-	attempt(bbq_wu_product::hourly, now);
+	if (!m_scheduled || scheduled_due("radar", radar_freshness_s, now)) {
+		attempt_radar(now);
+	}
+	if (!m_scheduled || scheduled_due("extended", extended_freshness_s, now)) {
+		attempt_extended(now);
+	}
+	if (!m_scheduled || scheduled_due("nowcast", freshness_s(bbq_wu_product::nowcast), now)) {
+		attempt(bbq_wu_product::nowcast, now);
+	}
+	if (!m_scheduled || scheduled_due("hourly", freshness_s(bbq_wu_product::hourly), now)) {
+		attempt(bbq_wu_product::hourly, now);
+	}
 }
 
 void bbq_wu_feed::refresh() {
@@ -1556,8 +1579,14 @@ void bbq_wu_feed::refresh() {
 
 void bbq_wu_feed::start_provider_round(qint64 now) {
 	if (!m_station_id.isEmpty()) {
-		attempt(bbq_wu_product::observed, now);
-		attempt(bbq_wu_product::current_station, now);
+		if (!m_scheduled ||
+		    scheduled_due("observed", freshness_s(bbq_wu_product::observed), now)) {
+			attempt(bbq_wu_product::observed, now);
+		}
+		if (!m_scheduled ||
+		    scheduled_due("current", freshness_s(bbq_wu_product::current_station), now)) {
+			attempt(bbq_wu_product::current_station, now);
+		}
 
 		/*
 		 * Here as well as in tick(), because tick() refuses to run
@@ -1927,6 +1956,84 @@ void bbq_wu_feed::save_server_state() {
 	m_history.set_state_value(QStringLiteral("policy"), bytes);
 }
 
+/* --- the publisher's schedule (project.md sec 15.16) ----------------- */
+
+/*
+ * Thirty seconds of slack, for the timer's own randomised delay: a band on
+ * a five-minute interval, fetched at one round, must be due at the next
+ * even when that round fires a few seconds early.
+ */
+const qint64 scheduled_slack_s = 30;
+
+bool bbq_wu_feed::scheduled_due(const char *band, int interval_s, qint64 now_utc) const {
+	const qint64 last = m_succeeded.value(QString::fromLatin1(band), 0);
+	return last > now_utc || now_utc - last >= interval_s - scheduled_slack_s;
+}
+
+bool bbq_wu_feed::current_reading_holds(qint64 now_utc) const {
+	const qint64 arrived = m_succeeded.value(QStringLiteral("current"), 0);
+	return arrived > 0 && arrived <= now_utc && now_utc - arrived < bbq_current_validity_s;
+}
+
+void bbq_wu_feed::note_success(const char *band) {
+	if (!m_scheduled) {
+		return;
+	}
+	m_succeeded.insert(QString::fromLatin1(band), QDateTime::currentSecsSinceEpoch());
+	save_schedule();
+}
+
+/*
+ * Kept per station, in the store's named values: the success times and a
+ * coordinate the station's own reply supplied. A pinned coordinate is not
+ * kept -- it is the command line's, and comes again with each run.
+ */
+void bbq_wu_feed::load_schedule() {
+	m_succeeded.clear();
+	if (!m_scheduled || !m_history.is_open() || m_station_id.isEmpty()) {
+		return;
+	}
+
+	const QByteArray bytes = m_history.state_value(QStringLiteral("schedule/") + m_station_id);
+	QDataStream in(bytes);
+	in.setVersion(QDataStream::Qt_6_0);
+	quint32 version = 0;
+	QHash<QString, qint64> succeeded;
+	bool have_point = false;
+	double latitude = 0.0;
+	double longitude = 0.0;
+	in >> version >> succeeded >> have_point >> latitude >> longitude;
+	if (in.status() != QDataStream::Ok || version != 1 || succeeded.size() > 32) {
+		return;
+	}
+
+	m_succeeded = succeeded;
+
+	/* Not a success but an attempt, as the backfill's interval is (sec 12.13). */
+	m_backfill_attempted = succeeded.value(QStringLiteral("backfill"), 0);
+
+	if (have_point && !m_have_geocode && std::isfinite(latitude) && std::isfinite(longitude) &&
+	    std::abs(latitude) <= 90.0 && std::abs(longitude) <= 180.0) {
+		m_latitude = latitude;
+		m_longitude = longitude;
+		m_have_geocode = true;
+	}
+}
+
+void bbq_wu_feed::save_schedule() {
+	if (!m_scheduled || !m_history.is_open() || m_station_id.isEmpty()) {
+		return;
+	}
+
+	QByteArray bytes;
+	QDataStream out(&bytes, QIODevice::WriteOnly);
+	out.setVersion(QDataStream::Qt_6_0);
+	const bool derived = m_have_geocode && !m_geocode_pinned;
+	out << quint32(1) << m_succeeded << derived << (derived ? m_latitude : 0.0)
+	    << (derived ? m_longitude : 0.0);
+	m_history.set_state_value(QStringLiteral("schedule/") + m_station_id, bytes);
+}
+
 int bbq_wu_feed::wu_requests() const {
 	return m_client->sent() + m_keys->sent();
 }
@@ -1939,6 +2046,8 @@ bool bbq_wu_feed::open_history(const QString &path) {
 
 	/* The server's state lives in the store, so it can only be read now. */
 	load_server_state();
+
+	load_schedule();
 
 	/* And so does the last key that worked (sec 2.6.1.3). */
 	m_keys->remember(QString::fromLatin1(m_history.state_value(QStringLiteral("wu_key"))));

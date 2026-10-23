@@ -7751,12 +7751,67 @@ was reverted in 13.5.2 and allowed again in 13.11.6, so `debian/rules`
 moves the units there first on a debhelper older than that and leaves a
 newer one alone.
 
+**On Devuan daedalus itself** (`devuan/devuan:daedalus`, the package
+alone, cold): 114 packages, the accounts made by
+`systemd-standalone-sysusers` with no systemd running, the daemon
+confined by its LSB script, demand written and the asked-for station
+admitted -- and no data, because four rounds over twenty minutes found
+no key on any of twelve page fetches (sec 2.6.1.4). The holder decided
+to upgrade the server to excalibur rather than install this.
+
 **And a gap the clean build found in every build.** The tests open SQLite
 archives, and Qt loads its SQLite driver at run time, so no link names
 it and `Build-Depends` never had it. This machine has it because the
 applet does; a bookworm container with exactly the declared build
 dependencies failed every store test with "Driver not loaded" -- 5 of
 19 binaries. `libqt6sql6-sqlite <!nocheck>` is declared now.
+
+## 15.16 The publisher's rounds keep the bands' own intervals
+
+**Found 2026-10-23 reading the publisher's logs: every round fetched
+every Weather Underground product** -- current, observed, nowcast and
+hourly, four requests every five minutes per station -- where sec 2.5.1
+gives them five, ten, fifteen and sixty minutes. The feed keeps those
+intervals in memory, which serves the applet's long-lived process and is
+forgotten by a publisher that is a new process every round; and the
+round began with refresh(), which is the applet's "everything, now". So
+the publisher spent 48 requests an hour per station where 23 were
+meant, against the one budget and the one address of sec 15.14.
+
+**A scheduled round** (`bbq_wu_feed::set_scheduled`, the publisher's
+alone): each band is fetched when its interval is up, timed from its
+last SUCCESS -- so a round that got no key retries next round rather
+than an interval later -- with thirty seconds of slack for the timer's
+own jitter. The successes, the backfill's attempt, and the coordinate
+the station's own reply supplied are kept in the store per station
+(`schedule/<STATION>`), since the observed reply that would supply the
+coordinate may not be due. The applet's refresh is unchanged.
+
+**The head is completed from the last one.** A round that brings the
+current reading alone must not publish a head of that alone, or a new
+client gets no forecast for up to an hour. A band this round did not
+fetch is carried from the previous head, read back as a client reads it
+-- signature against this key, so one another key signed is carried
+from not at all -- and keeps its own fetch time, so a client still sees
+how old it is.
+
+**Two things the live run found.** A round fired seconds after the last
+had nothing due, so the composite held no current reading and the
+verdict said "nothing covers now" and exited 1. A current reading that
+arrived within its fifteen-minute validity (sec 3.9) now covers now in a
+scheduled round, in the verdict and in the report the demand schedule
+reads -- where, wrong, it would have counted a station as silent and in
+three rounds dropped it. And the backfill of yesterday, six hours apart
+by design, was asked every round for the same reason as everything
+else; its stamp is kept with the rest.
+
+**Measured:** ISTOCK877's round fell from four WU requests to one when
+only the current reading was due; a round seconds later had nothing due
+and exited 0; the head kept every band. `test_feed` runs three feeds on
+one store as three rounds and reads what each attempts; `test_publish`
+publishes an hourly band, then the current reading alone, and finds both
+in the head with their own fetch times -- and none carried from a head
+another key signed.
 
 ## 16. The home-screen widget
 
