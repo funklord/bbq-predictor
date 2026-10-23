@@ -16229,6 +16229,17 @@ of history to be outweighed, which is weeks, and because it costs one
 table written down before it is needed -- which is the same reason sec
 16.97.6's baseline existed to be useful.
 
+**Re-read 2026-10-23: identical to the snapshot, row for row.** Nothing
+has been scored on the desktop since: its newest observation is from
+2026-09-10, because the applet there has not been run to feed it -- the
+phone's archive is the live one. So the comparison is still waiting and
+the snapshot still holds: nothing reset the totals. One thing did write
+to that archive, recorded so it is not mistaken for data later: 757
+pending forecasts issued 2026-10-22 20:57:59-20:58:01 UTC, by the
+applet's window opened by mistake for a few minutes (sec 15.13). They
+are genuine forecasts, scored only if observations ever arrive, and
+otherwise given up on as unverifiable.
+
 ### 16.120.6 One table, so a misspelling cannot happen rather than be caught
 
 The quantity names were written twice: in `quantity_name`, which decides
@@ -16333,7 +16344,9 @@ somebody arriving cold does not have to find them.
   the corrected band against it after sec 16.97.8's deletion. It needs a
   few days at the long leads. **It is void if anybody deletes or bumps
   precipitation in the meantime**, and this entry should say so when
-  that happens.
+  that happens. Re-read 2026-10-23: unchanged, because the desktop
+  archive has not been fed since 2026-09-10 -- it waits on the desktop
+  applet being run, not on days.
 
 **Recorded limits, not gaps to close:**
 
