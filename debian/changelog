@@ -1,3 +1,10 @@
+bbq-predictor (0.1.0-4) unstable; urgency=low
+
+  * Ask a different Weather Underground page on each of the three attempts
+    for the key, since what each page serves changes within minutes.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Fri, 23 Oct 2026 04:02:19 +0200
+
 bbq-predictor (0.1.0-3) unstable; urgency=low
 
   * bbq-predictor-serve records the stations clients ask for, with
