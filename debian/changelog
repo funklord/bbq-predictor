@@ -1,3 +1,14 @@
+bbq-predictor (0.1.0-5) unstable; urgency=low
+
+  * The publisher fetches each band at its own interval, remembered across
+    rounds, and completes the head from the last one: about half the
+    Weather Underground requests per station.
+  * Messages that named a cause nothing had tested now say what happened.
+  * Build-Depends names Qt's SQLite driver for the tests, and the server
+    half builds alone for Devuan daedalus (make deb-daedalus).
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Fri, 23 Oct 2026 08:24:12 +0200
+
 bbq-predictor (0.1.0-4) unstable; urgency=low
 
   * Ask a different Weather Underground page on each of the three attempts
