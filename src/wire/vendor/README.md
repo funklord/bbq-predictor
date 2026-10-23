@@ -18,8 +18,11 @@ truncated message reported to situ (inbox 20261022T1813Z; situ's
 b4cf766). The applet still never calls those two: the one reproduction
 is all that shows them safe, since neither `make fuzz-wire` nor situ's
 own gen-fuzz harness calls them, and the guard in `fuzz-wire` stays.
-`u8 x[remaining] max 0` after a dynamic member is still not enforced, so
-the reader keeps its exact-length checks. Take a new commit only after
+`u8 x[remaining] max 0` after a dynamic member is not enforced at
+`b186326`, so the reader keeps its exact-length checks. situ fixes that
+after `b186326`, and says two framing faults remain in `framed()` and
+`required()` (project.md sec 15.12.3), so both the checks and the
+refusal stay when the pin next moves. Take a new commit only after
 re-running `make fuzz-wire`, and regenerate all four files together,
 never one.
 

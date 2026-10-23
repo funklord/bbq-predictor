@@ -7393,10 +7393,23 @@ by 56dcad1, which the reader was first generated from, and `framed()`
 and `required()` by b186326, vendored since 2026-10-23
 (`src/wire/vendor/README.md` has what was measured). The reader still
 calls only the first three, because nothing here fuzzes the other two;
-and situ still does not enforce `max 0` on a trailing run after a
-dynamic member, so the reader checks exact lengths itself. Neither the C++ builder nor any backend writes
-a signed file, so the publisher writes the format by hand whatever
-happens.
+and situ did not enforce `max 0` on a trailing run after a dynamic
+member at b186326, so the reader checks exact lengths itself.
+
+**situ's answer, 2026-10-23 (its inbox reply 20261023T1730Z, recorded
+here and deleted there): keep both.** At its 7ff6fbe, not yet pushed
+when it wrote, the trailing cap is enforced, a run of varints is
+generated as one, and `[max]` on a varint in a variant arm compiles.
+But `framed()` and `required()` are still wrong in two ways that
+predate b186326: a struct containing a nested variable struct reports
+itself complete once its fixed prefix has arrived, and a counted run
+followed by fixed members frames short by their size (situ decisions
+26.684 and 26.685, one pass). `validate()` is sound. So the reader's
+exact-length checks stay until situ says otherwise, and so does
+`fuzz-wire`'s refusal of those two calls.
+
+Neither the C++ builder nor any backend writes a signed file, so the
+publisher writes the format by hand whatever happens.
 
 **The daemon is unaffected**: it never parses a published file, only
 its own 48-byte request (`src/serve/serve_core.c`), which is hand-written
@@ -7522,7 +7535,12 @@ it is committed. Found because the postinst's
 `install /dev/null .../demand` copied it: a 91-byte "empty" demand file
 that read as this package's bug. Reported to hull (inbox
 20261023T1630Z); `hull commit --tar` of docker's export carries the
-owners, so nothing here waits on it.
+owners, so nothing here waited on it. **hull fixed it in db523fc** (its
+reply 20261023T1714Z, recorded here and deleted there): a machine's
+`/dev` is a tmpfs of its own with the host's devices bound in, and
+nothing written there reaches the built tree. Its reply also settles
+the owners: a vm not giving back the manifest's owners is a gap, not a
+design, and is not hull's next work, so the bake keeps asserting them.
 
 ### 15.12.6 The applet reads it
 
