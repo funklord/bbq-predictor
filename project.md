@@ -16237,8 +16237,10 @@ the snapshot still holds: nothing reset the totals. One thing did write
 to that archive, recorded so it is not mistaken for data later: 757
 pending forecasts issued 2026-10-22 20:57:59-20:58:01 UTC, by the
 applet's window opened by mistake for a few minutes (sec 15.13). They
-are genuine forecasts, scored only if observations ever arrive, and
-otherwise given up on as unverifiable.
+were genuine forecasts, and were deleted on the holder's instruction
+the same day -- exactly those 757, the whole of `forecast_pending`, with
+the observation, verification and station counts unchanged (3813, 120,
+10) and the integrity check clean.
 
 ### 16.120.6 One table, so a misspelling cannot happen rather than be caught
 
