@@ -7,14 +7,23 @@ Build-Depends: debhelper-compat (= 13),
 # at install time, so the unit has a fixed user to run as.
                dh-sequence-installsysusers,
                qt6-base-dev,
-               qt6-positioning-dev,
-               libgl-dev,
+# The tests open archives, and Qt loads its SQLite driver at run time, so
+# nothing that links names it. A build machine with the applet installed
+# has it anyway, which hid this until a clean bookworm build failed every
+# store test with "Driver not loaded" (project.md sec 15.15).
+               libqt6sql6-sqlite <!nocheck>,
+# The window's alone. The profile pkg.bbq-predictor.server-only builds the
+# server half for a release whose Qt predates the window's (project.md
+# sec 15.15), and needs neither.
+               qt6-positioning-dev <!pkg.bbq-predictor.server-only>,
+               libgl-dev <!pkg.bbq-predictor.server-only>,
                pkg-config
 Standards-Version: 4.6.2
 Rules-Requires-Root: no
 
 Package: bbq-predictor
 Architecture: any
+Build-Profiles: <!pkg.bbq-predictor.server-only>
 Depends: ${shlibs:Depends},
          ${misc:Depends},
 # The SQLite driver is loaded at run time, so it appears in no ELF

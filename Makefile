@@ -219,7 +219,20 @@ else
 PUBLISH_ARTIFACT = $(PUBLISH_BUILD_DIR)/$(PUBLISH_TARGET)
 endif
 
-all: $(ARTIFACT) $(SERVE_ARTIFACT) $(PUBLISH_ARTIFACT)
+# SERVER_ONLY=1 builds, tests and installs the server half alone: the
+# publisher and the daemon (project.md sec 15.15). For a release whose Qt
+# predates the applet's -- Devuan daedalus and Debian bookworm have 6.4,
+# and the window uses 6.5's colour scheme and permissions -- where the
+# server builds and the applet does not, and a server does not want it.
+# The Debian profile pkg.bbq-predictor.server-only sets it.
+SERVER_ONLY ?=
+ifeq ($(SERVER_ONLY),1)
+APPLET_ARTIFACT =
+else
+APPLET_ARTIFACT = $(ARTIFACT)
+endif
+
+all: $(APPLET_ARTIFACT) $(SERVE_ARTIFACT) $(PUBLISH_ARTIFACT)
 
 # The vendored submodules, fetched when absent and never moved
 # (makefile-hazards: the build fetches what it vendors, and fails loudly
@@ -406,13 +419,29 @@ android-aab: $(ANDROID_BUILD_DIR)/Makefile
 	$(MAKE) -C $(ANDROID_BUILD_DIR) aab
 
 # --- the suite ---------------------------------------------------------
+# A directory of its own for the server-only suite, which builds fewer
+# projects: one tree reused across the two would keep whichever Makefile
+# qmake wrote first and build the wrong set without a word.
+ifeq ($(SERVER_ONLY),1)
+TEST_BUILD_DIR ?= build-test-server
+else
 TEST_BUILD_DIR ?= build-test
+endif
+
+# What the tests that drive the built programs are told. Without the
+# applet, test_publisher is TOLD there is none, rather than finding it
+# absent, which it is right to fail on.
+ifeq ($(SERVER_ONLY),1)
+TEST_APPLET_ENV = BBQ_NO_APPLET=1
+else
+TEST_APPLET_ENV = BBQ_APP_BINARY="$(abspath $(ARTIFACT))"
+endif
 TEST_SOURCES = $(wildcard test/*.cpp test/*.pro test/*.pri)
 
 $(TEST_BUILD_DIR)/Makefile: test/tests.pro $(TEST_SOURCES) | submodules
 	mkdir -p $(TEST_BUILD_DIR)
 	cd $(TEST_BUILD_DIR) && $(QMAKE) $(CURDIR)/test/tests.pro $(QMAKE_CONFIG) \
-	        QMAKE_CXX=$(CXX)
+	        QMAKE_CXX=$(CXX) BBQ_SERVER_ONLY=$(SERVER_ONLY)
 
 tests-build: $(TEST_BUILD_DIR)/Makefile
 	$(MAKE) -C $(TEST_BUILD_DIR)
@@ -440,7 +469,7 @@ tests-build: $(TEST_BUILD_DIR)/Makefile
 # in the difference.
 TEST_CLOCKS ?= 00:05:00 00:30:00 01:10:00 12:00:00 23:50:00 23:59:30
 
-test-clocks: tests-build $(ARTIFACT) $(PUBLISH_ARTIFACT)
+test-clocks: tests-build $(APPLET_ARTIFACT) $(PUBLISH_ARTIFACT)
 	@command -v faketime >/dev/null 2>&1 || { \
 		echo "test-clocks: faketime is not installed." >&2; \
 		echo "test-clocks:   apt install faketime" >&2; \
@@ -454,7 +483,7 @@ test-clocks: tests-build $(ARTIFACT) $(PUBLISH_ARTIFACT)
 		ran=$$((ran + 1)); \
 		for binary in $(TEST_BUILD_DIR)/test_*; do \
 			[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
-			BBQ_APP_BINARY="$(abspath $(ARTIFACT))" \
+			$(TEST_APPLET_ENV) \
 			BBQ_PUBLISH_BINARY="$(abspath $(PUBLISH_ARTIFACT))" $(TEST_CRASH_ENV) \
 			        faketime "$$today $$at" \
 			        timeout $(TEST_TIMEOUT) "$$binary" >/dev/null 2>&1 \
@@ -493,13 +522,13 @@ TEST_TIMEOUT ?= 120
 # look, so the test fails loudly rather than skipping when it is absent --
 # a skipped guard reads exactly like a guard that passed. test_publisher
 # does the same with the publisher, through BBQ_PUBLISH_BINARY.
-test: tests-build $(ARTIFACT) $(PUBLISH_ARTIFACT)
+test: tests-build $(APPLET_ARTIFACT) $(PUBLISH_ARTIFACT)
 	@failed=0; ran=0; \
 	for binary in $(TEST_BUILD_DIR)/test_*; do \
 		[ -x "$$binary" ] && [ -f "$$binary" ] || continue; \
 		ran=$$((ran + 1)); \
 		echo "--- $$binary"; \
-		BBQ_APP_BINARY="$(abspath $(ARTIFACT))" \
+		$(TEST_APPLET_ENV) \
 		BBQ_PUBLISH_BINARY="$(abspath $(PUBLISH_ARTIFACT))" $(TEST_CRASH_ENV) $(TEST_SANITIZE_ENV) timeout $(TEST_TIMEOUT) "$$binary" || failed=$$((failed + 1)); \
 	done; \
 	if [ "$$ran" -eq 0 ]; then \
@@ -675,6 +704,13 @@ DEB_DIR ?= $(BUILD_DIR)/deb
 # spelled $(VERSION)-1, which held only while the changelog had one entry:
 # 0.1.0-2 made the rule look for a .changes file dpkg had not named that
 # way and report a successful build as "not produced".
+# The server half for Devuan daedalus and Debian bookworm, built in a
+# bookworm container because their libraries are older than this
+# machine's (project.md sec 15.15). Needs docker; where the account is
+# only in the docker group by sg, `sg docker -c 'make deb-daedalus'`.
+deb-daedalus:
+	tool/build-in-container.sh debian:bookworm-slim daedalus1 pkg.bbq-predictor.server-only
+
 deb:
 	dpkg-buildpackage -b -us -uc
 	mkdir -p $(DEB_DIR)
@@ -717,7 +753,13 @@ hooks:
 # The binary alone is not an installation: without a .desktop entry the
 # app is invisible to every launcher, which for a tray applet people
 # expect to autostart is most of how it gets run.
-install: all
+ifeq ($(SERVER_ONLY),1)
+install: install-server
+else
+install: install-applet install-server
+endif
+
+install-applet: $(ARTIFACT)
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	install -m 0755 $(ARTIFACT) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	mkdir -p $(DESTDIR)$(PREFIX)/share/applications
@@ -737,10 +779,12 @@ install: all
 	install -m 0644 packaging/$(TARGET).1 \
 	        $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
 
-	# The archive server (project.md sec 15.12.2, 15.13): the daemon, so
-	# sbin and section 8, and the publisher, which a person types to make
-	# the key, so bin and section 1. The scheduler's wrapper goes under
-	# lib, because nobody types it.
+# The archive server (project.md sec 15.12.2, 15.13): the daemon, so
+# sbin and section 8, and the publisher, which a person types to make
+# the key, so bin and section 1. The scheduler's wrapper goes under lib,
+# because nobody types it.
+install-server: $(SERVE_ARTIFACT) $(PUBLISH_ARTIFACT)
+	mkdir -p $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/man/man1
 	mkdir -p $(DESTDIR)$(PREFIX)/sbin $(DESTDIR)$(PREFIX)/share/man/man8
 	install -m 0755 $(SERVE_ARTIFACT) $(DESTDIR)$(PREFIX)/sbin/$(SERVE_TARGET)
 	install -m 0755 $(PUBLISH_ARTIFACT) $(DESTDIR)$(PREFIX)/bin/$(PUBLISH_TARGET)
@@ -796,7 +840,7 @@ define bbq_remove_tree
 endef
 
 veryclean: clean
-	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) $(ANDROID_BUILD_DIR))
+	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) build-test-server $(ANDROID_BUILD_DIR))
 	rm -f $(TARGET) $(SERVE_TARGET) $(PUBLISH_TARGET)
 
 # `distclean` removes what the build generated and `veryclean` does not.
@@ -819,4 +863,4 @@ help:
         style-wiring style-setup style-tests style-links test-clocks fuzz-serve fuzz-wire \
         submodules check-publish-libraries \
         android android-aab \
-        install uninstall clean veryclean distclean help
+        deb-daedalus install install-applet install-server uninstall clean veryclean distclean help

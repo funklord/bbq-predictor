@@ -37,3 +37,10 @@ server_client.file = test_server_client.pro
 feed_server.file = test_feed_server.pro
 publisher.file = test_publisher.pro
 demand.file = test_demand.pro
+
+# SERVER_ONLY=1 (project.md sec 15.15): the window's tests need the
+# window, which an older Qt does not build, and test_seed drives the
+# applet, which a server-only build does not make.
+!isEmpty(BBQ_SERVER_ONLY) {
+	SUBDIRS -= view window seed
+}

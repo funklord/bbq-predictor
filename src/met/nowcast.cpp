@@ -172,7 +172,7 @@ bbq_series bbq_met_read_nowcast(const QJsonDocument &response) {
 	}
 
 	/* UTC throughout, and the response says so with a Z. */
-	series.set_zone(QTimeZone(QTimeZone::UTC));
+	series.set_zone(bbq_utc());
 	series.set_samples(std::move(samples));
 	return series;
 }

@@ -35,6 +35,7 @@ private slots:
 private:
 	QString m_publisher;
 	QString m_applet;
+	bool m_no_applet = false;
 
 	int run(const QString &binary, const QTemporaryDir &home,
 	        const QStringList &arguments, QString *said);
@@ -44,13 +45,19 @@ void test_publisher::initTestCase() {
 	m_publisher = QString::fromLocal8Bit(qgetenv("BBQ_PUBLISH_BINARY"));
 	m_applet = QString::fromLocal8Bit(qgetenv("BBQ_APP_BINARY"));
 
-	/* Failed, not skipped, for the reason test_seed gives. */
-	QVERIFY2(!m_publisher.isEmpty() && !m_applet.isEmpty(),
+	/*
+	 * Failed, not skipped, for the reason test_seed gives -- except that
+	 * a server-only build (sec 15.15) makes no applet, and says so with
+	 * BBQ_NO_APPLET. Told, not inferred: an applet that is merely
+	 * missing still fails here.
+	 */
+	m_no_applet = qgetenv("BBQ_NO_APPLET") == "1";
+	QVERIFY2(!m_publisher.isEmpty() && (m_no_applet || !m_applet.isEmpty()),
 	         "BBQ_PUBLISH_BINARY or BBQ_APP_BINARY is unset; run this "
 	         "through `make test`");
 	QVERIFY2(QFile::exists(m_publisher),
 	         qPrintable(QStringLiteral("no binary at %1").arg(m_publisher)));
-	QVERIFY2(QFile::exists(m_applet),
+	QVERIFY2(m_no_applet || QFile::exists(m_applet),
 	         qPrintable(QStringLiteral("no binary at %1").arg(m_applet)));
 }
 
@@ -169,6 +176,10 @@ void test_publisher::the_version_names_the_copyright_holder() {
 }
 
 void test_publisher::the_applet_refuses_what_moved_here() {
+	if (m_no_applet) {
+		QSKIP("a server-only build makes no applet (BBQ_NO_APPLET=1)");
+	}
+
 	QTemporaryDir home;
 	QVERIFY(home.isValid());
 	QString said;

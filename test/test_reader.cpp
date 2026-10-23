@@ -79,7 +79,7 @@ void test_reader::nowcast_reads_local_time_with_an_offset() {
 	QCOMPARE(series.size(), std::size_t(2));
 
 	/* 14:30+0200 is 12:30 UTC. */
-	const QDateTime expected(QDate(2026, 8, 7), QTime(12, 30), QTimeZone::UTC);
+	const QDateTime expected(QDate(2026, 8, 7), QTime(12, 30), bbq_utc());
 	QCOMPARE(series.samples()[0].start_utc, expected.toSecsSinceEpoch());
 
 	/* precipRate is already mm/h and must not be divided by anything. */

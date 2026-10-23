@@ -5,19 +5,32 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@
 
+# The server half alone (project.md sec 15.15), for a release whose Qt
+# predates the applet's; debian/control drops the applet's package and
+# build dependencies under the same profile.
+ifneq ($(filter pkg.bbq-predictor.server-only,$(DEB_BUILD_PROFILES)),)
+SERVER_ONLY = 1
+endif
+
 # The -dbgsym package is built whether or not anything generated debug
 # info, so without this it ships a build-id link and no symbols --
 # lintian's debug-file-with-no-debug-symbols. The release build does not
 # carry -g on its own; DEBUG_INFO adds it without making this a debug
 # build, and dh_strip moves the result out of the shipped binary.
 override_dh_auto_build:
-	$(MAKE) DEBUG_INFO=1
+	$(MAKE) DEBUG_INFO=1 SERVER_ONLY=$(SERVER_ONLY)
 
 # PREFIX is /usr/local by default, which is right for a hand-built copy
 # and wrong for a package. Into debian/tmp, because two packages now take
 # their files from one install: each .install file names its own.
+# The suite dh runs, told which half was built.
+override_dh_auto_test:
+ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
+	$(MAKE) test SERVER_ONLY=$(SERVER_ONLY)
+endif
+
 override_dh_auto_install:
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp PREFIX=/usr
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp PREFIX=/usr SERVER_ONLY=$(SERVER_ONLY)
 
 # The archive server's LSB script, installed by its .install file from
 # packaging/ so there is one copy of it; this adds only the update-rc.d
@@ -32,7 +45,23 @@ override_dh_installinit:
 # start would fetch before anybody had named a station. The timer is what
 # gets enabled and started, and it is what makes the archive advance.
 # Both are the server's since 0.1.0-2: the round is the publisher.
+#
+# Debhelper before 13.11.6 looks for units only in lib/systemd/system --
+# it reverted the move to /usr in 13.5.2 and allowed it again in 13.11.6
+# -- and bookworm and daedalus have 13.11.4, so there the units the
+# .install file put under /usr are moved first, or this stops with "does
+# not install unit" (project.md sec 15.15). Newer debhelper is left as it
+# is.
 override_dh_installsystemd:
+	if dpkg --compare-versions "$$(dpkg-query -W -f='$${Version}' debhelper)" lt 13.11.6; then \
+		mkdir -p debian/bbq-predictor-server/lib/systemd/system && \
+		mv debian/bbq-predictor-server/usr/lib/systemd/system/bbq-predictor-fetch.service \
+		   debian/bbq-predictor-server/usr/lib/systemd/system/bbq-predictor-fetch.timer \
+		   debian/bbq-predictor-server/usr/lib/systemd/system/bbq-predictor-serve.service \
+		   debian/bbq-predictor-server/lib/systemd/system/ && \
+		rmdir debian/bbq-predictor-server/usr/lib/systemd/system \
+		      debian/bbq-predictor-server/usr/lib/systemd; \
+	fi
 	dh_installsystemd -pbbq-predictor-server --no-start bbq-predictor-fetch.service
 	dh_installsystemd -pbbq-predictor-server --restart-after-upgrade \
 	        bbq-predictor-fetch.timer

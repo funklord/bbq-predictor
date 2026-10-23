@@ -423,7 +423,7 @@ void test_window::the_widget_picture_can_be_made_without_a_device() {
 	 * -- and the first version of this test did exactly that and passed.
 	 */
 	bbq_series band = bandful(bbq_band::hourly, base, 48);
-	band.set_zone(QTimeZone::UTC);
+	band.set_zone(bbq_utc());
 
 	bbq_composite composite;
 	composite.set_series(std::move(band));
@@ -1584,7 +1584,7 @@ void test_window::the_server_default_tries_a_local_host_before_a_remote_one() {
  * is the only way this can actually be wrong.
  */
 void test_window::the_tooltip_lists_every_window_the_count_promises() {
-	const QTimeZone utc = QTimeZone::UTC;
+	const QTimeZone utc = bbq_utc();
 
 	std::vector<bbq_window> windows;
 	for (int at = 0; at < 3; ++at) {
@@ -1671,7 +1671,7 @@ void test_window::refreshing_the_status_actually_hands_the_label_that_list() {
 	}
 
 	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
-	band.set_zone(QTimeZone::UTC);
+	band.set_zone(bbq_utc());
 	band.set_samples(std::move(samples));
 
 	bbq_composite composite;
@@ -1716,7 +1716,7 @@ void test_window::refreshing_the_status_actually_hands_the_label_that_list() {
  * exists to show.
  */
 void test_window::a_window_that_dips_says_so_and_a_steady_one_does_not() {
-	const QTimeZone utc = QTimeZone::UTC;
+	const QTimeZone utc = bbq_utc();
 
 	bbq_window steady;
 	steady.start_utc = 1700000000;
@@ -1785,7 +1785,7 @@ void test_window::a_phone_gets_the_extra_windows_on_the_surface() {
 	}
 
 	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
-	band.set_zone(QTimeZone::UTC);
+	band.set_zone(bbq_utc());
 	band.set_samples(std::move(samples));
 
 	bbq_composite composite;
@@ -2086,7 +2086,7 @@ void test_window::the_posed_picture_draws_a_curve_that_clears_its_ground() {
 	}
 
 	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
-	band.set_zone(QTimeZone::UTC);
+	band.set_zone(bbq_utc());
 	band.set_samples(std::move(samples));
 
 	bbq_composite composite;
@@ -2198,7 +2198,7 @@ void test_window::a_widget_render_halos_in_the_ground_it_lands_on() {
 	}
 
 	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
-	band.set_zone(QTimeZone::UTC);
+	band.set_zone(bbq_utc());
 	band.set_samples(std::move(samples));
 
 	bbq_composite composite;

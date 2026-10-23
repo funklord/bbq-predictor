@@ -11,6 +11,23 @@
 #include "model/sample.h"
 
 /*
+ * UTC as a zone, on every Qt this builds with (project.md sec 15.15).
+ *
+ * QTimeZone::UTC, the lightweight form, is Qt 6.5; Devuan daedalus and
+ * Debian bookworm ship 6.4.2, where it does not exist. There the zone is
+ * QTimeZone::utc(), the backend's "UTC", which describes the same
+ * instants. A function rather than a spelling at each call site, so the
+ * newer Qt keeps exactly what it had and the older one is one place.
+ */
+inline QTimeZone bbq_utc() {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+	return QTimeZone(QTimeZone::UTC);
+#else
+	return QTimeZone::utc();
+#endif
+}
+
+/*
  * Which band a series carries (project.md sec 3).
  *
  * A band is not a provider. The same graph may take its nowcast from

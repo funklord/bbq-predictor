@@ -1587,7 +1587,7 @@ bbq_composite grillable_days(qint64 from_utc, int days) {
 	}
 
 	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
-	band.set_zone(QTimeZone::UTC);
+	band.set_zone(bbq_utc());
 	band.set_samples(std::move(samples));
 
 	bbq_composite composite;
@@ -1638,7 +1638,7 @@ void test_view::a_window_boundary_in_view_is_drawn() {
 	graph.resize(900, 400);
 
 	const std::vector<bbq_window> windows = bbq_grill_windows(
-	        graph.composite(), QTimeZone::UTC, 1600000000,
+	        graph.composite(), bbq_utc(), 1600000000,
 	        1600000000 + 3 * 86400, bbq_grill_policy());
 	QVERIFY2(!windows.empty(), "the fixture scored no grilling window");
 
@@ -1669,7 +1669,7 @@ void test_view::a_window_running_off_the_edge_draws_no_rule_there() {
 	graph.resize(900, 400);
 
 	const std::vector<bbq_window> windows = bbq_grill_windows(
-	        graph.composite(), QTimeZone::UTC, 1600000000,
+	        graph.composite(), bbq_utc(), 1600000000,
 	        1600000000 + 3 * 86400, bbq_grill_policy());
 	QVERIFY(!windows.empty());
 
@@ -1735,7 +1735,7 @@ void test_view::a_window_lands_where_it_lands_whatever_range_was_asked() {
 
 	const auto first_window = [&](qint64 from) {
 		const std::vector<bbq_window> found = bbq_grill_windows(
-		        composite, QTimeZone::UTC, from, last, policy);
+		        composite, bbq_utc(), from, last, policy);
 		QTest::qVerify(!found.empty(), "found a window", "", __FILE__,
 		               __LINE__);
 		return found.front();
@@ -2711,7 +2711,7 @@ void test_view::a_rain_overlay_that_repeats_the_forecast_is_not_drawn() {
 		}
 
 		bbq_series band(bbq_band::hourly, QStringLiteral("test"));
-		band.set_zone(QTimeZone::UTC);
+		band.set_zone(bbq_utc());
 		band.set_samples(forecast);
 
 		bbq_composite composite;
@@ -2724,7 +2724,7 @@ void test_view::a_rain_overlay_that_repeats_the_forecast_is_not_drawn() {
 
 		bbq_series overlay(bbq_band::corrected,
 		                   QStringLiteral("bias-corrected"));
-		overlay.set_zone(QTimeZone::UTC);
+		overlay.set_zone(bbq_utc());
 		overlay.set_samples(std::move(corrected));
 
 		bbq_forecast_graph graph;

@@ -3,6 +3,7 @@
 /build/
 /build-*/
 /build-test/
+/build-test-server/
 /bbq-predictor
 /bbq-predictor.new
 /bbq-predictor-serve

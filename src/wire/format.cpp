@@ -43,13 +43,13 @@ bool bbq_wire_station_valid(const QString &station) {
 }
 
 uint16_t bbq_wire_month_of(qint64 utc) {
-	const QDate date = QDateTime::fromSecsSinceEpoch(utc, QTimeZone::UTC).date();
+	const QDate date = QDateTime::fromSecsSinceEpoch(utc, bbq_utc()).date();
 	return uint16_t(date.year() * 12 + date.month() - 1);
 }
 
 qint64 bbq_wire_month_begin(uint16_t month) {
 	const QDate first(month / 12, month % 12 + 1, 1);
-	return QDateTime(first, QTime(0, 0), QTimeZone::UTC).toSecsSinceEpoch();
+	return QDateTime(first, QTime(0, 0), bbq_utc()).toSecsSinceEpoch();
 }
 
 qint64 bbq_wire_month_end(uint16_t month) {

@@ -93,7 +93,7 @@ void test_providers::met_keeps_its_rain_rate() {
 void test_providers::met_reads_zulu_time_as_utc() {
 	const bbq_series series = bbq_met_read_nowcast(met_fixture());
 
-	const QDateTime expected(QDate(2026, 8, 7), QTime(12, 0), QTimeZone::UTC);
+	const QDateTime expected(QDate(2026, 8, 7), QTime(12, 0), bbq_utc());
 	QCOMPARE(series.samples()[0].start_utc, expected.toSecsSinceEpoch());
 }
 
@@ -110,7 +110,7 @@ void test_providers::openmeteo_reads_local_time_through_the_named_zone() {
 	        openmeteo_fixture("Europe/Stockholm"));
 	QCOMPARE(series.size(), std::size_t(2));
 
-	const QDateTime expected(QDate(2026, 8, 6), QTime(22, 0), QTimeZone::UTC);
+	const QDateTime expected(QDate(2026, 8, 6), QTime(22, 0), bbq_utc());
 	QCOMPARE(series.samples()[0].start_utc, expected.toSecsSinceEpoch());
 	QCOMPARE(series.band(), bbq_band::extended);
 

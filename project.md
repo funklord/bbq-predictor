@@ -7692,6 +7692,62 @@ being exceeded, so this is freshness, not safety. And WU's real limits
 are unknown: 2000 an hour is a starting point to raise or lower by what
 the publisher's log shows, a 401 or 429 being the first sign.
 
+## 15.15 The server half builds for an older release
+
+**The holder's server runs Devuan daedalus** (2026-10-23), built on
+Debian bookworm: glibc 2.36 and Qt 6.4.2, where the packages built here
+on excalibur want 2.38 and 6.8. They would not install there, and the
+fix is to build there.
+
+**The server half builds on Qt 6.4; the window does not.** Built in a
+bookworm container, the code stopped first on `QTimeZone::UTC`, which
+is Qt 6.5 -- twenty uses, four in sources -- and `bbq_utc()` in
+`model/series.h` now returns it on 6.5 and later and `QTimeZone::utc()`
+before, the same instants, so the newer Qt keeps exactly what it had.
+After that the publisher and the daemon built and linked Core, Network
+and Sql, and every test project built except `test_view` and
+`test_window`. What still fails is the window's own: 6.5's colour scheme
+(`Qt::ColorScheme`, `QStyleHints::setColorScheme`) and `QPermissions`.
+Porting those would make an applet nobody runs on a server, so it was
+not done.
+
+**`SERVER_ONLY=1`** builds, tests and installs the publisher and the
+daemon alone: `make` skips the applet, `make install` is
+`install-server`, and `make test` builds in `build-test-server` -- a
+directory of its own, since one tree reused across the two would keep
+whichever Makefile qmake wrote first -- without the two window tests and
+`test_seed`, which drives the applet. `test_publisher`'s applet case is
+skipped only when `BBQ_NO_APPLET=1` says there is no applet; an applet
+that is merely missing still fails it. The Debian profile
+`pkg.bbq-predictor.server-only` sets it, drops the applet's package, and
+drops the two build dependencies only the window needs:
+
+    DEB_BUILD_PROFILES=pkg.bbq-predictor.server-only make deb
+
+**`make deb-daedalus`** does that in a `debian:bookworm-slim` container
+(`tool/build-in-container.sh`), from HEAD as committed and monocypher at
+its gitlink, with the build dependencies `apt-get build-dep` reads from
+`debian/control` under the same profile -- exactly what is declared and
+nothing else, which is what the next paragraph's gap needed to be
+found. The package is versioned below the excalibur one it would be
+replaced by on an upgrade, `0.1.0-4~daedalus1`, by a changelog entry the
+container adds to its own copy, and lands in `DEB_DIR` owned by the
+caller rather than by the container's root. Where docker needs the
+group, `sg docker -c 'make deb-daedalus'`.
+
+**Two things bookworm's own tools needed.** Its debhelper (13.11.4)
+looks for systemd units only in `lib/systemd/system`; the move to /usr
+was reverted in 13.5.2 and allowed again in 13.11.6, so `debian/rules`
+moves the units there first on a debhelper older than that and leaves a
+newer one alone.
+
+**And a gap the clean build found in every build.** The tests open SQLite
+archives, and Qt loads its SQLite driver at run time, so no link names
+it and `Build-Depends` never had it. This machine has it because the
+applet does; a bookworm container with exactly the declared build
+dependencies failed every store test with "Driver not loaded" -- 5 of
+19 binaries. `libqt6sql6-sqlite <!nocheck>` is declared now.
+
 ## 16. The home-screen widget
 
 A resizable Android app widget showing the forecast graph. Asked for by

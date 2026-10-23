@@ -21,7 +21,7 @@ QString stamp(qint64 when_utc) {
 		return QStringLiteral("--");
 	}
 
-	const QTimeZone utc(QTimeZone::UTC);
+	const QTimeZone utc = bbq_utc();
 	const QDateTime when = QDateTime::fromSecsSinceEpoch(when_utc, utc);
 	return when.toString(QStringLiteral("MM-dd HH:mm"));
 }
