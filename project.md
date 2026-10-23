@@ -6447,6 +6447,18 @@ About 43 candidates were read here. The rest were sound, and the negative is
 worth as much as the hits: the Qt test targets, the Android build guards and
 the style gates all refuse rather than pass.
 
+**A fourth, found 2026-10-23 in this tree's own CI: the suite step could
+not fail.** It ran `make test 2>&1 | tee test.log`, and a pipeline's
+status is its last command's, so the step had tee's. The first green
+run after a day of red builds said `test: 22 binary(ies), 1 failed` in
+its log -- test_publisher, whose `--version` check read stderr and
+stdout merged, so Qt's warning that the C locale is not UTF-8 came
+first. The step now writes the log, prints it and exits with make's
+status (49e59e3). The day of red had its own message of the sec 19
+kind: the Makefile's submodule rule said "this is not a git checkout"
+for any refusal by git, when git's reason was a checkout owned by
+another uid, and it quotes git now (fcdbc88).
+
 ## 19. Two messages that name a cause the code never tested
 
 Reported from claude-guidelines 2026-09-03, from a second sweep of all
