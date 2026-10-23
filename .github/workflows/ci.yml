@@ -80,7 +80,14 @@ jobs:
             qt6-base-dev qt6-base-dev-tools qt6-positioning-dev libgl-dev \
             libqt6sql6-sqlite
 
+      # **With its submodules**: monocypher signs and verifies the published
+      # archive. The Makefile would fetch it, but git refuses this checkout
+      # -- the job runs as root and the runner made it as another uid, which
+      # git calls dubious ownership -- and that broke every build from
+      # 2026-10-22 until this line.
       - uses: actions/checkout@v7
+        with:
+          submodules: true
 
       # Printed because a build log that does not say which Qt it used cannot
       # be argued with later.

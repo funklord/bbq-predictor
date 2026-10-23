@@ -243,7 +243,10 @@ all: $(APPLET_ARTIFACT) $(SERVE_ARTIFACT) $(PUBLISH_ARTIFACT)
 # header much later, naming nothing useful.
 #
 # Asks git nothing when every directory is populated, so an ordinary build
-# spawns nothing. A submodule present at another commit is left alone:
+# spawns nothing. When git refuses, its own words are printed: the message
+# said "this is not a git checkout" for any refusal, and for a day CI's
+# real one -- a checkout owned by another uid, "dubious ownership" -- read
+# as an export. A submodule present at another commit is left alone:
 # that is somebody's work, and moving a pin is a reviewed commit.
 SUBMODULE_PATHS = monocypher
 
@@ -259,9 +262,11 @@ submodules:
 		echo "error: not checked out:$$missing, and git is not installed" >&2; \
 		exit 1; \
 	fi; \
-	if [ -z "$$(git rev-parse --git-common-dir 2>/dev/null)" ]; then \
-		echo "error: not checked out:$$missing, and this is not a git" >&2; \
-		echo "       checkout (git archive carries none of their contents)" >&2; \
+	if ! said=$$(git rev-parse --git-common-dir 2>&1); then \
+		echo "error: not checked out:$$missing, and git will not read this" >&2; \
+		echo "       tree; git says:" >&2; \
+		echo "$$said" | sed 's/^/       /' >&2; \
+		echo "       (an export by git archive carries no submodule contents)" >&2; \
 		exit 1; \
 	fi; \
 	echo "==> fetching submodules:$$missing"; \
