@@ -7615,6 +7615,22 @@ and `test_feed_server` the recheck both ways. `make fuzz-serve` drives
 the demand tracker with the address and the clock taken from the
 request's bytes: three million runs, no report.
 
+**The package, on a bare trixie, 2026-10-23** (`0.1.0-3`, the server
+package alone, no recommends, the daemon through its LSB script): the
+demand file made `bbq-predictor:bbq-predictor` 0600; the daemon at uid
+997 with no capabilities and NoNewPrivs, its root the published tree;
+ISTOCK877 served, IJOHAN69 answered not served and both written as
+demand; the next round emptied the file, admitted IJOHAN69 and
+published it, and the daemon served it after a reload. **That run was
+seeded with an archive already holding a key.** Unseeded, every round
+failed at the key page (sec 2.6.1.3) and nothing was published, which
+is what a fresh server will meet: until one scrape succeeds there is no
+key to keep. A failed round counts as the configured station's round,
+so the next try is the timer's next one, five minutes on; at the rate
+the page carried a key that evening, about one fetch in ten and three
+fetches a round, a fresh server should expect its first key within the
+hour, and to keep it afterwards.
+
 **What it does not do yet.** The forecast bands are fetched per station
 although they depend only on the place, so stations within a few
 kilometres could share them; with fifty stations at about five requests
