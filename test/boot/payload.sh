@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs as the workload in a vm whose PID 1 is the image's own init. Starts
 # nothing of the server's: everything it checks, init did at boot.
-# Terminates: every wait is bounded (60 s), every read under timeout 5.
+# Terminates: every wait is bounded (120 s), every read under timeout 5.
 set -u
 fail=0
 ok()  { echo "ok    $*"; }
@@ -12,7 +12,10 @@ echo "pid 1: $(tr '\0' ' ' </proc/1/cmdline)"
 # Wait for init to have run the server's script: the pid file, and a live
 # process of the daemon behind it.
 pid=
-for _ in $(seq 600); do
+#
+# 120 s, because sysinit alone took 20 s in the hull-built OpenRC image on a
+# loaded host, and a boot test that races the boot measures the host.
+for _ in $(seq 1200); do
 	if [ -r /run/bbq-predictor-serve.pid ]; then
 		pid=$(cat /run/bbq-predictor-serve.pid)
 		[ -n "$pid" ] && grep -q bbq-predictor-serve /proc/$pid/cmdline 2>/dev/null && break
@@ -21,7 +24,7 @@ for _ in $(seq 600); do
 	sleep 0.1
 done
 if [ -z "$pid" ]; then
-	bad "init did not start the daemon within 60 s"
+	bad "init did not start the daemon within 120 s"
 	ls /etc/rc2.d /etc/runlevels/default 2>/dev/null | grep -i bbq
 	cat /var/log/bbq-predictor-serve.log 2>/dev/null
 	exit 1
@@ -60,7 +63,14 @@ status=$(echo "$header" | awk '{print $5}')
 sleep 0.5
 grep -q '^IBOOT1 ' /var/lib/bbq-predictor/demand && ok "and recorded in the demand file" || bad "demand file: $(cat /var/lib/bbq-predictor/demand)"
 
-pidof cron >/dev/null && ok "cron is running" || bad "cron is not running"
+# Waited for as the daemon was: the runlevel starts them in an order of its
+# own, and under OpenRC cron came a second after the daemon, which a check
+# made at once reported as cron not running.
+for _ in $(seq 1200); do
+	pidof cron >/dev/null && break
+	sleep 0.1
+done
+pidof cron >/dev/null && ok "cron is running" || bad "cron is not running after 120 s"
 [ -r /etc/cron.d/bbq-predictor ] && ok "the round is in /etc/cron.d" || bad "no /etc/cron.d/bbq-predictor"
 
 # What shutdown will do with it, asked of the init that is running: OpenRC

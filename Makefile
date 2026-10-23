@@ -36,7 +36,7 @@
 #   make install      -- install the binary, desktop entry, icon and
 #                        manual page under PREFIX
 #   make check-boot   -- boot the server package under sysvinit and
-#                        OpenRC in hull vms (docker, KVM, hull)
+#                        OpenRC in hull vms (KVM, hull)
 #   make deb          -- a Debian package: the applet, a systemd timer
 #                        that fetches on its own clock, and the
 #                        bbq-predictor account it runs as. Lands in
@@ -777,12 +777,13 @@ deb-daedalus:
 # sysvinit and once under OpenRC, and each image booted in a hull vm whose
 # PID 1 is its own init. test/boot/payload.sh then checks what init did --
 # the daemon up, dropped and chrooted, answering, cron running -- and
-# starts nothing itself. Not part of check: it needs docker, KVM, hull and
-# the network, and takes some minutes. `make deb` first.
+# starts nothing itself. Not part of check: it needs KVM, hull and the
+# network, and takes some minutes. `make deb` first. No docker and no root:
+# hull builds the image as well as booting it.
 #
 # hull is a sibling checkout, not vendored, so HULL names the binary.
-# Terminates: each bake is under timeout 900 and removes its container by
-# name; each boot under timeout 300, and a vm ends with its hull run.
+# Terminates: each bake is under timeout 1200, each boot under timeout
+# 300, and a vm ends with its hull run.
 HULL ?= $(HOME)/src/hull/build/hull
 BOOT_INITS ?= sysvinit openrc
 

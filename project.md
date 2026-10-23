@@ -7530,9 +7530,16 @@ recording it as demand; cron running with the round in `/etc/cron.d`;
 and a way for shutdown to stop it, a K link or OpenRC's runlevel. 0.1.0-6
 passed all of it under both. Sabotaged by baking with the script's links
 removed (`update-rc.d disable`, `rc-update del`): both boots failed,
-"init did not start the daemon within 60 s".
+"init did not start the daemon", under each bake below.
 
-It is outside `check`, since it needs docker, KVM, hull and the network.
+It is outside `check`, since it needs KVM, hull and the network -- not
+docker, and not root, since hull builds the image too.
+
+**The payload waits for what init starts, up to 120 s each.** The first
+version checked cron at once after seeing the daemon, and under OpenRC
+reported cron not running: measured in the image, sysinit took 20 s on a
+host at load 160, and the default runlevel then started the daemon and
+cron a second apart. A boot test that races the boot measures the host.
 Two things it cannot see, and where they are checked instead:
 
 - **Owners.** A vm's materialized root shows every file as root's, so the
@@ -7540,9 +7547,9 @@ Two things it cannot see, and where they are checked instead:
   and the demand file the publisher's, and the demand file empty.
 - **A round.** Fetching is not booted here; the containers above run one.
 
-**The bake is docker's, not `hull build`'s, because a hull build step
-has no `/dev/null`.** The first `>/dev/null` makes a regular file, and
-it is committed. Found because the postinst's
+**The bake was docker's for its first day, because a hull build step
+had no `/dev/null`.** The first `>/dev/null` made a regular file, and
+it was committed. Found because the postinst's
 `getent passwd bbq-predictor >/dev/null` wrote a passwd line into it and
 `install /dev/null .../demand` copied it: a 91-byte "empty" demand file
 that read as this package's bug. Reported to hull (inbox
@@ -7553,6 +7560,9 @@ reply 20261023T1714Z, recorded here and deleted there): a machine's
 nothing written there reaches the built tree. Its reply also settles
 the owners: a vm not giving back the manifest's owners is a gap, not a
 design, and is not hull's next work, so the bake keeps asserting them.
+With the fix in hull's build, `bake.sh` went back to `hull build`
+(hull at 6f223d9): docker is gone from the test's needs, and hull caches
+the init layer, so a run re-bakes only when the package changed.
 
 ### 15.12.6 The applet reads it
 
