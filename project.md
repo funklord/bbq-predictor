@@ -7675,6 +7675,15 @@ the page carried a key that evening, about one fetch in ten and three
 fetches a round, a fresh server should expect its first key within the
 hour, and to keep it afterwards.
 
+**And cold, on `0.1.0-4`** (the page rotation of sec 2.6.1.4), with no
+seeded key and rounds five minutes apart as the timer runs them: three
+rounds found no key on any of their three pages, the fourth got one at
+fifteen minutes and published, and every round after used the stored
+key -- the asked-for station's first round sent five requests and no
+key page. The rest of the loop passed unchanged: demand written,
+IJOHAN69 admitted, published and served after a reload, the daemon
+confined and stopped by its script.
+
 **What it does not do yet.** The forecast bands are fetched per station
 although they depend only on the place, so stations within a few
 kilometres could share them; with fifty stations at about five requests
