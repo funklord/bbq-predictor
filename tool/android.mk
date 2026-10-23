@@ -19,6 +19,7 @@
 #   make android-check      everything the build needs, checked by name
 #   make android-play-check what Play would refuse, read from the bundle
 #   make android-screenshots  the store screenshots, from this build
+#   make android-store-screenshots  the same, on the shared store emulator
 #
 # `apk` is deliberately NOT a target name. netcfgd's `apk` is Alpine's
 # packaging command, and one word meaning two things across sibling trees is
@@ -855,6 +856,8 @@ android-screenshots: android-install
 			t=$$((t + 1)); \
 			if [ $$t -ge $(STORE_READY_TIMEOUT) ]; then \
 				echo "screenshots: $$v never logged store-view-ready in $(STORE_READY_TIMEOUT)s." >&2; \
+				$$adb logcat -d > "$$out/$$v.logcat" 2>&1; \
+				echo "screenshots:   the device log is in $$out/$$v.logcat" >&2; \
 				echo "screenshots:   the app's half is missing or failed; see the comment" >&2; \
 				echo "screenshots:   above android-screenshots in tool/android.mk." >&2; \
 				fail=1; break 2; \
@@ -887,4 +890,118 @@ android-screenshots: android-install
 	done; \
 	[ $$fail -eq 0 ]
 
-.PHONY: android-check android-play-check android-screenshots android-install android-run android-log android-uninstall
+# The same screenshots, on an emulator this starts and stops, rather than
+# on whatever phone is attached. Set by the holder 2026-10-23, after the
+# Fold3 brought a lock screen and PIN, a camera-cutout band, One UI
+# ignoring demo mode, and the owner's real app restarted under them. An
+# emulator has none of those, so every run gives the same pictures.
+#
+# Taken from beerssh's tool/store-screenshots.sh (0334c62), where each
+# step below was measured on this machine first.
+#
+#   STORE_AVD            ONE AVD shared by every app, `store`, by the
+#                        holder's choice: create it with
+#                          avdmanager create avd -n store \
+#                            -k 'system-images;android-34;google_apis;x86_64' \
+#                            -d pixel_6
+#   STORE_EMULATOR_PORT  its port, refused if adb already sees it: an
+#                        emulator on that serial is somebody else's
+#   STORE_ABI            the AVD's ABI, x86_64; the build is for it
+#   STORE_QT_ANDROID_ROOT  the kit for that ABI, found like the default
+#                        one and PASSED on the command line, so a phone's
+#                        arm64 kit set anywhere cannot win
+#
+# What stops it: every wait has a ceiling (300s to boot, 2400s for the
+# capture), and the EXIT trap asks the emulator to quit, waits 30s, then
+# SIGKILLs its process GROUP. `emulator` execs into qemu-system, which
+# starts a netsimd child in its group, so it is started under setsid and
+# the group is what dies; killing the pid alone orphaned netsimd.
+# The group kill is spelled `kill -9 -PGID`, the one form dash accepts:
+# `kill -9 -- -PGID` and `kill -s KILL -PGID` are both refused there
+# (measured 2026-10-23), and the refusal fell through to killing qemu
+# alone. The pid is checked to be a number above 1 first, because a
+# negative 1 is every process the user owns.
+#
+# Liveness is read from /proc rather than `kill -0`, because the emulator
+# is this shell's own child and stays a zombie until reaped.
+#
+# Data is wiped every run (-wipe-data, no snapshot), so the shared AVD
+# carries nothing from another app's run and every run starts the same.
+# The ready wait is 120s rather than the phone's 30: under software
+# rendering at a load of 175 on 24 cores, views took longer than 30s to
+# report drawn, a different view each run (2026-10-23).
+#
+# The cleanup ignores INT and TERM once it starts. Measured 2026-10-23: a
+# TERM to the process group reaches the recipe's shell twice, directly and
+# again from make passing it on, and the second fired `exit` inside the
+# cleanup and cut it short -- leaving the emulator and its netsimd up with
+# the trap having run. beerssh's version runs as a script, not under make,
+# and never saw the second signal.
+#
+# Two runs cannot share the AVD: the port check refuses the second, and
+# the emulator refuses an AVD already in use. Whoever counts leftovers:
+# hull's machines are qemu-system-x86_64 too, so match on `-avd store`.
+STORE_AVD             ?= store
+STORE_EMULATOR_PORT   ?= 5584
+STORE_ABI             ?= x86_64
+STORE_EMULATOR_READY_TIMEOUT ?= 120
+ifndef STORE_QT_ANDROID_ROOT
+STORE_QT_ANDROID_ROOT := $(shell ls -d $(QT_ROOT)/*/$(QT_KIT_$(STORE_ABI)) \
+                                 2>/dev/null | sort -V | tail -1)
+endif
+
+android-store-screenshots:
+	@adb="$(ANDROID_ADB)"; emu="$(ANDROID_SDK_ROOT)/emulator/emulator"; \
+	avd="$(STORE_AVD)"; serial="emulator-$(STORE_EMULATOR_PORT)"; \
+	for t in "$$adb" "$$emu"; do \
+		[ -x "$$t" ] || { echo "store: $$t is not there; set ANDROID_SDK_ROOT." >&2; exit 1; }; \
+	done; \
+	if ! "$$emu" -list-avds 2>/dev/null | grep -qx "$$avd"; then \
+		echo "store: no AVD named $$avd; see the comment above android-store-screenshots." >&2; \
+		exit 1; \
+	fi; \
+	if [ -z "$(STORE_QT_ANDROID_ROOT)" ]; then \
+		echo "store: no Qt kit for $(STORE_ABI) under $(QT_ROOT); set STORE_QT_ANDROID_ROOT." >&2; \
+		exit 1; \
+	fi; \
+	if "$$adb" devices | grep -q "^$$serial[[:space:]]"; then \
+		echo "store: $$serial is already running, and is not this run's; stop it or set STORE_EMULATOR_PORT." >&2; \
+		exit 1; \
+	fi; \
+	log=$$(mktemp) || exit 1; pid=''; \
+	alive() { [ -n "$$1" ] && [ -r "/proc/$$1/status" ] && ! grep -q '^State:[[:space:]]*Z' "/proc/$$1/status"; }; \
+	stop() { \
+		trap '' INT TERM; \
+		if alive "$$pid"; then \
+			timeout 20 "$$adb" -s "$$serial" emu kill >/dev/null 2>&1; \
+			w=0; while alive "$$pid" && [ $$w -lt 30 ]; do sleep 1; w=$$((w + 1)); done; \
+			if alive "$$pid"; then \
+				echo "store: the emulator did not quit; killing its group" >&2; \
+				case "$$pid" in ''|*[!0-9]*|0|1) ;; *) kill -9 "-$$pid" 2>/dev/null || kill -9 "$$pid" 2>/dev/null;; esac; \
+			fi; \
+		fi; \
+		rm -f "$$log"; \
+	}; \
+	trap stop EXIT; trap 'exit 130' INT TERM; \
+	echo "store: starting $$avd headless on $$serial"; \
+	setsid "$$emu" -avd "$$avd" -port $(STORE_EMULATOR_PORT) -no-window -no-audio \
+		-no-boot-anim -no-snapshot -wipe-data -gpu swiftshader_indirect > "$$log" 2>&1 & \
+	pid=$$!; \
+	w=0; \
+	until [ "$$(timeout 5 "$$adb" -s "$$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do \
+		if ! alive "$$pid"; then \
+			echo "store: the emulator exited while booting:" >&2; tail -5 "$$log" >&2; exit 1; \
+		fi; \
+		if [ $$w -ge 300 ]; then echo "store: $$avd did not boot in 300s" >&2; exit 1; fi; \
+		sleep 5; w=$$((w + 5)); \
+	done; \
+	echo "store: booted in about $${w}s"; \
+	sleep 20; \
+	"$$adb" -s "$$serial" shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1; \
+	"$$adb" -s "$$serial" shell input keyevent KEYCODE_HOME >/dev/null 2>&1; \
+	ANDROID_SERIAL="$$serial" timeout 2400 $(MAKE) --no-print-directory android-screenshots \
+		ANDROID_ABI=$(STORE_ABI) QT_ANDROID_ROOT="$(STORE_QT_ANDROID_ROOT)" \
+		STORE_READY_TIMEOUT=$(STORE_EMULATOR_READY_TIMEOUT); \
+	rc=$$?; exit $$rc
+
+.PHONY: android-check android-play-check android-screenshots android-store-screenshots android-install android-run android-log android-uninstall
