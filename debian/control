@@ -29,7 +29,12 @@ Depends: ${shlibs:Depends},
 # The SQLite driver is loaded at run time, so it appears in no ELF
 # header and dpkg-shlibdeps cannot see it. Without this the archive
 # cannot be opened at all.
-         libqt6sql6-sqlite
+         libqt6sql6-sqlite,
+# Every provider is HTTPS and Qt's network library only recommends the
+# trust store, as the server package found on a bare trixie (project.md
+# sec 15.13). A desktop has it in practice; a minimal install without
+# recommends would fetch nothing and say only that handshakes failed.
+         ca-certificates
 Description: weather applet and forecast-verification archive
  A Qt Widgets applet that draws high-resolution temperature and rain
  graphs from several providers at once, and answers whether an afternoon
