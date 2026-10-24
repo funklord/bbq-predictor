@@ -4,14 +4,15 @@
 // first prose draft it says so at the member, tagged SPEC CHANGE, with
 // the compiler's reason quoted.
 //
-// The client's parser is generated from this at situ b186326, whose
-// validate(), check() and accessors refuse hostile lengths. framed() and
-// required() read out of bounds before it and are fuzzed nowhere here,
-// so the client never calls them (src/wire/vendor/README.md), and
-// `u8 x[remaining] max 0` after a
-// dynamic member is still not enforced, so every `trailing` guard below
-// is also the caller's check. Regenerate from an exported commit of
-// situ, never its working tree and never /usr/bin/situc:
+// The client's parser is generated from this at situ 217ba65, whose
+// validate(), check() and accessors refuse hostile lengths, and whose
+// check() enforces every `trailing[remaining] max 0` below. framed() and
+// required() are still wrong for a nested variable struct and fuzzed
+// nowhere here, so the client never calls them, and it checks exact
+// lengths itself as well (src/wire/vendor/README.md).
+//
+// Regenerate from an exported commit of situ, never its working tree and
+// never /usr/bin/situc:
 //
 //     git -C ~/src/situ archive <commit> | tar -x -C <scratch>
 //     python3 <scratch>/bin/situc build --target cpp --out src/wire/vendor bbq.situ

@@ -287,8 +287,10 @@ void test_wire::a_file_over_its_cap_is_refused_unread() {
 
 void test_wire::bytes_after_the_last_column_are_refused() {
 	/*
-	 * situ does not enforce `trailing[remaining] max 0` after a dynamic
-	 * member at b186326, so this is the reader's own check.
+	 * Refused twice over since situ 217ba65: its check() enforces
+	 * `trailing[remaining] max 0`, and the reader checks exact lengths.
+	 * With the reader's check disabled, the columns case failed at
+	 * b186326 and passes at 217ba65.
 	 */
 	QString why;
 	bbq_wire_month_rows rows;

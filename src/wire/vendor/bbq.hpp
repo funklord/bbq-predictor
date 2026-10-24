@@ -1254,6 +1254,12 @@ public:
 			need = size_min;
 			return ::situ::rt::err::truncated;
 		}
+		if (v_len() == 0u) {
+			/* zv1.v: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
+			return ::situ::rt::err::truncated;
+		}
 
 		/* zv1.v: reading its length means reading
 		 * bytes that have to be here first. */
@@ -1399,6 +1405,12 @@ public:
 
 		if (have < size_min) {
 			need = size_min;
+			return ::situ::rt::err::truncated;
+		}
+		if (v_len() == 0u) {
+			/* v1.v: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
 			return ::situ::rt::err::truncated;
 		}
 
@@ -1686,6 +1698,12 @@ public:
 			need = size_min;
 			return ::situ::rt::err::truncated;
 		}
+		if (count_len() == 0u) {
+			/* optional_column.count: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
+			return ::situ::rt::err::truncated;
+		}
 
 		/* optional_column.count: reading its length means reading
 		 * bytes that have to be here first. */
@@ -1700,6 +1718,7 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
+			std::uint32_t pos = situ_advance_u32(0, count_len(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -1707,12 +1726,12 @@ public:
 				if (n >= delta_count()) {
 					break;
 				}
-				if (have < at) {
+				if (have < pos) {
 					need = at;
 					return ::situ::rt::err::truncated;
 				}
-				const ::situ::rt::err e = ::situ::zv1::required(situ_base(raw_) + at,
-					situ_remaining_u32(have, at), part);
+				const ::situ::rt::err e = ::situ::zv1::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -1723,7 +1742,8 @@ public:
 					                          ::situ::zv1::size_min));
 					return ::situ::rt::err::truncated;
 				}
-				at = situ_need_u32(at, part);
+				at  = situ_need_u32(at, part);
+				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
 		}
@@ -2717,6 +2737,12 @@ public:
 			need = size_min;
 			return ::situ::rt::err::truncated;
 		}
+		if (rows_len() == 0u) {
+			/* columns.rows: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
+			return ::situ::rt::err::truncated;
+		}
 
 		/* columns.rows: reading its length means reading
 		 * bytes that have to be here first. */
@@ -2763,6 +2789,7 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
+			std::uint32_t pos = situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -2770,12 +2797,12 @@ public:
 				if (n >= start_utc_count()) {
 					break;
 				}
-				if (have < at) {
+				if (have < pos) {
 					need = at;
 					return ::situ::rt::err::truncated;
 				}
-				const ::situ::rt::err e = ::situ::zv1::required(situ_base(raw_) + at,
-					situ_remaining_u32(have, at), part);
+				const ::situ::rt::err e = ::situ::zv1::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -2786,7 +2813,8 @@ public:
 					                          ::situ::zv1::size_min));
 					return ::situ::rt::err::truncated;
 				}
-				at = situ_need_u32(at, part);
+				at  = situ_need_u32(at, part);
+				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
 		}
@@ -2796,6 +2824,7 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
+			std::uint32_t pos = situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -2803,12 +2832,12 @@ public:
 				if (n >= duration_s_count()) {
 					break;
 				}
-				if (have < at) {
+				if (have < pos) {
 					need = at;
 					return ::situ::rt::err::truncated;
 				}
-				const ::situ::rt::err e = ::situ::v1::required(situ_base(raw_) + at,
-					situ_remaining_u32(have, at), part);
+				const ::situ::rt::err e = ::situ::v1::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -2819,7 +2848,8 @@ public:
 					                          ::situ::v1::size_min));
 					return ::situ::rt::err::truncated;
 				}
-				at = situ_need_u32(at, part);
+				at  = situ_need_u32(at, part);
+				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
 		}
@@ -2880,6 +2910,7 @@ public:
 	static constexpr std::uint32_t check_rows = 1u;
 	static constexpr std::uint32_t check_start_utc = 2u;
 	static constexpr std::uint32_t check_duration_s = 3u;
+	static constexpr std::uint32_t check_trailing = 4u;
 
 	/** Every constraint the schema declares, naming the member
 	 * that refused. `*which_` is `no_check` when nothing did
@@ -3193,6 +3224,11 @@ public:
 			} else if (got != ::situ::rt::err::version) {
 				return got;
 			}
+		}
+		/* columns.trailing: its declared cap (26.681). */
+		if (situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (wind_kph_wind_kph_values_extent())), raw_.limit)) > 0u) {
+			*which_ = check_trailing;
+			return ::situ::rt::err::bounds;
 		}
 		return ::situ::rt::err::ok;
 	}
@@ -3682,6 +3718,7 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
+			std::uint32_t pos = situ_advance_u32(9, station_extent(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -3689,12 +3726,12 @@ public:
 				if (n >= bands_count()) {
 					break;
 				}
-				if (have < at) {
+				if (have < pos) {
 					need = at;
 					return ::situ::rt::err::truncated;
 				}
-				const ::situ::rt::err e = ::situ::band_::required(situ_base(raw_) + at,
-					situ_remaining_u32(have, at), part);
+				const ::situ::rt::err e = ::situ::band_::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -3705,7 +3742,8 @@ public:
 					                          ::situ::band_::size_min));
 					return ::situ::rt::err::truncated;
 				}
-				at = situ_need_u32(at, part);
+				at  = situ_need_u32(at, part);
+				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
 		}
@@ -3734,6 +3772,7 @@ public:
 	static constexpr std::uint32_t check_generated_utc = 1u;
 	static constexpr std::uint32_t check_band_count = 2u;
 	static constexpr std::uint32_t check_bands = 3u;
+	static constexpr std::uint32_t check_trailing = 4u;
 
 	/** Every constraint the schema declares, naming the member
 	 * that refused. `*which_` is `no_check` when nothing did
@@ -3815,6 +3854,11 @@ public:
 		 * walk REACHED (26.676). */
 		if (!bands_fits()) {
 			*which_ = check_bands;
+			return ::situ::rt::err::bounds;
+		}
+		/* head_body.trailing: its declared cap (26.681). */
+		if (situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(9, station_extent(), raw_.limit), bands_span(), raw_.limit)) > 0u) {
+			*which_ = check_trailing;
 			return ::situ::rt::err::bounds;
 		}
 		return ::situ::rt::err::ok;
@@ -4244,6 +4288,7 @@ public:
 	static constexpr std::uint32_t check_generated_utc = 1u;
 	static constexpr std::uint32_t check_count = 2u;
 	static constexpr std::uint32_t check_months = 3u;
+	static constexpr std::uint32_t check_trailing = 4u;
 
 	/** Every constraint the schema declares, naming the member
 	 * that refused. `*which_` is `no_check` when nothing did
@@ -4310,6 +4355,11 @@ public:
 		 * fit the frame it is in. */
 		if (situ_remaining_u32(raw_.limit, situ_advance_u32(10, station_extent(), raw_.limit)) < ((::situ::rt::nonneg(::situ::rt::leaf_u(count()))) * 42)) {
 			*which_ = check_months;
+			return ::situ::rt::err::bounds;
+		}
+		/* index_body.trailing: its declared cap (26.681). */
+		if (situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(10, station_extent(), raw_.limit), (::situ::rt::nonneg(::situ::rt::leaf_u(count()))) * 42, raw_.limit)) > 0u) {
+			*which_ = check_trailing;
 			return ::situ::rt::err::bounds;
 		}
 		return ::situ::rt::err::ok;
@@ -4459,6 +4509,12 @@ public:
 
 		if (have < size_min) {
 			need = size_min;
+			return ::situ::rt::err::truncated;
+		}
+		if (run_len_len() == 0u) {
+			/* provider_run.run_len: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
 			return ::situ::rt::err::truncated;
 		}
 
@@ -5080,6 +5136,7 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
+			std::uint32_t pos = situ_advance_u32(3, station_extent(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -5087,12 +5144,12 @@ public:
 				if (n >= providers_count()) {
 					break;
 				}
-				if (have < at) {
+				if (have < pos) {
 					need = at;
 					return ::situ::rt::err::truncated;
 				}
-				const ::situ::rt::err e = ::situ::provider_name::required(situ_base(raw_) + at,
-					situ_remaining_u32(have, at), part);
+				const ::situ::rt::err e = ::situ::provider_name::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -5103,9 +5160,16 @@ public:
 					                          ::situ::provider_name::size_min));
 					return ::situ::rt::err::truncated;
 				}
-				at = situ_need_u32(at, part);
+				at  = situ_need_u32(at, part);
+				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
+		}
+		if (run_count_len() == 0u) {
+			/* month_body.run_count: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
+			return ::situ::rt::err::truncated;
 		}
 
 		/* month_body.run_count: reading its length means reading
@@ -5121,6 +5185,7 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
+			std::uint32_t pos = situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -5128,12 +5193,12 @@ public:
 				if (n >= runs_count()) {
 					break;
 				}
-				if (have < at) {
+				if (have < pos) {
 					need = at;
 					return ::situ::rt::err::truncated;
 				}
-				const ::situ::rt::err e = ::situ::provider_run::required(situ_base(raw_) + at,
-					situ_remaining_u32(have, at), part);
+				const ::situ::rt::err e = ::situ::provider_run::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -5144,7 +5209,8 @@ public:
 					                          ::situ::provider_run::size_min));
 					return ::situ::rt::err::truncated;
 				}
-				at = situ_need_u32(at, part);
+				at  = situ_need_u32(at, part);
+				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
 		}
@@ -5184,6 +5250,7 @@ public:
 	static constexpr std::uint32_t check_run_count = 4u;
 	static constexpr std::uint32_t check_runs = 5u;
 	static constexpr std::uint32_t check_columns = 6u;
+	static constexpr std::uint32_t check_trailing = 7u;
 
 	/** Every constraint the schema declares, naming the member
 	 * that refused. `*which_` is `no_check` when nothing did
@@ -5320,6 +5387,11 @@ public:
 				*which_ = check_columns;
 				return e;
 			}
+		}
+		/* month_body.trailing: its declared cap (26.681). */
+		if (situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit), runs_span(), raw_.limit), columns_extent(), raw_.limit)) > 0u) {
+			*which_ = check_trailing;
+			return ::situ::rt::err::bounds;
 		}
 		return ::situ::rt::err::ok;
 	}
@@ -5685,6 +5757,7 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
+			std::uint32_t pos = 10;
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -5692,12 +5765,12 @@ public:
 				if (n >= ids_count()) {
 					break;
 				}
-				if (have < at) {
+				if (have < pos) {
 					need = at;
 					return ::situ::rt::err::truncated;
 				}
-				const ::situ::rt::err e = ::situ::station_id::required(situ_base(raw_) + at,
-					situ_remaining_u32(have, at), part);
+				const ::situ::rt::err e = ::situ::station_id::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
@@ -5708,7 +5781,8 @@ public:
 					                          ::situ::station_id::size_min));
 					return ::situ::rt::err::truncated;
 				}
-				at = situ_need_u32(at, part);
+				at  = situ_need_u32(at, part);
+				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
 		}
@@ -5735,6 +5809,7 @@ public:
 	static constexpr std::uint32_t no_check = 0xFFFFFFFFu;
 	static constexpr std::uint32_t check_count = 0u;
 	static constexpr std::uint32_t check_ids = 1u;
+	static constexpr std::uint32_t check_trailing = 2u;
 
 	/** Every constraint the schema declares, naming the member
 	 * that refused. `*which_` is `no_check` when nothing did
@@ -5793,6 +5868,11 @@ public:
 		 * walk REACHED (26.676). */
 		if (!ids_fits()) {
 			*which_ = check_ids;
+			return ::situ::rt::err::bounds;
+		}
+		/* stations_body.trailing: its declared cap (26.681). */
+		if (situ_remaining_u32(raw_.limit, situ_advance_u32(10, ids_span(), raw_.limit)) > 0u) {
+			*which_ = check_trailing;
 			return ::situ::rt::err::bounds;
 		}
 		return ::situ::rt::err::ok;

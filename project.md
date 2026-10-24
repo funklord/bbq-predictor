@@ -7404,21 +7404,21 @@ being worked around here. situ fixed validate, check and the accessors
 by 56dcad1, which the reader was first generated from, and `framed()`
 and `required()` by b186326, vendored since 2026-10-23
 (`src/wire/vendor/README.md` has what was measured). The reader still
-calls only the first three, because nothing here fuzzes the other two;
-and situ did not enforce `max 0` on a trailing run after a dynamic
-member at b186326, so the reader checks exact lengths itself.
+calls only the first three, because nothing here fuzzes the other two.
 
-**situ's answer, 2026-10-23 (its inbox reply 20261023T1730Z, recorded
-here and deleted there): keep both.** At its 7ff6fbe, not yet pushed
-when it wrote, the trailing cap is enforced, a run of varints is
-generated as one, and `[max]` on a varint in a variant arm compiles.
-But `framed()` and `required()` are still wrong in two ways that
-predate b186326: a struct containing a nested variable struct reports
-itself complete once its fixed prefix has arrived, and a counted run
-followed by fixed members frames short by their size (situ decisions
-26.684 and 26.685, one pass). `validate()` is sound. So the reader's
-exact-length checks stay until situ says otherwise, and so does
-`fuzz-wire`'s refusal of those two calls.
+**Vendored at 217ba65 since 2026-10-24, where all but one of the
+reported faults are fixed.** `check()` enforces `max 0` on a trailing
+run after a dynamic member -- measured: with the reader's own length
+check disabled, the trailing-byte test fails at b186326 and passes at
+217ba65 -- and a run of varints is generated as one, `[max]` on a
+varint in a variant arm compiles, and three ways `required()` called a
+short message complete are fixed (situ's inbox reply 20261023T1730Z,
+recorded here and deleted there; its b78119f). Still open:
+`framed()` on a struct holding a nested variable struct reports
+completeness once the fixed prefix arrives (situ's 26.684, written and
+blocked on header ordering). So `fuzz-wire` still refuses a call to
+`framed()` or `required()`, and the reader keeps its exact-length
+checks, which also refuse padded varints that no cap can.
 
 Neither the C++ builder nor any backend writes a signed file, so the
 publisher writes the format by hand whatever happens.
@@ -7596,12 +7596,12 @@ providers asked, and the server is still asked first on every round.
 the providers at once, and the server is not counted as failing.
 
 **The reader** (`src/wire/read.cpp`) parses with situ's generated code
-at b186326 -- validate, check and accessors only -- after a size cap
+at 217ba65 -- validate, check and accessors only -- after a size cap
 and the signature, and checks every rule situ cannot state. Two of
-those rules are there because situ's own guard failed: its `trailing()`
-reported no trailing bytes with one present, so every body and column
-stream is held to the exact length its decoded content implies, which
-also refuses padded varints. `make fuzz-wire` fuzzes the parser
+those rules are there because situ's own guard failed before 217ba65:
+its `trailing()` reported no trailing bytes with one present, so every
+body and column stream is held to the exact length its decoded content
+implies, which also refuses padded varints. `make fuzz-wire` fuzzes the parser
 directly, bypassing the signature, seeded from real bodies: 1.46
 million inputs in five minutes, no report.
 

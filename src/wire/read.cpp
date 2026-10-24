@@ -6,9 +6,10 @@
 
 /*
  * Only at(), validate(), check() and the field accessors of the generated
- * code are used here. framed() and required() read out of bounds before
- * situ b186326 and nothing here fuzzes them (src/wire/vendor/README.md);
- * a call to either in this file is a defect, whatever it is for.
+ * code are used here. framed() and required() are still wrong for a
+ * nested variable struct at situ 217ba65, and nothing here fuzzes them
+ * (src/wire/vendor/README.md); a call to either in this file is a defect,
+ * whatever it is for.
  */
 
 namespace {
@@ -165,12 +166,12 @@ bool columns(const situ::packed_columns &packed_columns, uint32_t rows_max,
 	}
 
 	/*
-	 * NOT c.trailing(): situ does not enforce `trailing[remaining] max 0`
-	 * after a dynamic member at b186326, and its accessor reported no
-	 * trailing bytes with one there -- test_wire's case found it. So the
-	 * stream's exact length is computed below from what was decoded, and
-	 * must equal what was inflated: that refuses trailing bytes and
-	 * padded varints alike, so every file has one encoding.
+	 * Not c.trailing(): before situ 217ba65 the cap was not enforced and
+	 * the accessor reported no trailing bytes with one there -- test_wire's
+	 * case found it. check() above refuses them now, and the stream's
+	 * exact length is still computed below from what was decoded and must
+	 * equal what was inflated: that refuses padded varints as well, which
+	 * no cap can, so every file has one encoding.
 	 */
 	uint64_t size = 1;
 
@@ -283,7 +284,7 @@ bool bbq_wire_parse_stations(const QByteArray &body, QStringList *stations, QStr
 		stations->append(QString::fromLatin1(bytes_of(id.id())));
 	}
 
-	/* The exact length, since situ's trailing guard does not hold (see columns()). */
+	/* The exact length, which also refuses padded varints (see columns()). */
 	uint64_t size = 8 + 2;
 	for (const QString &id : *stations) {
 		size += 1 + uint64_t(id.size());
