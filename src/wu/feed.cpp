@@ -311,13 +311,17 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
 			m_composite.set_series(std::move(series));
 			emit updated();
+		} else {
+			emit band_quiet(QStringLiteral("extended"), tr("the reply held no rows"));
 		}
 
 		finish_one();
 	});
 
-	connect(m_open, &bbq_openmeteo_client::failed, this,
-	        [this](const QString &) { finish_one(); });
+	connect(m_open, &bbq_openmeteo_client::failed, this, [this](const QString &reason) {
+		emit band_quiet(QStringLiteral("extended"), reason);
+		finish_one();
+	});
 
 	/*
 	 * MET Norway serves the nowcast band where it can (sec 2.9). Five
@@ -341,6 +345,8 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
 			m_composite.set_series(std::move(series));
 			emit updated();
+		} else {
+			emit band_quiet(QStringLiteral("radar"), tr("the reply held no rows"));
 		}
 
 		finish_one();
@@ -351,9 +357,11 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	 * and absent elsewhere, so announcing it as a failed band would put
 	 * a permanent error on the display of everybody outside its
 	 * coverage. The ordinary nowcast is fetched independently and is
-	 * unaffected.
+	 * unaffected. band_quiet, which nothing on screen hears, is for the
+	 * diagnostic.
 	 */
-	connect(m_met, &bbq_met_client::failed, this, [this](const QString &) {
+	connect(m_met, &bbq_met_client::failed, this, [this](const QString &reason) {
+		emit band_quiet(QStringLiteral("radar"), reason);
 		finish_one();
 	});
 

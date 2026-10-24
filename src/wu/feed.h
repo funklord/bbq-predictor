@@ -290,6 +290,15 @@ signals:
 	/* A band did not arrive. Named, because absent must not read as empty. */
 	void band_failed(const QString &band, const QString &reason);
 
+	/*
+	 * A band settled with nothing, where the display deliberately reports
+	 * no failure: radar and extended, which sharpen bands that already
+	 * have a source. Nothing on screen listens. The diagnostic does,
+	 * because without it a run that timed out named these as bands that
+	 * "had not failed, had not answered yet" (project.md sec 19).
+	 */
+	void band_quiet(const QString &band, const QString &reason);
+
 	/* Discovery finished; the store has the stations it found. */
 	void stations_discovered(int count);
 	void places_found(const std::vector<bbq_wu_place> &places);

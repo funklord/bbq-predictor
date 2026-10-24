@@ -325,6 +325,21 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		failed_bands.insert(band);
 	});
 
+	/*
+	 * Radar and extended settle quietly when they bring nothing, and the
+	 * display rightly says nothing (feed.h). The report says so, on out
+	 * rather than error since it is not a failure, and the band is
+	 * settled: a timeout must not then call it unanswered (sec 19).
+	 */
+	QSet<QString> quiet_bands;
+	QObject::connect(&feed, &bbq_wu_feed::band_quiet, &loop,
+	                 [&](const QString &band, const QString &reason) {
+		out << QStringLiteral("  %1").arg(band, -10) << QStringLiteral(" none  ") << reason
+		    << "\n";
+		out.flush();
+		quiet_bands.insert(band);
+	});
+
 	QObject::connect(&feed, &bbq_wu_feed::settled, &loop, &QEventLoop::quit);
 
 	/*
@@ -376,15 +391,9 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 
 	if (timed_out) {
 		/*
-		 * Only the bands that neither arrived nor FAILED (sec 19).
-		 * Absence from the composite was the test, and a failed band is
-		 * absent too, so a band printed FAIL above was named here as one
-		 * that "had not failed" -- asserting the negative from evidence
-		 * that could not tell the two apart.
-		 */
-		QStringList unanswered;
-
-		/*
+		 * Only the bands that neither arrived nor FAILED (sec 19), decided
+		 * in fetch_verdict.h where test_feed reaches it.
+		 *
 		 * NOT missing_bands(), which is the display's question and a
 		 * narrower one: it leaves radar and extended out deliberately,
 		 * because they enhance rather than supply and a complaint about
@@ -393,25 +402,18 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		 * only the enhancements hung would have printed an empty list
 		 * and read as though nothing were outstanding.
 		 */
+		QStringList names;
+		QStringList arrived;
 		for (bbq_band band : order) {
 			const QString name = QString::fromLatin1(bbq_band_name(band));
-			if (composite.band(band) == nullptr && !failed_bands.contains(name)) {
-				unanswered << name;
+			names << name;
+			if (composite.band(band) != nullptr) {
+				arrived << name;
 			}
 		}
-
-		if (unanswered.isEmpty()) {
-			error << QStringLiteral("fetch-once: no answer within %1s, though every band "
-			                        "had arrived or failed -- what was outstanding was "
-			                        "not a band\n")
-			                 .arg(timeout_s);
-		} else {
-			error << QStringLiteral("fetch-once: no answer within %1s from: %2\n")
-			                 .arg(timeout_s)
-			                 .arg(unanswered.join(QLatin1Char(' ')));
-			error << "fetch-once: they had not failed -- they had not "
-			         "answered yet\n";
-		}
+		error << bbq_fetch_timeout_message(
+		        timeout_s,
+		        bbq_fetch_unanswered(names, arrived, (failed_bands + quiet_bands).values()));
 	}
 
 	for (bbq_band band : order) {

@@ -1,6 +1,9 @@
 #ifndef BBQ_WU_FETCH_VERDICT_H
 #define BBQ_WU_FETCH_VERDICT_H
 
+#include <QString>
+#include <QStringList>
+
 /*
  * What a single fetch run amounted to (project.md sec 16.39).
  *
@@ -50,6 +53,47 @@ inline bbq_fetch_outcome bbq_fetch_verdict(int failures, bool timed_out,
 	 */
 	return covers_now ? bbq_fetch_outcome::partial
 	                  : bbq_fetch_outcome::useless;
+}
+
+/*
+ * The bands a run that timed out should name as not having answered:
+ * those in `order` that neither arrived nor settled without data, loudly
+ * (band_failed) or quietly (band_quiet), project.md sec 19.
+ *
+ * Absence from the composite was the test once, and a failed band is
+ * absent too, so a band the run had printed FAIL for was named as one
+ * that "had not failed, had not answered yet" -- asserting the negative
+ * from evidence that could not tell the two apart.
+ */
+inline QStringList bbq_fetch_unanswered(const QStringList &order, const QStringList &arrived,
+                                        const QStringList &settled_empty) {
+	QStringList unanswered;
+	for (const QString &band : order) {
+		if (!arrived.contains(band) && !settled_empty.contains(band)) {
+			unanswered << band;
+		}
+	}
+	return unanswered;
+}
+
+/*
+ * What a run that timed out says, from that list. An empty list is a
+ * real case -- every band arrived or settled and something else held the
+ * loop -- and it gets a sentence of its own rather than the usual one
+ * over nothing.
+ */
+inline QString bbq_fetch_timeout_message(int timeout_s, const QStringList &unanswered) {
+	if (unanswered.isEmpty()) {
+		return QStringLiteral("fetch-once: no answer within %1s, though every band "
+		                      "had arrived, failed or come back empty -- what was "
+		                      "outstanding was not a band\n")
+		        .arg(timeout_s);
+	}
+	return QStringLiteral("fetch-once: no answer within %1s from: %2\n"
+	                      "fetch-once: they had not failed -- they had not "
+	                      "answered yet\n")
+	        .arg(timeout_s)
+	        .arg(unanswered.join(QLatin1Char(' ')));
 }
 
 #endif

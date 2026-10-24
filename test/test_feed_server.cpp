@@ -44,6 +44,7 @@ private slots:
 	void a_server_that_does_not_answer_is_counted_not_abandoned();
 	void a_file_signed_by_another_key_is_not_applied();
 	void no_key_means_no_server();
+	void the_keyless_bands_settle_quietly_when_unreachable();
 
 private:
 	bool settle(bbq_wu_feed &feed);
@@ -414,6 +415,40 @@ void test_feed_server::no_key_means_no_server() {
 	feed.set_server(QByteArray(), {daemon(m_port)});
 	feed.set_station(station);
 	QVERIFY(!feed.server_active());
+}
+
+/*
+ * Radar and extended, unreachable through the hermetic proxy, settle
+ * through band_quiet and never band_failed (sec 19). The display hears
+ * only the second, where a permanent error for everybody outside MET's
+ * coverage would be wrong; the diagnostic hears the first, without which
+ * a timeout named them as bands that had not answered yet.
+ */
+void test_feed_server::the_keyless_bands_settle_quietly_when_unreachable() {
+	QTemporaryDir scratch;
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath("history.sqlite")));
+	feed.set_station(station);
+	feed.set_geocode(59.33, 18.07);
+	QVERIFY(!feed.server_active());
+
+	QSignalSpy quiet(&feed, &bbq_wu_feed::band_quiet);
+	QSignalSpy failed(&feed, &bbq_wu_feed::band_failed);
+	QVERIFY(settle(feed));
+
+	QStringList quietly;
+	for (const auto &call : quiet) {
+		quietly << call.at(0).toString();
+		QVERIFY2(!call.at(1).toString().isEmpty(), "a quiet band with no reason");
+	}
+	quietly.sort();
+	QCOMPARE(quietly, QStringList({QStringLiteral("extended"), QStringLiteral("radar")}));
+
+	for (const auto &call : failed) {
+		const QString band = call.at(0).toString();
+		QVERIFY2(band != QLatin1String("radar") && band != QLatin1String("extended"),
+		         qPrintable(band + QStringLiteral(" was announced as failed")));
+	}
 }
 
 QTEST_GUILESS_MAIN(test_feed_server)

@@ -6470,9 +6470,23 @@ nothing; these are the messages.
 answered yet" about bands that failed.**~~ **Fixed 2026-10-23:** the
 bands `band_failed` named are collected and left out of the list, and
 when none is left the message says what was outstanding was not a band
-rather than printing an empty list under the old sentence. Read rather
-than staged: the round's thirty-second bound cannot be shortened from
-outside, so the timeout path has no test.
+rather than printing an empty list under the old sentence.
+
+**Tested since 2026-10-24, and the fix was half a fix.** The decision
+moved to `src/wu/fetch_verdict.h` (`bbq_fetch_unanswered`,
+`bbq_fetch_timeout_message`), beside the verdict, where test_feed
+reaches it; `fetch_once.cpp` has a main and links into nothing. Writing
+the test found the other half. Radar and extended settle silently on
+failure or an empty reply -- deliberately, as below, so the display
+carries no permanent error outside MET's coverage -- and so after a
+timeout they were still named as having "not failed". They settle
+through `band_quiet` now, a signal nothing on screen hears and the
+diagnostic does: it prints them as `none` with the reason, not in quiet
+mode, and counts them settled. test_feed asserts the table, and
+test_feed_server runs a round through its refusing proxy and asserts
+that both bands settle quietly and neither is announced as failed.
+Sabotaged: dropping radar's `band_quiet`, and ignoring settled bands in
+the helper, each failed its own test.
 
 The list it prints is built from `composite.band(band) == nullptr`, which
 is absence from the composite. A **failed** band looks identical:

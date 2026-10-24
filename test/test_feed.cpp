@@ -29,6 +29,7 @@ private slots:
 	void a_finished_day_is_told_from_one_still_running();
 	void a_late_endpoint_is_told_from_a_quiet_station();
 	void a_band_never_asked_for_is_not_a_band_that_answered();
+	void a_band_that_settled_is_not_one_still_waiting();
 	void a_pinned_coordinate_does();
 	void resetting_the_same_station_changes_nothing();
 	void the_observed_band_is_served_from_the_store();
@@ -1307,6 +1308,49 @@ void test_feed::a_band_never_asked_for_is_not_a_band_that_answered() {
 	         bbq_fetch_outcome::partial);
 	QCOMPARE(bbq_fetch_verdict(0, true, true, false),
 	         bbq_fetch_outcome::useless);
+}
+
+/*
+ * WHAT A RUN THAT TIMED OUT CALLS UNANSWERED (sec 19).
+ *
+ * A band that failed, or that settled empty without a displayed failure
+ * -- radar and extended, through band_quiet -- was named among the bands
+ * that "had not failed, had not answered yet", because absence from the
+ * composite was the whole test. Each kind is asserted on its own, so a
+ * fix for one cannot pass by luck of another.
+ */
+void test_feed::a_band_that_settled_is_not_one_still_waiting() {
+	const QStringList order = {QStringLiteral("observed"), QStringLiteral("current"),
+	                           QStringLiteral("radar"),    QStringLiteral("nowcast"),
+	                           QStringLiteral("extended"), QStringLiteral("hourly")};
+
+	/* Arrived, failed loudly, settled quietly: none of them is waiting. */
+	QCOMPARE(bbq_fetch_unanswered(order, {QStringLiteral("current")},
+	                              {QStringLiteral("observed"), QStringLiteral("radar")}),
+	         QStringList({QStringLiteral("nowcast"), QStringLiteral("extended"),
+	                      QStringLiteral("hourly")}));
+
+	/* Radar and extended are named when they are the ones still out. */
+	const QStringList the_rest = {QStringLiteral("observed"), QStringLiteral("current"),
+	                              QStringLiteral("nowcast"), QStringLiteral("hourly")};
+	QCOMPARE(bbq_fetch_unanswered(order, the_rest, {}),
+	         QStringList({QStringLiteral("radar"), QStringLiteral("extended")}));
+
+	const QString named = bbq_fetch_timeout_message(
+	        30, {QStringLiteral("radar"), QStringLiteral("extended")});
+	QVERIFY2(named.contains(QStringLiteral("no answer within 30s from: radar extended\n")),
+	         qPrintable(named));
+	QVERIFY2(named.contains(QStringLiteral("they had not answered yet")), qPrintable(named));
+
+	/* Every band settled: the other sentence, never the claim over nothing. */
+	const QString none = bbq_fetch_timeout_message(
+	        30, bbq_fetch_unanswered(order, {QStringLiteral("current")},
+	                                 {QStringLiteral("observed"), QStringLiteral("radar"),
+	                                  QStringLiteral("nowcast"), QStringLiteral("extended"),
+	                                  QStringLiteral("hourly")}));
+	QVERIFY2(none.contains(QStringLiteral("what was outstanding was not a band")),
+	         qPrintable(none));
+	QVERIFY2(!none.contains(QStringLiteral("had not answered yet")), qPrintable(none));
 }
 
 /*
