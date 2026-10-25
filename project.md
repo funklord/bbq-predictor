@@ -7434,6 +7434,20 @@ blocked on header ordering). So `fuzz-wire` still refuses a call to
 `framed()` or `required()`, and the reader keeps its exact-length
 checks, which also refuse padded varints that no cap can.
 
+**The five minor items in that report, as of situ bb79c61** (situ's
+inbox reply 20261025T1021Z, recorded here and deleted). Fixed in situ's
+9f69185: the `max_size` misuse now gets a diagnostic naming the form
+`max_size(X, n)`, and an enum member is accepted in `when`. Withdrawn:
+"every diagnostic prints twice" was ours. The evaluation ran `map` and
+`build` on one shell line, and each printed the error once. Still
+reproducible, with schemas sent back (situ's inbox, 20261025T1219Z):
+- a `ratio_bounded(1001, 1000) + 20` codec gives a size in bits, with
+  `explain` agreeing, so "explain gives bytes" was also wrong;
+- `explain` calls a member after a non-seekable coded region `Dynamic`
+  and `Random`, while every generator says its offset cannot be resolved.
+None of it touches the vendored reader, which has a length before every
+blob.
+
 Neither the C++ builder nor any backend writes a signed file, so the
 publisher writes the format by hand whatever happens.
 
