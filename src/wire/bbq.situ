@@ -12,9 +12,9 @@
 // lengths itself as well (src/wire/vendor/README.md).
 //
 // Regenerate from an exported commit of situ, never its working tree and
-// never /usr/bin/situc:
+// never /usr/bin/situc, given a situ checkout:
 //
-//     git -C ~/src/situ archive <commit> | tar -x -C <scratch>
+//     git -C <situ checkout> archive <commit> | tar -x -C <scratch>
 //     python3 <scratch>/bin/situc build --target cpp --out src/wire/vendor bbq.situ
 //
 // Reading model. Three acquisitions, each over a span the previous one

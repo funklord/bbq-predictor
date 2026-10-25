@@ -55,8 +55,8 @@ QStringList bbq_scheme_sources();
 
 
 /*
- * Tier 4 of the shared dark-desktop rule (claude-guidelines
- * harmonization.md): the scheme the desktop wrote down, or Unknown.
+ * Tier 4 of the dark-desktop rule (project.md sec 3.8.4, which states
+ * the four tiers): the scheme the desktop wrote down, or Unknown.
  *
  * The platform hint above does not fail VISIBLY on a Trinity or KDE 3
  * session, which is what makes this worth asking separately. That

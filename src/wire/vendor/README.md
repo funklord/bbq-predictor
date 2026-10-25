@@ -6,9 +6,9 @@ Not written here. Exempt from the style gate by the `vendor` component.
   `217ba65` (`runtime/c/` and `runtime/cpp/`), from the commit rather
   than a working tree.
 - `bbq.hpp` -- generated from `../bbq.situ` by situ's compiler at the
-  same commit:
+  same commit, given a situ checkout:
 
-      git -C ~/src/situ archive 217ba65 | tar -x -C <scratch>
+      git -C <situ checkout> archive 217ba65 | tar -x -C <scratch>
       python3 <scratch>/bin/situc build --target cpp --out src/wire/vendor src/wire/bbq.situ
 
 **Safe for downloaded files through the path the app uses.** At
