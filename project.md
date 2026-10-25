@@ -7312,6 +7312,26 @@ from 15 minutes to 5, because a window of half an hour with retries
 every quarter of an hour could not gather enough observed failures to
 mean anything. The numbers are still defaults rather than measurements.
 
+**Answering is not enough: a head over two hours old is a failure**
+(holder, 2026-10-25). A publisher that stops leaves the daemon serving
+its last files, and a daemon taken over can replay the last valid head
+for ever. Either way every round was a success, so the client was
+frozen on old bands with the fallback never coming. The staleness
+instrument showed the age, and nothing recovered. Now such a round
+fails, says how old the head is, and still applies it, since it is the
+newest there is. It counts toward the rule above like any other
+failure, so a short provider outage at the server, which keeps the last
+head on purpose, changes nothing. Two hours is about 24 of the
+publisher's five-minute rounds. `stale_head_s` in `src/server/policy.h`
+holds it.
+
+The feed test's fixture heads had a fixed date in September, which this
+made stale. They are now stamped ten minutes before the run, as a
+working publisher's are. A fourth fixture station has a head three
+hours old: the round fails, names "3 hours old", and the band is still
+shown. Removing the check fails that test, and moving the boundary from
+`>` to `>=` fails the policy's unit test.
+
 ### 15.12.2 A purpose-built daemon, not a web server
 
 **The holder ruled out a web server, 2026-10-22**: none on these
@@ -7354,7 +7374,8 @@ does one thing:
 publisher signs every file with Ed25519 (monocypher, vendored as
 fuzzypickles does), and the applet carries the public key. **The daemon
 never holds the signing key**, so taking it over lets an attacker refuse
-service but not forge a forecast. A head file carries when it was
+service but not forge a forecast. Nor freeze one: replaying the last
+valid head for ever is caught at two hours (sec 15.12.1). A head file carries when it was
 generated, and the applet refuses one older than what it holds, so a
 replayed old file cannot roll a client back. What is not protected is
 privacy: which station a client asks for is visible on the wire. The

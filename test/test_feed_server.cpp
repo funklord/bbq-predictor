@@ -47,6 +47,7 @@ private slots:
 	void a_server_that_does_not_answer_is_counted_not_abandoned();
 	void a_file_signed_by_another_key_is_not_applied();
 	void a_head_that_does_not_verify_is_a_failure();
+	void an_old_head_is_shown_and_counted_as_a_failure();
 	void no_key_means_no_server();
 	void the_keyless_bands_settle_quietly_when_unreachable();
 
@@ -62,6 +63,13 @@ private:
 	quint16 m_port = 0;
 	std::thread m_thread;
 	int m_september_rows = 0;
+
+	/*
+	 * When the fixture's heads were generated: minutes before the run, as
+	 * a working publisher's are. A fixed date went stale once the applet
+	 * began counting a head over two hours old as a failure (sec 15.12.1).
+	 */
+	qint64 m_head_utc = 0;
 };
 
 namespace {
@@ -87,6 +95,7 @@ void write(const QString &path, const QByteArray &bytes) {
 const QString station = QStringLiteral("ISTOCK877");
 const QString swapped = QStringLiteral("ISTOCK999");
 const QString forged = QStringLiteral("ISTOCK555");
+const QString stale = QStringLiteral("ISTOCK444");
 
 } // namespace
 
@@ -151,10 +160,11 @@ void test_feed_server::initTestCase() {
 		hours[size_t(i)].temperature = 20.0;
 	}
 	hourly.set_samples(hours);
-	hourly.set_fetched_utc(1789999000);
+	m_head_utc = QDateTime::currentSecsSinceEpoch() - 600;
+	hourly.set_fetched_utc(m_head_utc);
 	write(dir + "/" + station + "/head",
 	      bbq_wire_file(bbq_wire_kind::head,
-	                    bbq_wire_head_body(station, 1789999000, {&hourly}, &why), m_key));
+	                    bbq_wire_head_body(station, m_head_utc, {&hourly}, &why), m_key));
 	/*
 	 * A second station whose month file is validly signed but is NOT the
 	 * one its index names: the index was made from one version, and a
@@ -190,7 +200,7 @@ void test_feed_server::initTestCase() {
 		                    bbq_wire_index_body(swapped, 1, {entry}, &why), m_key));
 		write(dir + "/" + swapped + "/head",
 		      bbq_wire_file(bbq_wire_kind::head,
-		                    bbq_wire_head_body(swapped, 1789999000, {&hourly}, &why), m_key));
+		                    bbq_wire_head_body(swapped, m_head_utc, {&hourly}, &why), m_key));
 	}
 
 	/*
@@ -208,12 +218,27 @@ void test_feed_server::initTestCase() {
 		      bbq_wire_file(bbq_wire_kind::index, index_body, m_key));
 		write(dir + "/" + forged + "/head",
 		      bbq_wire_file(bbq_wire_kind::head,
-		                    bbq_wire_head_body(forged, 1789999000, {&hourly}, &why), other));
+		                    bbq_wire_head_body(forged, m_head_utc, {&hourly}, &why), other));
+	}
+
+	/* A fourth, all the server's own and valid, whose head is three hours old. */
+	{
+		bbq_series old_hourly = hourly;
+		old_hourly.set_fetched_utc(m_head_utc - 3 * 3600);
+		write(dir + "/" + stale + "/index",
+		      bbq_wire_file(bbq_wire_kind::index, bbq_wire_index_body(stale, 1, {}, &why),
+		                    m_key));
+		write(dir + "/" + stale + "/head",
+		      bbq_wire_file(bbq_wire_kind::head,
+		                    bbq_wire_head_body(stale, m_head_utc - 3 * 3600, {&old_hourly},
+		                                       &why),
+		                    m_key));
 	}
 
 	write(dir + "/stations",
 	      bbq_wire_file(bbq_wire_kind::stations,
-	                    bbq_wire_stations_body(1, {station, swapped, forged}, &why), m_key));
+	                    bbq_wire_stations_body(1, {station, swapped, forged, stale}, &why),
+	                    m_key));
 
 	m_dir_fd = ::open(QFile::encodeName(dir).constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
 	m_listen_fd = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
@@ -264,7 +289,7 @@ void test_feed_server::a_round_applies_the_head_and_stores_the_months() {
 
 	const bbq_series *hourly = feed.composite().band(bbq_band::hourly);
 	QVERIFY(hourly != nullptr);
-	QCOMPARE(hourly->fetched_utc(), qint64(1789999000));
+	QCOMPARE(hourly->fetched_utc(), m_head_utc);
 
 	/* Both months, every row, under the provider the file named. */
 	const auto months = feed.history().observation_months(station);
@@ -415,7 +440,7 @@ void test_feed_server::an_offline_launch_shows_the_last_head() {
 	feed.set_station(station);
 	const bbq_series *hourly = feed.composite().band(bbq_band::hourly);
 	QVERIFY(hourly != nullptr);
-	QCOMPARE(hourly->fetched_utc(), qint64(1789999000));
+	QCOMPARE(hourly->fetched_utc(), m_head_utc);
 }
 
 void test_feed_server::a_station_the_server_does_not_publish_is_not_an_outage() {
@@ -532,6 +557,36 @@ void test_feed_server::a_head_that_does_not_verify_is_a_failure() {
 		named |= arguments.at(1).toString().contains(QLatin1String("head"));
 	}
 	QVERIFY2(named, "the failure did not say it was the head");
+}
+
+/*
+ * Every file verifies and the head is three hours old: what a stopped
+ * publisher leaves the daemon serving, or a daemon replaying its last
+ * valid head. It used to be a success every round, which froze the client
+ * on old bands with the fallback never coming. Now it is a failure, named
+ * with its age -- and still applied, since it is the newest there is.
+ */
+void test_feed_server::an_old_head_is_shown_and_counted_as_a_failure() {
+	QTemporaryDir scratch;
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath("history.sqlite")));
+	feed.set_server(m_key.public_key(), {daemon(m_port)});
+	feed.set_station(stale);
+	QSignalSpy failed(&feed, &bbq_wu_feed::band_failed);
+	QVERIFY(settle(feed));
+
+	const bbq_series *hourly = feed.composite().band(bbq_band::hourly);
+	QVERIFY(hourly != nullptr);
+	QCOMPARE(hourly->fetched_utc(), m_head_utc - 3 * 3600);
+	QCOMPARE(feed.server_state().failures, 1);
+	QCOMPARE(feed.server_state().last_success_utc, qint64(0));
+
+	bool named = false;
+	for (const QList<QVariant> &arguments : failed) {
+		named |= arguments.at(0).toString() == QLatin1String("server") &&
+		         arguments.at(1).toString().contains(QLatin1String("3 hours old"));
+	}
+	QVERIFY2(named, "the failure did not say how old the head was");
 }
 
 void test_feed_server::no_key_means_no_server() {

@@ -73,3 +73,8 @@ bool bbq_server_should_scrape(const bbq_server_state &state,
 	/* The network answered during the outage, so the server is what is missing. */
 	return state.network_ok_utc >= state.outage_since_utc;
 }
+
+bool bbq_server_head_is_stale(qint64 generated_utc, qint64 now_utc,
+                              const bbq_server_policy &policy) {
+	return now_utc - generated_utc > policy.stale_head_s;
+}

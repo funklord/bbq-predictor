@@ -35,6 +35,18 @@ struct bbq_server_policy {
 
 	/* The retry interval grows to this and stays there. */
 	qint64 max_retry_s = 5 * 60;
+
+	/*
+	 * A server whose newest head is older than this has failed, though it
+	 * answered (holder, 2026-10-25). Answering is not enough: a publisher
+	 * that stopped leaves the daemon serving its last files, and a daemon
+	 * taken over can replay the last valid head for ever. Either froze a
+	 * client on old bands, every round a success, and the fallback above
+	 * never came. Two hours is about 24 of the publisher's five-minute
+	 * rounds, and a round only counts toward that fallback, so a short
+	 * provider outage at the server still changes nothing here.
+	 */
+	qint64 stale_head_s = 2 * 3600;
 };
 
 struct bbq_server_state {
@@ -69,6 +81,14 @@ void bbq_server_record_network_ok(bbq_server_state &state, qint64 now_utc);
 qint64 bbq_server_retry_delay(int failures, const bbq_server_policy &policy = {});
 
 bool bbq_server_may_attempt(const bbq_server_state &state, qint64 now_utc);
+
+/*
+ * Whether a head generated at `generated_utc` is too old to count as the
+ * server answering. One stamped ahead of `now_utc` -- a clock behind the
+ * server's -- is not stale.
+ */
+bool bbq_server_head_is_stale(qint64 generated_utc, qint64 now_utc,
+                              const bbq_server_policy &policy = {});
 
 /*
  * Whether the server has been absent long enough, while the network was

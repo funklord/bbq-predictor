@@ -1783,6 +1783,20 @@ void bbq_wu_feed::server_round_done(const std::vector<bbq_server_result> &result
 		return;
 	}
 
+	/*
+	 * And one that verifies but is old is a failure too (sec 15.12.1):
+	 * a stopped publisher or a daemon replaying its last valid head
+	 * answers every round, and counting those as successes froze the
+	 * client on old bands with the fallback never coming. Applied all
+	 * the same -- it is still the newest there is, under its own age.
+	 */
+	if (bbq_server_head_is_stale(m_server_head_generated, now, m_server_policy)) {
+		server_failed(now, tr("vibes.se's newest forecast is %1 hours old")
+		                           .arg((now - m_server_head_generated) / 3600));
+		finish_one();
+		return;
+	}
+
 	std::vector<bbq_wire_index_entry> entries;
 	if (results[1].status != bbq_server_status::ok ||
 	    !bbq_wire_read_index(results[1].file, m_server_key, m_station_id, &entries, &why)) {

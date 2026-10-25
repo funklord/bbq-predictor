@@ -32,6 +32,7 @@ private slots:
 	void one_success_ends_the_fallback();
 	void retries_back_off_and_cap();
 	void a_retry_waits_its_turn();
+	void an_old_head_is_stale_and_a_future_one_is_not();
 
 private:
 	/* Fail every `step_s` from offset `from_utc` for `count` attempts. */
@@ -147,6 +148,22 @@ void test_server::retries_back_off_and_cap() {
 	bbq_server_policy tight;
 	tight.max_retry_s = 90;
 	QCOMPARE(bbq_server_retry_delay(2, tight), qint64(90));
+}
+
+/*
+ * Two hours, the holder's figure: a head generated two hours ago still
+ * counts, one a second older does not. One stamped ahead of now -- this
+ * clock behind the server's -- is not stale, since being early is no
+ * evidence of being frozen.
+ */
+void test_server::an_old_head_is_stale_and_a_future_one_is_not() {
+	QVERIFY(!bbq_server_head_is_stale(t(0), t(2 * 3600)));
+	QVERIFY(bbq_server_head_is_stale(t(0), t(2 * 3600 + 1)));
+	QVERIFY(!bbq_server_head_is_stale(t(600), t(0)));
+
+	bbq_server_policy patient;
+	patient.stale_head_s = 6 * 3600;
+	QVERIFY(!bbq_server_head_is_stale(t(0), t(3 * 3600), patient));
 }
 
 void test_server::a_retry_waits_its_turn() {
