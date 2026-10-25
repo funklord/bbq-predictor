@@ -4,6 +4,7 @@
 
 #include <QDataStream>
 #include <QIODevice>
+#include <QSet>
 
 #include <algorithm>
 
@@ -44,8 +45,10 @@ void bbq_demand_configure(bbq_demand &demand, const QString &station, qint64 now
 	demand.refused_until.erase(station);
 }
 
-int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc) {
+int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc,
+                      int *turned_away) {
 	int admitted = 0;
+	QSet<QString> full;
 
 	for (const QByteArray &line : text.split('\n')) {
 		const QList<QByteArray> fields = line.split(' ');
@@ -72,6 +75,7 @@ int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc
 			continue;
 		}
 		if (admitted_count(demand) >= bbq_demand_max_stations) {
+			full.insert(station);
 			continue;
 		}
 
@@ -81,6 +85,9 @@ int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc
 		++admitted;
 	}
 
+	if (turned_away != nullptr) {
+		*turned_away = int(full.size());
+	}
 	return admitted;
 }
 

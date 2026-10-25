@@ -7796,6 +7796,12 @@ key page and the API, not the server or the keyless providers. A run
 stops starting stations after four minutes. The schedule is kept in the
 archive's named values.
 
+A station turned away because the ceiling is full is named in the
+run's summary line as "N turned away at the ceiling of 50" (since
+2026-10-25). Its request was consumed with the file and is lost until
+that client asks again, so the line is the only sign that the ceiling
+is binding. Whether to raise it is the holder's decision.
+
 **A station id that does not exist is the thing a stranger could fill
 the ceiling with,** so a station that says nothing for three rounds in
 which some other station answered is dropped and refused for a week.

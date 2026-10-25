@@ -133,7 +133,8 @@ int publish_demanded(const QString &station, const QString &geocode,
 	}
 
 	bbq_demand demand = bbq_demand_parse(store.state_value(QStringLiteral("demand")));
-	const int admitted = bbq_demand_absorb(demand, text, started);
+	int turned_away = 0;
+	const int admitted = bbq_demand_absorb(demand, text, started, &turned_away);
 	bbq_demand_expire(demand, started);
 	bbq_demand_configure(demand, station, started);
 
@@ -171,8 +172,12 @@ int publish_demanded(const QString &station, const QString &geocode,
 	store.set_state_value(QStringLiteral("demand"), bbq_demand_serialize(demand));
 
 	out << "publish: " << results.size() << " of " << due.size() << " due station(s) fetched, "
-	    << demand.stations.size() << " wanted, " << admitted << " newly asked for, "
-	    << bbq_demand_spent(demand, finished) << " of " << bbq_demand_budget_per_hour
+	    << demand.stations.size() << " wanted, " << admitted << " newly asked for, ";
+	if (turned_away > 0) {
+		out << turned_away << " turned away at the ceiling of " << bbq_demand_max_stations
+		    << ", ";
+	}
+	out << bbq_demand_spent(demand, finished) << " of " << bbq_demand_budget_per_hour
 	    << " WU requests spent this hour, every " << bbq_demand_interval(demand) / 60
 	    << " min\n";
 

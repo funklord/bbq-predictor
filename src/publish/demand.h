@@ -96,9 +96,13 @@ void bbq_demand_configure(bbq_demand &demand, const QString &station, qint64 now
  * Take the daemon's lines ("<STATION> <epoch>\n"). A malformed line, an
  * id that is not one, or a time further than bbq_demand_skew_s ahead or
  * older than the expiry is ignored. Returns how many stations were
- * admitted that were not there before.
+ * admitted that were not there before. `turned_away`, where given, is
+ * set to how many distinct stations asked and were not admitted because
+ * the ceiling was full: the one refusal the holder may want to act on,
+ * since it says bbq_demand_max_stations is binding.
  */
-int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc);
+int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc,
+                      int *turned_away = nullptr);
 
 /* Drop what nobody has asked for in two weeks, and spending older than an hour. */
 void bbq_demand_expire(bbq_demand &demand, qint64 now_utc);

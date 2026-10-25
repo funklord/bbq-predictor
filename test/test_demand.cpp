@@ -61,7 +61,14 @@ void test_demand::the_ceiling_admits_fifty_and_no_more() {
 	for (int i = 0; i < bbq_demand_max_stations + 5; ++i) {
 		text += line(QStringLiteral("IX%1").arg(i), now);
 	}
-	QCOMPARE(bbq_demand_absorb(demand, text, now), bbq_demand_max_stations);
+	int turned_away = -1;
+	QCOMPARE(bbq_demand_absorb(demand, text, now, &turned_away), bbq_demand_max_stations);
+	QCOMPARE(turned_away, 5);
+
+	/* Counted, not repeated: IX50 asking twice is one station turned away. */
+	QCOMPARE(bbq_demand_absorb(demand, line("IX50", now) + line("IX50", now), now, &turned_away),
+	         0);
+	QCOMPARE(turned_away, 1);
 
 	/* The configured station is not one of the fifty. */
 	QCOMPARE(demand.stations.size(), size_t(bbq_demand_max_stations + 1));
