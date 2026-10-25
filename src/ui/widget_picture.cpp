@@ -1,10 +1,13 @@
 #include "ui/widget_picture.h"
 
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QFontMetrics>
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QString>
 
@@ -26,6 +29,13 @@ namespace {
  * to fail.
  */
 const char *const picture_name = "/widget.png";
+
+/*
+ * And the reading as text beside it, agreed with GraphWidget.java the
+ * same way. Absent, the widget falls back to describing the graph without
+ * a number -- the right failure for a disagreement here too.
+ */
+const char *const reading_name = "widget-reading.txt";
 
 /*
  * WHAT TO DRAW WHEN ANDROID WILL NOT SAY HOW BIG THE WIDGET IS.
@@ -478,7 +488,30 @@ bool bbq_render_widget_picture(bbq_forecast_graph *source,
 		return false;
 	}
 
+	/*
+	 * THE NUMBER, FOR A SCREEN READER (sec 16.126). The widget's whole
+	 * content is a number painted into an image, and the image's
+	 * description was a fixed "Temperature and rain forecast graph" --
+	 * so TalkBack named the kind of picture and never what it said.
+	 * Written after the picture, so a reading never describes an older
+	 * one; a failure here costs the description, not the picture.
+	 */
+	const QString reading_path = bbq_widget_reading_path(path);
+	if (reading.isEmpty() || reading == QLatin1String("--")) {
+		QFile::remove(reading_path);
+	} else {
+		QSaveFile text(reading_path);
+		if (text.open(QIODevice::WriteOnly)) {
+			text.write(reading.toUtf8());
+			text.commit();
+		}
+	}
+
 	return true;
+}
+
+QString bbq_widget_reading_path(const QString &picture_path) {
+	return QFileInfo(picture_path).dir().filePath(QString::fromLatin1(reading_name));
 }
 
 void bbq_write_widget_picture(bbq_forecast_graph *source,

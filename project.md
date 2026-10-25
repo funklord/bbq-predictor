@@ -16772,3 +16772,27 @@ their own formatting. The unit test asserts both sides of the rounding.
 A second test asserts the wiring, through the tray label that also
 feeds the widget. Reverting only the tray to `QString::number` fails
 that test with "-0".
+
+## 16.126 The widget's number was drawn and never said
+
+The home-screen widget is one image, and its whole content is the
+current temperature painted into it. The image's description was the
+layout's fixed "Temperature and rain forecast graph". So TalkBack named
+the kind of picture and never said the number a glance would have given
+anybody. Its users are the people who need the screen described to
+them, so for them the widget said nothing at all.
+
+The render now writes the reading as text, `widget-reading.txt` beside
+`widget.png`, after the picture lands, so a reading never describes an
+older picture. With no reading, the tray's "--", it removes the file.
+`GraphWidget` reads it and sets the description to "12 degrees now.
+Temperature and rain forecast graph". Without the file, the layout's
+description stands. The name is agreed between the two sides in the
+same way the picture's already was. The age line is a TextView of its
+own, which TalkBack reads already.
+
+The C++ half is tested on the desktop: the reading is written, "--"
+removes it, and with the write sabotaged the test fails. The Java half
+is only built, not seen on a device: `make android` compiled it, and the
+APK's dex and resources carry the file name and the new string. It
+needs a phone with TalkBack to hear it.

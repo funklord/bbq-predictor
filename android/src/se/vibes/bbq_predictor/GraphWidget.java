@@ -12,7 +12,10 @@ import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.widget.RemoteViews;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 
 /*
  * The home-screen widget (project.md sec 16).
@@ -38,6 +41,13 @@ public class GraphWidget extends AppWidgetProvider {
 
 	/* Where the application agrees to leave the picture. */
 	private static final String PICTURE = "widget.png";
+
+	/*
+	 * The reading the picture shows, as text, written beside it by
+	 * widget_picture.cpp under the same agreement as PICTURE. A screen
+	 * reader cannot read digits out of an image (sec 16.126).
+	 */
+	private static final String READING = "widget-reading.txt";
 
 	/*
 	 * Beyond this the age is stated on the widget.
@@ -289,6 +299,20 @@ public class GraphWidget extends AppWidgetProvider {
 		draw(context, manager, id);
 	}
 
+	/* The reading beside the picture, or null when there is none to say. */
+	private static String reading(Context context) {
+		File file = new File(context.getFilesDir(), READING);
+		if (!file.isFile() || file.length() > 64) {
+			return null;
+		}
+		try (BufferedReader in = new BufferedReader(new FileReader(file))) {
+			String line = in.readLine();
+			return line == null || line.trim().isEmpty() ? null : line.trim();
+		} catch (IOException e) {
+			return null;
+		}
+	}
+
 	private void draw(Context context, AppWidgetManager manager, int id) {
 		RemoteViews views =
 		        new RemoteViews(context.getPackageName(), R.layout.bbq_widget);
@@ -330,6 +354,20 @@ public class GraphWidget extends AppWidgetProvider {
 		views.setViewVisibility(R.id.bbq_widget_graph, android.view.View.VISIBLE);
 		views.setViewVisibility(R.id.bbq_widget_empty, android.view.View.GONE);
 		views.setImageViewBitmap(R.id.bbq_widget_graph, drawn);
+
+		/*
+		 * SAID, NOT ONLY DRAWN. The layout's description named the kind
+		 * of picture and never the number in it, which is the widget's
+		 * whole content -- so TalkBack said "temperature and rain
+		 * forecast graph" and nothing a glance would have told anybody.
+		 * Without a reading the layout's own description stands.
+		 */
+		String reading = reading(context);
+		if (reading != null) {
+			views.setContentDescription(
+			        R.id.bbq_widget_graph,
+			        context.getString(R.string.bbq_widget_graph_reading, reading));
+		}
 
 		final long age = System.currentTimeMillis() - picture.lastModified();
 		if (age > STALE_MS) {

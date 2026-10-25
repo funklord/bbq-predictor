@@ -451,6 +451,23 @@ void test_window::the_widget_picture_can_be_made_without_a_device() {
 	QVERIFY2(!picture.isNull(), "the file that landed is not an image");
 	QCOMPARE(picture.size(), shape * window.m_graph->devicePixelRatioF());
 
+	/*
+	 * And the number as text beside it, for the widget to speak: an
+	 * image's description cannot read the digits out of it (sec 16.126).
+	 * With no reading -- the tray's "--" -- there is nothing to say and
+	 * the file goes, so the widget falls back to describing the graph.
+	 */
+	{
+		QFile spoken(bbq_widget_reading_path(path));
+		QVERIFY2(spoken.open(QIODevice::ReadOnly), "no reading was written for the widget");
+		QCOMPARE(spoken.readAll(), QByteArray("12"));
+	}
+	QVERIFY(bbq_render_widget_picture(window.m_graph, QStringLiteral("--"), shape, path));
+	QVERIFY2(!QFile::exists(bbq_widget_reading_path(path)),
+	         "a reading of nothing was left for the widget to say");
+	QVERIFY(bbq_render_widget_picture(window.m_graph, QStringLiteral("12"), shape, path));
+	QVERIFY(QFile::exists(bbq_widget_reading_path(path)));
+
 	const QColor scrim =
 	        bbq_widget_scrim(window.m_graph->palette_colours().background);
 

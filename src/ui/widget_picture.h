@@ -31,7 +31,13 @@ class bbq_forecast_graph;
  * Everything about the picture that is not Android's to answer, so that
  * a test can produce one without a device (sec 16.119). Returns whether
  * the file landed.
+ *
+ * The reading goes beside it as text, in bbq_widget_reading_path(path),
+ * for the widget to speak (sec 16.126): a screen reader cannot read the
+ * digits out of an image. No reading, the tray's "--", removes the file.
  */
+QString bbq_widget_reading_path(const QString &picture_path);
+
 bool bbq_render_widget_picture(bbq_forecast_graph *source,
                                const QString &reading, const QSize &shape,
                                const QString &path);
