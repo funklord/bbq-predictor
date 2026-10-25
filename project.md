@@ -16818,3 +16818,22 @@ Tested off the device: the name, now's reading, the cursor's added and
 "No forecast near now in view" for a view weeks away. With the
 description never set, the test fails, and the readout's existing tests
 pass on the shared fields. Not yet heard through Orca or TalkBack.
+
+## 16.128 The labels named nothing for a screen reader
+
+Same lens as sec 16.127, on the window's controls. Six labels
+("Station:", "Interpolation:", "Rounding:", "Steady scale:", "Layout:",
+"Theme:") sat beside their controls and were linked to none. So a
+screen reader announced "combo box, Auto" with nothing to say what it
+chose, and the slider as a bare number. Each label is now its control's
+buddy. That also gives the label's shortcut a control to focus.
+
+**What Qt does with a buddy is platform-shaped, and the first test was
+wrong about it.** It asked for the combo box's accessible NAME to start
+with "Theme" and got "Auto". On Unix, which includes Android, Qt gives a
+combo box its current text as its name and carries the label as a
+LABELLED-BY relation, which is how AT-SPI hands it to Orca. So the test
+asks the accessibility layer for that relation on each control, and
+counts a buddy on every label ending in a colon. With the buddy line
+removed, it fails ("Station: is labelled by []"). Whether TalkBack reads
+the relation, rather than only the name, is not established here.

@@ -1,3 +1,4 @@
+#include <QAccessible>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -101,6 +102,7 @@ private slots:
 	void the_tray_says_how_old_its_reading_is();
 	void the_tray_reads_the_owner_of_now_not_the_finest_band();
 	void the_tray_says_nought_not_minus_nought();
+	void every_labelled_control_is_named_by_its_label();
 	void a_dry_spell_is_not_a_rain_forecast_with_no_skill();
 
 private:
@@ -1031,6 +1033,46 @@ void test_window::the_tray_says_how_old_its_reading_is() {
  * The tray's label is the home-screen widget's reading as well, and it
  * said "-0" a hair under freezing (bbq_format_temperature).
  */
+/*
+ * Each label sat beside its control and named nothing, so a screen reader
+ * announced "combo box, Auto" with nothing to say what it chose (sec
+ * 16.128). On Linux Qt gives a combo box its current text as its NAME and
+ * carries the label as a LABELLED-BY relation, which is what AT-SPI hands
+ * Orca -- so the relation is what is asked of the accessibility layer
+ * here, not the buddy pointer Qt could ignore without this noticing.
+ */
+void test_window::every_labelled_control_is_named_by_its_label() {
+	bbq_main_window window;
+
+	QList<QPair<QWidget *, QString>> controls;
+	controls.append({window.m_station_box, QStringLiteral("Station:")});
+	controls.append({window.m_method_box, QStringLiteral("Interpolation:")});
+	controls.append({window.m_smoothing_box, QStringLiteral("Rounding:")});
+	controls.append({window.m_layout_box, QStringLiteral("Layout:")});
+	controls.append({window.m_theme_box, QStringLiteral("Theme:")});
+	for (const auto &[control, wanted] : controls) {
+		QAccessibleInterface *spoken = QAccessible::queryAccessibleInterface(control);
+		QVERIFY(spoken != nullptr);
+		QStringList labels;
+		for (const auto &relation : spoken->relations(QAccessible::Label)) {
+			labels << relation.first->text(QAccessible::Name);
+		}
+		QVERIFY2(labels.contains(wanted),
+		         qPrintable(QStringLiteral("%1 is labelled by [%2]")
+		                            .arg(wanted, labels.join(QStringLiteral(", ")))));
+	}
+
+	/* Every label that names a control, slider or drop-down alike, has one. */
+	int buddies = 0;
+	for (QLabel *label : window.findChildren<QLabel *>()) {
+		if (label->text().endsWith(QLatin1Char(':'))) {
+			QVERIFY2(label->buddy() != nullptr, qPrintable(label->text()));
+			++buddies;
+		}
+	}
+	QCOMPARE(buddies, 6);
+}
+
 void test_window::the_tray_says_nought_not_minus_nought() {
 	const qint64 now = QDateTime::currentSecsSinceEpoch();
 	bbq_sample sample;

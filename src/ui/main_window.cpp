@@ -411,14 +411,27 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * the arrangement and cannot do that from widgets already owned by
 	 * a layout it is about to replace.
 	 */
-	m_control_items << new QLabel(tr("Station:"), this) << m_station_box
+	/*
+	 * Each label is its control's BUDDY (sec 16.128). Beside it on the
+	 * screen was all it was, so a screen reader announced "combo box,
+	 * monotone" with no name, and the slider as a bare number -- the
+	 * label a sighted reader uses to know what the control is never
+	 * reached anybody else. Qt names a control from its buddy.
+	 */
+	const auto label_for = [this](const QString &text, QWidget *control) {
+		QLabel *label = new QLabel(text, this);
+		label->setBuddy(control);
+		return label;
+	};
+
+	m_control_items << label_for(tr("Station:"), m_station_box) << m_station_box
 	                << m_pin_box << m_find_button
-	                << new QLabel(tr("Interpolation:"), this) << method
-	                << new QLabel(tr("Rounding:"), this) << smoothing
+	                << label_for(tr("Interpolation:"), method) << method
+	                << label_for(tr("Rounding:"), smoothing) << smoothing
 	                << windows << marks << m_wind_box
-	                << new QLabel(tr("Steady scale:"), this) << steadiness
-	                << new QLabel(tr("Layout:"), this) << m_layout_box
-	                << new QLabel(tr("Theme:"), this) << m_theme_box;
+	                << label_for(tr("Steady scale:"), steadiness) << steadiness
+	                << label_for(tr("Layout:"), m_layout_box) << m_layout_box
+	                << label_for(tr("Theme:"), m_theme_box) << m_theme_box;
 
 	QVBoxLayout *layout = new QVBoxLayout(this);
 	m_root_layout = layout;
