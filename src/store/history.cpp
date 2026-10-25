@@ -107,6 +107,23 @@ QString quantity_name(int index) {
 	return QString::fromLatin1(scored[index].name);
 }
 
+/*
+ * Commit, or roll back and say why. A count of rows written inside a
+ * transaction is a promise only once it commits: a commit that failed
+ * stored none of them, and left the transaction open, so the next
+ * transaction() failed and every write after it went into one that was
+ * never committed while this process lived. The callers report zero
+ * rather than what they had counted.
+ */
+bool finish(QSqlDatabase &database, QString *error) {
+	if (database.commit()) {
+		return true;
+	}
+	*error = database.lastError().text();
+	database.rollback();
+	return false;
+}
+
 } // namespace
 
 bbq_lead_bucket bbq_lead_bucket_for(qint64 lead_s) {
@@ -962,8 +979,7 @@ int bbq_history::record_observations(const QString &station,
 		}
 	}
 
-	database.commit();
-	return stored;
+	return finish(database, &m_last_error) ? stored : 0;
 }
 
 int bbq_history::record_forecast(const QString &station,
@@ -1020,8 +1036,7 @@ int bbq_history::record_forecast(const QString &station,
 		}
 	}
 
-	database.commit();
-	return stored;
+	return finish(database, &m_last_error) ? stored : 0;
 }
 
 int bbq_history::verify(const QString &station) {
@@ -1352,8 +1367,7 @@ int bbq_history::verify(const QString &station) {
 		}
 	}
 
-	database.commit();
-	return verified;
+	return finish(database, &m_last_error) ? verified : 0;
 }
 
 int bbq_history::expire(const QString &station, qint64 now_utc) {

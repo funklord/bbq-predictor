@@ -308,7 +308,12 @@ public:
 	std::vector<bbq_station> stations() const;
 	std::vector<bbq_station> pinned_stations() const;
 
-	/* Every measurement in a series is archived. Re-storing is harmless. */
+	/*
+	 * Every measurement in a series is archived. Re-storing is harmless.
+	 * Returns how many were stored, which is none unless the write
+	 * committed: a caller marking anything done on the strength of this
+	 * compares it with what it gave.
+	 */
 	int record_observations(const QString &station, const bbq_series &series);
 
 	/*

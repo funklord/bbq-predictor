@@ -1790,8 +1790,15 @@ void bbq_wu_feed::server_round_done(const std::vector<bbq_server_result> &result
 	 * first, a dozen a round: a fresh install catches up over a few
 	 * rounds rather than in one long download.
 	 */
-	const std::map<int, QByteArray> held = m_history.server_months(m_station_id);
+	/* Nowhere to keep a month: fetching one would be fetching it every round. */
 	m_months_wanted.clear();
+	if (!m_history.is_open()) {
+		m_months_requested = 0;
+		finish_one();
+		return;
+	}
+
+	const std::map<int, QByteArray> held = m_history.server_months(m_station_id);
 	for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
 		const auto found = held.find(it->month);
 		if (found == held.end() || found->second != it->digest) {
@@ -1858,8 +1865,14 @@ void bbq_wu_feed::months_done(const std::vector<bbq_server_result> &results) {
 			continue;
 		}
 
-		/* Stored per provider, so each row keeps who reported it. */
+		/*
+		 * Stored per provider, so each row keeps who reported it. Held only
+		 * once every row is in the archive: a month marked held is never
+		 * asked for again, and a past month never changes on the server,
+		 * so marking one the archive refused lost its rows for good.
+		 */
 		size_t start = 0;
+		size_t stored = 0;
 		while (start < rows.samples.size()) {
 			size_t end = start;
 			while (end < rows.samples.size() && rows.provider[end] == rows.provider[start]) {
@@ -1868,10 +1881,20 @@ void bbq_wu_feed::months_done(const std::vector<bbq_server_result> &results) {
 			bbq_series run(bbq_band::observed, rows.providers.at(rows.provider[start]));
 			run.set_samples(std::vector<bbq_sample>(rows.samples.begin() + long(start),
 			                                        rows.samples.begin() + long(end)));
-			m_history.record_observations(m_station_id, run);
+			stored += size_t(m_history.record_observations(m_station_id, run));
 			start = end;
 		}
-		m_history.set_server_month(m_station_id, entry.month, entry.digest);
+		if (stored != rows.samples.size()) {
+			/* The archive's fault, not the server's: said as the scrape says it. */
+			note_partial_store(int(rows.samples.size()), int(stored));
+			applied += stored > 0 ? 1 : 0;
+			continue;
+		}
+		if (!m_history.set_server_month(m_station_id, entry.month, entry.digest)) {
+			refused << bbq_wire_month_name(entry.month) +
+			                   QStringLiteral(": stored, but not marked held: %1")
+			                           .arg(m_history.last_error());
+		}
 		++applied;
 	}
 

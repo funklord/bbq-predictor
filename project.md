@@ -7494,6 +7494,23 @@ before API 28.
   round is a damaged file on the server, and these two places are where
   that shows. Until then the refusal was a bare `continue`, and the
   month was fetched again every round without anyone knowing.
+- **A month is held only once the archive has every row** (since
+  2026-10-25). The count `record_observations` returns was discarded,
+  so a month the archive refused (disk full, a busy database) was
+  marked held anyway. Held months are never asked for again, and a past
+  month never changes on the server, so those rows were lost for good.
+  That is sec 12.13.2's fault, in the path written after it: the scrape
+  had been wired to check the count, and the server path never was. A
+  shortfall now goes through the same `note_partial_store`, onto the
+  status line, since a full archive is the reader's to fix and not the
+  server's. The store's three transactions also stopped trusting
+  `commit()`. A failed commit counted rows that were never stored, and
+  SQLite leaves the transaction open after one, so every later write
+  went into a transaction this process never committed. They roll back
+  and report zero now. The count path is tested, with an archive whose
+  trigger refuses every insert. The commit path is not: under WAL a busy
+  writer fails the insert rather than the commit, so no test here can
+  provoke one.
 
 **Measured end to end, 2026-10-22**, from one real fetch against a copy
 of the desktop archive: 3,108 ISTOCK877 observations published as three

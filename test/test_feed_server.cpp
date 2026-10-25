@@ -3,6 +3,8 @@
 #include <QFile>
 #include <QNetworkProxyFactory>
 #include <QSignalSpy>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -38,6 +40,7 @@ private slots:
 	void a_round_applies_the_head_and_stores_the_months();
 	void a_second_round_fetches_no_month_it_already_has();
 	void a_month_the_index_does_not_name_is_not_applied();
+	void a_month_the_archive_refuses_is_not_held();
 	void an_offline_launch_shows_the_last_head();
 	void a_station_the_server_does_not_publish_is_not_an_outage();
 	void a_station_the_server_has_since_added_is_taken_up();
@@ -312,6 +315,66 @@ void test_feed_server::a_month_the_index_does_not_name_is_not_applied() {
 	QCOMPARE(months, QStringList{QStringLiteral("2026-09: not the copy the index names")});
 	QCOMPARE(failed.size(), 0);
 	QCOMPARE(feed.server_state().failures, 0);
+}
+
+/*
+ * The archive refusing every row, by a trigger added from a second
+ * connection. A month marked held is never asked for again, and a past
+ * month never changes on the server, so held here would be its rows lost
+ * for good. Not held, said as the scrape says a short store, and taken
+ * whole by the next round once the archive accepts it.
+ */
+void test_feed_server::a_month_the_archive_refuses_is_not_held() {
+	QTemporaryDir scratch;
+	const QString path = scratch.filePath("history.sqlite");
+	const QString connection = QStringLiteral("refuse");
+	{
+		bbq_wu_feed feed;
+		QVERIFY(feed.open_history(path));
+		{
+			QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+			db.setDatabaseName(path);
+			QVERIFY(db.open());
+			QSqlQuery query(db);
+			QVERIFY(query.exec(QStringLiteral(
+			        "CREATE TRIGGER refuse BEFORE INSERT ON observation "
+			        "BEGIN SELECT RAISE(ABORT, 'refused for the test'); END")));
+		}
+		QSqlDatabase::removeDatabase(connection);
+
+		feed.set_server(m_key.public_key(), {daemon(m_port)});
+		feed.set_station(station);
+		QSignalSpy failed(&feed, &bbq_wu_feed::band_failed);
+		QVERIFY(settle(feed));
+
+		QCOMPARE(feed.history().server_months(station).size(), size_t(0));
+		bool said = false;
+		for (const QList<QVariant> &arguments : failed) {
+			said |= arguments.at(0).toString() == QLatin1String("observed") &&
+			        arguments.at(1).toString().contains(QLatin1String("refused for the test"));
+		}
+		QVERIFY2(said, "a month the archive refused was not said");
+	}
+
+	{
+		QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connection);
+		db.setDatabaseName(path);
+		QVERIFY(db.open());
+		QSqlQuery query(db);
+		QVERIFY(query.exec(QStringLiteral("DROP TRIGGER refuse")));
+	}
+	QSqlDatabase::removeDatabase(connection);
+
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(path));
+	feed.set_server(m_key.public_key(), {daemon(m_port)});
+	feed.set_station(station);
+	QVERIFY(settle(feed));
+	QCOMPARE(feed.m_months_requested, 2);
+	QCOMPARE(feed.history().server_months(station).size(), size_t(2));
+	const auto months = feed.history().observation_months(station);
+	QCOMPARE(months.size(), size_t(2));
+	QCOMPARE(months[1].rows, m_september_rows);
 }
 
 void test_feed_server::an_offline_launch_shows_the_last_head() {
