@@ -16796,3 +16796,25 @@ removes it, and with the write sabotaged the test fails. The Java half
 is only built, not seen on a device: `make android` compiled it, and the
 APK's dex and resources carry the file name and the new string. It
 needs a phone with TalkBack to hear it.
+
+## 16.127 The graph told a screen reader nothing
+
+Found by following sec 16.126 from the widget into the window. The only
+accessibility code here was the factory working around the slider
+crash (sec 11.6), and nothing set an accessible name or description. The
+graph is painted, so to Orca on the desktop or TalkBack on a phone it
+was an unnamed widget with nothing in it. The readout says exactly what
+a reading is, but only in pixels, and only while a pointer hovers,
+which a reader who cannot see the screen does not do.
+
+The graph is named "Forecast graph". Each paint sets its description to
+the reading nearest now: "Now: 14:00, 15.0 C, 8 km/h, hourly". While a
+readout is parked, its reading is added as well. It is set only when it
+changes, since every change is an event to any listening screen reader.
+The fields come from one function, which the on-screen readout row uses
+too, so the two cannot disagree.
+
+Tested off the device: the name, now's reading, the cursor's added and
+"No forecast near now in view" for a view weeks away. With the
+description never set, the test fails, and the readout's existing tests
+pass on the shared fields. Not yet heard through Orca or TalkBack.

@@ -846,6 +846,9 @@ std::vector<qint64> bbq_day_boundaries(qint64 from_utc, qint64 to_utc,
 }
 
 bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
+	/* What a screen reader calls it; the description says what it shows. */
+	setAccessibleName(tr("Forecast graph"));
+
 	/*
 	 * 240, and the width is the part that matters (sec 10.6).
 	 *
@@ -3420,21 +3423,61 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * It also says WHICH band and provider produced it, which is what
 	 * sec 3.4 kept the series separate for.
 	 */
-	if (m_cursor_column >= 0 && m_cursor_column < plot.width()) {
-		int found = -1;
+	const auto nearest_knot = [&](int at) {
 		for (int step = 0; step < plot.width(); ++step) {
-			const int left = m_cursor_column - step;
-			const int right = m_cursor_column + step;
+			const int left = at - step;
+			const int right = at + step;
 
-			if (left >= 0 && columns[left].has_knot) {
-				found = left;
-				break;
+			if (left >= 0 && left < plot.width() && columns[left].has_knot) {
+				return left;
 			}
-			if (right < plot.width() && columns[right].has_knot) {
-				found = right;
-				break;
+			if (right >= 0 && right < plot.width() && columns[right].has_knot) {
+				return right;
 			}
 		}
+		return -1;
+	};
+
+	/*
+	 * The fields a reading is said in, for the readout row and for the
+	 * accessible description below alike, so the two cannot disagree.
+	 */
+	const auto reading_fields = [&](const column &c, bool wide_enough) {
+		QStringList parts;
+		parts.append(bbq_readout_time_label(c.knot_utc, c.knot_last_utc, c.knot_count,
+		                                    wide_enough, zone));
+
+		if (c.knot_has_temperature) {
+			parts.append(bbq_format_temperature(c.knot_temperature, 1) + tr(" C"));
+		}
+		if (c.knot_has_rain) {
+			/*
+			 * One decimal rather than two. The second never decided
+			 * anything and it cost a character in the row that has to
+			 * fit.
+			 */
+			parts.append(QString::number(c.knot_rain, 'f', 1) + tr(" mm/h"));
+		}
+		if (c.knot_has_chance) {
+			parts.append(QString::number(c.knot_chance, 'f', 0) + QStringLiteral("%"));
+		}
+		if (c.knot_has_wind) {
+			parts.append(QString::number(c.knot_wind, 'f', 0) + tr(" km/h"));
+		}
+
+		/*
+		 * The band, without the provider. "nowcast / wunderground" was
+		 * the longest line in the old box and therefore set its width,
+		 * to say something the ribbon underneath already says in colour.
+		 */
+		parts.append(QString::fromLatin1(bbq_band_name(c.band)));
+		return parts;
+	};
+
+	int readout_column = -1;
+	if (m_cursor_column >= 0 && m_cursor_column < plot.width()) {
+		const int found = nearest_knot(m_cursor_column);
+		readout_column = found;
 
 		if (found >= 0) {
 			const column &c = columns[found];
@@ -3483,41 +3526,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 */
 			const bool wide_enough = plot.width() >= 420;
 
-			QStringList parts;
-			parts.append(bbq_readout_time_label(c.knot_utc,
-			                                    c.knot_last_utc,
-			                                    c.knot_count, wide_enough,
-			                                    zone));
-
-			if (c.knot_has_temperature) {
-				parts.append(bbq_format_temperature(c.knot_temperature, 1) +
-				             tr(" C"));
-			}
-			if (c.knot_has_rain) {
-				/*
-				 * One decimal rather than two. The second never
-				 * decided anything and it cost a character in the
-				 * row that has to fit.
-				 */
-				parts.append(QString::number(c.knot_rain, 'f', 1) +
-				             tr(" mm/h"));
-			}
-			if (c.knot_has_chance) {
-				parts.append(QString::number(c.knot_chance, 'f', 0) +
-				             QStringLiteral("%"));
-			}
-			if (c.knot_has_wind) {
-				parts.append(QString::number(c.knot_wind, 'f', 0) +
-				             tr(" km/h"));
-			}
-
-			/*
-			 * The band, without the provider. "nowcast / wunderground"
-			 * was the longest line in the old box and therefore set
-			 * its width, to say something the ribbon underneath
-			 * already says in colour.
-			 */
-			parts.append(QString::fromLatin1(bbq_band_name(c.band)));
+			QStringList parts = reading_fields(c, wide_enough);
 
 			/*
 			 * MEASURED, and shortened by dropping fields rather than
@@ -3586,6 +3595,38 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	}
 
 
+
+	/* --- what a screen reader is told --------------------------------- */
+	/*
+	 * SAID AS WELL AS DRAWN (sec 16.127). The graph is painted, so to
+	 * Orca or TalkBack it was an unnamed widget with nothing in it: the
+	 * readout says what a reading is, and only in pixels. A reader who
+	 * cannot see cannot hover either, so the description says the
+	 * reading nearest now, and the readout's too while one is parked --
+	 * the same fields, from the same function, as the row above.
+	 * Set only when it changes, since setting it is an event to every
+	 * listening screen reader.
+	 */
+	QStringList spoken;
+	const int now_column = int(now_x - plot.left());
+	if (now_column >= 0 && now_column < plot.width()) {
+		const int found = nearest_knot(now_column);
+		if (found >= 0) {
+			spoken << tr("Now: %1").arg(reading_fields(columns[found], true).join(QStringLiteral(", ")));
+		}
+	}
+	if (readout_column >= 0) {
+		spoken << tr("At the cursor: %1")
+		                  .arg(reading_fields(columns[readout_column], true)
+		                               .join(QStringLiteral(", ")));
+	}
+	if (spoken.isEmpty()) {
+		spoken << tr("No forecast near now in view");
+	}
+	const QString description = spoken.join(QStringLiteral(". "));
+	if (description != accessibleDescription()) {
+		setAccessibleDescription(description);
+	}
 
 	/* --- axis labels --------------------------------------------------- */
 	painter.setPen(m_palette.axis_text);

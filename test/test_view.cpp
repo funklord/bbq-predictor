@@ -103,6 +103,7 @@ private slots:
 	void no_day_name_is_drawn_under_an_axis_label();
 	void the_wind_scale_has_a_row_of_its_own();
 	void a_parked_readout_does_not_cross_the_scale_labels();
+	void a_screen_reader_is_told_the_reading();
 
 	/*
 	 * A grilling window's edge rules, and the clipping (sec 16.30.1).
@@ -1749,6 +1750,54 @@ void test_view::a_parked_readout_does_not_cross_the_scale_labels() {
 	}
 	QCOMPARE(crossed, 0);
 	QVERIFY2(readout > 20, "no readout was drawn");
+}
+
+/*
+ * The graph is painted, so to a screen reader it was an unnamed widget
+ * with nothing in it (sec 16.127). It is named, and its description says
+ * the reading nearest now -- and the readout's as well while one is
+ * parked, in the same fields the row on screen uses.
+ */
+void test_view::a_screen_reader_is_told_the_reading() {
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	std::vector<bbq_sample> samples;
+	for (int i = -6; i < 6; ++i) {
+		bbq_sample sample;
+		sample.start_utc = now - now % 3600 + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 15.0;
+		sample.wind_kph = 8.0;
+		samples.push_back(sample);
+	}
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(bbq_utc());
+	band.set_samples(std::move(samples));
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+
+	bbq_forecast_graph graph;
+	graph.set_composite(composite);
+	graph.resize(600, 300);
+	graph.set_view(now - 3 * 3600, 6 * 3600);
+	render_of(graph);
+
+	QCOMPARE(graph.accessibleName(), QStringLiteral("Forecast graph"));
+	const QString told = graph.accessibleDescription();
+	QVERIFY2(told.startsWith(QStringLiteral("Now: ")), qPrintable(told));
+	QVERIFY2(told.contains(QStringLiteral("15.0 C")), qPrintable(told));
+	QVERIFY2(told.contains(QStringLiteral("8 km/h")), qPrintable(told));
+	QVERIFY2(!told.contains(QStringLiteral("At the cursor")), qPrintable(told));
+
+	graph.set_cursor_column(20);
+	render_of(graph);
+	QVERIFY2(graph.accessibleDescription().contains(QStringLiteral("At the cursor: ")),
+	         qPrintable(graph.accessibleDescription()));
+
+	/* Nothing near now in view: said, rather than an empty description. */
+	graph.set_cursor_column(-1);
+	graph.set_view(now - 40 * 86400, 6 * 3600);
+	render_of(graph);
+	QCOMPARE(graph.accessibleDescription(), QStringLiteral("No forecast near now in view"));
 }
 
 /*
