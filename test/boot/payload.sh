@@ -40,9 +40,16 @@ root=$(readlink /proc/$pid/root)
 [ "$root" = /var/lib/bbq-predictor/published ] && ok "chrooted to $root" || bad "root is '$root'"
 grep -E '^(CapEff|NoNewPrivs):' /proc/$pid/status | sed 's/^/      /'
 
-# Owners are not checked here: a vm's materialized root keeps every owner
-# as the host user's (hull says so as it starts), so the image's own build
-# step asserts them instead.
+# Owners as the booted system sees them, which the bake also asserts. A vm
+# showed every owner as root until hull a1b6dd2 gave a stored image its
+# manifest's owners on run; a host with no /etc/subuid range still falls
+# back to root, which hull says on its log.
+owners=$(stat -c %U:%G /var/lib/bbq-predictor /var/lib/bbq-predictor/published /var/lib/bbq-predictor/demand | sort -u)
+if [ "$owners" = bbq-predictor:bbq-predictor ]; then
+	ok "the state directory is bbq-predictor's"
+else
+	bad "state directory owners: $(echo $owners)"
+fi
 echo "      demand file at boot: $(stat -c %s /var/lib/bbq-predictor/demand) bytes"
 sed 's/^/      | /' /var/lib/bbq-predictor/demand
 

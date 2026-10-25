@@ -7564,12 +7564,19 @@ version checked cron at once after seeing the daemon, and under OpenRC
 reported cron not running: measured in the image, sysinit took 20 s on a
 host at load 160, and the default runlevel then started the daemon and
 cron a second apart. A boot test that races the boot measures the host.
-Two things it cannot see, and where they are checked instead:
+It also checks that `/var/lib/bbq-predictor`, its tree and the demand
+file are the publisher's as the booted system sees them. The bake
+asserts the same inside its build step, along with the demand file
+being empty, and was the only check until hull a1b6dd2 (2026-10-25).
+Before that, a vm showed every file as root's: hull's f82403d gave the
+qemu engine the owners, but `hull run` of a stored image never passed
+them, which this test found at f82403d and hull fixed the same night.
+On a host with no `/etc/subuid` range hull still shows root, and the
+check fails there. It needs hull at a1b6dd2 or later; run with
+`HULL=` pointing at such a build.
 
-- **Owners.** A vm's materialized root shows every file as root's, so the
-  bake asserts that the postinst made `/var/lib/bbq-predictor`, its tree
-  and the demand file the publisher's, and the demand file empty.
-- **A round.** Fetching is not booted here; the containers above run one.
+One thing it cannot see: a round. Fetching is not booted here; the
+containers above run one.
 
 **The bake was docker's for its first day, because a hull build step
 had no `/dev/null`.** The first `>/dev/null` made a regular file, and
@@ -7583,7 +7590,7 @@ reply 20261023T1714Z, recorded here and deleted there): a machine's
 `/dev` is a tmpfs of its own with the host's devices bound in, and
 nothing written there reaches the built tree. Its reply also settles
 the owners: a vm not giving back the manifest's owners is a gap, not a
-design, and is not hull's next work, so the bake keeps asserting them.
+design. It was closed in a1b6dd2, above.
 With the fix in hull's build, `bake.sh` went back to `hull build`
 (hull at 6f223d9): docker is gone from the test's needs, and hull caches
 the init layer, so a run re-bakes only when the package changed.
