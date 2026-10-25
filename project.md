@@ -908,11 +908,17 @@ interval is a statement about yesterday's data rather than about a
 place, and that reasoning fails on a station change too -- a different
 station has a different yesterday.
 
-**Neither reset is covered by a test.** The feed's scheduling state has
-no observable handle, and `test_feed` deliberately touches no network,
-so asserting this would mean either exposing internals for the test or
-firing real requests. Recorded as unverified rather than left to look
-verified.
+**Both resets are covered since 2026-10-25**, by
+`a_move_forgets_only_what_was_asked_by_coordinate`. This said neither
+was, because the scheduling state had no observable handle. But
+`test_feed` is a friend of the feed and can read the freshness record
+itself, with no network. Re-storing the same coordinate forgets
+nothing. A real move forgets the five coordinate products and keeps
+the two station ones and the backfill. A station change forgets those
+two and the backfill, and drops an unpinned coordinate but not a pinned
+one. Each half, sabotaged, fails it. The station half also had a test
+already, `a_new_station_has_never_been_asked` (sec 14.9), which this
+paragraph never caught up with.
 
 ### 2.6.8 The command line overrides the run, not the configuration
 

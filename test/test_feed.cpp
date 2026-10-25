@@ -51,6 +51,7 @@ private slots:
 	void a_reader_who_never_moves_still_rediscovers_eventually();
 	void the_key_outlives_the_process_until_it_is_refused();
 	void a_scheduled_round_asks_only_for_what_is_due();
+	void a_move_forgets_only_what_was_asked_by_coordinate();
 
 private:
 	static bbq_series forecast_of(qint64 start, int count, double temperature);
@@ -1256,6 +1257,74 @@ void test_feed::a_scheduled_round_asks_only_for_what_is_due() {
 	         QStringList({"current", "extended", "hourly", "nowcast", "observed", "radar"}));
 
 	QNetworkProxy::setApplicationProxy(QNetworkProxy());
+}
+
+/*
+ * What sec 2.6.7.5 records as untested: freshness is about a place. A
+ * coordinate stored again, as one derived from an observed reply is on
+ * most fetches, forgets nothing -- forgetting there would re-fetch every
+ * band every round. A real move forgets the five products asked for by
+ * coordinate and keeps the two asked for by station. A station change
+ * forgets those two and the backfill, and leaves the coordinate's to the
+ * geocode, which it drops.
+ *
+ * Read from the freshness record itself: the scheduling state has no
+ * other handle, and asserting it through requests would mean a network.
+ */
+void test_feed::a_move_forgets_only_what_was_asked_by_coordinate() {
+	bbq_wu_feed feed;
+	feed.set_station(QStringLiteral("ISTOCK877"));
+
+	/* Unpinned: the cache a station's coordinate is, which a new station drops. */
+	feed.set_geocode(59.3, 18.0, false);
+
+	const auto mark_all_asked = [&feed] {
+		for (bbq_wu_product product :
+		     {bbq_wu_product::observed, bbq_wu_product::current_station,
+		      bbq_wu_product::nowcast, bbq_wu_product::hourly,
+		      bbq_wu_product::current_point}) {
+			feed.m_attempted.insert(static_cast<int>(product), 1000);
+		}
+		feed.m_radar_attempted = 1000;
+		feed.m_extended_attempted = 1000;
+		feed.m_backfill_attempted = 1000;
+	};
+	const auto asked = [&feed](bbq_wu_product product) {
+		return feed.m_attempted.contains(static_cast<int>(product));
+	};
+
+	/* The same coordinate again: nothing forgotten. */
+	mark_all_asked();
+	feed.set_geocode(59.3, 18.0, false);
+	QVERIFY(asked(bbq_wu_product::nowcast));
+	QVERIFY(asked(bbq_wu_product::hourly));
+	QVERIFY(asked(bbq_wu_product::current_point));
+	QCOMPARE(feed.m_radar_attempted, qint64(1000));
+	QCOMPARE(feed.m_extended_attempted, qint64(1000));
+
+	/* A real move: the coordinate's five go, the station's two stay. */
+	feed.set_geocode(57.7, 11.97, false);
+	QVERIFY(!asked(bbq_wu_product::nowcast));
+	QVERIFY(!asked(bbq_wu_product::hourly));
+	QVERIFY(!asked(bbq_wu_product::current_point));
+	QCOMPARE(feed.m_radar_attempted, qint64(0));
+	QCOMPARE(feed.m_extended_attempted, qint64(0));
+	QVERIFY(asked(bbq_wu_product::observed));
+	QVERIFY(asked(bbq_wu_product::current_station));
+	QCOMPARE(feed.m_backfill_attempted, qint64(1000));
+
+	/* A new station: its two and the backfill go, and the geocode with them. */
+	mark_all_asked();
+	feed.set_station(QStringLiteral("IGOTEB12"));
+	QVERIFY(!asked(bbq_wu_product::observed));
+	QVERIFY(!asked(bbq_wu_product::current_station));
+	QCOMPARE(feed.m_backfill_attempted, qint64(0));
+	QVERIFY(!feed.has_geocode());
+
+	/* A pinned coordinate was never the station's, and survives it. */
+	feed.set_geocode(57.7, 11.97);
+	feed.set_station(QStringLiteral("ISTOCK877"));
+	QVERIFY(feed.has_geocode());
 }
 
 QTEST_GUILESS_MAIN(test_feed)
