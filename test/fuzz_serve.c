@@ -102,9 +102,24 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
 		char line[BBQ_SERVE_DEMAND_LINE_MAX];
 		const int published = bbq_serve_table_has(table, request.station);
-		const size_t written = bbq_serve_demand_note(
-		        demand, key, request.station, published,
-		        1792000000 + (int64_t)request.month * 3600, line);
+		const int64_t now_s = 1792000000 + (int64_t)request.month * 3600;
+		size_t written = bbq_serve_demand_note(demand, key, request.station, published,
+		                                       now_s, line);
+
+		/*
+		 * A line the loop could not write, by the request's second bit:
+		 * forgotten, the same request at the same moment must write it
+		 * again -- that is the whole of what forgetting promises, and a
+		 * slot moved wrongly in the removal is where it would break.
+		 */
+		if (written != 0 && (request.have[1] & 1)) {
+			bbq_serve_demand_unwritten(demand, request.station);
+			written = bbq_serve_demand_note(demand, key, request.station, published,
+			                                now_s, line);
+			if (written == 0) {
+				abort();
+			}
+		}
 
 		/* A line is the station, a space, digits and a newline, and nothing else. */
 		if (written != 0) {
