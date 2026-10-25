@@ -34,6 +34,7 @@ private slots:
 	void an_empty_table_answers_nothing_served();
 
 	void demand_writes_a_station_once_an_hour();
+	void demand_not_written_is_due_again();
 	void an_address_introduces_three_stations_a_day();
 	void ipv6_is_limited_by_its_prefix();
 	void a_full_address_table_introduces_nothing();
@@ -404,6 +405,34 @@ void test_serve::demand_writes_a_station_once_an_hour() {
 	/* Not a station id: nothing, whatever reached here. */
 	QCOMPARE(note(demand.get(), a, "istock877", 1, noon), std::string());
 	QCOMPARE(note(demand.get(), a, "", 1, noon), std::string());
+}
+
+/*
+ * A line the loop could not write is forgotten, so the next request writes
+ * it rather than one an hour later -- and only that station is: the one
+ * moved into its slot keeps its hour, and the address does not get back
+ * the allowance the forgotten station spent.
+ */
+void test_serve::demand_not_written_is_due_again() {
+	auto demand = std::make_unique<bbq_serve_demand>();
+	std::memset(demand.get(), 0, sizeof *demand);
+	uint8_t a[BBQ_SERVE_DEMAND_KEY_SIZE];
+	const uint8_t v4[4] = {192, 0, 2, 1};
+	bbq_serve_demand_key(v4, 4, a);
+
+	QVERIFY(!note(demand.get(), a, "IONE1", 0, noon).empty());
+	QVERIFY(!note(demand.get(), a, "ITWO2", 0, noon).empty());
+	QVERIFY(!note(demand.get(), a, "ITHREE3", 0, noon).empty());
+
+	bbq_serve_demand_unwritten(demand.get(), "IONE1");
+	QCOMPARE(note(demand.get(), a, "IONE1", 0, noon + 1), std::string("IONE1 1792000001\n"));
+	QCOMPARE(note(demand.get(), a, "ITHREE3", 0, noon + 1), std::string());
+	QCOMPARE(note(demand.get(), a, "ITWO2", 0, noon + 1), std::string());
+	QCOMPARE(note(demand.get(), a, "IFOUR4", 0, noon + 1), std::string());
+
+	/* Unknown to the table: nothing to forget, and nothing else moves. */
+	bbq_serve_demand_unwritten(demand.get(), "INEVER9");
+	QCOMPARE(demand->station_count, size_t(3));
 }
 
 void test_serve::an_address_introduces_three_stations_a_day() {

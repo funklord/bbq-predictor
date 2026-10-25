@@ -203,6 +203,14 @@ size_t bbq_serve_demand_note(struct bbq_serve_demand *demand,
                              const char *station, int published, int64_t now_s,
                              char line[BBQ_SERVE_DEMAND_LINE_MAX]);
 
+/*
+ * The line `bbq_serve_demand_note` gave for `station` was not written, so
+ * forget that it was: the next request for it is due again rather than an
+ * hour later. The address's allowance is not given back, since the station
+ * stays among what that address introduced and asking again costs nothing.
+ */
+void bbq_serve_demand_unwritten(struct bbq_serve_demand *demand, const char *station);
+
 #ifdef __cplusplus
 }
 #endif

@@ -628,3 +628,10 @@ size_t bbq_serve_demand_note(struct bbq_serve_demand *demand,
 	                             (long long)now_s);
 	return written > 0 && written < BBQ_SERVE_DEMAND_LINE_MAX ? (size_t)written : 0;
 }
+
+void bbq_serve_demand_unwritten(struct bbq_serve_demand *demand, const char *station) {
+	struct bbq_serve_demand_station *known = demand_station(demand, station);
+	if (known) {
+		*known = demand->stations[--demand->station_count];
+	}
+}

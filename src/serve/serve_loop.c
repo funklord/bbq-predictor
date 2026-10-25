@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -230,6 +231,14 @@ static void accept_all(struct state *state, int listen_fd) {
  * One line of demand, appended unless the file has reached its cap, which
  * means the publisher has stopped emptying it: then the line is dropped,
  * once said, rather than filling the disk.
+ *
+ * The append holds the file's lock, which the publisher holds from its
+ * read to its truncate: without it a line landing between the two was
+ * emptied unread. The daemon never waits for it -- the loop answers
+ * every client, and nothing outside it may stall them -- so a line that
+ * finds the lock taken is dropped. Any line not written is forgotten as
+ * well as dropped, so the station's next request writes it, rather than
+ * one an hour later.
  */
 static void record_demand(struct state *state, const struct connection *connection,
                           const struct bbq_serve_request *request) {
@@ -262,9 +271,16 @@ static void record_demand(struct state *state, const struct connection *connecti
 		return;
 	}
 
+	const int fd = state->loop->demand_fd;
+	if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+		bbq_serve_demand_unwritten(state->demand, request->station);
+		return;
+	}
+
 	struct stat file;
-	if (fstat(state->loop->demand_fd, &file) != 0 ||
-	    file.st_size >= (off_t)BBQ_SERVE_DEMAND_FILE_MAX) {
+	if (fstat(fd, &file) != 0 || file.st_size >= (off_t)BBQ_SERVE_DEMAND_FILE_MAX) {
+		(void)flock(fd, LOCK_UN);
+		bbq_serve_demand_unwritten(state->demand, request->station);
 		if (!state->demand_full_said) {
 			say(state, "demand file full or unreadable; dropping demand until "
 			           "the publisher empties it");
@@ -273,7 +289,10 @@ static void record_demand(struct state *state, const struct connection *connecti
 		return;
 	}
 	state->demand_full_said = 0;
-	(void)!write(state->loop->demand_fd, line, length);
+	if (write(fd, line, length) != (ssize_t)length) {
+		bbq_serve_demand_unwritten(state->demand, request->station);
+	}
+	(void)flock(fd, LOCK_UN);
 }
 
 static void answer(struct state *state, struct connection *connection) {

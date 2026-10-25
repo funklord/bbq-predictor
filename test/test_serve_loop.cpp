@@ -7,10 +7,12 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <sys/file.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <cstring>
+#include <memory>
 #include <thread>
 
 #include "serve/serve_core.h"
@@ -40,6 +42,7 @@ private slots:
 	void a_hangup_reloads_at_once();
 	void demand_is_written_for_what_clients_ask();
 	void a_full_demand_file_is_left_alone();
+	void a_locked_demand_file_does_not_stall_the_loop();
 
 private:
 	void start(const bbq_serve_limits &limits, int demand_fd = -1);
@@ -441,6 +444,54 @@ void test_serve_loop::a_full_demand_file_is_left_alone() {
 	::close(fd);
 
 	QCOMPARE(QFileInfo(path).size(), qint64(BBQ_SERVE_DEMAND_FILE_MAX));
+
+	/* Emptied, as the publisher would: the dropped line is due again. */
+	QVERIFY(::ftruncate(demand_fd, 0) == 0);
+	const int again = connect_client();
+	QVERIFY(again >= 0);
+	QVERIFY(send_all(again, request(BBQ_SERVE_HEAD, "ISTOCK877")));
+	QCOMPARE(status_of(read_exactly(again, BBQ_SERVE_RESPONSE_HEADER_SIZE)), int(BBQ_SERVE_OK));
+	::close(again);
+	QVERIFY(QFileInfo(path).size() > 0);
+	::close(demand_fd);
+}
+
+/*
+ * The publisher holds the file's lock from its read to its truncation. The
+ * loop must answer while it is held -- the client's read times out at two
+ * seconds otherwise -- write nothing, and write the line on the next
+ * request once the lock is free rather than an hour later.
+ */
+void test_serve_loop::a_locked_demand_file_does_not_stall_the_loop() {
+	const QString path = m_root->filePath(QStringLiteral("demand"));
+	const QByteArray name = QFile::encodeName(path);
+	const int demand_fd = ::open(name.constData(), O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+	QVERIFY(demand_fd >= 0);
+	const int publisher_fd = ::open(name.constData(), O_RDWR | O_CLOEXEC);
+	QVERIFY(publisher_fd >= 0);
+	/* Closed on any exit: a failed case left holding the lock would hold a
+	 * loop that waits for it, and cleanup's join with it, until the
+	 * suite's timeout. */
+	const std::unique_ptr<const int, void (*)(const int *)> unlock(
+	        &publisher_fd, [](const int *held) { ::close(*held); });
+	QVERIFY(::flock(publisher_fd, LOCK_EX) == 0);
+	start(bbq_serve_default_limits(), demand_fd);
+
+	const int fd = connect_client();
+	QVERIFY(fd >= 0);
+	QVERIFY(send_all(fd, request(BBQ_SERVE_HEAD, "ISTOCK877")));
+	QCOMPARE(status_of(read_exactly(fd, BBQ_SERVE_RESPONSE_HEADER_SIZE)), int(BBQ_SERVE_OK));
+	QCOMPARE(read_exactly(fd, 200).size(), 200);
+	QCOMPARE(QFileInfo(path).size(), qint64(0));
+
+	QVERIFY(::flock(publisher_fd, LOCK_UN) == 0);
+	QVERIFY(send_all(fd, request(BBQ_SERVE_HEAD, "ISTOCK877")));
+	QCOMPARE(status_of(read_exactly(fd, BBQ_SERVE_RESPONSE_HEADER_SIZE)), int(BBQ_SERVE_OK));
+	::close(fd);
+
+	QFile written(path);
+	QVERIFY(written.open(QIODevice::ReadOnly));
+	QVERIFY(written.readAll().startsWith("ISTOCK877 "));
 	::close(demand_fd);
 }
 

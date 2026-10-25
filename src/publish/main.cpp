@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -58,9 +59,14 @@ void print_usage(QTextStream &out) {
 
 /*
  * The demand file's contents, and the file emptied (sec 15.14). Absent is
- * no demand rather than an error: the daemon may not be running yet. A
- * line the daemon appends between the read and the truncation is lost,
- * and costs only an hour, since the station is asked about again.
+ * no demand rather than an error: the daemon may not be running yet.
+ *
+ * The read and the truncation hold the file's lock, which the daemon
+ * takes for each append. Without it a line landing between the two was
+ * emptied unread, and since the daemon writes a station at most once an
+ * hour, a station's first request could wait an hour to be fetched. This
+ * side waits for the lock; the daemon never does, and drops a line that
+ * finds it taken so that the station's next request writes it again.
  */
 bool take_demand(const QString &path, QByteArray *text, QString *why) {
 	const QByteArray name = QFile::encodeName(path);
@@ -77,6 +83,13 @@ bool take_demand(const QString &path, QByteArray *text, QString *why) {
 	if (::fstat(fd, &file) != 0 || !S_ISREG(file.st_mode)) {
 		::close(fd);
 		*why = QStringLiteral("%1: not a regular file").arg(path);
+		return false;
+	}
+
+	if (::flock(fd, LOCK_EX) != 0) {
+		*why = QStringLiteral("%1: cannot lock it: %2")
+		               .arg(path, QString::fromLocal8Bit(strerror(errno)));
+		::close(fd);
 		return false;
 	}
 

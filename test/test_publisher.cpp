@@ -10,6 +10,10 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+
 #include "publish/demand.h"
 
 /*
@@ -268,6 +272,18 @@ void test_publisher::demand_is_saved_before_the_round_fetches() {
 	environment.remove(QStringLiteral("no_proxy"));
 	environment.remove(QStringLiteral("NO_PROXY"));
 
+	/*
+	 * The daemon's side of the lock, held before the run starts: the
+	 * publisher must wait for it rather than read and empty the file
+	 * under an append. A second is ample -- unlocked, the run has
+	 * emptied the file well inside it.
+	 */
+	const int daemon_fd = ::open(QFile::encodeName(demand).constData(),
+	                             O_WRONLY | O_APPEND | O_CLOEXEC);
+	QVERIFY(daemon_fd >= 0);
+	QVERIFY(::flock(daemon_fd, LOCK_EX) == 0);
+	const qint64 asked = QFileInfo(demand).size();
+
 	const QString archive = home.filePath(QStringLiteral("archive.sqlite"));
 	QProcess process;
 	process.setProcessEnvironment(environment);
@@ -277,6 +293,16 @@ void test_publisher::demand_is_saved_before_the_round_fetches() {
 	               QStringLiteral("ITEST1"), QStringLiteral("--history-path"), archive,
 	               QStringLiteral("--demand"), demand});
 	QVERIFY(process.waitForStarted());
+
+	QTest::qWait(1000);
+	const bool waited = process.state() == QProcess::Running &&
+	                    QFileInfo(demand).size() == asked;
+	::close(daemon_fd);
+	if (!waited) {
+		process.kill();
+		process.waitForFinished();
+	}
+	QVERIFY2(waited, "the publisher read the demand file while its lock was held");
 
 	/* Bounded: fifteen seconds, half the round's own thirty-second fetch. */
 	bool saved = false;

@@ -7798,6 +7798,19 @@ publisher's: made by the server postinst, 0600. Under systemd the unit
 names it in `ReadWritePaths=`, since `ProtectSystem=strict` would make
 the open fail.
 
+**The two share the file under its `flock`** (since 2026-10-25). The
+publisher holds it from its read to its truncation; before that, a
+line appended between the two was emptied unread, and since a station
+is written once an hour, a new station's first request could wait an
+hour to be fetched. The code had called that cost acceptable. **The
+daemon never waits for the lock**, because one loop answers every
+client and nothing outside it may stall them, so a line that finds it
+taken is dropped. Any line not written, whether locked out, refused for
+a full file or short-written, is now forgotten as well as dropped, so
+the station's next request writes it. Until then, the full-file path
+marked a station written although it was not, and the next request for
+it was not written either until an hour had passed.
+
 **The publisher schedules** (`src/publish/demand.cpp`, pure). Each run
 reads and empties the file, admits up to the ceiling, expires what
 nobody asked for in two weeks, and fetches the configured station first
