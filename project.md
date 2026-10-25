@@ -7606,7 +7606,10 @@ qemu engine the owners, but `hull run` of a stored image never passed
 them, which this test found at f82403d and hull fixed the same night.
 On a host with no `/etc/subuid` range hull still shows root, and the
 check fails there. It needs hull at a1b6dd2 or later; run with
-`HULL=` pointing at such a build.
+`HULL=` pointing at such a build. Unset, `HULL` is `hull` on `PATH`.
+Until 2026-10-25 it defaulted to a sibling checkout's build, a path
+nobody without that checkout has, and the holder set that a project
+builds and checks from its own files.
 
 One thing it cannot see: a round. Fetching is not booted here; the
 containers above run one.

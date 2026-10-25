@@ -781,16 +781,20 @@ deb-daedalus:
 # network, and takes some minutes. `make deb` first. No docker and no root:
 # hull builds the image as well as booting it.
 #
-# hull is a sibling checkout, not vendored, so HULL names the binary.
+# hull is a separate program, not vendored, so HULL names the binary:
+# found on PATH unless set. Not a path into a sibling checkout, which
+# defaulted here until 2026-10-25 -- this tree builds and checks from its
+# own files, and somebody working on it has no such checkout.
 # Terminates: each bake is under timeout 1200, each boot under timeout
 # 300, and a vm ends with its hull run.
-HULL ?= $(HOME)/src/hull/build/hull
+HULL ?= hull
 BOOT_INITS ?= sysvinit openrc
 
 check-boot:
 	@command -v $(HULL) >/dev/null 2>&1 || { \
-		echo "check-boot: $(HULL) is not runnable; hull is a sibling" >&2; \
-		echo "check-boot:   project -- build it there, or set HULL=" >&2; \
+		echo "check-boot: $(HULL) is not runnable. It needs hull, which" >&2; \
+		echo "check-boot:   is not part of this tree: put it on PATH, or" >&2; \
+		echo "check-boot:   set HULL= to the binary." >&2; \
 		exit 1; }
 	@deb=$(DEB_DIR)/bbq-predictor-server_$$(dpkg-parsechangelog -S Version)_$$(dpkg --print-architecture).deb; \
 	if [ ! -f "$$deb" ]; then \
