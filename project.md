@@ -3169,12 +3169,11 @@ anything.
 - **A dark-desktop variant**, given the measured palette is fixed and
   light. A question about how the applet is actually used rather than
   one this document can answer (sec 3.8.3)
-- **Packaging**, now drafted as a proposal rather than a gap (sec 5.1).
-  The mechanism is not in question -- every sibling that packages uses
-  `dpkg-buildpackage` with `dh`, seven of eight with identical flags.
-  What needs deciding is where artifacts land, whether `dh` is now *the*
-  convention rather than what everyone happens to do, and two things
-  that are the holder's alone: that `debian/copyright` needs a
+- **Packaging**, built rather than proposed since sec 15.11: two
+  packages from `dpkg-buildpackage` with `dh`, installed, and booted on
+  Devuan under sysvinit and under OpenRC (sec 15.12.5). Where the artifacts
+  land is `DEB_DIR`, settled across the siblings. What remains is two
+  things that are the holder's alone: that `debian/copyright` needs a
   `License:` field this project deliberately cannot supply, and that a
   `.deb` is a distribution artifact where the source is not
 - ~~**Finishing the Android build.**~~ Done. android-36 is installed,
@@ -3194,11 +3193,10 @@ anything.
   accessibility service running would settle it. The slider was asked
   for by name, so the drop-down is a workaround holding a place rather
   than a design
-- **The fetching server of sec 15**, proposed 2026-08-31 and recorded
-  as a design rather than started. It is the precondition for a home
-  screen widget and for verification accumulating while nobody is
-  looking, and it needs five decisions before any of it is code -- most
-  of them the holder's rather than technical (sec 15.4)
+- ~~**The fetching server of sec 15**~~, proposed 2026-08-31 as a
+  design. Built: the publisher, the daemon and the client's server
+  path are secs 15.12 to 15.16. What still waits on the holder is the
+  publisher's public key, which the applet is built with
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
@@ -3207,24 +3205,19 @@ anything.
   one means watching it, pinning, and switching back -- which works and
   is clumsy enough that the second station was pinned by editing the
   store instead
-- **CI, which is free for this repository and unused.** There is no
-  `.github/workflows` here and the repo is public, so GitHub Actions
-  costs nothing -- unlike the sibling trees that are private and
-  currently blocked on billing. The gates that would run are already
-  written and already run locally: `make check` is style, the signal
-  gate and twelve test binaries. What stops it being free of judgement
-  is that the Android build needs an SDK and the fetch tests must not
-  reach WU from a shared runner
+- ~~**CI, which is free for this repository and unused.**~~ Running
+  since sec 16.69: `.github/workflows/ci.yml` runs the gates and the
+  offline suite on every push, and its first run found a defect (sec
+  16.70). The Android build is not in it, for want of an SDK there
 - ~~**How strong the rain wash should be.**~~ Settled at alpha 60 by the
   copyright holder, 2026-09-03. It was 90, chosen against a
   certain-downpour fixture -- the right method for the extreme, and
   silent about an ordinary day. What changed the answer is sec 3.20:
   with the hour bands gone the wash became the only tint left on the
   plot and carried more weight than it had as one of three
-- **Whether the three projects that shipped for Android first adopt
-  `tool/android.mk`.** Their target names differ from the agreed ones
-  in ways somebody has to decide about rather than sweep, so it belongs
-  to a deliberate cross-project pass
+- ~~**Whether the three projects that shipped for Android first adopt
+  `tool/android.mk`.**~~ They did: hydra, beerssh and fuzzypickles all
+  carry it, re-checked 2026-10-25
 - **Whether to take Open-Meteo's quarter-hourly block where it is
   genuine.** It is real over North America and central Europe and
   interpolated elsewhere (sec 2.10.4), so using it correctly means
