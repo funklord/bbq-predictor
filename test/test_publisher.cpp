@@ -1,10 +1,16 @@
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QTcpServer>
 #include <QTemporaryDir>
 #include <QTest>
+
+#include "publish/demand.h"
 
 /*
  * The publisher's main and the applet's refusal of what moved to it
@@ -31,6 +37,7 @@ private slots:
 	void a_key_is_made_once_and_never_overwritten();
 	void the_version_names_the_copyright_holder();
 	void the_applet_refuses_what_moved_here();
+	void demand_is_saved_before_the_round_fetches();
 
 private:
 	QString m_publisher;
@@ -219,6 +226,94 @@ void test_publisher::the_applet_refuses_what_moved_here() {
 	QVERIFY2(!QFileInfo::exists(tree), "the applet published");
 	QVERIFY2(QDir(home.path()).entryList(QDir::AllEntries | QDir::NoDotAndDotDot).isEmpty(),
 	         "a refused run wrote something, so it did more than refuse");
+}
+
+
+void test_publisher::demand_is_saved_before_the_round_fetches() {
+	QTemporaryDir home;
+	QVERIFY(home.isValid());
+	QString said;
+
+	const QString key = home.filePath(QStringLiteral("signing.key"));
+	QCOMPARE(run(m_publisher, home, {QStringLiteral("--generate-signing-key"), key}, &said),
+	         0);
+
+	const QString demand = home.filePath(QStringLiteral("demand"));
+	{
+		QFile file(demand);
+		QVERIFY(file.open(QIODevice::WriteOnly));
+		file.write(QStringLiteral("IDEMAND1 %1\n")
+		                   .arg(QDateTime::currentSecsSinceEpoch())
+		                   .toLatin1());
+	}
+
+	/*
+	 * A proxy that takes the connection and never answers, so the round
+	 * is still in its first fetch when the archive is read -- what a
+	 * crash or a shutdown would interrupt. Without it the run ends in a
+	 * second and saving at the end could not be told from saving at the
+	 * start; with it, nothing reaches a weather provider.
+	 */
+	QTcpServer silent;
+	QVERIFY(silent.listen(QHostAddress::LocalHost));
+	const QString proxy = QStringLiteral("http://127.0.0.1:%1").arg(silent.serverPort());
+
+	QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+	environment.insert(QStringLiteral("XDG_DATA_HOME"), home.path());
+	environment.insert(QStringLiteral("XDG_CONFIG_HOME"), home.path());
+	environment.insert(QStringLiteral("XDG_CACHE_HOME"), home.path());
+	for (const char *name : {"http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"}) {
+		environment.insert(QString::fromLatin1(name), proxy);
+	}
+	environment.remove(QStringLiteral("no_proxy"));
+	environment.remove(QStringLiteral("NO_PROXY"));
+
+	const QString archive = home.filePath(QStringLiteral("archive.sqlite"));
+	QProcess process;
+	process.setProcessEnvironment(environment);
+	process.start(m_publisher,
+	              {QStringLiteral("--dir"), home.filePath(QStringLiteral("published")),
+	               QStringLiteral("--signing-key"), key, QStringLiteral("--station"),
+	               QStringLiteral("ITEST1"), QStringLiteral("--history-path"), archive,
+	               QStringLiteral("--demand"), demand});
+	QVERIFY(process.waitForStarted());
+
+	/* Bounded: fifteen seconds, half the round's own thirty-second fetch. */
+	bool saved = false;
+	bool running = true;
+	for (int i = 0; i < 150 && !saved; ++i) {
+		QTest::qWait(100);
+		running = process.state() == QProcess::Running;
+		if (!running) {
+			break;
+		}
+		{
+			QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"),
+			                                            QStringLiteral("probe"));
+			db.setDatabaseName(archive);
+			if (QFileInfo::exists(archive) && db.open()) {
+				QSqlQuery query(db);
+				if (query.exec(QStringLiteral(
+				            "SELECT value FROM server_state WHERE name = 'demand'")) &&
+				    query.next()) {
+					const bbq_demand held = bbq_demand_parse(query.value(0).toByteArray());
+					saved = held.stations.count(QStringLiteral("IDEMAND1")) == 1;
+				}
+			}
+		}
+		QSqlDatabase::removeDatabase(QStringLiteral("probe"));
+	}
+
+	process.kill();
+	process.waitForFinished();
+
+	QVERIFY2(running, qPrintable(QStringLiteral("the round ended before the archive was "
+	                                            "read, so the proxy held nothing: %1")
+	                                     .arg(QString::fromLocal8Bit(process.readAll()))));
+	QVERIFY2(saved, "the demand was not in the archive while the round was fetching");
+
+	/* And the file it came from was emptied, so the archive was the only copy. */
+	QCOMPARE(QFileInfo(demand).size(), qint64(0));
 }
 
 QTEST_GUILESS_MAIN(test_publisher)

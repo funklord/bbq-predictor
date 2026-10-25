@@ -129,8 +129,9 @@ advanced. The systemd timer forgives this by name.
 Nothing covers now: the run stored nothing usable. A publish that fails
 after the fetch exits 1 as well. With
 .BR \-\-demand ,
-1 is the configured station storing nothing or any publish failing; a
-station a client asked for saying nothing makes the run 3, not 1.
+1 is the configured station storing nothing, any publish failing, or
+the demand schedule not saving to the archive; a station a client
+asked for saying nothing makes the run 3, not 1.
 .TP
 .B 2
 A configuration error, including a

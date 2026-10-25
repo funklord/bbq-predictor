@@ -7794,7 +7794,11 @@ budget would not cover the next. The cost of a station is what its last
 round actually sent, counted by the key source and the API client: the
 key page and the API, not the server or the keyless providers. A run
 stops starting stations after four minutes. The schedule is kept in the
-archive's named values.
+archive's named values. It is saved once before the first fetch as
+well as after the last (since 2026-10-25). The file is emptied as it is
+read, and nothing outside bounds a round, so a crash or a shutdown in
+the middle of one used to lose every request it had taken. A save that
+fails exits 1, since it forgets the hour's spending too.
 
 A station turned away because the ceiling is full is named in the
 run's summary line as "N turned away at the ceiling of 50" (since

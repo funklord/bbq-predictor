@@ -138,6 +138,18 @@ int publish_demanded(const QString &station, const QString &geocode,
 	bbq_demand_expire(demand, started);
 	bbq_demand_configure(demand, station, started);
 
+	/*
+	 * Saved before the first fetch, not only after the last. The file
+	 * was emptied as it was read, so until this lands the archive is
+	 * the only copy of what clients asked for -- and a round runs for
+	 * minutes with nothing bounding it from outside, so a crash or a
+	 * shutdown in the middle lost every request it had taken.
+	 */
+	if (!store.set_state_value(QStringLiteral("demand"), bbq_demand_serialize(demand))) {
+		error << "publish: cannot save the demand: " << store.last_error() << "\n";
+		return 1;
+	}
+
 	const std::vector<QString> due = bbq_demand_due(demand, started);
 	std::vector<bbq_demand_result> results;
 	int configured_code = 0;
@@ -169,7 +181,15 @@ int publish_demanded(const QString &station, const QString &geocode,
 
 	const qint64 finished = QDateTime::currentSecsSinceEpoch();
 	bbq_demand_record(demand, results, finished);
-	store.set_state_value(QStringLiteral("demand"), bbq_demand_serialize(demand));
+	/*
+	 * A failure here forgets the hour's spending as well as the schedule,
+	 * and the next run would spend the budget again: a failed run, not a
+	 * quiet one.
+	 */
+	if (!store.set_state_value(QStringLiteral("demand"), bbq_demand_serialize(demand))) {
+		error << "publish: cannot save the demand: " << store.last_error() << "\n";
+		return 1;
+	}
 
 	out << "publish: " << results.size() << " of " << due.size() << " due station(s) fetched, "
 	    << demand.stations.size() << " wanted, " << admitted << " newly asked for, ";
