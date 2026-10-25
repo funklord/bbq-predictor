@@ -1398,7 +1398,7 @@ void test_window::the_widget_render_leaves_the_parked_readout_where_it_was() {
 		const bbq_borrowed_graph borrowed(&graph);
 
 		bbq_pose_graph_for_picture(&graph, QColor(0x39, 0x3b, 0x3c), 3.0,
-		                           QSize(885, 546));
+		                           QSize(885, 546), QStringLiteral("17 C"));
 
 		/* Really changed, or the restore below proves nothing. */
 		QCOMPARE(graph.cursor_column(), -1);
@@ -1406,9 +1406,17 @@ void test_window::the_widget_render_leaves_the_parked_readout_where_it_was() {
 		QVERIFY(graph.size() != was);
 		QVERIFY(graph.palette_colours().temperature != ink);
 		QVERIFY(graph.is_following_now());
+
+		/* Kept clear exactly where the reading will be painted: top centre. */
+		const QRectF box = bbq_widget_reading_box(QSize(885, 546), QStringLiteral("17 C"));
+		QCOMPARE(graph.kept_clear(), box);
+		QVERIFY(!box.isEmpty());
+		QVERIFY(qAbs(box.center().x() - 885 / 2.0) < 3.0);
+		QVERIFY(box.top() >= 0.0 && box.bottom() < 546 / 2.0);
 	}
 
 	QCOMPARE(graph.cursor_column(), 37);
+	QVERIFY(graph.kept_clear().isEmpty());
 	QCOMPARE(graph.size(), was);
 	QVERIFY(graph.opaque_background());
 	QVERIFY(!graph.contrast_ground().isValid());
@@ -1443,7 +1451,7 @@ void test_window::a_following_window_is_still_following_after_a_render() {
 	{
 		const bbq_borrowed_graph borrowed(&graph);
 		bbq_pose_graph_for_picture(&graph, QColor(0x39, 0x3b, 0x3c), 3.0,
-		                           QSize(885, 546));
+		                           QSize(885, 546), QStringLiteral("17 C"));
 	}
 
 	QVERIFY(graph.is_following_now());
@@ -1482,7 +1490,7 @@ void test_window::the_picture_is_posed_at_now_with_no_cursor() {
 	const QSize shape(885, 546);
 	const QColor ground(0x39, 0x3b, 0x3c);
 
-	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape);
+	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape, QStringLiteral("17 C"));
 
 	QVERIFY2(graph.is_following_now(),
 	         "the picture would show whatever range the window was left "
@@ -1494,7 +1502,7 @@ void test_window::the_picture_is_posed_at_now_with_no_cursor() {
 
 	/* And a null graph is a no-op rather than a crash: the render calls
 	 * this before it has checked much. */
-	bbq_pose_graph_for_picture(nullptr, ground, 3.0, shape);
+	bbq_pose_graph_for_picture(nullptr, ground, 3.0, shape, QStringLiteral("17 C"));
 }
 
 /*
@@ -2110,7 +2118,7 @@ void test_window::the_posed_picture_draws_a_curve_that_clears_its_ground() {
 
 	const QColor unclamped = graph.palette_colours().temperature;
 
-	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape);
+	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape, QStringLiteral("17 C"));
 	const QColor clamped = graph.palette_colours().temperature;
 
 	/*
@@ -2231,7 +2239,7 @@ void test_window::a_widget_render_halos_in_the_ground_it_lands_on() {
 	/* Posed for a pale wallpaper, it must not appear at all. */
 	const QColor ground(0xd8, 0xdc, 0xe0);
 	const QSize shape(480, 260);
-	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape);
+	bbq_pose_graph_for_picture(&graph, ground, 3.0, shape, QStringLiteral("17 C"));
 
 	QImage picture(shape, QImage::Format_ARGB32_Premultiplied);
 	picture.fill(bbq_widget_scrim(ground));

@@ -2,6 +2,7 @@
 #define BBQ_UI_WIDGET_PICTURE_H
 
 #include <QColor>
+#include <QRectF>
 #include <QSize>
 #include <QtGlobal>
 
@@ -42,9 +43,10 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
  * The graph settings a widget render borrows, put back when it leaves
  * (project.md sec 16.35).
  *
- * FIVE things change for the duration of a render: the graph's size,
+ * SIX things change for the duration of a render: the graph's size,
  * its opaque ground, its contrast clamp, the readout parked by whatever
- * the user last touched, and the view they panned to. All five belong
+ * the user last touched, the view they panned to, and the area kept
+ * clear for the reading. All five belong
  * to the window the user is looking at, and the render happens on that
  * live graph every five minutes.
  *
@@ -71,6 +73,7 @@ private:
 	bbq_forecast_graph *m_graph = nullptr;
 	QSize m_size;
 	QColor m_contrast_ground;
+	QRectF m_kept_clear;
 	qint64 m_view_from = 0;
 	qint64 m_view_span_s = 0;
 	int m_cursor_column = -1;
@@ -82,7 +85,7 @@ private:
  * Put the graph into the state a home-screen picture is drawn from
  * (project.md sec 16.36).
  *
- * Five things, and every one of them is a difference between what a
+ * Six things, and every one of them is a difference between what a
  * window is for and what a widget is for:
  *
  *   the ground     off, so the scrim carries it
@@ -90,6 +93,8 @@ private:
  *   the readout    cleared; a home screen has no cursor
  *   the view       back to now; a widget is a glance at the present
  *   the size       the widget's box
+ *   kept clear     where `reading` will be painted, so no day name is
+ *                  drawn under it (sec 16.85)
  *
  * Available off Android, unlike the render, so the pose can be tested
  * where the JNI cannot go. That is deliberate: the readout fix
@@ -100,7 +105,15 @@ private:
  */
 void bbq_pose_graph_for_picture(bbq_forecast_graph *graph,
                                 const QColor &ground, double floor,
-                                const QSize &shape);
+                                const QSize &shape, const QString &reading);
+
+/*
+ * Everything the current temperature inks when painted over a picture
+ * of `shape`, halo included -- the one layout the painting and the
+ * kept-clear area both use, so the two cannot disagree about where it
+ * is. Empty for no reading.
+ */
+QRectF bbq_widget_reading_box(const QSize &shape, const QString &reading);
 
 /*
  * The translucent ground the picture is filled with, from the graph's

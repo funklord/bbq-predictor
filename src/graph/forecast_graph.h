@@ -341,6 +341,17 @@ public:
 	 * varying input rather than a second way to draw the same element,
 	 * which is the objection sec 16.109.2 recorded against doing it.
 	 */
+	/*
+	 * An area no day name may be drawn under, in widget coordinates
+	 * (project.md sec 16.85). Set by exactly one caller,
+	 * bbq_pose_graph_for_picture, for the duration of a widget render,
+	 * where the current temperature is painted across the top after the
+	 * graph -- and a name drawn there was unreadable behind it. Empty
+	 * everywhere else, which keeps clear nothing.
+	 */
+	void set_kept_clear(const QRectF &area);
+	QRectF kept_clear() const { return m_kept_clear; }
+
 	QColor ground_behind() const {
 		return m_contrast_ground.isValid() ? m_contrast_ground
 		                                   : m_palette.background;
@@ -514,6 +525,7 @@ private:
 	bool m_opaque_background = true;
 	QColor m_contrast_ground;
 	double m_contrast_floor = 3.0;
+	QRectF m_kept_clear;
 
 	/*
 	 * Where the readout is pointing, as a column index into the plot,

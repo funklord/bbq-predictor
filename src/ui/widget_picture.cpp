@@ -175,12 +175,22 @@ int asked_size(const char *method) {
  * marks. A corner that happens to be empty in today's data is not a
  * free corner, it is a collision waiting for a warmer afternoon.
  */
-void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
+struct reading_layout {
+	QPainterPath glyphs;
+	double halo_width = 0.0;
+
+	/* Everything the reading inks, halo included. */
+	QRectF box;
+};
+
+reading_layout lay_out_reading(const QSize &size, const QString &text) {
+	reading_layout laid;
 	if (text.isEmpty()) {
-		return;
+		return laid;
 	}
 
-	QFont font = painter.font();
+	/* The application's font, which is what a painter on an image starts with. */
+	QFont font;
 	font.setBold(true);
 	font.setPixelSize(qMax(10, int(qMin(size.height() * reading_height_share,
 	                                    size.width() * reading_width_share))));
@@ -193,14 +203,25 @@ void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
 	const QFontMetrics metrics(font);
 	const QRect tight = metrics.tightBoundingRect(text);
 
-	const double halo_width = qMax(1.0, font.pixelSize() / 12.0);
-	const double margin = halo_width + size.height() / 30.0;
+	laid.halo_width = qMax(1.0, font.pixelSize() / 12.0);
+	const double margin = laid.halo_width + size.height() / 30.0;
 
 	const double left = (size.width() - tight.width()) / 2.0 - tight.left();
 	const double baseline = margin - tight.top();
 
-	QPainterPath glyphs;
-	glyphs.addText(QPointF(left, baseline), font, text);
+	laid.glyphs.addText(QPointF(left, baseline), font, text);
+	laid.box = laid.glyphs.boundingRect().adjusted(-laid.halo_width, -laid.halo_width,
+	                                               laid.halo_width, laid.halo_width);
+	return laid;
+}
+
+void draw_reading(QPainter &painter, const QSize &size, const QString &text) {
+	const reading_layout laid = lay_out_reading(size, text);
+	if (laid.glyphs.isEmpty()) {
+		return;
+	}
+	const QPainterPath &glyphs = laid.glyphs;
+	const double halo_width = laid.halo_width;
 
 	/*
 	 * Stroked first and filled over the top. A stroke is centred on the
@@ -228,6 +249,7 @@ bbq_borrowed_graph::bbq_borrowed_graph(bbq_forecast_graph *graph)
 
 	m_size = m_graph->size();
 	m_contrast_ground = m_graph->contrast_ground();
+	m_kept_clear = m_graph->kept_clear();
 	m_cursor_column = m_graph->cursor_column();
 	m_opaque_background = m_graph->opaque_background();
 
@@ -244,6 +266,7 @@ bbq_borrowed_graph::~bbq_borrowed_graph() {
 	m_graph->resize(m_size);
 	m_graph->set_opaque_background(m_opaque_background);
 	m_graph->set_contrast_ground(m_contrast_ground, contrast_floor);
+	m_graph->set_kept_clear(m_kept_clear);
 	m_graph->set_cursor_column(m_cursor_column);
 
 	/*
@@ -259,9 +282,13 @@ bbq_borrowed_graph::~bbq_borrowed_graph() {
 	}
 }
 
+QRectF bbq_widget_reading_box(const QSize &shape, const QString &reading) {
+	return lay_out_reading(shape, reading).box;
+}
+
 void bbq_pose_graph_for_picture(bbq_forecast_graph *graph,
                                 const QColor &ground, double floor,
-                                const QSize &shape) {
+                                const QSize &shape, const QString &reading) {
 	if (graph == nullptr) {
 		return;
 	}
@@ -298,6 +325,15 @@ void bbq_pose_graph_for_picture(bbq_forecast_graph *graph,
 	graph->follow_now();
 
 	graph->resize(shape);
+
+	/*
+	 * AND NOTHING UNDER THE READING (sec 16.85). The number is painted
+	 * over the picture after the render, centred, and a day name whose
+	 * midnight fell near the middle came out as fragments around its
+	 * digits. The graph leaves that name out, as it leaves out one past
+	 * the right edge, and the divider still marks the day.
+	 */
+	graph->set_kept_clear(bbq_widget_reading_box(shape, reading));
 }
 
 QColor bbq_widget_scrim(const QColor &ground) {
@@ -397,7 +433,7 @@ bool bbq_render_widget_picture(bbq_forecast_graph *source,
 	const QColor scrim = bbq_widget_scrim(source->palette_colours().background);
 	const QColor ground = bbq_widget_worst_ground(scrim);
 
-	bbq_pose_graph_for_picture(source, ground, contrast_floor, shape);
+	bbq_pose_graph_for_picture(source, ground, contrast_floor, shape, reading);
 
 	/*
 	 * Rendered at the device's pixel ratio so the file is at the

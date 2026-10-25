@@ -13399,16 +13399,31 @@ only when a day boundary lands near the middle. That is also why it has
 not been noticed -- it depends on the hour the picture happens to be
 drawn at.
 
-**Not fixed here, because the reasonable answers disagree.** The name
-loop already skips one that would fall off the right edge, so skipping
-one that falls under the reading is the same shape -- but the graph does
-not know where the reading goes, since `draw_reading` paints after it
-and from a different file. Moving the number to a corner is a layout
-decision the centred placement was chosen against, deliberately (sec
-16.20). Dropping day names from the widget entirely is a third answer,
-and the divider line would still mark the boundary.
+**Settled by the holder 2026-10-25: the name under the reading is
+skipped.** Three answers were on the table, and the other two were
+rejected:
+- moving the number to a corner, which is the placement sec 16.20 tried
+  on the device first and rejected, because both corners collided with
+  an axis label;
+- dropping day names from the widget altogether, which loses every name
+  to fix one.
 
-Recorded with the picture rather than decided.
+The name loop already skipped a name that would fall off the right
+edge, so this is the same shape, and the divider still marks the
+boundary. What stood in the way was that the graph did not know where
+the reading goes. So it is told: `bbq_widget_reading_box` lays the
+reading out once, and both `draw_reading` and
+`bbq_pose_graph_for_picture` use that layout. The pose hands the box to
+the graph as an area to keep clear, and the graph leaves out a day name
+whose plate would cross it. `bbq_borrowed_graph` puts the area back, so
+the window's own graph never keeps anything clear.
+
+Tested off the device. Rendered with a band across the top kept clear,
+a view with one midnight differs from the control, and only inside that
+band, so the name went and nothing else did. The pose test checks the
+area is the reading's box at the top centre, and is gone after the
+render. Each of the three parts, removed in turn, fails its test. Not
+yet seen on a phone.
 
 ### 16.85.1 A false finding avoided by not truncating
 

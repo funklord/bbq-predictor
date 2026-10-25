@@ -1293,6 +1293,11 @@ void bbq_forecast_graph::set_theme(bbq_theme theme) {
 	update();
 }
 
+void bbq_forecast_graph::set_kept_clear(const QRectF &area) {
+	m_kept_clear = area;
+	update();
+}
+
 void bbq_forecast_graph::set_contrast_ground(const QColor &ground,
                                              double floor) {
 	m_contrast_ground = ground;
@@ -3256,6 +3261,20 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 			/* Skip one that would be drawn off the right-hand edge. */
 			if (x + 52 > plot.right()) {
+				continue;
+			}
+
+			/*
+			 * And one that would be drawn under the widget's reading
+			 * (sec 16.85), which is painted over the top afterwards and
+			 * left the name in fragments around its digits. The same
+			 * shape as the edge: the divider still marks the boundary,
+			 * and a name nobody can read was saying nothing. Measured
+			 * as edge_label draws it -- the plate, from x + 1.
+			 */
+			const QRectF plate(x + 1, plot.top() + 2,
+			                   day_measured.horizontalAdvance(name) + 6, 14);
+			if (m_kept_clear.intersects(plate)) {
 				continue;
 			}
 

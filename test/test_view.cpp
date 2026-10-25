@@ -99,6 +99,7 @@ private slots:
 	 * The home-screen widget's ground (sec 16.23).
 	 */
 	void the_ground_is_painted_unless_it_is_turned_off();
+	void no_day_name_is_drawn_where_the_reading_goes();
 
 	/*
 	 * A grilling window's edge rules, and the clipping (sec 16.30.1).
@@ -1434,6 +1435,65 @@ void test_view::the_ground_is_painted_unless_it_is_turned_off() {
 	graph.render(&clear, QPoint(), QRegion(), QWidget::DrawChildren);
 
 	QCOMPARE(qAlpha(clear.pixel(corner)), 0);
+}
+
+/*
+ * The home-screen reading is painted over the top of the picture after
+ * the graph, and a day name under it came out in fragments (project.md
+ * sec 16.85). With an area kept clear across the top, the one name in
+ * view must go -- the picture changes -- and nothing else may: every
+ * pixel that differs from the control lies inside that area, so what
+ * went was the name and not the divider, the curve or the axis.
+ */
+void test_view::no_day_name_is_drawn_where_the_reading_goes() {
+	const qint64 midnight = 1600041600; /* 2020-09-14 00:00 UTC */
+	std::vector<bbq_sample> samples;
+	for (int i = -8; i < 8; ++i) {
+		bbq_sample sample;
+		sample.start_utc = midnight + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 15.0;
+		samples.push_back(sample);
+	}
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(bbq_utc());
+	band.set_samples(std::move(samples));
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+
+	bbq_forecast_graph graph;
+	graph.set_composite(composite);
+	graph.resize(600, 300);
+	graph.set_view(midnight - 6 * 3600, 12 * 3600);
+
+	const auto shot = [&graph] {
+		QImage image(graph.size(), QImage::Format_ARGB32_Premultiplied);
+		image.fill(Qt::transparent);
+		graph.render(&image, QPoint(), QRegion(), QWidget::DrawChildren);
+		return image;
+	};
+
+	const QImage named = shot();
+	const QRectF clear(0, 0, graph.width(), 40);
+	graph.set_kept_clear(clear);
+	const QImage unnamed = shot();
+
+	int differ = 0;
+	int outside = 0;
+	for (int y = 0; y < named.height(); ++y) {
+		for (int x = 0; x < named.width(); ++x) {
+			if (named.pixel(x, y) != unnamed.pixel(x, y)) {
+				++differ;
+				outside += clear.contains(QPointF(x + 0.5, y + 0.5)) ? 0 : 1;
+			}
+		}
+	}
+	QVERIFY2(differ > 20, "no name was left out, so the kept-clear area did nothing");
+	QCOMPARE(outside, 0);
+
+	/* And kept clear of nothing, the name comes back. */
+	graph.set_kept_clear(QRectF());
+	QCOMPARE(shot(), named);
 }
 
 /*
