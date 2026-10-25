@@ -11,6 +11,7 @@
 #include <QFontMetrics>
 #include <QEvent>
 #include <QGestureEvent>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QPaintEvent>
@@ -850,6 +851,12 @@ bbq_forecast_graph::bbq_forecast_graph(QWidget *parent) : QWidget(parent) {
 	setAccessibleName(tr("Forecast graph"));
 
 	/*
+	 * Reachable by Tab, so the keys below can step the readout: a reader
+	 * with no pointer could otherwise hear only now (sec 16.129).
+	 */
+	setFocusPolicy(Qt::StrongFocus);
+
+	/*
 	 * 240, and the width is the part that matters (sec 10.6).
 	 *
 	 * It was 360, which is wider than some screens this runs on. A
@@ -1361,6 +1368,52 @@ void bbq_forecast_graph::set_show_samples(bool show) {
 void bbq_forecast_graph::set_cursor_column(int column) {
 	m_cursor_column = column;
 	update();
+}
+
+/*
+ * THE READOUT BY KEYBOARD (sec 16.129). Only a pointer could park it, so
+ * a reader with a keyboard -- which is most readers with a screen reader
+ * -- heard what was happening now and nothing else. Left and Right step
+ * it to the previous or next real sample, from now when none is parked,
+ * which is what the readout snaps to anyway; Escape puts it away. The
+ * description follows on the next paint.
+ */
+void bbq_forecast_graph::keyPressEvent(QKeyEvent *event) {
+	const int key = event->key();
+	if (key == Qt::Key_Escape && m_cursor_column >= 0) {
+		set_cursor_column(-1);
+		return;
+	}
+	if ((key != Qt::Key_Left && key != Qt::Key_Right) || m_knot_columns.empty()) {
+		QWidget::keyPressEvent(event);
+		return;
+	}
+
+	int from = m_cursor_column;
+	if (from < 0) {
+		/* The first press reads the sample at or past now, either way. */
+		from = m_now_column + (key == Qt::Key_Right ? -1 : 1);
+	}
+
+	int next = -1;
+	if (key == Qt::Key_Right) {
+		for (int x : m_knot_columns) {
+			if (x > from) {
+				next = x;
+				break;
+			}
+		}
+	} else {
+		for (auto it = m_knot_columns.rbegin(); it != m_knot_columns.rend(); ++it) {
+			if (*it < from) {
+				next = *it;
+				break;
+			}
+		}
+	}
+	if (next >= 0) {
+		set_cursor_column(next);
+	}
 }
 
 void bbq_forecast_graph::mouseMoveEvent(QMouseEvent *event) {
@@ -3609,6 +3662,14 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 */
 	QStringList spoken;
 	const int now_column = int(now_x - plot.left());
+
+	m_knot_columns.clear();
+	for (int x = 0; x < plot.width(); ++x) {
+		if (columns[x].has_knot) {
+			m_knot_columns.push_back(x);
+		}
+	}
+	m_now_column = now_column;
 	if (now_column >= 0 && now_column < plot.width()) {
 		const int found = nearest_knot(now_column);
 		if (found >= 0) {

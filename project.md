@@ -16837,3 +16837,26 @@ asks the accessibility layer for that relation on each control, and
 counts a buddy on every label ending in a colon. With the buddy line
 removed, it fails ("Station: is labelled by []"). Whether TalkBack reads
 the relation, rather than only the name, is not established here.
+
+## 16.129 The readout, by keyboard
+
+Sec 16.127 made the graph say the reading at now, and at the readout
+while one is parked. Only a pointer could park one, though, so a reader
+with a keyboard heard now and nothing else, and most readers with a
+screen reader use a keyboard. The graph takes focus by Tab now.
+
+- **Left and Right** step the readout to the previous or next real
+  sample, which is what it snaps to anyway.
+- **The first press** starts from now's column, so Right reads the
+  first sample at or after now and Left the last one before it.
+- **Escape** puts the readout away.
+
+Which columns hold a sample is known only to a paint, so each paint
+records them, with now's column, for the key handler. Moving the
+readout repaints, and the description follows.
+
+Tested: Right, Right again, Left back to the first, Escape clears, and
+the description gains and loses "At the cursor". Starting from the
+left edge instead of now fails the test, as does ignoring Escape. Not
+yet tried with a screen reader. Stepping stops at the edge of the view
+rather than panning it; panning by keyboard would be its own change.

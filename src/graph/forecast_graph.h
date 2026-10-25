@@ -434,6 +434,7 @@ protected:
 	void mouseReleaseEvent(QMouseEvent *event) override;
 	void mouseDoubleClickEvent(QMouseEvent *event) override;
 	void wheelEvent(QWheelEvent *event) override;
+	void keyPressEvent(QKeyEvent *event) override;
 	bool event(QEvent *event) override;
 	void leaveEvent(QEvent *event) override;
 
@@ -532,6 +533,14 @@ private:
 	 * or -1 for nowhere.
 	 */
 	int m_cursor_column = -1;
+
+	/*
+	 * The plot columns holding a real sample, and now's column, as the
+	 * last paint found them -- what the keys step the readout between
+	 * (sec 16.129). Only a paint knows where samples landed.
+	 */
+	std::vector<int> m_knot_columns;
+	int m_now_column = -1;
 
 	/*
 	 * The view. Zero span means "not set yet", so the layout's window is

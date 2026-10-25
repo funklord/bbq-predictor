@@ -104,6 +104,7 @@ private slots:
 	void the_wind_scale_has_a_row_of_its_own();
 	void a_parked_readout_does_not_cross_the_scale_labels();
 	void a_screen_reader_is_told_the_reading();
+	void the_keys_step_the_readout_between_samples();
 
 	/*
 	 * A grilling window's edge rules, and the clipping (sec 16.30.1).
@@ -1798,6 +1799,64 @@ void test_view::a_screen_reader_is_told_the_reading() {
 	graph.set_view(now - 40 * 86400, 6 * 3600);
 	render_of(graph);
 	QCOMPARE(graph.accessibleDescription(), QStringLiteral("No forecast near now in view"));
+}
+
+/*
+ * Only a pointer could park the readout, so a keyboard reader -- most
+ * readers with a screen reader -- heard now and nothing else (sec
+ * 16.129). Left and Right step it between real samples, from now when
+ * none is parked, and Escape puts it away; the description follows.
+ */
+void test_view::the_keys_step_the_readout_between_samples() {
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	const qint64 hour = now - now % 3600;
+	std::vector<bbq_sample> samples;
+	for (int i = -6; i < 6; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 10.0 + i;
+		samples.push_back(sample);
+	}
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(bbq_utc());
+	band.set_samples(std::move(samples));
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+
+	bbq_forecast_graph graph;
+	graph.set_composite(composite);
+	graph.resize(600, 300);
+	graph.set_view(now - 3 * 3600, 6 * 3600);
+	QCOMPARE(graph.focusPolicy(), Qt::StrongFocus);
+	render_of(graph);
+	QCOMPARE(graph.cursor_column(), -1);
+
+	QTest::keyClick(&graph, Qt::Key_Right);
+	const int first = graph.cursor_column();
+	QVERIFY(first >= 0);
+	render_of(graph);
+	QVERIFY2(graph.accessibleDescription().contains(QStringLiteral("At the cursor: ")),
+	         qPrintable(graph.accessibleDescription()));
+
+	QTest::keyClick(&graph, Qt::Key_Right);
+	const int second = graph.cursor_column();
+	QVERIFY(second > first);
+
+	QTest::keyClick(&graph, Qt::Key_Left);
+	QCOMPARE(graph.cursor_column(), first);
+
+	/* The first sample stepped to is at or after now, never one behind it. */
+	const double per_pixel = 6.0 * 3600 / graph.plot_rect().width();
+	QVERIFY2(first * per_pixel >= 3 * 3600 - per_pixel,
+	         qPrintable(QStringLiteral("stepped to %1 s into the view, before now at %2")
+	                            .arg(first * per_pixel)
+	                            .arg(3 * 3600)));
+
+	QTest::keyClick(&graph, Qt::Key_Escape);
+	QCOMPARE(graph.cursor_column(), -1);
+	render_of(graph);
+	QVERIFY(!graph.accessibleDescription().contains(QStringLiteral("At the cursor")));
 }
 
 /*
