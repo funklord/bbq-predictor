@@ -1823,10 +1823,11 @@ void bbq_wu_feed::server_round_done(const std::vector<bbq_server_result> &result
 void bbq_wu_feed::months_done(const std::vector<bbq_server_result> &results) {
 	m_fetching_months = false;
 	int applied = 0;
+	QStringList refused;
 
-	for (size_t i = 0; i < results.size() && i < m_months_wanted.size(); ++i) {
+	for (size_t i = 0; i < m_months_wanted.size(); ++i) {
 		const bbq_wire_index_entry &entry = m_months_wanted[i];
-		const bbq_server_result &result = results[i];
+		const bbq_server_result result = i < results.size() ? results[i] : bbq_server_result();
 		QString why;
 		bbq_wire_month_rows rows;
 
@@ -1835,11 +1836,25 @@ void bbq_wu_feed::months_done(const std::vector<bbq_server_result> &results) {
 		 * as to its own signature: a validly signed but OLDER month cannot
 		 * be passed off as the one the index names.
 		 */
-		if (result.status != bbq_server_status::ok ||
-		    uint32_t(result.file.size()) != entry.bytes ||
-		    bbq_wire_digest(result.file) != entry.digest ||
-		    !bbq_wire_read_month(result.file, m_server_key, m_station_id, entry.month,
-		                         &rows, &why)) {
+		if (result.status == bbq_server_status::failed) {
+			why = tr("no route answered");
+		} else if (result.status != bbq_server_status::ok) {
+			why = tr("the server did not hand it over");
+		} else if (uint32_t(result.file.size()) != entry.bytes) {
+			why = tr("%1 bytes where the index says %2")
+			              .arg(result.file.size())
+			              .arg(entry.bytes);
+		} else if (bbq_wire_digest(result.file) != entry.digest) {
+			why = tr("not the copy the index names");
+		} else {
+			QString unread;
+			if (!bbq_wire_read_month(result.file, m_server_key, m_station_id,
+			                         entry.month, &rows, &unread)) {
+				why = tr("does not verify: %1").arg(unread);
+			}
+		}
+		if (!why.isEmpty()) {
+			refused << bbq_wire_month_name(entry.month) + QStringLiteral(": ") + why;
 			continue;
 		}
 
@@ -1864,6 +1879,9 @@ void bbq_wu_feed::months_done(const std::vector<bbq_server_result> &results) {
 	if (applied > 0) {
 		load_observations();
 		emit updated();
+	}
+	if (!refused.isEmpty()) {
+		emit months_refused(refused);
 	}
 	finish_one();
 }

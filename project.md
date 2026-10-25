@@ -7470,6 +7470,16 @@ before API 28.
   into a file stamped by it.
 - **The manifest is written last** and always, since it is the daemon's
   signal to reload; every file is written aside and renamed.
+- **A month the client refuses is reported, not failed** (holder's
+  choice, 2026-10-25). A month that fails its size, digest or signature
+  check, or never arrives, is named by `months_refused` as
+  `YYYY-MM: why`: fetch-once prints a `server month refused` line, and
+  the GUI logs a warning. The status line stays clear and the server is
+  not counted down, since a publish landing between the index and the
+  month refuses one that the next round cures. A month refused every
+  round is a damaged file on the server, and these two places are where
+  that shows. Until then the refusal was a bare `continue`, and the
+  month was fetched again every round without anyone knowing.
 
 **Measured end to end, 2026-10-22**, from one real fetch against a copy
 of the desktop archive: 3,108 ISTOCK877 observations published as three

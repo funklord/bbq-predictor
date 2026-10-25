@@ -234,8 +234,10 @@ void test_feed_server::a_round_applies_the_head_and_stores_the_months() {
 	feed.set_server(m_key.public_key(), {daemon(m_port)});
 	feed.set_station(station);
 	QVERIFY(feed.server_active());
+	QSignalSpy refused(&feed, &bbq_wu_feed::months_refused);
 
 	QVERIFY(settle(feed));
+	QCOMPARE(refused.size(), 0);
 
 	const bbq_series *hourly = feed.composite().band(bbq_band::hourly);
 	QVERIFY(hourly != nullptr);
@@ -293,11 +295,23 @@ void test_feed_server::a_month_the_index_does_not_name_is_not_applied() {
 	QVERIFY(feed.open_history(scratch.filePath("history.sqlite")));
 	feed.set_server(m_key.public_key(), {daemon(m_port)});
 	feed.set_station(swapped);
+	QSignalSpy refused(&feed, &bbq_wu_feed::months_refused);
+	QSignalSpy failed(&feed, &bbq_wu_feed::band_failed);
 	QVERIFY(settle(feed));
 
 	QCOMPARE(feed.m_months_requested, 1);
 	QCOMPARE(feed.history().server_months(swapped).size(), size_t(0));
 	QCOMPARE(feed.history().observation_months(swapped).size(), size_t(0));
+
+	/*
+	 * Refused out loud, naming the month and why, and not as a server
+	 * failure: the head applied and the server is as healthy as before.
+	 */
+	QCOMPARE(refused.size(), 1);
+	const QStringList months = refused.at(0).at(0).toStringList();
+	QCOMPARE(months, QStringList{QStringLiteral("2026-09: not the copy the index names")});
+	QCOMPARE(failed.size(), 0);
+	QCOMPARE(feed.server_state().failures, 0);
 }
 
 void test_feed_server::an_offline_launch_shows_the_last_head() {

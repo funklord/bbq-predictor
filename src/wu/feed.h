@@ -299,6 +299,18 @@ signals:
 	 */
 	void band_quiet(const QString &band, const QString &reason);
 
+	/*
+	 * Months the server's index named that this round did not apply, one
+	 * "YYYY-MM: why" each. Not band_failed: the rest of the round stands,
+	 * the server is not counted down, and the month is asked for again
+	 * next round. A publish landing between the index and the month
+	 * refuses one once and cures itself, so the status line would flash
+	 * for nothing; a month refused every round is a damaged file on the
+	 * server, and the diagnostic and the log are where that shows
+	 * (project.md sec 15.12.4).
+	 */
+	void months_refused(const QStringList &months);
+
 	/* Discovery finished; the store has the stations it found. */
 	void stations_discovered(int count);
 	void places_found(const std::vector<bbq_wu_place> &places);

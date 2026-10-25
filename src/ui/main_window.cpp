@@ -669,6 +669,17 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	});
 
 	/*
+	 * Logged and not shown, unlike band_failed: the round stood and the
+	 * month is asked for again, so a refusal the next round cures would
+	 * be a status line crying wolf (feed.h).
+	 */
+	connect(m_feed, &bbq_wu_feed::months_refused, this, [](const QStringList &months) {
+		for (const QString &month : months) {
+			qWarning("bbq-predictor: server month refused, %s", qUtf8Printable(month));
+		}
+	});
+
+	/*
 	 * The device decides, unless the configuration disagrees. Applied
 	 * before the first paint so nothing is drawn twice in two shapes.
 	 */

@@ -340,6 +340,20 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 		quiet_bands.insert(band);
 	});
 
+	/*
+	 * Months the server's index named and this round refused. Not a
+	 * failure -- a publish mid-round causes one that the next round cures
+	 * -- but the one place a month refused every round can be seen.
+	 */
+	QObject::connect(&feed, &bbq_wu_feed::months_refused, &loop,
+	                 [&](const QStringList &months) {
+		for (const QString &month : months) {
+			out << QStringLiteral("  %1").arg(QStringLiteral("server"), -10)
+			    << QStringLiteral(" month refused  ") << month << "\n";
+		}
+		out.flush();
+	});
+
 	QObject::connect(&feed, &bbq_wu_feed::settled, &loop, &QEventLoop::quit);
 
 	/*
