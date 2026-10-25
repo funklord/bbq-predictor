@@ -16858,5 +16858,12 @@ readout repaints, and the description follows.
 Tested: Right, Right again, Left back to the first, Escape clears, and
 the description gains and loses "At the cursor". Starting from the
 left edge instead of now fails the test, as does ignoring Escape. Not
-yet tried with a screen reader. Stepping stops at the edge of the view
-rather than panning it; panning by keyboard would be its own change.
+yet tried with a screen reader.
+
+**Past the last sample in view, the view moves by half a span**, and
+the readout keeps the sample it was on, so the next press steps on from
+it. Without that, the rest of the forecast was the pointer's alone. The
+first version handed the keys back to Qt whenever no sample was in
+view, so a stretch with no data left them dead. They now move the view
+there too. Each of the three (no move, the readout dropped on a move,
+and dead keys with nothing in view) fails its test when sabotaged.

@@ -1376,7 +1376,8 @@ void bbq_forecast_graph::set_cursor_column(int column) {
  * -- heard what was happening now and nothing else. Left and Right step
  * it to the previous or next real sample, from now when none is parked,
  * which is what the readout snaps to anyway; Escape puts it away. The
- * description follows on the next paint.
+ * description follows on the next paint. Past the last sample in view
+ * the view moves on by half a span.
  */
 void bbq_forecast_graph::keyPressEvent(QKeyEvent *event) {
 	const int key = event->key();
@@ -1384,7 +1385,7 @@ void bbq_forecast_graph::keyPressEvent(QKeyEvent *event) {
 		set_cursor_column(-1);
 		return;
 	}
-	if ((key != Qt::Key_Left && key != Qt::Key_Right) || m_knot_columns.empty()) {
+	if (key != Qt::Key_Left && key != Qt::Key_Right) {
 		QWidget::keyPressEvent(event);
 		return;
 	}
@@ -1413,6 +1414,28 @@ void bbq_forecast_graph::keyPressEvent(QKeyEvent *event) {
 	}
 	if (next >= 0) {
 		set_cursor_column(next);
+		return;
+	}
+
+	/*
+	 * NOTHING FURTHER IN VIEW: the view moves by half its span, and the
+	 * readout stays on the sample it was on, nearer the middle now, so
+	 * the next press steps on from it. Without this a keyboard reader
+	 * reached the edge of the screenful and the rest of the forecast was
+	 * the pointer's. Also how the keys get out of a stretch with no
+	 * data in it at all.
+	 */
+	if (m_plot.width() <= 0) {
+		return;
+	}
+	const qint64 span = view_span_s();
+	const qint64 was = view_from_utc();
+	set_view(was + (key == Qt::Key_Right ? span / 2 : -span / 2), span);
+	if (m_cursor_column >= 0) {
+		const double per_pixel = double(span) / m_plot.width();
+		const int moved = int((view_from_utc() - was) / per_pixel);
+		const int kept = m_cursor_column - moved;
+		set_cursor_column(kept >= 0 && kept < m_plot.width() ? kept : -1);
 	}
 }
 

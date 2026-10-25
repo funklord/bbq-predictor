@@ -105,6 +105,7 @@ private slots:
 	void a_parked_readout_does_not_cross_the_scale_labels();
 	void a_screen_reader_is_told_the_reading();
 	void the_keys_step_the_readout_between_samples();
+	void the_keys_carry_the_view_past_its_edge();
 
 	/*
 	 * A grilling window's edge rules, and the clipping (sec 16.30.1).
@@ -1857,6 +1858,60 @@ void test_view::the_keys_step_the_readout_between_samples() {
 	QCOMPARE(graph.cursor_column(), -1);
 	render_of(graph);
 	QVERIFY(!graph.accessibleDescription().contains(QStringLiteral("At the cursor")));
+}
+
+/*
+ * Past the last sample in view the view moves on by half a span, and the
+ * readout keeps the sample it had, so the next press steps on (sec
+ * 16.129) -- else the rest of the forecast was the pointer's alone. And
+ * a view with no data in it at all must not leave the keys dead.
+ */
+void test_view::the_keys_carry_the_view_past_its_edge() {
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	const qint64 hour = now - now % 3600;
+	std::vector<bbq_sample> samples;
+	for (int i = -24; i < 24; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 10.0;
+		samples.push_back(sample);
+	}
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(bbq_utc());
+	band.set_samples(std::move(samples));
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+
+	bbq_forecast_graph graph;
+	graph.set_composite(composite);
+	graph.resize(600, 300);
+	const qint64 span = 6 * 3600;
+	graph.set_view(now - 3 * 3600, span);
+	render_of(graph);
+
+	const qint64 start = graph.view_from_utc();
+	int presses = 0;
+	while (graph.view_from_utc() == start && presses < 20) {
+		QTest::keyClick(&graph, Qt::Key_Right);
+		render_of(graph);
+		++presses;
+	}
+	QCOMPARE(graph.view_from_utc(), start + span / 2);
+	const int kept = graph.cursor_column();
+	QVERIFY2(kept >= 0 && kept < graph.plot_rect().width() / 2 + 5,
+	         qPrintable(QStringLiteral("the readout sat at %1 after the move").arg(kept)));
+
+	QTest::keyClick(&graph, Qt::Key_Right);
+	QVERIFY(graph.cursor_column() > kept);
+
+	/* A stretch with nothing in it: the keys still move the view. */
+	graph.set_cursor_column(-1);
+	graph.set_view(now + 30 * 86400, span);
+	render_of(graph);
+	const qint64 empty = graph.view_from_utc();
+	QTest::keyClick(&graph, Qt::Key_Left);
+	QCOMPARE(graph.view_from_utc(), empty - span / 2);
 }
 
 /*
