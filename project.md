@@ -7487,6 +7487,15 @@ before API 28.
   round is a damaged file on the server, and these two places are where
   that shows. Until then the refusal was a bare `continue`, and the
   month was fetched again every round without anyone knowing.
+- **A head that does not verify fails the round** (since 2026-10-25),
+  as a manifest or an index that does not verify already did. It was
+  dropped without a word and the round counted as a success. So the
+  server stayed healthy and scraping stayed off while the bands went
+  stale: nothing said why, and nothing ever fell back to the providers.
+  The test publishes a station whose manifest and index are the
+  server's and whose head is signed by another key. Against the old
+  code it counted no failure. A stored head that no longer verifies on
+  an offline launch, after a key change, is simply not shown.
 - **A month is held only once the archive has every row** (since
   2026-10-25). The count `record_observations` returns was discarded,
   so a month the archive refused (disk full, a busy database) was

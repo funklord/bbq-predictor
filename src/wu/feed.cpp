@@ -1682,16 +1682,15 @@ void bbq_wu_feed::start_server_round(qint64 now_utc) {
 	m_server->fetch({manifest, index, head});
 }
 
-void bbq_wu_feed::apply_head(const QByteArray &file, bool remember) {
-	QString why;
+bool bbq_wu_feed::apply_head(const QByteArray &file, bool remember, QString *why) {
 	bbq_wire_head head;
-	if (!bbq_wire_read_head(file, m_server_key, m_station_id, &head, &why)) {
-		return;
+	if (!bbq_wire_read_head(file, m_server_key, m_station_id, &head, why)) {
+		return false;
 	}
 
 	/* Never backwards: an older head than the one held is a replay or a stale cache. */
 	if (head.generated_utc < m_server_head_generated) {
-		return;
+		return true;
 	}
 	m_server_head = file;
 	m_server_head_generated = head.generated_utc;
@@ -1720,6 +1719,7 @@ void bbq_wu_feed::apply_head(const QByteArray &file, bool remember) {
 		m_history.set_state_value(QStringLiteral("head/") + m_station_id, file);
 	}
 	emit updated();
+	return true;
 }
 
 void bbq_wu_feed::server_round_done(const std::vector<bbq_server_result> &results) {
@@ -1765,8 +1765,18 @@ void bbq_wu_feed::server_round_done(const std::vector<bbq_server_result> &result
 
 	/* The head: applied when new, kept when unchanged. */
 	const bbq_server_result &head = results[2];
+	/*
+	 * A head that does not verify is no better than silence, as the
+	 * manifest above is. It was dropped without a word and the round
+	 * counted as a success, so the server stayed healthy and scraping
+	 * stayed off while the bands went stale with nothing saying why.
+	 */
 	if (head.status == bbq_server_status::ok) {
-		apply_head(head.file, true);
+		if (!apply_head(head.file, true, &why)) {
+			server_failed(now, tr("vibes.se sent a head that does not verify: %1").arg(why));
+			finish_one();
+			return;
+		}
 	} else if (head.status != bbq_server_status::unchanged) {
 		server_failed(now, tr("vibes.se has no head for %1").arg(m_station_id));
 		finish_one();
@@ -1989,8 +1999,10 @@ void bbq_wu_feed::load_server_state() {
 	 */
 	if (bbq_wire_station_valid(m_station_id)) {
 		const QByteArray head = m_history.state_value(QStringLiteral("head/") + m_station_id);
+		/* One that no longer verifies, under a new key, is simply not shown. */
+		QString unread;
 		if (!head.isEmpty()) {
-			apply_head(head, false);
+			apply_head(head, false, &unread);
 		}
 	}
 }

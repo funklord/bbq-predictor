@@ -46,6 +46,7 @@ private slots:
 	void a_station_the_server_has_since_added_is_taken_up();
 	void a_server_that_does_not_answer_is_counted_not_abandoned();
 	void a_file_signed_by_another_key_is_not_applied();
+	void a_head_that_does_not_verify_is_a_failure();
 	void no_key_means_no_server();
 	void the_keyless_bands_settle_quietly_when_unreachable();
 
@@ -85,6 +86,7 @@ void write(const QString &path, const QByteArray &bytes) {
 
 const QString station = QStringLiteral("ISTOCK877");
 const QString swapped = QStringLiteral("ISTOCK999");
+const QString forged = QStringLiteral("ISTOCK555");
 
 } // namespace
 
@@ -191,9 +193,27 @@ void test_feed_server::initTestCase() {
 		                    bbq_wire_head_body(swapped, 1789999000, {&hourly}, &why), m_key));
 	}
 
+	/*
+	 * A third whose manifest and index are the server's, and whose head
+	 * is signed by somebody else: what a damaged file or a substitution
+	 * looks like when only one file of the three is wrong.
+	 */
+	{
+		bbq_signing_key other;
+		uint8_t seed[32] = {7, 7};
+		other.set_seed(seed);
+		const QByteArray index_body = bbq_wire_index_body(forged, 1, {}, &why);
+		QVERIFY2(!index_body.isEmpty(), qPrintable(why));
+		write(dir + "/" + forged + "/index",
+		      bbq_wire_file(bbq_wire_kind::index, index_body, m_key));
+		write(dir + "/" + forged + "/head",
+		      bbq_wire_file(bbq_wire_kind::head,
+		                    bbq_wire_head_body(forged, 1789999000, {&hourly}, &why), other));
+	}
+
 	write(dir + "/stations",
 	      bbq_wire_file(bbq_wire_kind::stations,
-	                    bbq_wire_stations_body(1, {station, swapped}, &why), m_key));
+	                    bbq_wire_stations_body(1, {station, swapped, forged}, &why), m_key));
 
 	m_dir_fd = ::open(QFile::encodeName(dir).constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
 	m_listen_fd = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
@@ -485,6 +505,33 @@ void test_feed_server::a_file_signed_by_another_key_is_not_applied() {
 	QVERIFY(feed.composite().band(bbq_band::hourly) == nullptr);
 	QCOMPARE(feed.history().observation_months(station).size(), size_t(0));
 	QCOMPARE(feed.server_state().failures, 1);
+}
+
+/*
+ * The manifest and the index verify; the head does not. It was dropped
+ * without a word and the round counted as a success, so the server stayed
+ * healthy, scraping stayed off, and the bands went stale with nothing
+ * saying why and nothing ever falling back. A head that does not verify
+ * is no better than silence, as the manifest and the index already are.
+ */
+void test_feed_server::a_head_that_does_not_verify_is_a_failure() {
+	QTemporaryDir scratch;
+	bbq_wu_feed feed;
+	QVERIFY(feed.open_history(scratch.filePath("history.sqlite")));
+	feed.set_server(m_key.public_key(), {daemon(m_port)});
+	feed.set_station(forged);
+	QSignalSpy failed(&feed, &bbq_wu_feed::band_failed);
+	QVERIFY(settle(feed));
+
+	QVERIFY(feed.composite().band(bbq_band::hourly) == nullptr);
+	QCOMPARE(feed.server_state().failures, 1);
+	QCOMPARE(feed.server_state().last_success_utc, qint64(0));
+
+	bool named = false;
+	for (const QList<QVariant> &arguments : failed) {
+		named |= arguments.at(1).toString().contains(QLatin1String("head"));
+	}
+	QVERIFY2(named, "the failure did not say it was the head");
 }
 
 void test_feed_server::no_key_means_no_server() {

@@ -338,7 +338,11 @@ private:
 	void server_round_done(const std::vector<bbq_server_result> &results);
 	void months_done(const std::vector<bbq_server_result> &results);
 	void server_failed(qint64 now_utc, const QString &reason);
-	void apply_head(const QByteArray &file, bool remember);
+	/*
+	 * False, with why, for a head that does not verify; an older head
+	 * than the one held is not applied and is not a failure.
+	 */
+	bool apply_head(const QByteArray &file, bool remember, QString *why);
 	void load_server_state();
 	void save_server_state();
 
