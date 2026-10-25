@@ -1515,6 +1515,10 @@ is -- a ruler for the eye that costs no lines.
 
 ### 3.8.3 What the palette cost
 
+**Superseded on 2026-08-12 by e8253ed (sec 10.4)**, which added a dark
+palette beside this one and follows the desktop or the device. What
+follows is the state of 2026-08-07, kept for the trade it records.
+
 **The graph no longer follows the desktop into dark mode.** The colours
 were derived from `QPalette` before this and are fixed now.
 
@@ -3166,9 +3170,10 @@ attribution.
 Each of these needs a decision rather than a drift. None of them blocks
 anything.
 
-- **A dark-desktop variant**, given the measured palette is fixed and
-  light. A question about how the applet is actually used rather than
-  one this document can answer (sec 3.8.3)
+- ~~**A dark-desktop variant**, given the measured palette is fixed and
+  light.~~ Built five days after it was asked: light, dark and the
+  device's answer since e8253ed (sec 10.4), and the applet follows a
+  dark desktop, measured on this machine (sec 3.8.4)
 - **Packaging**, built rather than proposed since sec 15.11: two
   packages from `dpkg-buildpackage` with `dh`, installed, and booted on
   Devuan under sysvinit and under OpenRC (sec 15.12.5). Where the artifacts
