@@ -13436,6 +13436,40 @@ Fourth time today that reducing output before reading it produced a
 wrong answer, and the first where the wrong answer would have been a bug
 report about somebody else's device.
 
+### 16.85.2 The same strip, and the other labels in it
+
+Found 2026-10-25 by asking what else along the top of the plot the day
+names did not know about, and then LOOKING: a scratch render of the
+phone layout with a midnight placed at the left, at the right and with
+wind on.
+
+- **Day names through the axis labels.** On a phone the labels are
+  drawn inside the plot (sec 10.5), at the height the names use. A
+  midnight in the first few columns put "Mon 14" through "21 C". One in
+  the right fifth put it into "10 mm/h" and "100% rain", or under them
+  as fragments. The right-edge skip only caught a name that would leave
+  the plot. Such a name is now skipped, as the holder chose for the
+  reading. The comparison is letters against letters, not plates: a
+  name a few pixels right of "21 C" read fine, and the first version
+  dropped it.
+- **"12 km/h" printed over "10 mm/h", on every layout.** d2a90aa moved
+  the rain label to the top, where the wind's already was, so ticking
+  Wind left neither readable. Wind has its own row, under the chance's.
+- **The phone's wind label was white.** `edge_label` set `axis_text`
+  after drawing a plate, overriding the wind colour its caller had set.
+  It puts the caller's pen back now. Every caller sets one first; the
+  day names have done so since sec 16.90.
+
+Tested by rendering, not on a phone. The test compares each view with
+the same view twelve hours later, which keeps the hour ticks in place
+and has no midnight. Under a label only the divider's column may
+differ, and in open plot the name must appear too, which shows the test
+can see one. Turning wind on must change nothing beside the rain and
+chance labels, and on a phone what it adds must be the wind's colour.
+Each of the three fixes, removed in turn, fails its check. The
+right-hand case was proved separately, by running it first, because the
+loop stops at its first failure.
+
 
 ## 16.86 A second archive, and what it says about the correction
 

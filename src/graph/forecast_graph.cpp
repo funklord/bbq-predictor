@@ -2173,12 +2173,19 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			QColor plate = m_palette.background;
 			plate.setAlpha(200);
 
+			/*
+			 * The caller's pen back after the plate, not axis_text: the
+			 * wind's label is drawn in the wind's colour and came out
+			 * white on a phone. Every caller sets its pen first (sec
+			 * 16.90 made the day names do so).
+			 */
+			const QPen pen = painter.pen();
 			painter.setPen(Qt::NoPen);
 			painter.setBrush(plate);
 			painter.drawRect(QRectF(left - 3, box.top(), text_wide + 6,
 			                        box.height()));
 			painter.setBrush(Qt::NoBrush);
-			painter.setPen(m_palette.axis_text);
+			painter.setPen(pen);
 		}
 
 		painter.drawText(box, align | Qt::AlignVCenter, text);
@@ -3251,6 +3258,58 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * same translucent plate the edge labels use. A divider without a
 	 * name only says "something changed here".
 	 */
+	/*
+	 * The axis labels' texts, made here rather than where they are drawn
+	 * because the day names below have to know where they will sit.
+	 */
+	const QString high_text = QString::number(temperature_high, 'f', 0) + tr(" C");
+	const QString low_text = QString::number(temperature_low, 'f', 0) + tr(" C");
+
+	/*
+	 * The top of the rain scale, which is now a constant and so says
+	 * something about the world rather than about this screenful. The
+	 * "+" appears only when the trace has actually been clamped, so it
+	 * is a statement about the data in view rather than decoration.
+	 */
+	const bool rain_clipped = rain_peak > rain_full_scale_mm_h;
+	const QString rain_text =
+	        QString::number(rain_full_scale_mm_h, 'f', 0) +
+	        (rain_clipped ? QStringLiteral("+") : QString()) + tr(" mm/h");
+	const QString chance_text = tr("100% rain");
+	const QString wind_text = QString::number(wind_high, 'f', 0) + tr(" km/h");
+
+	/* The right-hand column, one scale a row from the top. */
+	const double right_row = gutter.height();
+	const double rain_row_y = plot.top() - 2;
+	const double chance_row_y = rain_row_y + right_row;
+	const double wind_row_y = chance_row_y + right_row;
+
+	/*
+	 * Where edge_label puts a text's letters, measured the same way.
+	 * The letters rather than the plate: two plates may touch, and only
+	 * letters crossing letters are unreadable -- a name a few pixels
+	 * right of "21 C" read fine and must not be dropped.
+	 */
+	const auto label_ink = [&](double x, double y, double wide, Qt::Alignment align,
+	                           const QString &text) {
+		const double text_wide = QFontMetrics(label_font).horizontalAdvance(text);
+		const double left =
+		        align.testFlag(Qt::AlignRight) ? x + wide - text_wide : x;
+		return QRectF(left, y, text_wide, 14);
+	};
+
+	std::vector<QRectF> top_labels;
+	top_labels.push_back(label_ink(left_label_x, plot.top() - 2, left_label_wide,
+	                               left_align, high_text));
+	top_labels.push_back(label_ink(right_label_x, rain_row_y, right_label_wide,
+	                               right_align, rain_text));
+	top_labels.push_back(label_ink(right_label_x, chance_row_y, right_label_wide,
+	                               right_align, chance_text));
+	if (m_show_wind) {
+		top_labels.push_back(label_ink(right_label_x, wind_row_y, right_label_wide,
+		                               right_align, wind_text));
+	}
+
 	if (!midnights.empty() && !days_would_crowd) {
 		painter.setFont(label_font);
 
@@ -3275,6 +3334,23 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			const QRectF plate(x + 1, plot.top() + 2,
 			                   day_measured.horizontalAdvance(name) + 6, 14);
 			if (m_kept_clear.intersects(plate)) {
+				continue;
+			}
+
+			/*
+			 * Or under an axis label. On a phone the labels are drawn
+			 * inside the plot (sec 10.5), at the height the names use,
+			 * and a midnight near either edge put "Mon 14" through
+			 * "21 C" or "10 mm/h". Skipped for the same reason as the
+			 * two above. In the desktop's gutters no label meets a name.
+			 */
+			const QRectF letters(x + 4, plot.top() + 2,
+			                     day_measured.horizontalAdvance(name), 14);
+			bool under_label = false;
+			for (const QRectF &label : top_labels) {
+				under_label = under_label || label.intersects(letters);
+			}
+			if (under_label) {
 				continue;
 			}
 
@@ -3306,10 +3382,11 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 * it stopped stroking one line per column for speed, at
 			 * which point the names inherited the GRID colour instead
 			 * and went visibly dim. The overlay path -- the phone and
-			 * the home-screen picture -- sets axis_text inside
-			 * edge_label and was right all along, so this makes the
-			 * desktop agree with the phone rather than inventing an
-			 * answer.
+			 * the home-screen picture -- then set axis_text inside
+			 * edge_label and was right, so this made the desktop agree
+			 * with the phone. edge_label has since stopped setting it,
+			 * to keep the wind's colour, so this line is what colours
+			 * the names on every layout.
 			 */
 			painter.setPen(m_palette.axis_text);
 
@@ -3495,9 +3572,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	/* --- axis labels --------------------------------------------------- */
 	painter.setPen(m_palette.axis_text);
 
-	const QString high_text = QString::number(temperature_high, 'f', 0) + tr(" C");
-	const QString low_text = QString::number(temperature_low, 'f', 0) + tr(" C");
-
 	edge_label(left_label_x, plot.top() - 2, left_label_wide, left_align,
 	           high_text);
 	edge_label(left_label_x, plot.bottom() - 12, left_label_wide, left_align,
@@ -3507,36 +3581,27 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	           left_label_wide, left_align, clock);
 
 	/*
-	 * The top of the rain scale, which is now a constant and so says
-	 * something about the world rather than about this screenful. The
-	 * "+" appears only when the trace has actually been clamped, so it
-	 * is a statement about the data in view rather than decoration.
-	 */
-	const bool rain_clipped = rain_peak > rain_full_scale_mm_h;
-	const QString rain_text =
-	        QString::number(rain_full_scale_mm_h, 'f', 0) +
-	        (rain_clipped ? QStringLiteral("+") : QString()) + tr(" mm/h");
-
-	/*
 	 * At the top, because that is where full scale now is. It sat at
 	 * 45% of the height while the rain trace did.
 	 */
-	edge_label(right_label_x, plot.top() - 2, right_label_wide, right_align,
-	           rain_text);
+	edge_label(right_label_x, rain_row_y, right_label_wide, right_align, rain_text);
 
 	/*
 	 * And the chance's ceiling directly under it: both are full-height
 	 * scales now, so both are labelled where they top out.
 	 */
-	edge_label(right_label_x, plot.top() - 2 + gutter.height(),
-	           right_label_wide, right_align, tr("100% rain"));
+	edge_label(right_label_x, chance_row_y, right_label_wide, right_align, chance_text);
 
+	/*
+	 * A ROW OF ITS OWN, under the chance's. It was drawn into the rain
+	 * label's own box, which was free when rain was labelled at 45% of
+	 * the height; d2a90aa moved rain to the top and left wind where it
+	 * was, so ticking Wind printed "12 km/h" over "10 mm/h" and neither
+	 * could be read, on every layout.
+	 */
 	if (m_show_wind) {
-		const QString wind_text = QString::number(wind_high, 'f', 0) + tr(" km/h");
-
 		painter.setPen(m_palette.wind);
-		edge_label(right_label_x, plot.top() - 2, right_label_wide, right_align,
-		           wind_text);
+		edge_label(right_label_x, wind_row_y, right_label_wide, right_align, wind_text);
 		painter.setPen(m_palette.axis_text);
 	}
 }

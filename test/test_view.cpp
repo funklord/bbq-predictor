@@ -100,6 +100,8 @@ private slots:
 	 */
 	void the_ground_is_painted_unless_it_is_turned_off();
 	void no_day_name_is_drawn_where_the_reading_goes();
+	void no_day_name_is_drawn_under_an_axis_label();
+	void the_wind_scale_has_a_row_of_its_own();
 
 	/*
 	 * A grilling window's edge rules, and the clipping (sec 16.30.1).
@@ -1494,6 +1496,188 @@ void test_view::no_day_name_is_drawn_where_the_reading_goes() {
 	/* And kept clear of nothing, the name comes back. */
 	graph.set_kept_clear(QRectF());
 	QCOMPARE(shot(), named);
+}
+
+namespace {
+
+/* Flat weather around one midnight, so the scales are the same in every view. */
+bbq_composite flat_day(qint64 midnight) {
+	std::vector<bbq_sample> samples;
+	for (int i = -48; i < 48; ++i) {
+		bbq_sample sample;
+		sample.start_utc = midnight + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 15.0;
+		sample.precip_rate = 1.0;
+		sample.precip_chance = 40.0;
+		sample.wind_kph = 12.0;
+		samples.push_back(sample);
+	}
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_zone(bbq_utc());
+	band.set_samples(std::move(samples));
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	return composite;
+}
+
+QImage render_of(bbq_forecast_graph &graph) {
+	QImage image(graph.size(), QImage::Format_ARGB32_Premultiplied);
+	image.fill(Qt::black);
+	graph.render(&image, QPoint(), QRegion(), QWidget::DrawChildren);
+	return image;
+}
+
+} // namespace
+
+/*
+ * On a phone the axis labels are drawn inside the plot (sec 10.5), at
+ * the height the day names use, and a midnight near either edge put
+ * "Mon 14" through "21 C" or "10 mm/h". Such a name is left out.
+ *
+ * Each view is compared with the same view twelve hours later: the hour
+ * ticks fall in the same places, the flat weather draws the same, and no
+ * midnight is in it -- so along the top the two differ by the divider
+ * and by the name, if one was drawn. Under a label only the divider's
+ * column may differ. In open plot the name must show as well, which is
+ * what proves this can see a name at all.
+ */
+void test_view::no_day_name_is_drawn_under_an_axis_label() {
+	const qint64 midnight = 1600041600; /* 2020-09-14 00:00 UTC */
+	bbq_forecast_graph graph;
+	graph.set_layout(bbq_layout::mobile);
+	graph.set_composite(flat_day(midnight));
+	graph.resize(400, 300);
+	const qint64 span = 12 * 3600;
+	graph.set_view(midnight - span / 2, span);
+	render_of(graph);
+	const QRect plot = graph.plot_rect();
+	QVERIFY(plot.width() > 300);
+
+	for (const int at : {6, plot.width() - 100, plot.width() / 4}) {
+		const bool open_plot = at == plot.width() / 4;
+		const qint64 from = midnight - qint64(at) * span / plot.width();
+
+		graph.set_view(from, span);
+		const QImage with_midnight = render_of(graph);
+		graph.set_view(from + span, span);
+		const QImage without = render_of(graph);
+
+		int divider = 0;
+		int elsewhere = 0;
+		for (int y = qMax(0, plot.top() - 2); y < plot.top() + 16; ++y) {
+			for (int x = 0; x < graph.width(); ++x) {
+				if (with_midnight.pixel(x, y) != without.pixel(x, y)) {
+					++(qAbs(x - (plot.left() + at)) <= 1 ? divider : elsewhere);
+				}
+			}
+		}
+		const QString where = QStringLiteral("midnight at column %1").arg(at);
+		QVERIFY2(divider > 0, qPrintable(where + QStringLiteral(": no divider drawn")));
+		if (open_plot) {
+			QVERIFY2(elsewhere > 20, qPrintable(where + QStringLiteral(": no name drawn")));
+		} else {
+			QVERIFY2(elsewhere == 0,
+			         qPrintable(where + QStringLiteral(": a name was drawn under a "
+			                                           "label, %1 pixels")
+			                                    .arg(elsewhere)));
+		}
+	}
+}
+
+/*
+ * The wind's maximum was drawn into the rain label's own box: d2a90aa
+ * moved rain to the top and left wind where it was, so ticking Wind
+ * printed "12 km/h" over "10 mm/h" and neither could be read. With a row
+ * of its own, turning wind on changes nothing in the gutter beside the
+ * rain and chance labels, and adds a label below them.
+ */
+void test_view::the_wind_scale_has_a_row_of_its_own() {
+	const qint64 midnight = 1600041600;
+	bbq_forecast_graph graph;
+	graph.set_layout(bbq_layout::desktop);
+	graph.set_composite(flat_day(midnight));
+	graph.resize(600, 300);
+	graph.set_view(midnight + 3600, 12 * 3600);
+
+	const QImage calm = render_of(graph);
+	graph.set_show_wind(true);
+	const QImage windy = render_of(graph);
+	const QRect plot = graph.plot_rect();
+	QVERIFY(plot.right() < graph.width() - 30);
+
+	/* The two rows already there, found in the calm picture: the gutter's inked rows. */
+	int labels_bottom = -1;
+	for (int y = 0; y < plot.top() + plot.height() / 3; ++y) {
+		for (int x = plot.right() + 2; x < graph.width(); ++x) {
+			if (calm.pixel(x, y) != calm.pixel(graph.width() - 1, graph.height() / 2)) {
+				labels_bottom = y;
+			}
+		}
+	}
+	QVERIFY(labels_bottom > plot.top());
+
+	int beside = 0;
+	int below = 0;
+	for (int y = 0; y < plot.top() + plot.height() / 2; ++y) {
+		for (int x = plot.right() + 2; x < graph.width(); ++x) {
+			if (calm.pixel(x, y) != windy.pixel(x, y)) {
+				++(y <= labels_bottom ? beside : below);
+			}
+		}
+	}
+	QCOMPARE(beside, 0);
+	QVERIFY2(below > 20, "no wind label was drawn");
+
+	/*
+	 * And in the wind's colour on a phone, where the labels sit on
+	 * plates inside the plot: edge_label set axis_text after drawing a
+	 * plate, so the wind's label came out the colour of every other
+	 * label. What the label adds there is wind-coloured, and none of it
+	 * is the axis text's.
+	 */
+	bbq_forecast_graph phone;
+	phone.set_layout(bbq_layout::mobile);
+	phone.set_composite(flat_day(midnight));
+	phone.resize(400, 300);
+	phone.set_view(midnight + 3600, 12 * 3600);
+	const QImage phone_calm = render_of(phone);
+	phone.set_show_wind(true);
+	const QImage phone_windy = render_of(phone);
+	const QRect phone_plot = phone.plot_rect();
+	const QRgb axis = phone.palette_colours().axis_text.rgb();
+	const QRgb wind = phone.palette_colours().wind.rgb();
+
+	/* Near rather than equal: the letters land a shade off their pen. */
+	const auto near = [](QRgb a, QRgb b) {
+		return qAbs(qRed(a) - qRed(b)) + qAbs(qGreen(a) - qGreen(b)) +
+		               qAbs(qBlue(a) - qBlue(b)) <
+		       16;
+	};
+
+	int text_rows_bottom = -1;
+	for (int y = 0; y < phone_plot.top() + phone_plot.height() / 3; ++y) {
+		for (int x = phone_plot.right() - 60; x <= phone_plot.right(); ++x) {
+			if (near(phone_calm.pixel(x, y), axis)) {
+				text_rows_bottom = y;
+			}
+		}
+	}
+	QVERIFY(text_rows_bottom > 0);
+
+	int axis_coloured = 0;
+	int wind_coloured = 0;
+	for (int y = text_rows_bottom + 1; y < text_rows_bottom + 18; ++y) {
+		for (int x = phone_plot.right() - 60; x <= phone_plot.right(); ++x) {
+			if (phone_calm.pixel(x, y) == phone_windy.pixel(x, y)) {
+				continue;
+			}
+			axis_coloured += near(phone_windy.pixel(x, y), axis) ? 1 : 0;
+			wind_coloured += near(phone_windy.pixel(x, y), wind) ? 1 : 0;
+		}
+	}
+	QCOMPARE(axis_coloured, 0);
+	QVERIFY2(wind_coloured > 5, "the phone's wind label is not in the wind's colour");
 }
 
 /*
