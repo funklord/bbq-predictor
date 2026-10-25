@@ -99,7 +99,7 @@ QString bbq_tray_icon::reading_label(const bbq_composite &composite) {
 		return QStringLiteral("--");
 	}
 
-	return QString::number(*sample.temperature, 'f', 0);
+	return bbq_format_temperature(*sample.temperature, 0);
 }
 
 void bbq_tray_icon::show_state(const bbq_composite &composite,
@@ -141,7 +141,7 @@ void bbq_tray_icon::show_state(const bbq_composite &composite,
 	QString detail;
 
 	if (reading.is_valid() && sample.temperature.has_value()) {
-		detail = QString::number(*sample.temperature, 'f', 1);
+		detail = bbq_format_temperature(*sample.temperature, 1);
 		detail += QStringLiteral(" C from ");
 		detail += QString::fromLatin1(bbq_band_name(reading.series->band()));
 	} else {

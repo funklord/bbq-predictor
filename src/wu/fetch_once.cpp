@@ -65,7 +65,7 @@ QString describe_reading(const bbq_composite &composite, qint64 when_utc) {
 	QString text;
 
 	if (reading.sample->temperature.has_value()) {
-		text += QString::number(*reading.sample->temperature, 'f', 1);
+		text += bbq_format_temperature(*reading.sample->temperature, 1);
 		text += QStringLiteral(" C");
 	} else {
 		text += QStringLiteral("-- C");

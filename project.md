@@ -16753,3 +16753,22 @@ The package id on the device is `se.vibes.bbq_predictor`, underscore,
 where sec 0 states `se.vibes.bbq-predictor` -- an Android package name
 cannot carry a hyphen. Worth knowing before typing it into `run-as` or
 `dumpsys`, where the hyphenated form silently matches nothing.
+
+## 16.125 A hair under freezing read "-0"
+
+`QString::number(-0.3, 'f', 0)` is "-0", and -0.04 to one place is
+"-0.0": Qt keeps the sign of a value that rounds to nought. Measured
+with Qt 6.8 before anything changed. So between -0.5 and 0 the tray
+icon said "-0". So did the home-screen widget, whose reading is the
+tray's label, and so did the graph's axis label whenever its padded low
+end fell there. The tooltip, the readout and `--fetch-once` said "-0.0"
+just under. Around freezing is ordinary weather where this applet is
+used.
+
+`bbq_format_temperature` in `src/model/units.cpp` formats a temperature
+and drops the sign when every digit is nought. All five places that
+print one use it. Rain, chance and wind cannot be negative and keep
+their own formatting. The unit test asserts both sides of the rounding.
+A second test asserts the wiring, through the tray label that also
+feeds the widget. Reverting only the tray to `QString::number` fails
+that test with "-0".

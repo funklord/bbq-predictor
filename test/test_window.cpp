@@ -100,6 +100,7 @@ private slots:
 	void an_unscored_lead_does_not_claim_the_archive_is_empty();
 	void the_tray_says_how_old_its_reading_is();
 	void the_tray_reads_the_owner_of_now_not_the_finest_band();
+	void the_tray_says_nought_not_minus_nought();
 	void a_dry_spell_is_not_a_rain_forecast_with_no_skill();
 
 private:
@@ -1007,6 +1008,24 @@ void test_window::the_tray_says_how_old_its_reading_is() {
 	QVERIFY2(tray.toolTip().contains(QStringLiteral("STALE")),
 	         qPrintable(QStringLiteral("three hours old and the tray does not "
 	                                   "say stale: %1").arg(tray.toolTip())));
+}
+
+/*
+ * The tray's label is the home-screen widget's reading as well, and it
+ * said "-0" a hair under freezing (bbq_format_temperature).
+ */
+void test_window::the_tray_says_nought_not_minus_nought() {
+	const qint64 now = QDateTime::currentSecsSinceEpoch();
+	bbq_sample sample;
+	sample.start_utc = now - 1800;
+	sample.duration_s = 3600;
+	sample.temperature = -0.3;
+	bbq_series hourly(bbq_band::hourly, QStringLiteral("test"));
+	hourly.set_samples({sample});
+	bbq_composite composite;
+	composite.set_series(std::move(hourly));
+
+	QCOMPARE(bbq_tray_icon::reading_label(composite), QStringLiteral("0"));
 }
 
 void test_window::the_tray_reads_the_owner_of_now_not_the_finest_band() {

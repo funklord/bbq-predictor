@@ -18,6 +18,7 @@ class test_model : public QObject {
 private slots:
 	void a_span_is_said_in_units_a_reader_thinks_in();
 	void a_near_neighbour_is_not_zero_kilometres_away();
+	void a_temperature_a_hair_below_freezing_is_not_minus_zero();
 	void samples_are_sorted_on_the_way_in();
 	void a_span_that_ended_does_not_cover_now();
 	void range_takes_overlaps_not_containment();
@@ -464,6 +465,24 @@ void test_model::a_span_is_said_in_units_a_reader_thinks_in() {
  * The boundary is asserted from both sides for the reason the duration
  * test gives: a unit switch is where an off-by-one lives.
  */
+/*
+ * Qt keeps the sign of a value that rounds to nought: -0.3 to no places
+ * is "-0", and -0.04 to one is "-0.0". The tray, the widget and the
+ * graph's axis all said "-0" a hair under freezing.
+ */
+void test_model::a_temperature_a_hair_below_freezing_is_not_minus_zero() {
+	QCOMPARE(bbq_format_temperature(-0.3, 0), QStringLiteral("0"));
+	QCOMPARE(bbq_format_temperature(-0.04, 1), QStringLiteral("0.0"));
+	QCOMPARE(bbq_format_temperature(-0.0, 0), QStringLiteral("0"));
+
+	/* And every real minus stays, from just past the rounding up. */
+	QCOMPARE(bbq_format_temperature(-0.5, 0), QStringLiteral("-1"));
+	QCOMPARE(bbq_format_temperature(-0.06, 1), QStringLiteral("-0.1"));
+	QCOMPARE(bbq_format_temperature(-12.0, 0), QStringLiteral("-12"));
+	QCOMPARE(bbq_format_temperature(-10.04, 1), QStringLiteral("-10.0"));
+	QCOMPARE(bbq_format_temperature(21.6, 0), QStringLiteral("22"));
+}
+
 void test_model::a_near_neighbour_is_not_zero_kilometres_away() {
 	/* The case that prompted it. */
 	QCOMPARE(bbq_describe_distance(0.0), QStringLiteral("0 m"));

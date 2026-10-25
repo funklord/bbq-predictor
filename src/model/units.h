@@ -46,4 +46,16 @@ QString bbq_describe_duration(qint64 seconds);
  */
 QString bbq_describe_distance(double km);
 
+/*
+ * A temperature's number, to `decimals` places, with no unit.
+ *
+ * QString::number(-0.3, 'f', 0) is "-0", and -0.04 to one place is
+ * "-0.0": the sign of a value that rounds to nought is kept, so a
+ * thermometer a hair under freezing read "-0" in the tray, on the
+ * home-screen widget and at the foot of the graph. Freezing is ordinary
+ * weather where this is used, so the sign goes wherever the digits are
+ * all zero.
+ */
+QString bbq_format_temperature(double celsius, int decimals);
+
 #endif

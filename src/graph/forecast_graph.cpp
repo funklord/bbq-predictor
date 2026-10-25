@@ -3,6 +3,7 @@
 #include "graph/simplify.h"
 #include "graph/ticks.h"
 
+#include "model/units.h"
 #include "ui/theme.h"
 
 #include <QDateTime>
@@ -3262,8 +3263,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	 * The axis labels' texts, made here rather than where they are drawn
 	 * because the day names below have to know where they will sit.
 	 */
-	const QString high_text = QString::number(temperature_high, 'f', 0) + tr(" C");
-	const QString low_text = QString::number(temperature_low, 'f', 0) + tr(" C");
+	const QString high_text = bbq_format_temperature(temperature_high, 0) + tr(" C");
+	const QString low_text = bbq_format_temperature(temperature_low, 0) + tr(" C");
 
 	/*
 	 * The top of the rain scale, which is now a constant and so says
@@ -3489,7 +3490,7 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			                                    zone));
 
 			if (c.knot_has_temperature) {
-				parts.append(QString::number(c.knot_temperature, 'f', 1) +
+				parts.append(bbq_format_temperature(c.knot_temperature, 1) +
 				             tr(" C"));
 			}
 			if (c.knot_has_rain) {

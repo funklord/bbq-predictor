@@ -55,3 +55,17 @@ QString bbq_describe_distance(double km) {
 	return QCoreApplication::translate("bbq_units", "%1 km")
 	        .arg(QString::number(km, 'f', 1));
 }
+
+QString bbq_format_temperature(double celsius, int decimals) {
+	QString text = QString::number(celsius, 'f', decimals);
+	if (text.startsWith(QLatin1Char('-'))) {
+		bool nought = true;
+		for (int i = 1; i < text.size(); ++i) {
+			nought = nought && (text.at(i) == QLatin1Char('0') || text.at(i) == QLatin1Char('.'));
+		}
+		if (nought) {
+			text.remove(0, 1);
+		}
+	}
+	return text;
+}
