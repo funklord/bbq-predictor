@@ -3555,7 +3555,24 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			const double box_x = bbq_readout_box_x(
 			        px, box_w, plot.left(), plot.right());
 
-			const QRectF box(box_x, plot.top() + 4, box_w, box_h);
+			/*
+			 * BELOW THE SCALE LABELS IT WOULD CROSS (sec 16.85.3). On
+			 * a phone they are drawn inside the plot and after this, so
+			 * a readout parked near the right edge had "10 mm/h" and
+			 * "100% rain" printed through it and neither could be read
+			 * -- and a phone's readout stays parked (sec 16.35). Drawn
+			 * on top instead it would hide the scales; moved down it
+			 * keeps both. On the desktop the labels are in the gutters
+			 * and never in its way.
+			 */
+			double box_y = plot.top() + 4;
+			for (const QRectF &label : top_labels) {
+				if (label.left() < box_x + box_w && label.right() > box_x) {
+					box_y = std::max(box_y, label.bottom() + 2);
+				}
+			}
+
+			const QRectF box(box_x, box_y, box_w, box_h);
 			painter.setPen(m_palette.readout_edge);
 			painter.setBrush(m_palette.readout_back);
 			painter.drawRoundedRect(box, 3, 3);

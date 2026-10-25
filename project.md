@@ -13470,6 +13470,29 @@ Each of the three fixes, removed in turn, fails its check. The
 right-hand case was proved separately, by running it first, because the
 loop stops at its first failure.
 
+### 16.85.3 A parked readout under the scale labels
+
+Found by the same renders, with the cursor parked at a few columns
+across the phone layout. The readout box sits at the top of the plot
+and the scale labels are drawn after it. So one parked near the right
+edge had "10 mm/h", "100% rain" and the wind's maximum printed through
+it, and neither the readout nor the scales could be read. A phone's
+readout stays parked where the finger left it (sec 16.35), so this was
+not a passing glitch.
+
+Drawing the readout on top would have hidden the scales instead. It
+moves down, to just below whichever labels it would cross. A readout
+in open plot stays at the top, and on the desktop the labels are in the
+gutters, so nothing changes there. A side effect, seen in the renders:
+the moved box no longer covers the day name beside it.
+
+The test parks the readout near the right edge and requires that
+nothing changes where the labels are, apart from the cursor's own line.
+That line snaps to the nearest real sample rather than the column asked
+for, and the test's first version failed on it, so the line is now
+found as whatever differs near the bottom of the plot. With the box
+pinned back at the top, 1578 label pixels change and the test fails.
+
 
 ## 16.86 A second archive, and what it says about the correction
 

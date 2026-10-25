@@ -102,6 +102,7 @@ private slots:
 	void no_day_name_is_drawn_where_the_reading_goes();
 	void no_day_name_is_drawn_under_an_axis_label();
 	void the_wind_scale_has_a_row_of_its_own();
+	void a_parked_readout_does_not_cross_the_scale_labels();
 
 	/*
 	 * A grilling window's edge rules, and the clipping (sec 16.30.1).
@@ -1678,6 +1679,76 @@ void test_view::the_wind_scale_has_a_row_of_its_own() {
 	}
 	QCOMPARE(axis_coloured, 0);
 	QVERIFY2(wind_coloured > 5, "the phone's wind label is not in the wind's colour");
+}
+
+/*
+ * On a phone the scale labels are drawn inside the plot and after the
+ * readout, so a readout parked near the right edge had "10 mm/h" and
+ * "100% rain" printed through it, and a phone's readout stays parked
+ * (sec 16.35). It moves down below the labels it would cross. So parking
+ * it changes nothing where the labels are, except the cursor's own
+ * column; the readout still appears, lower down.
+ */
+void test_view::a_parked_readout_does_not_cross_the_scale_labels() {
+	const qint64 midnight = 1600041600;
+	bbq_forecast_graph graph;
+	graph.set_layout(bbq_layout::mobile);
+	graph.set_composite(flat_day(midnight));
+	graph.set_show_wind(true);
+	graph.resize(400, 300);
+	graph.set_view(midnight + 3600, 12 * 3600);
+
+	const QImage free = render_of(graph);
+	const QRect plot = graph.plot_rect();
+	const int column = plot.width() - 6;
+	graph.set_cursor_column(column);
+	const QImage parked = render_of(graph);
+
+	/* The labels' rows, from where the free picture has the axis text. */
+	const QRgb axis = graph.palette_colours().axis_text.rgb();
+	const auto near = [](QRgb a, QRgb b) {
+		return qAbs(qRed(a) - qRed(b)) + qAbs(qGreen(a) - qGreen(b)) +
+		               qAbs(qBlue(a) - qBlue(b)) <
+		       16;
+	};
+	const int labels_left = plot.right() - 70;
+	int labels_bottom = -1;
+	for (int y = 0; y < plot.top() + plot.height() / 3; ++y) {
+		for (int x = labels_left; x <= plot.right(); ++x) {
+			if (near(free.pixel(x, y), axis)) {
+				labels_bottom = y;
+			}
+		}
+	}
+	QVERIFY(labels_bottom > plot.top());
+
+	/*
+	 * The cursor's own line, which snaps to the nearest real sample
+	 * rather than sitting on the column asked for: found as what differs
+	 * near the bottom of the plot, where nothing but the line reaches.
+	 */
+	QSet<int> cursor_line;
+	const int low = plot.bottom() - plot.height() / 8;
+	for (int x = 0; x < graph.width(); ++x) {
+		if (free.pixel(x, low) != parked.pixel(x, low) ||
+		    free.pixel(x, low - 1) != parked.pixel(x, low - 1)) {
+			cursor_line << x - 1 << x << x + 1;
+		}
+	}
+	QVERIFY(!cursor_line.isEmpty());
+
+	int crossed = 0;
+	int readout = 0;
+	for (int y = 0; y < plot.top() + plot.height() / 2; ++y) {
+		for (int x = labels_left; x <= plot.right(); ++x) {
+			if (cursor_line.contains(x) || free.pixel(x, y) == parked.pixel(x, y)) {
+				continue;
+			}
+			++(y <= labels_bottom + 1 ? crossed : readout);
+		}
+	}
+	QCOMPARE(crossed, 0);
+	QVERIFY2(readout > 20, "no readout was drawn");
 }
 
 /*
