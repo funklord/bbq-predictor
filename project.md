@@ -7467,7 +7467,18 @@ five minutes, `month_body::required()` calling 95 bytes complete at 82,
 then calling those 82 truncated and asking for 87. With month_body left
 out, `head_body` did the same on 13 bytes, complete at 10 and then
 truncated asking for 11, so it is not one struct's fault. Both were
-sent to situ with their inputs (its inbox, 20261026T1249Z and T1317Z). The case is off by default, since it
+sent to situ with their inputs (its inbox, 20261026T1249Z and T1317Z). situ
+recorded both as its 26.693 and agrees the fault is real: `need` must
+never fall as `have` rises (its reply 20261026T1455Z, recorded here and
+deleted). **It corrected one of the case's four invariants**, that the
+`need` bytes alone answer complete with the same `need`. situ says that
+is not its contract: `required()` gives a lower bound that can rise as
+bytes arrive, and all six of its own prefix-swept shapes break it. The
+other three are its contract, and it quotes them verbatim. Three shapes
+it guessed at did not reproduce the fall, so it asked for this schema;
+the reply gives the path and the commit to pin it to (situ's inbox,
+20261026T1504Z). Until situ settles the contract, the case stays off by
+default, and the third check is the one to revisit. The case is off by default, since it
 fails on a fault the reader does not reach, and it is the test of
 situ's fix. The reader keeps its exact-length
 checks, which also refuse padded varints that no cap can.
