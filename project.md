@@ -7477,7 +7477,7 @@ bytes arrive, and all six of its own prefix-swept shapes break it. The
 other three are its contract, and it quotes them verbatim. Three shapes
 it guessed at did not reproduce the fall, so it asked for this schema;
 the reply gives the path and the commit to pin it to (situ's inbox,
-20261026T1504Z). Until situ settles the contract, the case stays off by
+20261026T1557Z). Until situ settles the contract, the case stays off by
 default, and the third check is the one to revisit. The case is off by default, since it
 fails on a fault the reader does not reach, and it is the test of
 situ's fix. The reader keeps its exact-length
