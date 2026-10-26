@@ -16885,3 +16885,28 @@ first version handed the keys back to Qt whenever no sample was in
 view, so a stretch with no data left them dead. They now move the view
 there too. Each of the three (no move, the readout dropped on a move,
 and dead keys with nothing in view) fails its test when sabotaged.
+
+## 16.130 The suite, a year ahead and past 2038
+
+A server fixture rotted on 2026-10-25: its heads carried a fixed
+September date, and they went stale the day a rule compared them with
+the clock (sec 15.12.1). So the whole suite was run with the clock
+moved, to find any other test that only passes today.
+
+Not through `make`, whose files would be dated ahead and then wrongly
+taken as current. Built normally, then each test binary run as `make
+test` runs it, under `faketime -f +400d` and then `+4500d`, which lands
+in February 2039, past the signed 32-bit end of January 2038. A
+two-line Qt program confirmed the fake clock reaches
+`QDateTime::currentDateTimeUtc()`: 2026-10-26 read as 2027-11-30.
+
+Both runs: 22 binaries, 371 test functions passed, none failed. No test
+depends on today's date, and nothing the suite exercises breaks on the
+2038 boundary. Worth re-running when a test gains a fixed timestamp
+compared with the clock:
+
+    for b in build-test/test_*; do
+        BBQ_APP_BINARY=$PWD/build/bbq-predictor \
+        BBQ_PUBLISH_BINARY=$PWD/build/publish/bbq-predictor-publish \
+        QT_QPA_PLATFORM=offscreen timeout 300 faketime -f +400d "$b"
+    done
