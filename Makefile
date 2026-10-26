@@ -691,6 +691,14 @@ FUZZ_DIR ?= $(TEST_BUILD_DIR)/fuzz
 WIRE_FUZZ_FLAGS = -std=c++17 -g -O1 -fPIC -Isrc -Isrc/wire/vendor \
                   -Imonocypher/src -Imonocypher/src/optional \
                   $(shell pkg-config --cflags Qt6Core)
+# FUZZ_FRAMING=1 adds fuzz_wire.cpp's fifth case, which holds the
+# generated framed() and required() to their contract. Off by default
+# because it finds a situ fault the reader does not reach (situ's inbox,
+# 20261026T1249Z): month_body answers differently for the prefix it named.
+# On, it is the check that situ's fix works.
+ifeq ($(FUZZ_FRAMING),1)
+WIRE_FUZZ_FLAGS += -DBBQ_FUZZ_FRAMING
+endif
 WIRE_FUZZ_SOURCES = src/wire/read.cpp src/wire/format.cpp src/model/series.cpp \
                     src/wire/vendor/situ.c monocypher/src/monocypher.c \
                     monocypher/src/optional/monocypher-ed25519.c

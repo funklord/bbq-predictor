@@ -21,9 +21,17 @@ framed() and required() no longer read out of bounds (situ's b4cf766),
 three ways they reported a short message complete are fixed (b78119f),
 and since `601fa96` a struct holding a nested variable struct frames
 right too (situ's 26.684, fixed in 1e81500 and c10c83a). The applet
-still never calls those two, and the guard in `fuzz-wire` stays: no
-fuzzer here drives them, and situ's own generated harness does not
-call them either. Take a new commit
+still never calls those two, and the guard in `fuzz-wire` stays.
+
+`make fuzz-wire FUZZ_FRAMING=1` drives them, against the contract a
+reader would rely on. Complete means `need` is within the bytes given,
+and those `need` bytes alone answer the same; truncated asks for more
+than it has; and if the whole input validates, the `need` bytes do too.
+At `601fa96` it broke the second inside five minutes: given 95 bytes,
+`month_body::required()` said complete at 82, and given those 82 it
+said truncated and asked for 87 (situ's inbox, 20261026T1249Z, with the
+input). So it stays off by default, and the guard stays, until a situ
+commit passes it. Take a new commit
 only after re-running `make fuzz-wire`, and regenerate all four files
 together, never one.
 

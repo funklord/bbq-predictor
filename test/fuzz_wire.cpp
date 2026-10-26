@@ -7,14 +7,20 @@
  * of real bodies the encoder writes (fuzz_wire_seed.cpp).
  *
  * This is also what holds the reader to the generated calls this run
- * covers: a framed() or required() reached from here would be code no
- * fuzz run has exercised (src/wire/vendor/README.md).
+ * covers. The parse_* cases never reach framed() or required(); the
+ * fifth case drives them directly, against the contract the reader
+ * would rely on, so that a later reader using them would be using
+ * fuzzed code (src/wire/vendor/README.md).
  */
 #include <QByteArray>
 #include <QtGlobal>
 #include <QString>
 
 #include "wire/read.h"
+
+#include "bbq.hpp"
+
+#include <vector>
 
 /*
  * Quiet: qUncompress warns on every corrupt stream, which is most of what
@@ -27,6 +33,50 @@ extern "C" int LLVMFuzzerInitialize(int *, char ***) {
 	return 0;
 }
 
+/*
+ * What a framer promises, held for one generated struct. Complete means
+ * the message is `need` bytes and they are all here; those same bytes
+ * alone must then answer the same; truncated must ask for more than it
+ * has. And framing must agree with validation: if the whole input
+ * validates, the `need` bytes framing named validate too -- the check
+ * that catches a framer calling a message complete before it is, which
+ * is what situ's 26.684 did with a nested variable struct.
+ */
+template <typename T>
+static void hold_framing(std::vector<uint8_t> &bytes) {
+	using ::situ::rt::err;
+	const uint32_t have = uint32_t(bytes.size());
+	uint32_t need = 0;
+	const err said = T::required(bytes.data(), have, need);
+
+	if (said == err::truncated && need <= have) {
+		__builtin_trap();
+	}
+	if (said != err::ok) {
+		return;
+	}
+	if (need > have) {
+		__builtin_trap();
+	}
+
+	uint32_t again = 0;
+	if (T::required(bytes.data(), need, again) != err::ok || again != need) {
+		__builtin_trap();
+	}
+
+	::situ::rt::message whole_message(bytes.data(), have);
+	T whole;
+	if (T::at(whole_message, 0, have, whole) != err::ok || whole.validate() != err::ok) {
+		return;
+	}
+	::situ::rt::message framed_message(bytes.data(), need);
+	T framed;
+	if (T::at(framed_message, 0, need, framed) != err::ok ||
+	    framed.validate() != err::ok) {
+		__builtin_trap();
+	}
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	if (size < 1) {
 		return 0;
@@ -36,7 +86,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	const QString station = QStringLiteral("ISTOCK877");
 	QString why;
 
-	switch (data[0] % 4) {
+	switch (data[0] % 5) {
 	case 0: {
 		QStringList stations;
 		bbq_wire_parse_stations(body, &stations, &why);
@@ -65,6 +115,32 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	case 3: {
 		bbq_wire_head head;
 		bbq_wire_parse_head(body, station, &head, &why);
+		break;
+	}
+	case 4: {
+		/*
+		 * Off unless FUZZ_FRAMING=1 (Makefile): situ's month_body framer
+		 * breaks the third promise above (situ's inbox, 20261026T1249Z),
+		 * and a fuzz target that always fails on a known fault in code
+		 * the reader does not call would only teach people to ignore it.
+		 */
+#ifndef BBQ_FUZZ_FRAMING
+		break;
+#endif
+		if (body.isEmpty()) {
+			break;
+		}
+		/* A copy: a view takes a writable buffer, and the second byte picks the struct. */
+		std::vector<uint8_t> bytes(data + 2, data + size);
+		switch (uint8_t(body[0]) % 7) {
+		case 0: hold_framing<::situ::bbq_file>(bytes); break;
+		case 1: hold_framing<::situ::head_body>(bytes); break;
+		case 2: hold_framing<::situ::index_body>(bytes); break;
+		case 3: hold_framing<::situ::month_body>(bytes); break;
+		case 4: hold_framing<::situ::stations_body>(bytes); break;
+		case 5: hold_framing<::situ::columns>(bytes); break;
+		case 6: hold_framing<::situ::band_>(bytes); break;
+		}
 		break;
 	}
 	}

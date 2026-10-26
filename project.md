@@ -7461,8 +7461,13 @@ so, though situ's `project.md` heading still read "Open" on 2026-10-26.
 inside `framed()` and `required()`: with those cut from both versions,
 everything else is line for line the same. So the take changed nothing
 the reader runs, and `src/wire/vendor/README.md` has the measurements.
-`fuzz-wire` still refuses a call to either, since no fuzzer here or in
-situ's generated harness drives them. The reader keeps its exact-length
+`fuzz-wire` still refuses a call to either. **And they are not sound
+yet:** fuzzing them under `make fuzz-wire FUZZ_FRAMING=1` found, within
+five minutes, `month_body::required()` calling 95 bytes complete at 82,
+then calling those 82 truncated and asking for 87. Sent to situ with the
+input (its inbox, 20261026T1249Z). The case is off by default, since it
+fails on a fault the reader does not reach, and it is the test of
+situ's fix. The reader keeps its exact-length
 checks, which also refuse padded varints that no cap can.
 
 **The five minor items in that report, as of situ bb79c61** (situ's
