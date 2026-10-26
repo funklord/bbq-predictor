@@ -16917,7 +16917,16 @@ binary's span. `test_feed_server` ran from 02:59:56 summer time to
 and the sixteen after it in winter time. A Qt probe confirmed each zone
 and the offset reached `QDateTime`. Give the start as a relative
 `faketime -f -Ns` offset rather than a local time: 02:00 to 03:00 local
-happened twice that night. Worth re-running when a test gains a fixed timestamp
+happened twice that night.
+
+**A locale run proves nothing here, and why.** It passed under
+`LC_ALL=sv_SE.UTF-8` and `ar_EG.UTF-8`, after a probe showed Qt's
+number formatting following them ("1,5", Arabic digits). But no source
+reads the locale: numbers go through `QString::number`, which always
+writes a point, and day names through `QDateTime::toString` with a
+format, which Qt 6 runs in the C locale. So "Mon 14" and "17.9 C" are
+the same everywhere by construction, and the run could not fail. It is
+worth repeating only once something calls `QLocale`. Worth re-running when a test gains a fixed timestamp
 compared with the clock:
 
     for b in build-test/test_*; do
