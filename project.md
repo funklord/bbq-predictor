@@ -7452,24 +7452,33 @@ check disabled, the trailing-byte test fails at b186326 and passes at
 217ba65 -- and a run of varints is generated as one, `[max]` on a
 varint in a variant arm compiles, and three ways `required()` called a
 short message complete are fixed (situ's inbox reply 20261023T1730Z,
-recorded here and deleted there; its b78119f). Still open:
-`framed()` on a struct holding a nested variable struct reports
-completeness once the fixed prefix arrives (situ's 26.684, written and
-blocked on header ordering). So `fuzz-wire` still refuses a call to
-`framed()` or `required()`, and the reader keeps its exact-length
-checks, which also refuse padded varints that no cap can.
+recorded here and deleted there; its b78119f). The one left open at
+217ba65, `framed()` on a struct holding a nested variable struct
+reporting completeness once the fixed prefix arrives (situ's 26.684),
+is fixed in situ since 1e81500 and c10c83a. Its decision record says
+so, though situ's `project.md` heading still read "Open" on 2026-10-26.
+**It is not in the vendored copy**, which is still 217ba65. So
+`fuzz-wire` still refuses a call to `framed()` or `required()`, and the
+reader keeps its exact-length checks, which also refuse padded varints
+that no cap can. Taking the fix means re-vendoring and fuzzing those
+two calls here first.
 
 **The five minor items in that report, as of situ bb79c61** (situ's
 inbox reply 20261025T1021Z, recorded here and deleted). Fixed in situ's
 9f69185: the `max_size` misuse now gets a diagnostic naming the form
 `max_size(X, n)`, and an enum member is accepted in `when`. Withdrawn:
 "every diagnostic prints twice" was ours. The evaluation ran `map` and
-`build` on one shell line, and each printed the error once. Still
-reproducible, with schemas sent back (situ's inbox, 20261025T1219Z):
-- a `ratio_bounded(1001, 1000) + 20` codec gives a size in bits, with
-  `explain` agreeing, so "explain gives bytes" was also wrong;
-- `explain` calls a member after a non-seekable coded region `Dynamic`
-  and `Random`, while every generator says its offset cannot be resolved.
+`build` on one shell line, and each printed the error once. Two more
+reproduced, with schemas sent back (situ's inbox, 20261025T1219Z), and
+both fixed at situ 601fa96, rerun here 2026-10-26:
+- a `ratio_bounded(1001, 1000) + 20` codec gave a size in bits, with
+  `explain` agreeing, so "explain gives bytes" was also wrong. It is
+  whole bytes, rounded up, since 1976e1f;
+- `explain` blamed a member after a non-seekable coded region on a
+  generic dynamic member, while every generator says its offset cannot
+  be resolved. Since 45b6df8 it names the coded region and the
+  remedies. It still lists the member's access as `Random`, which was
+  reported back (situ's inbox, 20261026T1117Z).
 None of it touches the vendored reader, which has a length before every
 blob.
 
