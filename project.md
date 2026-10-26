@@ -7464,8 +7464,10 @@ the reader runs, and `src/wire/vendor/README.md` has the measurements.
 `fuzz-wire` still refuses a call to either. **And they are not sound
 yet:** fuzzing them under `make fuzz-wire FUZZ_FRAMING=1` found, within
 five minutes, `month_body::required()` calling 95 bytes complete at 82,
-then calling those 82 truncated and asking for 87. Sent to situ with the
-input (its inbox, 20261026T1249Z). The case is off by default, since it
+then calling those 82 truncated and asking for 87. With month_body left
+out, `head_body` did the same on 13 bytes, complete at 10 and then
+truncated asking for 11, so it is not one struct's fault. Both were
+sent to situ with their inputs (its inbox, 20261026T1249Z and T1317Z). The case is off by default, since it
 fails on a fault the reader does not reach, and it is the test of
 situ's fix. The reader keeps its exact-length
 checks, which also refuse padded varints that no cap can.

@@ -30,7 +30,8 @@ than it has; and if the whole input validates, the `need` bytes do too.
 At `601fa96` it broke the second inside five minutes: given 95 bytes,
 `month_body::required()` said complete at 82, and given those 82 it
 said truncated and asked for 87 (situ's inbox, 20261026T1249Z, with the
-input). So it stays off by default, and the guard stays, until a situ
+input). With month_body left out, `head_body` did the same on 13 bytes:
+complete at 10, then truncated asking for 11 (20261026T1317Z). So it stays off by default, and the guard stays, until a situ
 commit passes it. Take a new commit
 only after re-running `make fuzz-wire`, and regenerate all four files
 together, never one.
