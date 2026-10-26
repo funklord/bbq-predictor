@@ -130,6 +130,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 1u;
+		std::uint32_t pos = 1u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -138,11 +139,15 @@ public:
 
 		/* provider_name.name: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint8_t>(*(situ_base(raw_) + 0))))));
+		{
+			const std::uint32_t len = (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint8_t>(*(situ_base(raw_) + 0)))));
+
+			at = situ_need_u32(at, len);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -323,6 +328,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 4u;
+		std::uint32_t pos = 4u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -331,11 +337,15 @@ public:
 
 		/* packed_columns.packed: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 0))))));
+		{
+			const std::uint32_t len = (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 0)))));
+
+			at = situ_need_u32(at, len);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -605,6 +615,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 17u;
+		std::uint32_t pos = 1u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -613,19 +624,59 @@ public:
 
 		/* band.provider: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, provider_extent());
+
+		/* band.provider: a nested `provider_name` frames
+		 * itself. Its EXTENT shrinks when the bytes run out, so
+		 * adding that reported a complete message (26.684). */
+		{
+			std::uint32_t part = 0;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			const ::situ::rt::err e = ::situ::provider_name::required(
+				situ_base(raw_) + pos,
+				situ_remaining_u32(have, pos), part);
+			if (e != ::situ::rt::err::ok) {
+				need = situ_need_u32(at, part);
+				return ::situ::rt::err::truncated;
+			}
+			at = situ_need_u32(at, part);
+			pos = situ_need_u32(pos, part);
+		}
+		pos = situ_need_u32(pos, 16u);
 
 		/* band.columns: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, columns_extent());
+
+		/* band.columns: a nested `packed_columns` frames
+		 * itself. Its EXTENT shrinks when the bytes run out, so
+		 * adding that reported a complete message (26.684). */
+		{
+			std::uint32_t part = 0;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			const ::situ::rt::err e = ::situ::packed_columns::required(
+				situ_base(raw_) + pos,
+				situ_remaining_u32(have, pos), part);
+			if (e != ::situ::rt::err::ok) {
+				need = situ_need_u32(at, part);
+				return ::situ::rt::err::truncated;
+			}
+			at = situ_need_u32(at, part);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -924,6 +975,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 74u;
+		std::uint32_t pos = 10u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -932,11 +984,15 @@ public:
 
 		/* bbq_file.body: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6))))));
+		{
+			const std::uint32_t len = (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6)))));
+
+			at = situ_need_u32(at, len);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -1249,6 +1305,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 0u;
+		std::uint32_t pos = 0u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -1263,11 +1320,15 @@ public:
 
 		/* zv1.v: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, v_len());
+		{
+			const std::uint32_t len = v_len();
+
+			at = situ_need_u32(at, len);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -1402,6 +1463,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 0u;
+		std::uint32_t pos = 0u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -1416,11 +1478,15 @@ public:
 
 		/* v1.v: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, v_len());
+		{
+			const std::uint32_t len = v_len();
+
+			at = situ_need_u32(at, len);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -1693,6 +1759,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 0u;
+		std::uint32_t pos = 0u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -1707,18 +1774,22 @@ public:
 
 		/* optional_column.count: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, count_len());
+		{
+			const std::uint32_t len = count_len();
+
+			at = situ_need_u32(at, len);
+			pos = situ_need_u32(pos, len);
+		}
 
 		/* optional_column.delta: a run of `zv1`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
-			std::uint32_t pos = situ_advance_u32(0, count_len(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -2732,6 +2803,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 1u;
+		std::uint32_t pos = 1u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -2746,50 +2818,74 @@ public:
 
 		/* columns.rows: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, rows_len());
+		{
+			const std::uint32_t len = rows_len();
+
+			at = situ_need_u32(at, len);
+			pos = situ_need_u32(pos, len);
+		}
 
 		/* columns.temperature_map: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))));
+		{
+			const std::uint32_t len = (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8)));
+
+			at = situ_need_u32(at, len);
+			pos = situ_need_u32(pos, len);
+		}
 
 		/* columns.precip_rate_map: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))));
+		{
+			const std::uint32_t len = (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8)));
+
+			at = situ_need_u32(at, len);
+			pos = situ_need_u32(pos, len);
+		}
 
 		/* columns.precip_chance_map: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))));
+		{
+			const std::uint32_t len = (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8)));
+
+			at = situ_need_u32(at, len);
+			pos = situ_need_u32(pos, len);
+		}
 
 		/* columns.wind_kph_map: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))));
+		{
+			const std::uint32_t len = (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8)));
+
+			at = situ_need_u32(at, len);
+			pos = situ_need_u32(pos, len);
+		}
 
 		/* columns.start_utc: a run of `zv1`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
-			std::uint32_t pos = situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -2824,7 +2920,6 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
-			std::uint32_t pos = situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -2856,35 +2951,154 @@ public:
 
 		/* columns.temperature: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())));
+
+		/* columns.temperature: the arm the discriminant selects
+		 * frames itself -- reported by bbq-predictor against a
+		 * variant arm, whose extent shrank (26.684). */
+		{
+			std::uint32_t part = 0;
+			::situ::rt::err e = ::situ::rt::err::ok;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			if (this->has_temperature() == 0u) {
+				e = ::situ::nothing::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			} else {
+				e = ::situ::optional_column::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			}
+			(void)e;
+			at = situ_need_u32(at, part);
+			pos = situ_need_u32(pos, part);
+		}
 
 		/* columns.precip_rate: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())));
+
+		/* columns.precip_rate: the arm the discriminant selects
+		 * frames itself -- reported by bbq-predictor against a
+		 * variant arm, whose extent shrank (26.684). */
+		{
+			std::uint32_t part = 0;
+			::situ::rt::err e = ::situ::rt::err::ok;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			if (this->has_precip_rate() == 0u) {
+				e = ::situ::nothing::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			} else {
+				e = ::situ::optional_column::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			}
+			(void)e;
+			at = situ_need_u32(at, part);
+			pos = situ_need_u32(pos, part);
+		}
 
 		/* columns.precip_chance: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())));
+
+		/* columns.precip_chance: the arm the discriminant selects
+		 * frames itself -- reported by bbq-predictor against a
+		 * variant arm, whose extent shrank (26.684). */
+		{
+			std::uint32_t part = 0;
+			::situ::rt::err e = ::situ::rt::err::ok;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			if (this->has_precip_chance() == 0u) {
+				e = ::situ::nothing::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			} else {
+				e = ::situ::optional_column::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			}
+			(void)e;
+			at = situ_need_u32(at, part);
+			pos = situ_need_u32(pos, part);
+		}
 
 		/* columns.wind_kph: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (this->has_wind_kph() == 0u ? 0u : (wind_kph_wind_kph_values_extent())));
+
+		/* columns.wind_kph: the arm the discriminant selects
+		 * frames itself -- reported by bbq-predictor against a
+		 * variant arm, whose extent shrank (26.684). */
+		{
+			std::uint32_t part = 0;
+			::situ::rt::err e = ::situ::rt::err::ok;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			if (this->has_wind_kph() == 0u) {
+				e = ::situ::nothing::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			} else {
+				e = ::situ::optional_column::required(situ_base(raw_) + pos,
+					situ_remaining_u32(have, pos), part);
+				if (e != ::situ::rt::err::ok) {
+					need = situ_need_u32(at, part);
+					return ::situ::rt::err::truncated;
+				}
+			}
+			(void)e;
+			at = situ_need_u32(at, part);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -3336,6 +3550,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 1u;
+		std::uint32_t pos = 1u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -3344,11 +3559,15 @@ public:
 
 		/* station_id.id: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint8_t>(*(situ_base(raw_) + 0))))));
+		{
+			const std::uint32_t len = (::situ::rt::nonneg(::situ::rt::saturate_i64(static_cast<std::uint8_t>(*(situ_base(raw_) + 0)))));
+
+			at = situ_need_u32(at, len);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -3699,6 +3918,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 9u;
+		std::uint32_t pos = 0u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -3707,18 +3927,38 @@ public:
 
 		/* head_body.station: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, station_extent());
+
+		/* head_body.station: a nested `station_id` frames
+		 * itself. Its EXTENT shrinks when the bytes run out, so
+		 * adding that reported a complete message (26.684). */
+		{
+			std::uint32_t part = 0;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			const ::situ::rt::err e = ::situ::station_id::required(
+				situ_base(raw_) + pos,
+				situ_remaining_u32(have, pos), part);
+			if (e != ::situ::rt::err::ok) {
+				need = situ_need_u32(at, part);
+				return ::situ::rt::err::truncated;
+			}
+			at = situ_need_u32(at, part);
+			pos = situ_need_u32(pos, part);
+		}
+		pos = situ_need_u32(pos, 9u);
 
 		/* head_body.bands: a run of `band`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
-			std::uint32_t pos = situ_advance_u32(9, station_extent(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -4242,6 +4482,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 10u;
+		std::uint32_t pos = 0u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -4250,19 +4491,59 @@ public:
 
 		/* index_body.station: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, station_extent());
+
+		/* index_body.station: a nested `station_id` frames
+		 * itself. Its EXTENT shrinks when the bytes run out, so
+		 * adding that reported a complete message (26.684). */
+		{
+			std::uint32_t part = 0;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			const ::situ::rt::err e = ::situ::station_id::required(
+				situ_base(raw_) + pos,
+				situ_remaining_u32(have, pos), part);
+			if (e != ::situ::rt::err::ok) {
+				need = situ_need_u32(at, part);
+				return ::situ::rt::err::truncated;
+			}
+			at = situ_need_u32(at, part);
+			pos = situ_need_u32(pos, part);
+		}
+		pos = situ_need_u32(pos, 10u);
 
 		/* index_body.months: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, (::situ::rt::nonneg(::situ::rt::saturate_i64(count()))) * 42);
+
+		/* index_body.months: a nested `index_entry` frames
+		 * itself. Its EXTENT shrinks when the bytes run out, so
+		 * adding that reported a complete message (26.684). */
+		{
+			std::uint32_t part = 0;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			const ::situ::rt::err e = ::situ::index_entry::required(
+				situ_base(raw_) + pos,
+				situ_remaining_u32(have, pos), part);
+			if (e != ::situ::rt::err::ok) {
+				need = situ_need_u32(at, part);
+				return ::situ::rt::err::truncated;
+			}
+			at = situ_need_u32(at, part);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -4506,6 +4787,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 1u;
+		std::uint32_t pos = 0u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -4520,11 +4802,15 @@ public:
 
 		/* provider_run.run_len: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, run_len_len());
+		{
+			const std::uint32_t len = run_len_len();
+
+			at = situ_need_u32(at, len);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -5117,6 +5403,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 3u;
+		std::uint32_t pos = 0u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -5125,18 +5412,38 @@ public:
 
 		/* month_body.station: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, station_extent());
+
+		/* month_body.station: a nested `station_id` frames
+		 * itself. Its EXTENT shrinks when the bytes run out, so
+		 * adding that reported a complete message (26.684). */
+		{
+			std::uint32_t part = 0;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			const ::situ::rt::err e = ::situ::station_id::required(
+				situ_base(raw_) + pos,
+				situ_remaining_u32(have, pos), part);
+			if (e != ::situ::rt::err::ok) {
+				need = situ_need_u32(at, part);
+				return ::situ::rt::err::truncated;
+			}
+			at = situ_need_u32(at, part);
+			pos = situ_need_u32(pos, part);
+		}
+		pos = situ_need_u32(pos, 3u);
 
 		/* month_body.providers: a run of `provider_name`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
-			std::uint32_t pos = situ_advance_u32(3, station_extent(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -5174,18 +5481,22 @@ public:
 
 		/* month_body.run_count: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, run_count_len());
+		{
+			const std::uint32_t len = run_count_len();
+
+			at = situ_need_u32(at, len);
+			pos = situ_need_u32(pos, len);
+		}
 
 		/* month_body.runs: a run of `provider_run`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
-			std::uint32_t pos = situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit);
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;
@@ -5217,11 +5528,30 @@ public:
 
 		/* month_body.columns: reading its length means reading
 		 * bytes that have to be here first. */
-		if (have < at) {
+		if (have < pos) {
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-		at = situ_need_u32(at, columns_extent());
+
+		/* month_body.columns: a nested `packed_columns` frames
+		 * itself. Its EXTENT shrinks when the bytes run out, so
+		 * adding that reported a complete message (26.684). */
+		{
+			std::uint32_t part = 0;
+
+			if (have < pos) {
+				need = at;
+				return ::situ::rt::err::truncated;
+			}
+			const ::situ::rt::err e = ::situ::packed_columns::required(
+				situ_base(raw_) + pos,
+				situ_remaining_u32(have, pos), part);
+			if (e != ::situ::rt::err::ok) {
+				need = situ_need_u32(at, part);
+				return ::situ::rt::err::truncated;
+			}
+			at = situ_need_u32(at, part);
+		}
 
 		need = at;
 		return have >= at ? ::situ::rt::err::ok
@@ -5746,6 +6076,7 @@ public:
 	{
 		const std::uint32_t have = raw_.limit;
 		std::uint32_t at = 10u;
+		std::uint32_t pos = 10u;
 
 		if (have < size_min) {
 			need = size_min;
@@ -5757,7 +6088,6 @@ public:
 		 * of the bytes as readily as at the end of the run; this asks each
 		 * element whether it is whole. */
 		{
-			std::uint32_t pos = 10;
 			std::uint32_t n = 0;
 			for (;;) {
 				std::uint32_t part = 0;

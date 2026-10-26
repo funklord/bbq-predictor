@@ -7457,11 +7457,13 @@ recorded here and deleted there; its b78119f). The one left open at
 reporting completeness once the fixed prefix arrives (situ's 26.684),
 is fixed in situ since 1e81500 and c10c83a. Its decision record says
 so, though situ's `project.md` heading still read "Open" on 2026-10-26.
-**It is not in the vendored copy**, which is still 217ba65. So
-`fuzz-wire` still refuses a call to `framed()` or `required()`, and the
-reader keeps its exact-length checks, which also refuse padded varints
-that no cap can. Taking the fix means re-vendoring and fuzzing those
-two calls here first.
+**Vendored at 601fa96 since 2026-10-26.** The new header differs only
+inside `framed()` and `required()`: with those cut from both versions,
+everything else is line for line the same. So the take changed nothing
+the reader runs, and `src/wire/vendor/README.md` has the measurements.
+`fuzz-wire` still refuses a call to either, since no fuzzer here or in
+situ's generated harness drives them. The reader keeps its exact-length
+checks, which also refuse padded varints that no cap can.
 
 **The five minor items in that report, as of situ bb79c61** (situ's
 inbox reply 20261025T1021Z, recorded here and deleted). Fixed in situ's
