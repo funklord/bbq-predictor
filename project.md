@@ -16902,7 +16902,22 @@ two-line Qt program confirmed the fake clock reaches
 
 Both runs: 22 binaries, 371 test functions passed, none failed. No test
 depends on today's date, and nothing the suite exercises breaks on the
-2038 boundary. Worth re-running when a test gains a fixed timestamp
+2038 boundary.
+
+**And the local zone, 2026-10-26.** The same 371 passed under
+`TZ=America/St_Johns` (-3:30) and `TZ=Pacific/Chatham` (+13:45), and
+under `Europe/Stockholm` across last night's change from summer time.
+That last one needed two attempts to be true. The first started an hour
+before the change. The second started two minutes before it, but
+the suite takes about 26 seconds, so it never reached the change
+either; the probe printed every binary starting before it. The run
+that counts started ten seconds before 01:00 UTC and logged each
+binary's span. `test_feed_server` ran from 02:59:56 summer time to
+02:00:04 winter time, the five before it ran entirely in summer time,
+and the sixteen after it in winter time. A Qt probe confirmed each zone
+and the offset reached `QDateTime`. Give the start as a relative
+`faketime -f -Ns` offset rather than a local time: 02:00 to 03:00 local
+happened twice that night. Worth re-running when a test gains a fixed timestamp
 compared with the clock:
 
     for b in build-test/test_*; do
