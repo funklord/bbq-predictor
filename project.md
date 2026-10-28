@@ -7676,6 +7676,10 @@ them, which this test found at f82403d and hull fixed the same night.
 On a host with no `/etc/subuid` range hull still shows root, and the
 check fails there. It needs hull at a1b6dd2 or later; run with
 `HULL=` pointing at such a build. Unset, `HULL` is `hull` on `PATH`.
+hull 55f2beb (2026-10-27) gives a chroot machine its own NATed network
+when its spec names none, rather than the host's. `bake.sh`'s steps
+already say `(network true)`, and the boots are vms, so nothing changes
+here (hull's notice, inbox 20261027T1808Z, recorded and deleted).
 Until 2026-10-25 it defaulted to a sibling checkout's build, a path
 nobody without that checkout has, and the holder set that a project
 builds and checks from its own files.
@@ -16953,3 +16957,36 @@ compared with the clock:
         BBQ_PUBLISH_BINARY=$PWD/build/publish/bbq-predictor-publish \
         QT_QPA_PLATFORM=offscreen timeout 300 faketime -f +400d "$b"
     done
+
+## 16.131 Where things stand, 2026-10-28
+
+What the next session should know, as of 8ac4b32's successors.
+
+**Waiting on the holder:** the publisher's public key, for
+`bbq_server_built_in_key()`. And two linked decisions: whether to score
+temperature on whole degrees (sec 16.94.2), and what the applet says
+after a scoring epoch bump (sec 16.120.5). If the first is yes, the
+second becomes real at once.
+
+**Waiting on situ:** 26.693, its framing contract (sec 15.12.3). The
+reader calls neither `framed()` nor `required()`, so nothing here is
+unsafe. When situ settles it, re-vendor by the README's procedure,
+align the fuzz case's third check, and run
+`make fuzz-wire FUZZ_FRAMING=1` before letting the guard go.
+
+**Not verified on a device:** the widget's spoken reading
+(sec 16.126), the graph's description and keyboard readout (sec 16.127,
+16.129), the label buddies under TalkBack (sec 16.128), the widget's
+skipped day name (sec 16.85), and the axis-label skips (sec 16.85.2,
+16.85.3). All are tested by rendering or on the desktop; `adb` was not
+available. Each section says what a device would show.
+
+**Stale artifacts:** the debs predate many commits since 0.1.0-6;
+rebuild only when asked. `make check-boot` now needs `HULL=` here,
+since hull is not on `PATH`.
+
+**Measured and clean, so not to repeat blind:** the suite a year ahead,
+past 2038, in half- and quarter-hour zones and across a clock change
+(sec 16.130). A locale run proves nothing here until code reads
+`QLocale`.
+
