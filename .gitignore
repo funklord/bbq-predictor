@@ -54,3 +54,6 @@ deps/
 /debian/*.substvars
 /debian/*.debhelper.log
 /debian/*.debhelper
+
+# The /go skill's run state, never committed.
+/.claude/go.md
