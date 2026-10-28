@@ -32,7 +32,10 @@ At `601fa96` it broke the second inside five minutes: given 95 bytes,
 said truncated and asked for 87 (situ's inbox, 20261026T1249Z, with the
 input). With month_body left out, `head_body` did the same on 13 bytes:
 complete at 10, then truncated asking for 11 (20261026T1317Z). So it stays off by default, and the guard stays, until a situ
-commit passes it. Take a new commit
+commit passes it. situ's 97d1343 fixed that fault and did not pass: with
+the size floor gone from `required`, a `stations_body` shorter than 10
+bytes is read at offset 8, a heap-buffer-overflow under ASan (situ's
+inbox, 20261028T2255Z). Not taken. Take a new commit
 only after re-running `make fuzz-wire`, and regenerate all four files
 together, never one.
 

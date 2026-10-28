@@ -34,13 +34,20 @@ extern "C" int LLVMFuzzerInitialize(int *, char ***) {
 }
 
 /*
- * What a framer promises, held for one generated struct. Complete means
- * the message is `need` bytes and they are all here; those same bytes
- * alone must then answer the same; truncated must ask for more than it
- * has. And framing must agree with validation: if the whole input
- * validates, the `need` bytes framing named validate too -- the check
- * that catches a framer calling a message complete before it is, which
- * is what situ's 26.684 did with a nested variable struct.
+ * What situ's framer promises, held for one generated struct, as situ
+ * states it (its 26.693). Complete means the `need` bytes are all here;
+ * truncated asks for more than it has. The answer never goes backwards:
+ * with one byte fewer, the need is no larger -- situ's 26.693 said
+ * "need 11" at ten bytes and "complete at 10" at eleven, so a caller told
+ * complete stopped short. And framing agrees with validation: if the
+ * whole input validates, the `need` bytes it named validate too, the
+ * check that catches 26.684's kind of fault.
+ *
+ * Not held: that the `need` bytes alone answer complete with the same
+ * need. That was this case's first third check, and situ's contract
+ * does not promise it -- `required` gives a lower bound that may rise
+ * as bytes arrive, so "complete at n" says nothing in the n bytes asks
+ * for more, and only validate speaks for the whole message.
  */
 template <typename T>
 static void hold_framing(std::vector<uint8_t> &bytes) {
@@ -52,15 +59,28 @@ static void hold_framing(std::vector<uint8_t> &bytes) {
 	if (said == err::truncated && need <= have) {
 		__builtin_trap();
 	}
+	/*
+	 * Never backwards, asked of two shorter prefixes: one byte fewer, and
+	 * the frame the answer itself named. The second is where 26.693
+	 * showed -- complete at 10 for thirteen bytes, then "need 11" for
+	 * ten -- and one byte fewer than thirteen would never have seen it.
+	 */
+	if (said == err::ok || said == err::truncated) {
+		for (const uint32_t prefix : {have - 1, need}) {
+			if (have == 0 || prefix >= have) {
+				continue;
+			}
+			uint32_t shorter = 0;
+			const err less = T::required(bytes.data(), prefix, shorter);
+			if ((less == err::ok || less == err::truncated) && shorter > need) {
+				__builtin_trap();
+			}
+		}
+	}
 	if (said != err::ok) {
 		return;
 	}
 	if (need > have) {
-		__builtin_trap();
-	}
-
-	uint32_t again = 0;
-	if (T::required(bytes.data(), need, again) != err::ok || again != need) {
 		__builtin_trap();
 	}
 

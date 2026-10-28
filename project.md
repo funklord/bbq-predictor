@@ -7485,8 +7485,25 @@ different sources: the size floor of 11 comes from `station_id`'s
 `[min = 1]` constraint, while the total comes from the unvalidated
 bytes, which say length 0. On our question, situ says `ok` at `need = n`
 cannot mean exactly `n` bytes while `n` comes from unvalidated lengths:
-`validate()` alone speaks for the whole message. Which way the floor
-goes is situ's holder's decision, and the case stays off until then. The case is off by default, since it
+`validate()` alone speaks for the whole message.
+
+**situ fixed 26.693, and the fix was not taken** (2026-10-28). situ's
+2025f69 took the size floor out of `required`, and at 97d1343 both of
+our 26.693 inputs pass where they trap at 601fa96. But five minutes of
+`FUZZ_FRAMING=1` at 97d1343 found `stations_body::required()` on a
+buffer shorter than 10 bytes reading the count at offset 8. ASan calls
+it a heap-buffer-overflow. The same calls at 601fa96 answer truncated,
+need 10, clean. The floor was unsound as a claim about the message but
+sound as a bounds guard, and the fix removed both. Sent to situ (its
+inbox, 20261028T2255Z); vendored stays 601fa96. Apart from
+`framed()`/`required()`, 97d1343's header differed only in spelling
+(`::situ::` and `this->` qualification, `raw()` named through its base,
+and `band_` for the `band` alias).
+
+The case's third check was rewritten to situ's contract: never
+backwards, asked of one byte fewer and of the frame the answer named.
+Asked only of one byte fewer, it missed 26.693 entirely, which a run
+against the unfixed header showed. The case is off by default, since it
 fails on a fault the reader does not reach, and it is the test of
 situ's fix. The reader keeps its exact-length
 checks, which also refuse padded varints that no cap can.
