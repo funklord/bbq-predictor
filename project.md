@@ -17114,9 +17114,20 @@ The graph read "Forecast graph, Now: Thu 02:00, 6.6 C, 0.0 mm/h, 0%,
 9 km/h, extended", every control appeared, and the slider was named
 "Steady scale:" through its buddy, its node built without an abort.
 Heard the same night: the holder, with TalkBack on, reports the app
-reading the graph. One gap is left: a drop-down is named by its value
-only, with its label as a separate node beside it. Android does not turn Qt's labelled-by
-relation into a name, so sec 16.128 holds for Orca and not here.
+reading the graph.
+
+**A drop-down said its value and not what it set**, "Akima" with no
+"Interpolation": Qt names a combo box by its current text on every
+Unix, and Android's bridge does not read the labelled-by relation that
+Orca does. The bridge speaks the name, then ", " and the description,
+so on Android each labelled drop-down now takes its label, colon
+dropped, as its description (`bbq_describe_by_label`, 0f70add). Only on
+Android, since Orca would hear the label twice. Checked on the API 33
+emulator rather than the phone, per the holder's rule of 2026-10-29:
+"Akima, Interpolation", "30 min, Rounding", "Auto, Layout", "Auto,
+Theme". On a fresh install the station box reads "Station:, Station":
+its text is empty, so Qt falls back to naming it from its buddy, and the
+description repeats the word. That lasts until a station is set.
 
 **The desktop shares the cause and is not measured.** On Linux the
 AT-SPI bridge takes its root from the same call, so Orca very likely
