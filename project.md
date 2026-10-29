@@ -2305,8 +2305,6 @@ Both halves are tested now, and both tests were watched to fail --
 while fixing the first, since keeping radar from owning a column is
 only correct if its rain still arrives.
 
-
-
 #### 3.18.2 Replaced means replaced: the rain that flickered on zoom
 
 Seen on the Fold 2026-10-29: pinching, the first two hours' rain
@@ -2326,6 +2324,23 @@ radar alone, still the maximum over radar's own samples (sec 3.5).
 `test_view`'s `radar_s_rain_is_the_rain_at_every_zoom` asks the readout
 at three zooms of a 4 mm/h nowcast under 1 mm/h radar, and reads 4.0
 before the fix.
+
+#### 3.18.3 Radar refines a band it outranks, and not an observation
+
+Seen on the Fold the same day, with 3.18.2 installed: the rain still
+flickered slightly by the now marker. Radar's first steps begin minutes
+before now, under the station's last observations, and radar replaced
+whatever owned the column, observed included. The declared order puts
+observed at 300 and radar at 250 (sec 3.3), so a measured rate was
+being overruled by an extrapolation of it. In the graph it was worse: a
+column whose rain radar had cleared, with no radar sample starting in
+it, had no rain knot at all, so rain came and went as the columns
+moved. `resolved_at()` had the same fault.
+
+Radar now refines only a band it outranks, in both. `test_model`'s
+`radar_does_not_overrule_an_observation` and `test_view`'s
+`an_observation_keeps_its_rain_under_radar` both fail at b082b33, the
+second with a readout naming no rain at all.
 
 ### 3.19 One plot, and rain is blue
 

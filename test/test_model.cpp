@@ -31,6 +31,7 @@ private slots:
 	void range_agrees_with_the_scan_it_replaced();
 	void radar_does_not_hide_the_cold();
 	void radar_still_sharpens_the_rain();
+	void radar_does_not_overrule_an_observation();
 
 private:
 	static bbq_series band_of(bbq_band band, qint64 start, int step_s,
@@ -412,6 +413,42 @@ void test_model::radar_still_sharpens_the_rain() {
 
 	QVERIFY(resolved.precip_rate.has_value());
 	QCOMPARE(*resolved.precip_rate, 0.0);
+}
+
+void test_model::radar_does_not_overrule_an_observation() {
+	/*
+	 * Sec 3.18.3. Radar's first step begins before now, under the
+	 * station's last observation, and the observation outranks it: what
+	 * was measured is not replaced by an extrapolation of it.
+	 */
+	const qint64 when = 1786125600;
+
+	bbq_series observed(bbq_band::observed, QStringLiteral("test"));
+	std::vector<bbq_sample> measured;
+	bbq_sample o;
+	o.start_utc = when - 150;
+	o.duration_s = 300;
+	o.temperature = 11.0;
+	o.precip_rate = 3.0;
+	measured.push_back(o);
+	observed.set_samples(std::move(measured));
+
+	bbq_series radar(bbq_band::nowcast_fine, QStringLiteral("test"));
+	std::vector<bbq_sample> fine;
+	bbq_sample r;
+	r.start_utc = when - 200;
+	r.duration_s = 300;
+	r.precip_rate = 0.5;
+	fine.push_back(r);
+	radar.set_samples(std::move(fine));
+
+	bbq_composite composite;
+	composite.set_series(std::move(observed));
+	composite.set_series(std::move(radar));
+
+	const bbq_sample resolved = composite.resolved_at(when);
+	QVERIFY(resolved.precip_rate.has_value());
+	QCOMPARE(*resolved.precip_rate, 3.0);
 }
 
 QTEST_APPLESS_MAIN(test_model)

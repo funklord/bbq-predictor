@@ -435,9 +435,16 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	 * radar said it had stopped, which bbq_composite::resolved_at()
 	 * already refused. Within the column the maximum over radar's own
 	 * samples still holds (sec 3.5).
+	 *
+	 * And only over a band radar outranks (sec 3.18.3). Radar's first
+	 * steps begin minutes before now, under the station's last
+	 * observations, and replacing a measured rate with an extrapolated
+	 * one there is the forecast beating what happened -- the flicker
+	 * left by the now marker once the first one was gone.
 	 */
 	const bbq_series *fine = composite.band(bbq_band::nowcast_fine);
-	if (fine != nullptr && fine != winner && !fine->is_empty()) {
+	if (fine != nullptr && fine != winner && !fine->is_empty() &&
+	    winner->priority() < fine->priority()) {
 		const auto fine_span = fine->range(from, to);
 		const std::vector<bbq_sample> &fine_samples = fine->samples();
 

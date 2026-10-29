@@ -161,6 +161,7 @@ private slots:
 	void zoomed_out_the_day_s_range_is_drawn_behind_the_mean();
 	void a_day_view_draws_no_range_band();
 	void radar_s_rain_is_the_rain_at_every_zoom();
+	void an_observation_keeps_its_rain_under_radar();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -862,6 +863,56 @@ void test_view::radar_s_rain_is_the_rain_at_every_zoom() {
 		const QString told = graph.accessibleDescription();
 		QVERIFY2(told.contains(QStringLiteral(" 1.0 mm/h")) &&
 		                 !told.contains(QStringLiteral("4.0 mm/h")),
+		         qPrintable(QStringLiteral("at a %1 s span: %2").arg(span).arg(told)));
+	}
+}
+
+void test_view::an_observation_keeps_its_rain_under_radar() {
+	/*
+	 * Sec 3.18.3, the flicker left by the now marker. Radar begins
+	 * before the last observations end; there the measured 3 mm/h is the
+	 * rain, at every zoom, and radar's 0.5 is not.
+	 */
+	const qint64 start = 1600000000;
+	std::vector<bbq_sample> measured;
+	for (int i = 0; i < 12; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 300;
+		sample.duration_s = 300;
+		sample.temperature = 12.0;
+		sample.precip_rate = 3.0;
+		measured.push_back(sample);
+	}
+	std::vector<bbq_sample> fine;
+	for (int i = 0; i < 36; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + 40 + i * 300;
+		sample.duration_s = 300;
+		sample.precip_rate = 0.5;
+		fine.push_back(sample);
+	}
+	bbq_series observed(bbq_band::observed, QStringLiteral("test"));
+	observed.set_samples(std::move(measured));
+	bbq_series radar(bbq_band::nowcast_fine, QStringLiteral("test"));
+	radar.set_samples(std::move(fine));
+	bbq_composite composite;
+	composite.set_series(std::move(observed));
+	composite.set_series(std::move(radar));
+
+	probe graph;
+	graph.set_composite(composite);
+	graph.resize(900, 400);
+
+	const qint64 spans[] = {1800, 3600, 2 * 3600};
+	for (qint64 span : spans) {
+		graph.set_view(start, span);
+		graph.grab();
+		/* A quarter of an hour in, well inside the observations. */
+		graph.set_cursor_column(int(900.0 / span * graph.plot_rect().width()));
+		graph.grab();
+
+		const QString told = graph.accessibleDescription();
+		QVERIFY2(told.contains(QStringLiteral(" 3.0 mm/h")),
 		         qPrintable(QStringLiteral("at a %1 s span: %2").arg(span).arg(told)));
 	}
 }
