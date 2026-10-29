@@ -162,6 +162,7 @@ private slots:
 	void a_day_view_draws_no_range_band();
 	void radar_s_rain_is_the_rain_at_every_zoom();
 	void an_observation_keeps_its_rain_under_radar();
+	void radar_s_last_step_does_not_erase_the_next_hour();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -914,6 +915,63 @@ void test_view::an_observation_keeps_its_rain_under_radar() {
 		const QString told = graph.accessibleDescription();
 		QVERIFY2(told.contains(QStringLiteral(" 3.0 mm/h")),
 		         qPrintable(QStringLiteral("at a %1 s span: %2").arg(span).arg(told)));
+	}
+}
+
+void test_view::radar_s_last_step_does_not_erase_the_next_hour() {
+	/*
+	 * Sec 3.18.4, the shape on the Fold on 2026-10-29: an hourly band
+	 * with rain from 14:00, under radar that says dry and ends at 13:50.
+	 * At twenty minutes a column, wherever the column edges fall, the
+	 * hour starting at 14:00 keeps its 4 mm/h. Radar used to speak for
+	 * any column it touched, so the column holding its last step and
+	 * the 14:00 start lost the hour's knot, and the rain hump came and
+	 * went as the view moved.
+	 */
+	const qint64 noon = 1600000000 - 1600000000 % 3600;
+	std::vector<bbq_sample> hours;
+	for (int i = -2; i < 12; ++i) {
+		bbq_sample sample;
+		sample.start_utc = noon + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 9.0;
+		sample.precip_rate = i >= 2 ? 4.0 : 0.0;
+		hours.push_back(sample);
+	}
+	std::vector<bbq_sample> fine;
+	for (int i = -1; i < 23; ++i) {
+		bbq_sample sample;
+		sample.start_utc = noon + i * 300;
+		sample.duration_s = 300;
+		sample.precip_rate = 0.0;
+		fine.push_back(sample);
+	}
+	bbq_series hourly(bbq_band::hourly, QStringLiteral("test"));
+	hourly.set_samples(std::move(hours));
+	bbq_series radar(bbq_band::nowcast_fine, QStringLiteral("test"));
+	radar.set_samples(std::move(fine));
+	bbq_composite composite;
+	composite.set_series(std::move(hourly));
+	composite.set_series(std::move(radar));
+
+	probe graph;
+	graph.set_composite(composite);
+	graph.resize(900, 400);
+	graph.grab();
+	const int width = graph.plot_rect().width();
+	const qint64 per_column = 1200;
+
+	for (qint64 shift = 0; shift < per_column; shift += 60) {
+		const qint64 from = noon - 2 * 3600 + shift;
+		graph.set_view(from, per_column * width);
+		graph.grab();
+		const int column = int((noon + 2 * 3600 - from) / per_column);
+		graph.set_cursor_column(column);
+		graph.grab();
+
+		const QString told = graph.accessibleDescription();
+		QVERIFY2(told.contains(QStringLiteral(" 4.0 mm/h")),
+		         qPrintable(QStringLiteral("shifted %1 s: %2").arg(shift).arg(told)));
 	}
 }
 

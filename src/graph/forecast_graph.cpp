@@ -313,6 +313,25 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	double wind_total = 0.0;
 	int wind_count = 0;
 
+	/*
+	 * Where radar speaks for the rain, instant by instant (sec 3.18,
+	 * 3.18.4). It refines a band it outranks and not an observation, and
+	 * where it covers an instant the owner's rain there is not counted.
+	 * Each instant has one source, and the column takes the maximum over
+	 * its instants (sec 3.5) -- so no rate depends on which column a
+	 * sample's start happens to fall in.
+	 */
+	const bbq_series *fine = composite.band(bbq_band::nowcast_fine);
+	const bool radar_refines = fine != nullptr && fine != winner && !fine->is_empty() &&
+	                           winner->priority() < fine->priority();
+	const auto radar_covers = [&](qint64 when) {
+		if (!radar_refines) {
+			return false;
+		}
+		const bbq_sample *sample = fine->at(when);
+		return sample != nullptr && sample->precip_rate.has_value();
+	};
+
 	for (std::size_t i = span.first; i < span.second; ++i) {
 		/*
 		 * Temperature counts a sample only where its START lands in
@@ -370,7 +389,8 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 			 * from meaned peaks would smooth away the thing the maximum
 			 * was protecting.
 			 */
-			if (samples[i].precip_rate.has_value()) {
+			if (samples[i].precip_rate.has_value() &&
+			    !radar_covers(samples[i].start_utc)) {
 				const double v = *samples[i].precip_rate;
 				if (!result.knot_has_rain || v > result.knot_rain) {
 					result.knot_rain = v;
@@ -387,7 +407,15 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 			}
 		}
 
-		if (samples[i].precip_rate.has_value()) {
+		/*
+		 * The part of this sample inside the column, unless radar
+		 * covers all of it.
+		 */
+		const qint64 seen_from = std::max(samples[i].start_utc, from);
+		const qint64 seen_to = std::min(samples[i].start_utc + samples[i].duration_s, to);
+		const bool hidden = radar_covers(seen_from) && radar_covers(seen_to - 1);
+
+		if (samples[i].precip_rate.has_value() && !hidden) {
 			const double rate = *samples[i].precip_rate;
 			if (!result.has_rain || rate > result.rain) {
 				result.rain = rate;
@@ -422,43 +450,23 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	 * still reports one band's account of each quantity, and rain has
 	 * one source here rather than an average of two.
 	 *
-	 * Both the drawn value and the knot are REPLACED, or the trace and
-	 * the readout would disagree about the same column.
+	 * Both the drawn value and the knot take radar's word where radar
+	 * covers, or the trace and the readout would disagree about the
+	 * same column. The owner's rain was left out above for exactly the
+	 * instants radar covers, so here radar adds its own.
 	 *
-	 * Replaced, not maxed with the owner's. Taking the wetter of the
-	 * two made the rain's source depend on where sample starts fell:
-	 * zoomed in, a column holding a fifteen-minute nowcast start took
-	 * its rate and the columns beside it took radar's, so wherever the
-	 * two disagreed the trace grew spikes that came and went with every
-	 * zoom step -- seen on the Fold as the first two hours' rain
-	 * flickering while pinching (sec 3.18.2). It also drew rain where
-	 * radar said it had stopped, which bbq_composite::resolved_at()
-	 * already refused. Within the column the maximum over radar's own
-	 * samples still holds (sec 3.5).
-	 *
-	 * And only over a band radar outranks (sec 3.18.3). Radar's first
-	 * steps begin minutes before now, under the station's last
-	 * observations, and replacing a measured rate with an extrapolated
-	 * one there is the forecast beating what happened -- the flicker
-	 * left by the now marker once the first one was gone.
+	 * Three rules came before this one, each seen failing on the Fold
+	 * while pinching (sec 3.18.2 to 3.18.4). Taking the wetter of the
+	 * owner and radar gave spikes at the nowcast's starts. Replacing
+	 * the owner's rain wherever radar touched the column let radar's
+	 * last step erase the next hour's knot, so a whole hump came and
+	 * went with the zoom; deciding at the column's middle only moved
+	 * which column lost it. The unit was wrong: a column is a slice of
+	 * the screen, and which source speaks is a property of an instant.
 	 */
-	const bbq_series *fine = composite.band(bbq_band::nowcast_fine);
-	if (fine != nullptr && fine != winner && !fine->is_empty() &&
-	    winner->priority() < fine->priority()) {
+	if (radar_refines) {
 		const auto fine_span = fine->range(from, to);
 		const std::vector<bbq_sample> &fine_samples = fine->samples();
-
-		bool radar_speaks = false;
-		for (std::size_t i = fine_span.first; i < fine_span.second; ++i) {
-			radar_speaks = radar_speaks || fine_samples[i].precip_rate.has_value();
-		}
-
-		if (radar_speaks) {
-			result.has_rain = false;
-			result.rain = 0.0;
-			result.knot_has_rain = false;
-			result.knot_rain = 0.0;
-		}
 
 		for (std::size_t i = fine_span.first; i < fine_span.second; ++i) {
 			if (!fine_samples[i].precip_rate.has_value()) {

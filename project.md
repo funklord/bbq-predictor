@@ -2342,6 +2342,37 @@ Radar now refines only a band it outranks, in both. `test_model`'s
 `an_observation_keeps_its_rain_under_radar` both fail at b082b33, the
 second with a readout naming no rain at all.
 
+**That was not the fault the holder was seeing**, and it made the
+flicker worse: a whole hump now flickered in and out by the now marker.
+ISTOCK877 had reported nothing all day (HTTP 204), so there were no
+observations near now. What met was radar, from 11:55Z to 13:50Z, under
+hourly forecast bands.
+
+#### 3.18.4 Which source speaks is a property of an instant, not a column
+
+b082b33 replaced the owner's rain wherever radar touched any part of a
+column. The column holding radar's last step can also hold the next
+hourly start; radar then erased that hour's rain knot and put its own
+dry one in its place. With the knot gone the curve bridged the whole
+hour, so a wet hour after radar's reach vanished or appeared as the
+zoom moved the column edges. Deciding at the column's middle, the
+first repair tried, only moved which column lost the knot: the test
+below failed under it exactly as before.
+
+The unit was wrong. A column is a slice of the screen, and which source
+speaks for the rain is a property of an instant: radar where it
+covers, otherwise the owner. So an owner sample's rain counts in a
+column unless radar covers all of its part of the column, and its knot
+counts unless radar covers its start. Radar adds its own, and the column
+takes the maximum over its instants (sec 3.5). Each instant has one
+source, so no rate depends on which column a start falls in.
+
+`test_view`'s `radar_s_last_step_does_not_erase_the_next_hour` builds
+the Fold's shape: rain from 14:00 in an hourly band, dry radar ending
+at :55. It sweeps the view a minute at a time across a twenty-minute
+column and asks for the 14:00 hour's 4.0 mm/h at each; at f8fbbb9 the
+first shift already reads 0.0.
+
 ### 3.19 One plot, and rain is blue
 
 The chart had two panels: temperature, wind and rain rate above, and
