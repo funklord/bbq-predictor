@@ -2448,6 +2448,9 @@ tell the versions apart from pixels, since a narrow spike's tip is
 mostly antialiasing. A change that cannot be shown to matter was left
 out rather than kept on theory.
 
+**Seen on the Fold with 17237d8, 2026-10-29:** the holder reports the
+flicker gone.
+
 ### 3.19 One plot, and rain is blue
 
 The chart had two panels: temperature, wind and rain rate above, and
