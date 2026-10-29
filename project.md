@@ -7523,13 +7523,32 @@ It is not a regression: 601fa96 answers the same 62. The earlier runs
 never reached it. Sent to situ with the input (its inbox,
 20261029T0315Z).
 
+**Vendored at situ 714ac3c since 2026-10-29**, and the framing case is
+on by default. situ's reply (its message 20261029T0421Z to this inbox,
+recorded here and deleted) traced `index_body` to a counted run of
+fixed-size structs framed as one struct: each of its four emitters
+delegated to the nested struct's own `required`, and the guards that
+should have stopped it excluded fixed-size elements on purpose, so the
+shape fell past all of them. One predicate decides it now, and such a
+run is framed as `count * size`. It also fixed a pad clamped to what
+had arrived (26.730) and C reading a `uvar v[remaining]` as empty
+(26.733), and added its own cross-backend framing witness. Here: the
+index_body input traps the case at 601fa96 and passes at 714ac3c, in
+the tree's own target with no flag; the case ran 3.68M inputs in 301 s
+clean, the other cases 1.79M, and `make check` passes. Outside
+`framed()` and `required()` the header changed only in spelling, so
+nothing the reader runs changed. `src/wire/vendor/README.md` has the
+measurements. `FUZZ_FRAMING` is gone: it existed to keep a known situ
+fault from failing every run, and there is none left to keep out.
+
 The case's third check was rewritten to situ's contract: never
 backwards, asked of one byte fewer and of the frame the answer named.
 Asked only of one byte fewer, it missed 26.693 entirely, which a run
-against the unfixed header showed. The case is off by default, since it
-fails on a fault the reader does not reach, and it is the test of
-situ's fix. The reader keeps its exact-length
-checks, which also refuse padded varints that no cap can.
+against the unfixed header showed. The reader still calls neither
+function, and `fuzz-wire` still refuses a call to either: the case
+proves them sound for a later reader, not needed by this one. The
+reader keeps its exact-length checks, which also refuse padded varints
+that no cap can.
 
 **The five minor items in that report, as of situ bb79c61** (situ's
 inbox reply 20261025T1021Z, recorded here and deleted). Fixed in situ's
@@ -17009,11 +17028,9 @@ temperature on whole degrees (sec 16.94.2), and what the applet says
 after a scoring epoch bump (sec 16.120.5). If the first is yes, the
 second becomes real at once.
 
-**Waiting on situ:** 26.693, its framing contract (sec 15.12.3). The
-reader calls neither `framed()` nor `required()`, so nothing here is
-unsafe. When situ settles it, re-vendor by the README's procedure,
-align the fuzz case's third check, and run
-`make fuzz-wire FUZZ_FRAMING=1` before letting the guard go.
+**Nothing waits on situ** since 2026-10-29: vendored at 714ac3c, whose
+framing passes the fuzz case, now on by default (sec 15.12.3). The
+reader still calls neither `framed()` nor `required()`.
 
 **Seen on the Fold (SM-F926B, API 35), 2026-10-29,** with a build of
 4a3f1ad: the axis-label skip ("Thu 29" clear of "11 C"), a readout

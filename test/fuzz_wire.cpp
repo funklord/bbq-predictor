@@ -138,15 +138,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		break;
 	}
 	case 4: {
-		/*
-		 * Off unless FUZZ_FRAMING=1 (Makefile): situ's month_body framer
-		 * breaks the third promise above (situ's inbox, 20261026T1249Z),
-		 * and a fuzz target that always fails on a known fault in code
-		 * the reader does not call would only teach people to ignore it.
-		 */
-#ifndef BBQ_FUZZ_FRAMING
-		break;
-#endif
 		if (body.isEmpty()) {
 			break;
 		}

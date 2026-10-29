@@ -52,7 +52,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, provider_name &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::provider_name &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -132,10 +132,6 @@ public:
 		std::uint32_t at = 1u;
 		std::uint32_t pos = 1u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* provider_name.name: reading its length means reading
 		 * bytes that have to be here first. */
@@ -160,7 +156,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return provider_name{ situ_view_t{
+		return ::situ::provider_name{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -202,12 +198,12 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 		/* provider_name.len [min = 1] */
-		if (len() < 1) {
+		if (this->len() < 1) {
 			*which_ = check_len;
 			return ::situ::rt::err::constraint;
 		}
 		/* provider_name.len [max = 32] */
-		if (len() > 32) {
+		if (this->len() > 32) {
 			*which_ = check_len;
 			return ::situ::rt::err::constraint;
 		}
@@ -250,7 +246,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, packed_columns &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::packed_columns &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -330,10 +326,6 @@ public:
 		std::uint32_t at = 4u;
 		std::uint32_t pos = 4u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* packed_columns.packed: reading its length means reading
 		 * bytes that have to be here first. */
@@ -358,7 +350,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return packed_columns{ situ_view_t{
+		return ::situ::packed_columns{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -400,12 +392,12 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 		/* packed_columns.packed_len [min = 5] */
-		if (packed_len() < 5) {
+		if (this->packed_len() < 5) {
 			*which_ = check_packed_len;
 			return ::situ::rt::err::constraint;
 		}
 		/* packed_columns.packed_len [max = 4194230] */
-		if (packed_len() > 4194230) {
+		if (this->packed_len() > 4194230) {
 			*which_ = check_packed_len;
 			return ::situ::rt::err::constraint;
 		}
@@ -443,7 +435,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, band_ &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::band_ &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -480,7 +472,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0u;
 		}
@@ -493,7 +485,7 @@ public:
 	[[nodiscard]] ::situ::rt::err provider(::situ::provider_name &out) const noexcept
 	{
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), (1), provider_extent(), &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), (1), provider_extent(), &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::provider_name(raw);
@@ -509,14 +501,14 @@ public:
 	 */
 	[[nodiscard]] std::int64_t fetched_utc() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(1, provider_extent(), raw_.limit), 8u) ? static_cast<std::int64_t>(situ_get_le64(situ_base(raw_) + situ_advance_u32(1, provider_extent(), raw_.limit))) : std::int64_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(1, provider_extent(), raw_.limit), 8u) ? static_cast<std::int64_t>(situ_get_le64(situ_base(raw_) + situ_advance_u32(1, provider_extent(), raw_.limit))) : std::int64_t{};
 	}
 	/** Does nothing where the member does not fit the view: writing past
 	 * the frame is somebody else's data, and `validate` reports it.
 	 */
 	void set_fetched_utc(std::int64_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(1, provider_extent(), raw_.limit), 8u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(1, provider_extent(), raw_.limit), 8u)) {
 			situ_put_le64(situ_base(raw_) + situ_advance_u32(1, provider_extent(), raw_.limit), static_cast<std::uint64_t>(value));
 		}
 	}
@@ -529,14 +521,14 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t nominal_step_s() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(9, provider_extent(), raw_.limit), 4u) ? static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + situ_advance_u32(9, provider_extent(), raw_.limit))) : std::uint32_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(9, provider_extent(), raw_.limit), 4u) ? static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + situ_advance_u32(9, provider_extent(), raw_.limit))) : std::uint32_t{};
 	}
 	/** Does nothing where the member does not fit the view: writing past
 	 * the frame is somebody else's data, and `validate` reports it.
 	 */
 	void set_nominal_step_s(std::uint32_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(9, provider_extent(), raw_.limit), 4u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(9, provider_extent(), raw_.limit), 4u)) {
 			situ_put_le32(situ_base(raw_) + situ_advance_u32(9, provider_extent(), raw_.limit), static_cast<std::uint32_t>(value));
 		}
 	}
@@ -549,14 +541,14 @@ public:
 	 */
 	[[nodiscard]] std::uint32_t max_duration_s() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(13, provider_extent(), raw_.limit), 4u) ? static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + situ_advance_u32(13, provider_extent(), raw_.limit))) : std::uint32_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(13, provider_extent(), raw_.limit), 4u) ? static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + situ_advance_u32(13, provider_extent(), raw_.limit))) : std::uint32_t{};
 	}
 	/** Does nothing where the member does not fit the view: writing past
 	 * the frame is somebody else's data, and `validate` reports it.
 	 */
 	void set_max_duration_s(std::uint32_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(13, provider_extent(), raw_.limit), 4u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(13, provider_extent(), raw_.limit), 4u)) {
 			situ_put_le32(situ_base(raw_) + situ_advance_u32(13, provider_extent(), raw_.limit), static_cast<std::uint32_t>(value));
 		}
 	}
@@ -568,7 +560,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0u;
 		}
@@ -585,7 +577,7 @@ public:
 	[[nodiscard]] ::situ::rt::err columns(::situ::packed_columns &out) const noexcept
 	{
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), (situ_advance_u32(17, provider_extent(), raw_.limit)), columns_extent(), &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), (situ_advance_u32(17, provider_extent(), raw_.limit)), columns_extent(), &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::packed_columns(raw);
@@ -617,10 +609,6 @@ public:
 		std::uint32_t at = 17u;
 		std::uint32_t pos = 1u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* band.provider: reading its length means reading
 		 * bytes that have to be here first. */
@@ -689,7 +677,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return band_{ situ_view_t{
+		return ::situ::band_{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -746,19 +734,19 @@ public:
 		}
 		/* band.fetched_utc: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(1, provider_extent(), raw_.limit), 8u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(1, provider_extent(), raw_.limit), 8u)) {
 			*which_ = check_fetched_utc;
 			return ::situ::rt::err::bounds;
 		}
 		/* band.nominal_step_s: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(9, provider_extent(), raw_.limit), 4u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(9, provider_extent(), raw_.limit), 4u)) {
 			*which_ = check_nominal_step_s;
 			return ::situ::rt::err::bounds;
 		}
 		/* band.max_duration_s: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(13, provider_extent(), raw_.limit), 4u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(13, provider_extent(), raw_.limit), 4u)) {
 			*which_ = check_max_duration_s;
 			return ::situ::rt::err::bounds;
 		}
@@ -810,7 +798,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, bbq_file &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::bbq_file &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -922,7 +910,7 @@ public:
 	 */
 	[[nodiscard]] ::situ::rt::bytes signature() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(10, (::situ::rt::nonneg(::situ::rt::leaf_u(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6))))), raw_.limit), 64u)
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(10, (::situ::rt::nonneg(::situ::rt::leaf_u(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6))))), raw_.limit), 64u)
 			? ::situ::rt::bytes(situ_base(raw_) + (situ_advance_u32(10, (::situ::rt::nonneg(::situ::rt::leaf_u(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6))))), raw_.limit)), 64)
 			: ::situ::rt::bytes();
 	}
@@ -940,7 +928,7 @@ public:
 		const std::uint32_t start = 0;
 		const std::uint32_t end   = situ_advance_u32(10, (::situ::rt::nonneg(::situ::rt::leaf_u(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6))))), raw_.limit);
 
-		if (end < start || !situ_in_bounds(raw(), start, end - start)) {
+		if (end < start || !situ_in_bounds(::situ::rt::view::raw(), start, end - start)) {
 			return ::situ::rt::err::bounds;
 		}
 
@@ -977,10 +965,6 @@ public:
 		std::uint32_t at = 74u;
 		std::uint32_t pos = 10u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* bbq_file.body: reading its length means reading
 		 * bytes that have to be here first. */
@@ -1005,7 +989,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return bbq_file{ situ_view_t{
+		return ::situ::bbq_file{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -1072,17 +1056,17 @@ public:
 			}
 		}
 		/* bbq_file.kind: `file_kind` rejects unknown values (section 8.7) */
-		if (!is_known(kind())) {
+		if (!is_known(this->kind())) {
 			*which_ = check_kind;
 			return ::situ::rt::err::constraint;
 		}
 		/* bbq_file.reserved_zero [must_eq = 0] */
-		if (reserved_zero() != 0) {
+		if (this->reserved_zero() != 0) {
 			*which_ = check_reserved_zero;
 			return ::situ::rt::err::constraint;
 		}
 		/* bbq_file.body_len [max = 4194230] */
-		if (body_len() > 4194230) {
+		if (this->body_len() > 4194230) {
 			*which_ = check_body_len;
 			return ::situ::rt::err::constraint;
 		}
@@ -1094,7 +1078,7 @@ public:
 		}
 		/* bbq_file.signature: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(10, (::situ::rt::nonneg(::situ::rt::leaf_u(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6))))), raw_.limit), 64u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(10, (::situ::rt::nonneg(::situ::rt::leaf_u(static_cast<std::uint32_t>(situ_get_le32(situ_base(raw_) + 6))))), raw_.limit), 64u)) {
 			*which_ = check_signature;
 			return ::situ::rt::err::bounds;
 		}
@@ -1143,7 +1127,7 @@ public:
 	static constexpr std::uint32_t size_bytes = 0;
 
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, nothing &out) noexcept
+			std::uint32_t offset, ::situ::nothing &out) noexcept
 	{
 		situ_view_t raw;
 		const situ_err_t e = situ_view_at(owner.raw(), offset, size_bytes, &raw);
@@ -1185,7 +1169,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return nothing{ situ_view_t{
+		return ::situ::nothing{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -1215,7 +1199,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, zv1 &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::zv1 &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -1307,21 +1291,25 @@ public:
 		std::uint32_t at = 0u;
 		std::uint32_t pos = 0u;
 
-		if (have < size_min) {
-			need = size_min;
+
+		/* zv1.v: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
 			return ::situ::rt::err::truncated;
 		}
 		if (v_len() == 0u) {
 			/* zv1.v: mid-varint, so one more
 			 * byte and ask again. */
 			need = situ_need_u32(have, 1u);
-			return ::situ::rt::err::truncated;
-		}
-
-		/* zv1.v: reading its length means reading
-		 * bytes that have to be here first. */
-		if (have < pos) {
-			need = at;
+			/* ... and never below the total the walk has
+			 * already accounted. The two are different
+			 * quantities and neither bounds the other, so
+			 * `framed`'s six fell to five the moment its
+			 * fourth byte arrived (26.726). */
+			if (need < at) {
+				need = at;
+			}
 			return ::situ::rt::err::truncated;
 		}
 		{
@@ -1341,7 +1329,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return zv1{ situ_view_t{
+		return ::situ::zv1{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -1373,7 +1361,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, v1 &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::v1 &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -1465,21 +1453,25 @@ public:
 		std::uint32_t at = 0u;
 		std::uint32_t pos = 0u;
 
-		if (have < size_min) {
-			need = size_min;
+
+		/* v1.v: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
 			return ::situ::rt::err::truncated;
 		}
 		if (v_len() == 0u) {
 			/* v1.v: mid-varint, so one more
 			 * byte and ask again. */
 			need = situ_need_u32(have, 1u);
-			return ::situ::rt::err::truncated;
-		}
-
-		/* v1.v: reading its length means reading
-		 * bytes that have to be here first. */
-		if (have < pos) {
-			need = at;
+			/* ... and never below the total the walk has
+			 * already accounted. The two are different
+			 * quantities and neither bounds the other, so
+			 * `framed`'s six fell to five the moment its
+			 * fourth byte arrived (26.726). */
+			if (need < at) {
+				need = at;
+			}
 			return ::situ::rt::err::truncated;
 		}
 		{
@@ -1499,7 +1491,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return v1{ situ_view_t{
+		return ::situ::v1{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -1531,7 +1523,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, optional_column &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::optional_column &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -1638,7 +1630,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -1654,7 +1646,7 @@ public:
 			if (n == index) {
 				situ_view_t narrowed;
 				const situ_err_t e =
-					situ_view_sub(this->raw(), at, size, &narrowed);
+					situ_view_sub(::situ::rt::view::raw(), at, size, &narrowed);
 
 				if (e == SITU_OK) {
 					out = ::situ::zv1(narrowed);
@@ -1681,7 +1673,7 @@ public:
 		while (n < delta_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -1717,7 +1709,7 @@ public:
 			if (at >= raw_.limit) {
 				return false;
 			}
-			if (situ_view_sub(this->raw(), at,
+			if (situ_view_sub(::situ::rt::view::raw(), at,
 					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
 				return false;
 			}
@@ -1761,16 +1753,6 @@ public:
 		std::uint32_t at = 0u;
 		std::uint32_t pos = 0u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
-		if (count_len() == 0u) {
-			/* optional_column.count: mid-varint, so one more
-			 * byte and ask again. */
-			need = situ_need_u32(have, 1u);
-			return ::situ::rt::err::truncated;
-		}
 
 		/* optional_column.count: reading its length means reading
 		 * bytes that have to be here first. */
@@ -1778,11 +1760,32 @@ public:
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
+		if (count_len() == 0u) {
+			/* optional_column.count: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
+			/* ... and never below the total the walk has
+			 * already accounted. The two are different
+			 * quantities and neither bounds the other, so
+			 * `framed`'s six fell to five the moment its
+			 * fourth byte arrived (26.726). */
+			if (need < at) {
+				need = at;
+			}
+			return ::situ::rt::err::truncated;
+		}
 		{
 			const std::uint32_t len = count_len();
 
 			at = situ_need_u32(at, len);
 			pos = situ_need_u32(pos, len);
+		}
+
+		/* optional_column.delta: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
+			return ::situ::rt::err::truncated;
 		}
 
 		/* optional_column.delta: a run of `zv1`, framed one
@@ -1806,11 +1809,14 @@ public:
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
-					 * the count still promises after it. */
+					 * the count still promises after it -- the STRUCTURAL
+					 * minimum, every value constraint ignored, so that it
+					 * agrees with what each of those elements will itself
+					 * report once reached (26.724). */
 					need = situ_need_u32(at, part);
 					need = situ_need_u32(need,
 					        situ_need_mul_u32(delta_count() - n - 1u,
-					                          ::situ::zv1::size_min));
+					                          1u));
 					return ::situ::rt::err::truncated;
 				}
 				at  = situ_need_u32(at, part);
@@ -1830,7 +1836,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return optional_column{ situ_view_t{
+		return ::situ::optional_column{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -1937,7 +1943,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, columns &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::columns &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -2140,7 +2146,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -2156,7 +2162,7 @@ public:
 			if (n == index) {
 				situ_view_t narrowed;
 				const situ_err_t e =
-					situ_view_sub(this->raw(), at, size, &narrowed);
+					situ_view_sub(::situ::rt::view::raw(), at, size, &narrowed);
 
 				if (e == SITU_OK) {
 					out = ::situ::zv1(narrowed);
@@ -2183,7 +2189,7 @@ public:
 		while (n < start_utc_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -2219,7 +2225,7 @@ public:
 			if (at >= raw_.limit) {
 				return false;
 			}
-			if (situ_view_sub(this->raw(), at,
+			if (situ_view_sub(::situ::rt::view::raw(), at,
 					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
 				return false;
 			}
@@ -2284,7 +2290,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -2300,7 +2306,7 @@ public:
 			if (n == index) {
 				situ_view_t narrowed;
 				const situ_err_t e =
-					situ_view_sub(this->raw(), at, size, &narrowed);
+					situ_view_sub(::situ::rt::view::raw(), at, size, &narrowed);
 
 				if (e == SITU_OK) {
 					out = ::situ::v1(narrowed);
@@ -2327,7 +2333,7 @@ public:
 		while (n < duration_s_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -2363,7 +2369,7 @@ public:
 			if (at >= raw_.limit) {
 				return false;
 			}
-			if (situ_view_sub(this->raw(), at,
+			if (situ_view_sub(::situ::rt::view::raw(), at,
 					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
 				return false;
 			}
@@ -2408,7 +2414,7 @@ public:
 	 */
 	[[nodiscard]] ::situ::rt::bytes trailing() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (wind_kph_wind_kph_values_extent())), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (wind_kph_wind_kph_values_extent())), raw_.limit), 0) : ::situ::rt::bytes();
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (wind_kph_wind_kph_values_extent())), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (wind_kph_wind_kph_values_extent())), raw_.limit), 0) : ::situ::rt::bytes();
 	}
 
 	/** columns.temperature_map.temperature_map_absent, present when the discriminant selects `0`.
@@ -2419,7 +2425,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(1, rows_len(), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(1, rows_len(), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2447,7 +2453,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2475,7 +2481,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2503,7 +2509,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2531,7 +2537,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2547,7 +2553,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0;
 		}
@@ -2572,7 +2578,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t whole;
-		situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit),
+		situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit),
 			situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit)), &whole);
 
 		if (e != SITU_OK) {
@@ -2581,7 +2587,7 @@ public:
 
 		/* Twice: once over what is left, to give the extent
 		 * something to measure, and once at the size it says. */
-		e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit),
+		e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit),
 			::situ::optional_column(whole).extent(), &whole);
 		if (e == SITU_OK) {
 			out = ::situ::optional_column(whole);
@@ -2597,7 +2603,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2613,7 +2619,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0;
 		}
@@ -2639,7 +2645,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t whole;
-		situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit),
+		situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit),
 			situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit)), &whole);
 
 		if (e != SITU_OK) {
@@ -2648,7 +2654,7 @@ public:
 
 		/* Twice: once over what is left, to give the extent
 		 * something to measure, and once at the size it says. */
-		e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit),
+		e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit),
 			::situ::optional_column(whole).extent(), &whole);
 		if (e == SITU_OK) {
 			out = ::situ::optional_column(whole);
@@ -2664,7 +2670,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2680,7 +2686,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0;
 		}
@@ -2707,7 +2713,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t whole;
-		situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit),
+		situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit),
 			situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit)), &whole);
 
 		if (e != SITU_OK) {
@@ -2716,7 +2722,7 @@ public:
 
 		/* Twice: once over what is left, to give the extent
 		 * something to measure, and once at the size it says. */
-		e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit),
+		e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit),
 			::situ::optional_column(whole).extent(), &whole);
 		if (e == SITU_OK) {
 			out = ::situ::optional_column(whole);
@@ -2732,7 +2738,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit), nothing::size_bytes, &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit), nothing::size_bytes, &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::nothing(raw);
@@ -2748,7 +2754,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0;
 		}
@@ -2776,7 +2782,7 @@ public:
 			return ::situ::rt::err::version;
 		}
 		situ_view_t whole;
-		situ_err_t e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit),
+		situ_err_t e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit),
 			situ_remaining_u32(raw_.limit, situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit)), &whole);
 
 		if (e != SITU_OK) {
@@ -2785,7 +2791,7 @@ public:
 
 		/* Twice: once over what is left, to give the extent
 		 * something to measure, and once at the size it says. */
-		e = situ_view_sub(this->raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit),
+		e = situ_view_sub(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(1, rows_len(), raw_.limit), (this->has_temperature() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), (this->has_wind_kph() == 0u ? 0u : (::situ::rt::nonneg((::situ::rt::leaf_u(rows_value()) + 7) / 8))), raw_.limit), start_utc_span(), raw_.limit), duration_s_span(), raw_.limit), (this->has_temperature() == 0u ? 0u : (temperature_temperature_values_extent())), raw_.limit), (this->has_precip_rate() == 0u ? 0u : (precip_rate_precip_rate_values_extent())), raw_.limit), (this->has_precip_chance() == 0u ? 0u : (precip_chance_precip_chance_values_extent())), raw_.limit),
 			::situ::optional_column(whole).extent(), &whole);
 		if (e == SITU_OK) {
 			out = ::situ::optional_column(whole);
@@ -2805,21 +2811,25 @@ public:
 		std::uint32_t at = 1u;
 		std::uint32_t pos = 1u;
 
-		if (have < size_min) {
-			need = size_min;
+
+		/* columns.rows: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
 			return ::situ::rt::err::truncated;
 		}
 		if (rows_len() == 0u) {
 			/* columns.rows: mid-varint, so one more
 			 * byte and ask again. */
 			need = situ_need_u32(have, 1u);
-			return ::situ::rt::err::truncated;
-		}
-
-		/* columns.rows: reading its length means reading
-		 * bytes that have to be here first. */
-		if (have < pos) {
-			need = at;
+			/* ... and never below the total the walk has
+			 * already accounted. The two are different
+			 * quantities and neither bounds the other, so
+			 * `framed`'s six fell to five the moment its
+			 * fourth byte arrived (26.726). */
+			if (need < at) {
+				need = at;
+			}
 			return ::situ::rt::err::truncated;
 		}
 		{
@@ -2881,6 +2891,13 @@ public:
 			pos = situ_need_u32(pos, len);
 		}
 
+		/* columns.start_utc: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
+			return ::situ::rt::err::truncated;
+		}
+
 		/* columns.start_utc: a run of `zv1`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
@@ -2902,17 +2919,27 @@ public:
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
-					 * the count still promises after it. */
+					 * the count still promises after it -- the STRUCTURAL
+					 * minimum, every value constraint ignored, so that it
+					 * agrees with what each of those elements will itself
+					 * report once reached (26.724). */
 					need = situ_need_u32(at, part);
 					need = situ_need_u32(need,
 					        situ_need_mul_u32(start_utc_count() - n - 1u,
-					                          ::situ::zv1::size_min));
+					                          1u));
 					return ::situ::rt::err::truncated;
 				}
 				at  = situ_need_u32(at, part);
 				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
+		}
+
+		/* columns.duration_s: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
+			return ::situ::rt::err::truncated;
 		}
 
 		/* columns.duration_s: a run of `v1`, framed one
@@ -2936,11 +2963,14 @@ public:
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
-					 * the count still promises after it. */
+					 * the count still promises after it -- the STRUCTURAL
+					 * minimum, every value constraint ignored, so that it
+					 * agrees with what each of those elements will itself
+					 * report once reached (26.724). */
 					need = situ_need_u32(at, part);
 					need = situ_need_u32(need,
 					        situ_need_mul_u32(duration_s_count() - n - 1u,
-					                          ::situ::v1::size_min));
+					                          1u));
 					return ::situ::rt::err::truncated;
 				}
 				at  = situ_need_u32(at, part);
@@ -3111,7 +3141,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return columns{ situ_view_t{
+		return ::situ::columns{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -3472,7 +3502,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, station_id &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::station_id &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -3552,10 +3582,6 @@ public:
 		std::uint32_t at = 1u;
 		std::uint32_t pos = 1u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* station_id.id: reading its length means reading
 		 * bytes that have to be here first. */
@@ -3580,7 +3606,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return station_id{ situ_view_t{
+		return ::situ::station_id{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -3622,12 +3648,12 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 		/* station_id.len [min = 1] */
-		if (len() < 1) {
+		if (this->len() < 1) {
 			*which_ = check_len;
 			return ::situ::rt::err::constraint;
 		}
 		/* station_id.len [max = 32] */
-		if (len() > 32) {
+		if (this->len() > 32) {
 			*which_ = check_len;
 			return ::situ::rt::err::constraint;
 		}
@@ -3670,7 +3696,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, head_body &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::head_body &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -3695,7 +3721,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0u;
 		}
@@ -3708,7 +3734,7 @@ public:
 	[[nodiscard]] ::situ::rt::err station(::situ::station_id &out) const noexcept
 	{
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), (0), station_extent(), &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), (0), station_extent(), &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::station_id(raw);
@@ -3724,14 +3750,14 @@ public:
 	 */
 	[[nodiscard]] std::int64_t generated_utc() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u) ? static_cast<std::int64_t>(situ_get_le64(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit))) : std::int64_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u) ? static_cast<std::int64_t>(situ_get_le64(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit))) : std::int64_t{};
 	}
 	/** Does nothing where the member does not fit the view: writing past
 	 * the frame is somebody else's data, and `validate` reports it.
 	 */
 	void set_generated_utc(std::int64_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
 			situ_put_le64(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit), static_cast<std::uint64_t>(value));
 		}
 	}
@@ -3746,7 +3772,7 @@ public:
 	 */
 	[[nodiscard]] std::uint8_t band_count() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(8, station_extent(), raw_.limit), 1u) ? static_cast<std::uint8_t>(*(situ_base(raw_) + situ_advance_u32(8, station_extent(), raw_.limit))) : std::uint8_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(8, station_extent(), raw_.limit), 1u) ? static_cast<std::uint8_t>(*(situ_base(raw_) + situ_advance_u32(8, station_extent(), raw_.limit))) : std::uint8_t{};
 	}
 	/** Writing this moves where the members after it start, so every
 	 * view of this message is stale afterwards (12.3). It takes the
@@ -3755,7 +3781,7 @@ public:
 	 */
 	void set_band_count(::situ::rt::message &owner, std::uint8_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(8, station_extent(), raw_.limit), 1u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(8, station_extent(), raw_.limit), 1u)) {
 			*(situ_base(raw_) + situ_advance_u32(8, station_extent(), raw_.limit)) = static_cast<std::uint8_t>(value);
 			owner.touch();
 		}
@@ -3785,7 +3811,7 @@ public:
 	 * advance by the element's own `extent()`.
 	 */
 	[[nodiscard]] ::situ::rt::err bands_at(std::uint32_t index,
-			::situ::band &out) const noexcept
+			::situ::band_ &out) const noexcept
 	{
 		std::uint32_t at = bands_offset();
 		std::uint32_t n  = 0;
@@ -3797,12 +3823,12 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
 
-			const ::situ::band element(raw);
+			const ::situ::band_ element(raw);
 			const std::uint32_t size = element.extent();
 
 			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
@@ -3813,10 +3839,10 @@ public:
 			if (n == index) {
 				situ_view_t narrowed;
 				const situ_err_t e =
-					situ_view_sub(this->raw(), at, size, &narrowed);
+					situ_view_sub(::situ::rt::view::raw(), at, size, &narrowed);
 
 				if (e == SITU_OK) {
-					out = ::situ::band(narrowed);
+					out = ::situ::band_(narrowed);
 				}
 				return static_cast<::situ::rt::err>(e);
 			}
@@ -3840,12 +3866,12 @@ public:
 		while (n < bands_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
 
-			const ::situ::band element(raw);
+			const ::situ::band_ element(raw);
 			const std::uint32_t size = element.extent();
 
 			if (size == 0 || size > situ_remaining_u32(raw_.limit, at)) {
@@ -3876,11 +3902,11 @@ public:
 			if (at >= raw_.limit) {
 				return false;
 			}
-			if (situ_view_sub(this->raw(), at,
+			if (situ_view_sub(::situ::rt::view::raw(), at,
 					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
 				return false;
 			}
-			const ::situ::band element(raw);
+			const ::situ::band_ element(raw);
 			const std::uint32_t size = element.extent();
 
 			if (size == 0) {
@@ -3905,7 +3931,7 @@ public:
 	 */
 	[[nodiscard]] ::situ::rt::bytes trailing() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(situ_advance_u32(9, station_extent(), raw_.limit), bands_span(), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(9, station_extent(), raw_.limit), bands_span(), raw_.limit), 0) : ::situ::rt::bytes();
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(9, station_extent(), raw_.limit), bands_span(), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(9, station_extent(), raw_.limit), bands_span(), raw_.limit), 0) : ::situ::rt::bytes();
 	}
 
 	/** How many bytes a whole one needs, given the ones this view
@@ -3920,10 +3946,6 @@ public:
 		std::uint32_t at = 9u;
 		std::uint32_t pos = 0u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* head_body.station: reading its length means reading
 		 * bytes that have to be here first. */
@@ -3954,6 +3976,13 @@ public:
 		}
 		pos = situ_need_u32(pos, 9u);
 
+		/* head_body.bands: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
+			return ::situ::rt::err::truncated;
+		}
+
 		/* head_body.bands: a run of `band`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
@@ -3975,11 +4004,14 @@ public:
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
-					 * the count still promises after it. */
+					 * the count still promises after it -- the STRUCTURAL
+					 * minimum, every value constraint ignored, so that it
+					 * agrees with what each of those elements will itself
+					 * report once reached (26.724). */
 					need = situ_need_u32(at, part);
 					need = situ_need_u32(need,
 					        situ_need_mul_u32(bands_count() - n - 1u,
-					                          ::situ::band_::size_min));
+					                          17u));
 					return ::situ::rt::err::truncated;
 				}
 				at  = situ_need_u32(at, part);
@@ -3999,7 +4031,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return head_body{ situ_view_t{
+		return ::situ::head_body{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -4060,18 +4092,18 @@ public:
 		}
 		/* head_body.generated_utc: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
 			*which_ = check_generated_utc;
 			return ::situ::rt::err::bounds;
 		}
 		/* head_body.band_count: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(8, station_extent(), raw_.limit), 1u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(8, station_extent(), raw_.limit), 1u)) {
 			*which_ = check_band_count;
 			return ::situ::rt::err::bounds;
 		}
 		/* head_body.band_count [max = 16] */
-		if (band_count() > 16) {
+		if (this->band_count() > 16) {
 			*which_ = check_band_count;
 			return ::situ::rt::err::constraint;
 		}
@@ -4119,7 +4151,7 @@ public:
 	static constexpr std::uint32_t size_bytes = 42;
 
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, index_entry &out) noexcept
+			std::uint32_t offset, ::situ::index_entry &out) noexcept
 	{
 		situ_view_t raw;
 		const situ_err_t e = situ_view_at(owner.raw(), offset, size_bytes, &raw);
@@ -4226,7 +4258,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return index_entry{ situ_view_t{
+		return ::situ::index_entry{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -4268,17 +4300,17 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 		/* index_entry.rows [max = 44640] */
-		if (rows() > 44640) {
+		if (this->rows() > 44640) {
 			*which_ = check_rows;
 			return ::situ::rt::err::constraint;
 		}
 		/* index_entry.bytes [min = 74] */
-		if (bytes() < 74) {
+		if (this->bytes() < 74) {
 			*which_ = check_bytes;
 			return ::situ::rt::err::constraint;
 		}
 		/* index_entry.bytes [max = 4194304] */
-		if (bytes() > 4194304) {
+		if (this->bytes() > 4194304) {
 			*which_ = check_bytes;
 			return ::situ::rt::err::constraint;
 		}
@@ -4337,7 +4369,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, index_body &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::index_body &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -4362,7 +4394,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0u;
 		}
@@ -4375,7 +4407,7 @@ public:
 	[[nodiscard]] ::situ::rt::err station(::situ::station_id &out) const noexcept
 	{
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), (0), station_extent(), &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), (0), station_extent(), &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::station_id(raw);
@@ -4391,14 +4423,14 @@ public:
 	 */
 	[[nodiscard]] std::int64_t generated_utc() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u) ? static_cast<std::int64_t>(situ_get_le64(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit))) : std::int64_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u) ? static_cast<std::int64_t>(situ_get_le64(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit))) : std::int64_t{};
 	}
 	/** Does nothing where the member does not fit the view: writing past
 	 * the frame is somebody else's data, and `validate` reports it.
 	 */
 	void set_generated_utc(std::int64_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
 			situ_put_le64(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit), static_cast<std::uint64_t>(value));
 		}
 	}
@@ -4413,7 +4445,7 @@ public:
 	 */
 	[[nodiscard]] std::uint16_t count() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(8, station_extent(), raw_.limit), 2u) ? static_cast<std::uint16_t>(situ_get_le16(situ_base(raw_) + situ_advance_u32(8, station_extent(), raw_.limit))) : std::uint16_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(8, station_extent(), raw_.limit), 2u) ? static_cast<std::uint16_t>(situ_get_le16(situ_base(raw_) + situ_advance_u32(8, station_extent(), raw_.limit))) : std::uint16_t{};
 	}
 	/** Writing this moves where the members after it start, so every
 	 * view of this message is stale afterwards (12.3). It takes the
@@ -4422,7 +4454,7 @@ public:
 	 */
 	void set_count(::situ::rt::message &owner, std::uint16_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(8, station_extent(), raw_.limit), 2u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(8, station_extent(), raw_.limit), 2u)) {
 			situ_put_le16(situ_base(raw_) + situ_advance_u32(8, station_extent(), raw_.limit), static_cast<std::uint16_t>(value));
 			owner.touch();
 		}
@@ -4454,7 +4486,7 @@ public:
 		}
 
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(),
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(),
 			months_offset() + index * ::situ::index_entry::size_bytes,
 			::situ::index_entry::size_bytes, &raw);
 
@@ -4469,7 +4501,7 @@ public:
 	 */
 	[[nodiscard]] ::situ::rt::bytes trailing() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(situ_advance_u32(10, station_extent(), raw_.limit), (::situ::rt::nonneg(::situ::rt::leaf_u(count()))) * 42, raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(10, station_extent(), raw_.limit), (::situ::rt::nonneg(::situ::rt::leaf_u(count()))) * 42, raw_.limit), 0) : ::situ::rt::bytes();
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(10, station_extent(), raw_.limit), (::situ::rt::nonneg(::situ::rt::leaf_u(count()))) * 42, raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(10, station_extent(), raw_.limit), (::situ::rt::nonneg(::situ::rt::leaf_u(count()))) * 42, raw_.limit), 0) : ::situ::rt::bytes();
 	}
 
 	/** How many bytes a whole one needs, given the ones this view
@@ -4484,10 +4516,6 @@ public:
 		std::uint32_t at = 10u;
 		std::uint32_t pos = 0u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* index_body.station: reading its length means reading
 		 * bytes that have to be here first. */
@@ -4524,25 +4552,10 @@ public:
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
-
-		/* index_body.months: a nested `index_entry` frames
-		 * itself. Its EXTENT shrinks when the bytes run out, so
-		 * adding that reported a complete message (26.684). */
 		{
-			std::uint32_t part = 0;
+			const std::uint32_t len = (::situ::rt::nonneg(::situ::rt::saturate_i64(count()))) * 42;
 
-			if (have < pos) {
-				need = at;
-				return ::situ::rt::err::truncated;
-			}
-			const ::situ::rt::err e = ::situ::index_entry::required(
-				situ_base(raw_) + pos,
-				situ_remaining_u32(have, pos), part);
-			if (e != ::situ::rt::err::ok) {
-				need = situ_need_u32(at, part);
-				return ::situ::rt::err::truncated;
-			}
-			at = situ_need_u32(at, part);
+			at = situ_need_u32(at, len);
 		}
 
 		need = at;
@@ -4556,7 +4569,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return index_body{ situ_view_t{
+		return ::situ::index_body{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -4617,18 +4630,18 @@ public:
 		}
 		/* index_body.generated_utc: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 8u)) {
 			*which_ = check_generated_utc;
 			return ::situ::rt::err::bounds;
 		}
 		/* index_body.count: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(8, station_extent(), raw_.limit), 2u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(8, station_extent(), raw_.limit), 2u)) {
 			*which_ = check_count;
 			return ::situ::rt::err::bounds;
 		}
 		/* index_body.count [max = 2400] */
-		if (count() > 2400) {
+		if (this->count() > 2400) {
 			*which_ = check_count;
 			return ::situ::rt::err::constraint;
 		}
@@ -4671,7 +4684,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, provider_run &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::provider_run &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -4753,14 +4766,14 @@ public:
 	 */
 	[[nodiscard]] std::uint8_t provider() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(0, run_len_len(), raw_.limit), 1u) ? static_cast<std::uint8_t>(*(situ_base(raw_) + situ_advance_u32(0, run_len_len(), raw_.limit))) : std::uint8_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, run_len_len(), raw_.limit), 1u) ? static_cast<std::uint8_t>(*(situ_base(raw_) + situ_advance_u32(0, run_len_len(), raw_.limit))) : std::uint8_t{};
 	}
 	/** Does nothing where the member does not fit the view: writing past
 	 * the frame is somebody else's data, and `validate` reports it.
 	 */
 	void set_provider(std::uint8_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(0, run_len_len(), raw_.limit), 1u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, run_len_len(), raw_.limit), 1u)) {
 			*(situ_base(raw_) + situ_advance_u32(0, run_len_len(), raw_.limit)) = static_cast<std::uint8_t>(value);
 		}
 	}
@@ -4789,21 +4802,25 @@ public:
 		std::uint32_t at = 1u;
 		std::uint32_t pos = 0u;
 
-		if (have < size_min) {
-			need = size_min;
+
+		/* provider_run.run_len: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
 			return ::situ::rt::err::truncated;
 		}
 		if (run_len_len() == 0u) {
 			/* provider_run.run_len: mid-varint, so one more
 			 * byte and ask again. */
 			need = situ_need_u32(have, 1u);
-			return ::situ::rt::err::truncated;
-		}
-
-		/* provider_run.run_len: reading its length means reading
-		 * bytes that have to be here first. */
-		if (have < pos) {
-			need = at;
+			/* ... and never below the total the walk has
+			 * already accounted. The two are different
+			 * quantities and neither bounds the other, so
+			 * `framed`'s six fell to five the moment its
+			 * fourth byte arrived (26.726). */
+			if (need < at) {
+				need = at;
+			}
 			return ::situ::rt::err::truncated;
 		}
 		{
@@ -4823,7 +4840,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return provider_run{ situ_view_t{
+		return ::situ::provider_run{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -4888,12 +4905,12 @@ public:
 		}
 		/* provider_run.provider: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(0, run_len_len(), raw_.limit), 1u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, run_len_len(), raw_.limit), 1u)) {
 			*which_ = check_provider;
 			return ::situ::rt::err::bounds;
 		}
 		/* provider_run.provider [max = 15] */
-		if (provider() > 15) {
+		if (this->provider() > 15) {
 			*which_ = check_provider;
 			return ::situ::rt::err::constraint;
 		}
@@ -4925,7 +4942,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, month_body &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::month_body &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -4950,7 +4967,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0u;
 		}
@@ -4963,7 +4980,7 @@ public:
 	[[nodiscard]] ::situ::rt::err station(::situ::station_id &out) const noexcept
 	{
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), (0), station_extent(), &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), (0), station_extent(), &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::station_id(raw);
@@ -4979,14 +4996,14 @@ public:
 	 */
 	[[nodiscard]] std::uint16_t month() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 2u) ? static_cast<std::uint16_t>(situ_get_le16(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit))) : std::uint16_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 2u) ? static_cast<std::uint16_t>(situ_get_le16(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit))) : std::uint16_t{};
 	}
 	/** Does nothing where the member does not fit the view: writing past
 	 * the frame is somebody else's data, and `validate` reports it.
 	 */
 	void set_month(std::uint16_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 2u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 2u)) {
 			situ_put_le16(situ_base(raw_) + situ_advance_u32(0, station_extent(), raw_.limit), static_cast<std::uint16_t>(value));
 		}
 	}
@@ -5002,7 +5019,7 @@ public:
 	 */
 	[[nodiscard]] std::uint8_t provider_count() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(2, station_extent(), raw_.limit), 1u) ? static_cast<std::uint8_t>(*(situ_base(raw_) + situ_advance_u32(2, station_extent(), raw_.limit))) : std::uint8_t{};
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(2, station_extent(), raw_.limit), 1u) ? static_cast<std::uint8_t>(*(situ_base(raw_) + situ_advance_u32(2, station_extent(), raw_.limit))) : std::uint8_t{};
 	}
 	/** Writing this moves where the members after it start, so every
 	 * view of this message is stale afterwards (12.3). It takes the
@@ -5011,7 +5028,7 @@ public:
 	 */
 	void set_provider_count(::situ::rt::message &owner, std::uint8_t value) noexcept
 	{
-		if (situ_in_bounds(raw(), situ_advance_u32(2, station_extent(), raw_.limit), 1u)) {
+		if (situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(2, station_extent(), raw_.limit), 1u)) {
 			*(situ_base(raw_) + situ_advance_u32(2, station_extent(), raw_.limit)) = static_cast<std::uint8_t>(value);
 			owner.touch();
 		}
@@ -5053,7 +5070,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -5069,7 +5086,7 @@ public:
 			if (n == index) {
 				situ_view_t narrowed;
 				const situ_err_t e =
-					situ_view_sub(this->raw(), at, size, &narrowed);
+					situ_view_sub(::situ::rt::view::raw(), at, size, &narrowed);
 
 				if (e == SITU_OK) {
 					out = ::situ::provider_name(narrowed);
@@ -5096,7 +5113,7 @@ public:
 		while (n < providers_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -5132,7 +5149,7 @@ public:
 			if (at >= raw_.limit) {
 				return false;
 			}
-			if (situ_view_sub(this->raw(), at,
+			if (situ_view_sub(::situ::rt::view::raw(), at,
 					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
 				return false;
 			}
@@ -5248,7 +5265,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -5264,7 +5281,7 @@ public:
 			if (n == index) {
 				situ_view_t narrowed;
 				const situ_err_t e =
-					situ_view_sub(this->raw(), at, size, &narrowed);
+					situ_view_sub(::situ::rt::view::raw(), at, size, &narrowed);
 
 				if (e == SITU_OK) {
 					out = ::situ::provider_run(narrowed);
@@ -5291,7 +5308,7 @@ public:
 		while (n < runs_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -5327,7 +5344,7 @@ public:
 			if (at >= raw_.limit) {
 				return false;
 			}
-			if (situ_view_sub(this->raw(), at,
+			if (situ_view_sub(::situ::rt::view::raw(), at,
 					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
 				return false;
 			}
@@ -5358,7 +5375,7 @@ public:
 	{
 		situ_view_t whole;
 
-		if (situ_view_sub(this->raw(), at,
+		if (situ_view_sub(::situ::rt::view::raw(), at,
 				situ_remaining_u32(raw_.limit, at), &whole) != SITU_OK) {
 			return 0u;
 		}
@@ -5377,7 +5394,7 @@ public:
 	[[nodiscard]] ::situ::rt::err columns(::situ::packed_columns &out) const noexcept
 	{
 		situ_view_t raw;
-		const situ_err_t e = situ_view_sub(this->raw(), (situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit), runs_span(), raw_.limit)), columns_extent(), &raw);
+		const situ_err_t e = situ_view_sub(::situ::rt::view::raw(), (situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit), runs_span(), raw_.limit)), columns_extent(), &raw);
 
 		if (e == SITU_OK) {
 			out = ::situ::packed_columns(raw);
@@ -5390,7 +5407,7 @@ public:
 	 */
 	[[nodiscard]] ::situ::rt::bytes trailing() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit), runs_span(), raw_.limit), columns_extent(), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit), runs_span(), raw_.limit), columns_extent(), raw_.limit), 0) : ::situ::rt::bytes();
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit), runs_span(), raw_.limit), columns_extent(), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(situ_advance_u32(3, station_extent(), raw_.limit), providers_span(), raw_.limit), run_count_len(), raw_.limit), runs_span(), raw_.limit), columns_extent(), raw_.limit), 0) : ::situ::rt::bytes();
 	}
 
 	/** How many bytes a whole one needs, given the ones this view
@@ -5405,10 +5422,6 @@ public:
 		std::uint32_t at = 3u;
 		std::uint32_t pos = 0u;
 
-		if (have < size_min) {
-			need = size_min;
-			return ::situ::rt::err::truncated;
-		}
 
 		/* month_body.station: reading its length means reading
 		 * bytes that have to be here first. */
@@ -5439,6 +5452,13 @@ public:
 		}
 		pos = situ_need_u32(pos, 3u);
 
+		/* month_body.providers: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
+			return ::situ::rt::err::truncated;
+		}
+
 		/* month_body.providers: a run of `provider_name`, framed one
 		 * element at a time. The walk the accessors use stops at the end
 		 * of the bytes as readily as at the end of the run; this asks each
@@ -5460,23 +5480,20 @@ public:
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
-					 * the count still promises after it. */
+					 * the count still promises after it -- the STRUCTURAL
+					 * minimum, every value constraint ignored, so that it
+					 * agrees with what each of those elements will itself
+					 * report once reached (26.724). */
 					need = situ_need_u32(at, part);
 					need = situ_need_u32(need,
 					        situ_need_mul_u32(providers_count() - n - 1u,
-					                          ::situ::provider_name::size_min));
+					                          1u));
 					return ::situ::rt::err::truncated;
 				}
 				at  = situ_need_u32(at, part);
 				pos = situ_need_u32(pos, part);
 				n += 1;
 			}
-		}
-		if (run_count_len() == 0u) {
-			/* month_body.run_count: mid-varint, so one more
-			 * byte and ask again. */
-			need = situ_need_u32(have, 1u);
-			return ::situ::rt::err::truncated;
 		}
 
 		/* month_body.run_count: reading its length means reading
@@ -5485,11 +5502,32 @@ public:
 			need = at;
 			return ::situ::rt::err::truncated;
 		}
+		if (run_count_len() == 0u) {
+			/* month_body.run_count: mid-varint, so one more
+			 * byte and ask again. */
+			need = situ_need_u32(have, 1u);
+			/* ... and never below the total the walk has
+			 * already accounted. The two are different
+			 * quantities and neither bounds the other, so
+			 * `framed`'s six fell to five the moment its
+			 * fourth byte arrived (26.726). */
+			if (need < at) {
+				need = at;
+			}
+			return ::situ::rt::err::truncated;
+		}
 		{
 			const std::uint32_t len = run_count_len();
 
 			at = situ_need_u32(at, len);
 			pos = situ_need_u32(pos, len);
+		}
+
+		/* month_body.runs: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
+			return ::situ::rt::err::truncated;
 		}
 
 		/* month_body.runs: a run of `provider_run`, framed one
@@ -5513,11 +5551,14 @@ public:
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
-					 * the count still promises after it. */
+					 * the count still promises after it -- the STRUCTURAL
+					 * minimum, every value constraint ignored, so that it
+					 * agrees with what each of those elements will itself
+					 * report once reached (26.724). */
 					need = situ_need_u32(at, part);
 					need = situ_need_u32(need,
 					        situ_need_mul_u32(runs_count() - n - 1u,
-					                          ::situ::provider_run::size_min));
+					                          1u));
 					return ::situ::rt::err::truncated;
 				}
 				at  = situ_need_u32(at, part);
@@ -5564,7 +5605,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return month_body{ situ_view_t{
+		return ::situ::month_body{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -5628,23 +5669,23 @@ public:
 		}
 		/* month_body.month: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(0, station_extent(), raw_.limit), 2u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(0, station_extent(), raw_.limit), 2u)) {
 			*which_ = check_month;
 			return ::situ::rt::err::bounds;
 		}
 		/* month_body.provider_count: its offset is a sum of lengths the
 		 * message chose, so the frame is not known to contain it. */
-		if (!situ_in_bounds(raw(), situ_advance_u32(2, station_extent(), raw_.limit), 1u)) {
+		if (!situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(2, station_extent(), raw_.limit), 1u)) {
 			*which_ = check_provider_count;
 			return ::situ::rt::err::bounds;
 		}
 		/* month_body.provider_count [min = 1] */
-		if (provider_count() < 1) {
+		if (this->provider_count() < 1) {
 			*which_ = check_provider_count;
 			return ::situ::rt::err::constraint;
 		}
 		/* month_body.provider_count [max = 16] */
-		if (provider_count() > 16) {
+		if (this->provider_count() > 16) {
 			*which_ = check_provider_count;
 			return ::situ::rt::err::constraint;
 		}
@@ -5751,7 +5792,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, qcompressed &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::qcompressed &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -5840,7 +5881,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 		/* qcompressed.raw_len [max = 8388608] */
-		if (raw_len() > 8388608) {
+		if (this->raw_len() > 8388608) {
 			*which_ = check_raw_len;
 			return ::situ::rt::err::constraint;
 		}
@@ -5872,7 +5913,7 @@ public:
 	 * random bytes to all four and diffing what they said.
 	 */
 	[[nodiscard]] static ::situ::rt::err at(::situ::rt::message &owner,
-			std::uint32_t offset, std::uint32_t length, stations_body &out) noexcept
+			std::uint32_t offset, std::uint32_t length, ::situ::stations_body &out) noexcept
 	{
 		if (length < size_min) {
 			return ::situ::rt::err::bounds;
@@ -5955,7 +5996,7 @@ public:
 		while (at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -5971,7 +6012,7 @@ public:
 			if (n == index) {
 				situ_view_t narrowed;
 				const situ_err_t e =
-					situ_view_sub(this->raw(), at, size, &narrowed);
+					situ_view_sub(::situ::rt::view::raw(), at, size, &narrowed);
 
 				if (e == SITU_OK) {
 					out = ::situ::station_id(narrowed);
@@ -5998,7 +6039,7 @@ public:
 		while (n < ids_count() && at < raw_.limit) {
 			situ_view_t raw;
 
-			if (situ_view_sub(this->raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
+			if (situ_view_sub(::situ::rt::view::raw(), at, situ_remaining_u32(raw_.limit, at), &raw)
 					!= SITU_OK) {
 				break;
 			}
@@ -6034,7 +6075,7 @@ public:
 			if (at >= raw_.limit) {
 				return false;
 			}
-			if (situ_view_sub(this->raw(), at,
+			if (situ_view_sub(::situ::rt::view::raw(), at,
 					situ_remaining_u32(raw_.limit, at), &raw) != SITU_OK) {
 				return false;
 			}
@@ -6063,7 +6104,7 @@ public:
 	 */
 	[[nodiscard]] ::situ::rt::bytes trailing() const noexcept
 	{
-		return situ_in_bounds(raw(), situ_advance_u32(10, ids_span(), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(10, ids_span(), raw_.limit), 0) : ::situ::rt::bytes();
+		return situ_in_bounds(::situ::rt::view::raw(), situ_advance_u32(10, ids_span(), raw_.limit), 0u) ? ::situ::rt::bytes(situ_base(raw_) + situ_advance_u32(10, ids_span(), raw_.limit), 0) : ::situ::rt::bytes();
 	}
 
 	/** How many bytes a whole one needs, given the ones this view
@@ -6078,8 +6119,11 @@ public:
 		std::uint32_t at = 10u;
 		std::uint32_t pos = 10u;
 
-		if (have < size_min) {
-			need = size_min;
+
+		/* stations_body.ids: reading its length means reading
+		 * bytes that have to be here first. */
+		if (have < pos) {
+			need = at;
 			return ::situ::rt::err::truncated;
 		}
 
@@ -6104,11 +6148,14 @@ public:
 				if (e != ::situ::rt::err::ok) {
 					/* The element is short, so its own lower bound is part
 					 * of this run's -- and so is a minimum for each element
-					 * the count still promises after it. */
+					 * the count still promises after it -- the STRUCTURAL
+					 * minimum, every value constraint ignored, so that it
+					 * agrees with what each of those elements will itself
+					 * report once reached (26.724). */
 					need = situ_need_u32(at, part);
 					need = situ_need_u32(need,
 					        situ_need_mul_u32(ids_count() - n - 1u,
-					                          ::situ::station_id::size_min));
+					                          1u));
 					return ::situ::rt::err::truncated;
 				}
 				at  = situ_need_u32(at, part);
@@ -6128,7 +6175,7 @@ public:
 	[[nodiscard]] static ::situ::rt::err required(const std::uint8_t *data,
 			std::uint32_t have, std::uint32_t &need) noexcept
 	{
-		return stations_body{ situ_view_t{
+		return ::situ::stations_body{ situ_view_t{
 			const_cast<std::uint8_t *>(data), have, 0u, nullptr } }.framed(need);
 	}
 
@@ -6175,7 +6222,7 @@ public:
 			return ::situ::rt::err::bounds;
 		}
 		/* stations_body.count [max = 4096] */
-		if (count() > 4096) {
+		if (this->count() > 4096) {
 			*which_ = check_count;
 			return ::situ::rt::err::constraint;
 		}
