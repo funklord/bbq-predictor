@@ -17087,10 +17087,47 @@ built and tested on the desktop, and reach nobody here.
   installs a factory for sliders and progress bars and switches nothing
   off.
 
-**Not yet known: whether this is Qt's or this app's.** Qt's Android
-accessibility has been worked on mainly for Qt Quick. The experiment
-that separates the two is a minimal Qt Widgets app, a window with a
-label and a button, built with the same kit and run under TalkBack on
-the same phone. If it is silent too, this is Qt's to fix and goes
-upstream with that reproduction. If it speaks, the cause is here, and
-the difference between the two apps is where to look.
+**It was this app's, and a one-line fault.** A minimal Qt Widgets app,
+with a label and a button, built with the same kit, exposed both under
+TalkBack, and to `uiautomator` with no service at all, where
+bbq-predictor showed its three containers. bbq-predictor's own factory
+added to the minimal app changed nothing, and the two manifests' tags
+were identical. A temporary probe in the real app showed the focus
+window and its accessibility root with four children, so the tree
+existed. Qt's source showed what stood between the tree and the
+phone:
+- Java asks Qt for a node's children through `runInObjectContext`,
+  and only while `m_accessibilityContext` exists; otherwise every list
+  comes back empty.
+- That context is created in `setRootObject`, and Qt calls
+  `QAccessible::setRootObject(qApp)` in exactly one place,
+  `QGuiApplication::exec()`.
+- `8edc558` (2026-09-07) moved the application into a
+  `std::unique_ptr<QCoreApplication>` so diagnostics could run without
+  a display. `exec()` is static, so `app->exec()` named
+  `QCoreApplication::exec()` through the pointer's type, and Qt never
+  set a root.
+
+The fix enters the loop through `QApplication::exec()` when the
+program draws. On the Fold the app then exposed 29 nodes instead of 3.
+The graph read "Forecast graph, Now: Thu 02:00, 6.6 C, 0.0 mm/h, 0%,
+9 km/h, extended", every control appeared, and the slider was named
+"Steady scale:" through its buddy, its node built without an abort.
+One gap is left: a drop-down is named by its value only, with its label
+as a separate node beside it. Android does not turn Qt's labelled-by
+relation into a name, so sec 16.128 holds for Orca and not here.
+
+**The desktop shares the cause and is not measured.** On Linux the
+AT-SPI bridge takes its root from the same call, so Orca very likely
+found nothing either, from 8edc558 until this. There is no AT-SPI
+session or `pyatspi` on this machine to show it.
+
+**No automated test catches this.** The accessibility tests query a
+widget's interface directly and never need the root, which is why they
+passed throughout; the root is set only in `main`'s event loop.
+
+**What the fix switches back on.** Qt's accessibility has been dark
+since 8edc558, so the API 29 abort of sec 11.6 could not happen in that
+time, and the protections against it (the drop-down below API 33, the
+factory for scroll bars) have not met it since. They are in place, and
+the factory is still unverified on a device (sec 9.2).

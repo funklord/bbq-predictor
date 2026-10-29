@@ -1210,5 +1210,14 @@ int main(int argc, char *argv[]) {
 		QTimer::singleShot(30000, &window, take);
 	}
 
-	return app->exec();
+	/*
+	 * THROUGH QApplication, NOT THE POINTER'S TYPE (sec 16.133). exec()
+	 * is static, so app->exec() on a unique_ptr<QCoreApplication> named
+	 * QCoreApplication::exec() and skipped QGuiApplication::exec() --
+	 * the only place Qt calls QAccessible::setRootObject(qApp). From
+	 * 8edc558 until this, no screen reader on any platform reached the
+	 * window: on Android Qt had no accessibility context and answered
+	 * every child list empty, so TalkBack found nothing at all.
+	 */
+	return draws ? QApplication::exec() : QCoreApplication::exec();
 }
