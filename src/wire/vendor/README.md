@@ -35,7 +35,11 @@ complete at 10, then truncated asking for 11 (20261026T1317Z). So it stays off b
 commit passes it. situ's 97d1343 fixed that fault and did not pass: with
 the size floor gone from `required`, a `stations_body` shorter than 10
 bytes is read at offset 8, a heap-buffer-overflow under ASan (situ's
-inbox, 20261028T2255Z). Not taken. Take a new commit
+inbox, 20261028T2255Z). Not taken. situ's 1605cd8 fixed that and four
+more, and still did not pass: `index_body::required()` calls a 104-byte
+message with two entries complete at 62, one entry short. 601fa96 does
+the same, so it is old rather than new (situ's inbox, 20261029T0315Z).
+Not taken. Take a new commit
 only after re-running `make fuzz-wire`, and regenerate all four files
 together, never one.
 

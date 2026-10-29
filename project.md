@@ -7513,6 +7513,16 @@ invariants found all five. It still does not take the third, that the
 `need` bytes answer the same need, as its contract; that is its
 holder's call.
 
+**situ 1605cd8 was not taken either** (2026-10-29). Our 26.693 inputs
+and the short `stations_body` case pass there, and the default fuzz ran
+2.7M inputs in 300 s, clean. But five minutes of the framing case found
+`index_body::required()` calling a 104-byte message, with two 42-byte
+entries, complete at 62, one entry short, for every prefix up to the
+last byte. The whole input validates, so the message is exactly 104.
+It is not a regression: 601fa96 answers the same 62. The earlier runs
+never reached it. Sent to situ with the input (its inbox,
+20261029T0315Z).
+
 The case's third check was rewritten to situ's contract: never
 backwards, asked of one byte fewer and of the frame the answer named.
 Asked only of one byte fewer, it missed 26.693 entirely, which a run
