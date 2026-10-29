@@ -183,6 +183,20 @@ struct column {
 	double knot_chance = 0.0;
 	bool knot_has_wind = false;
 	double knot_wind = 0.0;
+
+	/*
+	 * WHEN each knot is, not merely which column holds it (sec
+	 * 3.11.6). A knot drawn at its column's index sits up to a column
+	 * from its sample's time, and the column edges move with every zoom
+	 * step, so the curve through it shimmered while pinching. The
+	 * temperature knot is the mean of its samples, so it sits at the
+	 * mean of their starts; the others are one sample's value, so they
+	 * sit at that sample's start.
+	 */
+	double knot_temperature_at = 0.0;
+	qint64 knot_rain_at = 0;
+	qint64 knot_chance_at = 0;
+	qint64 knot_wind_at = 0;
 };
 
 /* Which quantity a curve is being built for. */
@@ -309,6 +323,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	const std::vector<bbq_sample> &samples = reading.series->samples();
 
 	double temperature_total = 0.0;
+	double temperature_time_total = 0.0;
 	int temperature_count = 0;
 	double wind_total = 0.0;
 	int wind_count = 0;
@@ -368,6 +383,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 				result.temperature_low = std::min(result.temperature_low, value);
 				result.temperature_high = std::max(result.temperature_high, value);
 				temperature_total += value;
+				temperature_time_total += static_cast<double>(samples[i].start_utc);
 				++temperature_count;
 			}
 
@@ -381,6 +397,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 				++wind_count;
 				result.knot_wind = *samples[i].wind_kph;
 				result.knot_has_wind = true;
+				result.knot_wind_at = samples[i].start_utc;
 			}
 
 			/*
@@ -395,6 +412,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 				if (!result.knot_has_rain || v > result.knot_rain) {
 					result.knot_rain = v;
 					result.knot_has_rain = true;
+					result.knot_rain_at = samples[i].start_utc;
 				}
 			}
 
@@ -403,6 +421,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 				if (!result.knot_has_chance || v > result.knot_chance) {
 					result.knot_chance = v;
 					result.knot_has_chance = true;
+					result.knot_chance_at = samples[i].start_utc;
 				}
 			}
 		}
@@ -486,6 +505,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 			if (starts_here && (!result.knot_has_rain || rate > result.knot_rain)) {
 				result.knot_rain = rate;
 				result.knot_has_rain = true;
+				result.knot_rain_at = begins;
 			}
 		}
 	}
@@ -496,6 +516,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 		result.has_range = true;
 		result.knot_temperature = result.temperature;
 		result.knot_has_temperature = true;
+		result.knot_temperature_at = temperature_time_total / temperature_count;
 	} else if (reading.sample->temperature.has_value()) {
 		/*
 		 * A column narrower than the band's step holds no sample start,
@@ -582,6 +603,10 @@ struct curve_spec {
 	quantity which = quantity::temperature;
 	bbq_interpolation method = bbq_interpolation::monotone;
 	double smooth_columns = 0.0;
+
+	/* Where a time lands on the column axis: column x begins at from + x * per. */
+	qint64 view_from_utc = 0;
+	double seconds_per_column = 1.0;
 };
 
 void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
@@ -605,29 +630,41 @@ void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
 			const column &c = cols[k];
 			bool present = false;
 			double value = 0.0;
+			double at = 0.0;
 
 			switch (which) {
 			case quantity::temperature:
 				present = c.knot_has_temperature;
 				value = c.knot_temperature;
+				at = c.knot_temperature_at;
 				break;
 			case quantity::rain:
 				present = c.knot_has_rain;
 				value = c.knot_rain;
+				at = static_cast<double>(c.knot_rain_at);
 				break;
 			case quantity::chance:
 				present = c.knot_has_chance;
 				value = c.knot_chance;
+				at = static_cast<double>(c.knot_chance_at);
 				break;
 			case quantity::wind:
 				present = c.knot_has_wind;
 				value = c.knot_wind;
+				at = static_cast<double>(c.knot_wind_at);
 				break;
 			}
 
 			if (present) {
 				bbq_knot knot;
-				knot.x = static_cast<double>(k);
+				/*
+				 * At the knot's own time (sec 3.11.6), clamped into its
+				 * column against rounding in the column edges.
+				 */
+				const double true_x =
+				        (at - static_cast<double>(spec.view_from_utc)) / spec.seconds_per_column;
+				knot.x = std::max(static_cast<double>(k),
+				                  std::min(static_cast<double>(k) + 0.999, true_x));
 				knot.y = value;
 				knots.push_back(knot);
 			}
@@ -1938,9 +1975,22 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	}
 
 
+	/*
+	 * Where a knot's time lands on the plot, clamped into the column
+	 * that holds it exactly as apply_curve() clamps it, so a mark and
+	 * the curve through it agree.
+	 */
+	const auto knot_x = [&](double at, int column_index) {
+		const double true_x = (at - static_cast<double>(from)) / seconds_per_pixel;
+		return std::max(static_cast<double>(column_index),
+		                std::min(static_cast<double>(column_index) + 0.999, true_x));
+	};
+
 	curve_spec spec;
 	spec.method = m_interpolation;
 	spec.smooth_columns = m_smoothing_s / seconds_per_pixel;
+	spec.view_from_utc = from;
+	spec.seconds_per_column = seconds_per_pixel;
 
 	spec.which = quantity::temperature;
 	apply_curve(columns, spec);
@@ -2881,7 +2931,8 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 			 * separates from the curve, 34 sat above it and 36 below.
 			 * A placement error is a displacement and cannot scatter.
 			 */
-			const double px = plot.left() + x;
+			/* At the reading's own time, as the curve has it (sec 3.11.6). */
+			const double px = plot.left() + knot_x(c.knot_temperature_at, x);
 			const double py = y_for_temperature(c.knot_temperature);
 
 			/*
@@ -3698,7 +3749,9 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 		if (found >= 0) {
 			const column &c = columns[found];
-			const double px = plot.left() + found;
+			const double px = plot.left() +
+			                  (c.knot_has_temperature ? knot_x(c.knot_temperature_at, found)
+			                                          : static_cast<double>(found));
 
 			painter.setPen(QPen(m_palette.readout_edge, 1, Qt::DashLine));
 			painter.drawLine(QPointF(px, plot.top()),

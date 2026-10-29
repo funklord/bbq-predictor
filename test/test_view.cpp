@@ -163,6 +163,7 @@ private slots:
 	void radar_s_rain_is_the_rain_at_every_zoom();
 	void an_observation_keeps_its_rain_under_radar();
 	void radar_s_last_step_does_not_erase_the_next_hour();
+	void the_curve_does_not_shimmer_as_the_view_moves();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -973,6 +974,77 @@ void test_view::radar_s_last_step_does_not_erase_the_next_hour() {
 		QVERIFY2(told.contains(QStringLiteral(" 4.0 mm/h")),
 		         qPrintable(QStringLiteral("shifted %1 s: %2").arg(shift).arg(told)));
 	}
+}
+
+/*
+ * The temperature line's centre in one column: the mean height of its
+ * strongly red pixels, or -1 where it has none.
+ */
+static double line_centre(const QImage &shot, int x, const QRect &plot) {
+	double total = 0.0;
+	double weight = 0.0;
+	for (int y = plot.top(); y <= plot.bottom(); ++y) {
+		const QColor c = QColor::fromRgb(shot.pixel(x, y));
+		const double red = c.red() - std::max(c.green(), c.blue());
+		if (red > 60) {
+			total += y * red;
+			weight += red;
+		}
+	}
+	return weight > 0 ? total / weight : -1.0;
+}
+
+void test_view::the_curve_does_not_shimmer_as_the_view_moves() {
+	/*
+	 * Sec 3.11.6. A knot used to sit at its column's index, up to a
+	 * column from its sample's time, and the column edges move with
+	 * every pan and zoom step -- so the curve shimmered while pinching.
+	 * At its own time, the curve is the same function of time however
+	 * the columns fall: shifting the view by part of a column moves the
+	 * line under the same instants by less than a pixel.
+	 *
+	 * Hourly samples at about five minutes a column put a knot every
+	 * eleven columns, on a cycle steep enough that a column's error is
+	 * pixels. Cold, so no grilling wash is painted red.
+	 */
+	probe graph;
+	graph.resize(900, 400);
+	set_daily_cycle(graph, 1);
+	graph.grab();
+	const int width = graph.plot_rect().width();
+	const double per = 330.0;
+	const qint64 from = 1600000000 + 6 * 3600;
+	const qint64 span = qint64(per * width);
+
+	set_daily_cycle(graph, 6);
+	graph.set_view(from, span);
+	const QImage base = graph.grab().toImage();
+	const QRect plot = graph.plot_rect();
+	QCOMPARE(plot.width(), width);
+
+	double worst = 0.0;
+	for (qint64 shift = 60; shift < qint64(per); shift += 60) {
+		graph.set_view(from + shift, span);
+		const QImage shot = graph.grab().toImage();
+		for (int x = 40; x < width - 40; ++x) {
+			/* This column's instant, found in the unshifted render. */
+			const double at = (x * per + shift) / per;
+			const int left = int(at);
+			const double a = line_centre(base, plot.left() + left, plot);
+			const double b = line_centre(base, plot.left() + left + 1, plot);
+			const double here = line_centre(shot, plot.left() + x, plot);
+			if (a < 0 || b < 0 || here < 0) {
+				continue;
+			}
+			const double expected = a + (b - a) * (at - left);
+			worst = std::max(worst, std::abs(here - expected));
+		}
+	}
+
+	QVERIFY2(worst < 1.0,
+	         qPrintable(QStringLiteral("the line moved %1 px under the same "
+	                                   "instant when the view shifted")
+	                            .arg(worst)));
 }
 
 void test_view::showing_the_wind_does_not_touch_the_temperature_line() {

@@ -1890,6 +1890,26 @@ by either. That is the condition that makes a non-conservative default
 acceptable: it is a presentation the reader can see and undo, not a
 claim they cannot check.
 
+### 3.11.6 A knot sits at its sample's time, not its column's
+
+Every knot was placed at its column's index, so up to a column from the
+time of the sample it came from. The column edges move with every pan
+and pinch step, so the curve through the knots moved under the same
+instants, and the holder saw it on the Fold as rain shimmering while
+pinching, after sec 3.18.4 had removed the larger fault. **Each knot now
+records when it is**: the temperature knot at the mean of its samples'
+starts, since it is their mean, and rain, chance and wind at the start
+of the one sample whose value they carry. The curve and the sample
+marks both place it there, clamped into its own column so rounding in
+the column edges cannot carry it into a neighbour's. The readout
+marker's dot goes with it.
+
+`test_view`'s `the_curve_does_not_shimmer_as_the_view_moves` renders
+hourly samples at 330 seconds a column, then the same view shifted by
+one to five minutes, and compares the line's height under the same
+instants. The worst difference is 0.41 px, against 2.19 px with knots
+at the column index.
+
 ### 3.12 The readout snaps to samples
 
 Hovering the graph shows a readout: the time, the values, and which
@@ -2378,8 +2398,8 @@ flicker on that first hump is minimal now. What is left is most likely
 the column reduction itself: every knot sits at its column's index
 rather than at its sample's own time, so a knot moves by up to a
 column as the zoom changes, and the curve through it moves with it.
-Placing knots at their true fractional position would address that;
-it is not done, and it is not known that the remainder is this.
+Placing knots at their true fractional position was done next, as sec
+3.11.6; whether the remainder was this is for the device to say.
 
 ### 3.19 One plot, and rain is blue
 
