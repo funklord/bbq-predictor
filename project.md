@@ -3192,18 +3192,16 @@ anything.
   the Note 9. The `compileSdk 35` floor sec 11.2 describes was real and
   is cleared; the entry is struck rather than deleted because the floor
   is Qt's and will move again
-- **Whether the steadiness slider comes back on Android**, which sec
-  11.9 sharpens: the fault is an SDK 29 one and the Fold is SDK 35, so
-  conditioning the workaround on the runtime SDK gives the slider back
-  where it cannot crash while keeping it on the Note 9. It is a
-  drop-down there because a slider aborted the process (sec 11.6), and
-  the accessibility factory that should make a slider safe is written,
-  tested as a mechanism, and UNVERIFIED on a device -- the phone no
-  longer runs an accessibility service and both emulator images are API
-  33, above the range where the fault lives. Two minutes with any
-  accessibility service running would settle it. The slider was asked
-  for by name, so the drop-down is a workaround holding a place rather
-  than a design
+- **The steadiness slider on Android: back from API 33 up since
+  44ff211** (2026-09-03), so the Fold (API 35) has it and the Note 9
+  (API 29) keeps the drop-down that stops the abort of sec 11.6. On the
+  Fold, 2026-10-29, the app started and ran with TalkBack on and the
+  slider in its controls, and did not abort. That is weaker than it
+  sounds: `uiautomator` saw only three of the app's nodes, under
+  TalkBack too, so whether Qt built the slider's node then is not
+  shown. **Still open:** the accessibility factory that should make a
+  slider safe on API 29 is tested as a mechanism and unverified on a
+  device. It needs the Note 9 with any accessibility service running
 - ~~**The fetching server of sec 15**~~, proposed 2026-08-31 as a
   design. Built: the publisher, the daemon and the client's server
   path are secs 15.12 to 15.16. What still waits on the holder is the
@@ -16991,12 +16989,21 @@ unsafe. When situ settles it, re-vendor by the README's procedure,
 align the fuzz case's third check, and run
 `make fuzz-wire FUZZ_FRAMING=1` before letting the guard go.
 
-**Not verified on a device:** the widget's spoken reading
-(sec 16.126), the graph's description and keyboard readout (sec 16.127,
-16.129), the label buddies under TalkBack (sec 16.128), the widget's
-skipped day name (sec 16.85), and the axis-label skips (sec 16.85.2,
-16.85.3). All are tested by rendering or on the desktop; `adb` was not
-available. Each section says what a device would show.
+**Seen on the Fold (SM-F926B, API 35), 2026-10-29,** with a build of
+4a3f1ad: the axis-label skip ("Thu 29" clear of "11 C"), a readout
+parked at the right edge sitting below "10 mm/h" and "100% rain" (sec
+16.85.2, 16.85.3), and the widget's own `widget.png`, with its "6"
+clear at the top. Its midnight was at the left edge, so that name was
+skipped under "11 C" rather than under the reading. `widget-reading.txt`
+held "6".
+
+**Still not verified on a device:** the widget's spoken description
+(sec 16.126), since the widget is on the cover screen, which is off
+while the phone is open. And the graph's description, keyboard readout
+and label relations (sec 16.127 to 16.129): `uiautomator` sees only
+three of the app's nodes, even with TalkBack on, so Qt's accessibility
+tree is not readable that way. Hearing it with TalkBack is the test
+left.
 
 **Stale artifacts:** the debs predate many commits since 0.1.0-6;
 rebuild only when asked. `make check-boot` now needs `HULL=` here,
