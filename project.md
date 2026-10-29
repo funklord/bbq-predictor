@@ -1915,6 +1915,9 @@ the sweep scores 6.8 for chance and 0.16 for temperature, against 59
 and 0.34. The 144-frame sweep took 0.25 s with the margins and without,
 on a machine at load 32, so the cost did not show at that resolution.
 
+**Seen on the Fold with 150552e, 2026-10-29:** the holder reports
+panning steady and the edges good.
+
 ### 3.11.5 The defaults, and why they are not the safest ones
 
 **Akima, with thirty minutes of rounding.**

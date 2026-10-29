@@ -45,8 +45,10 @@ applets that come with GNOME and KDE:
   marked, so a smoothed line never has to be taken on trust, and the
   curve is one of seven interpolation methods, from steps to Akima.
 - **A history that is kept.** Every observation goes into a SQLite
-  archive for good, and the graph scrolls and zooms through it, from a
-  quarter of an hour across the window to years. A desktop weather
+  archive for good, and the graph moves through it the way a map does:
+  drag it sideways, zoom with the wheel or a pinch about the moment
+  under the pointer or the fingers, from a quarter of an hour across the
+  window to years. A desktop weather
   applet keeps nothing; Weather Underground keeps a station's history,
   but on its own pages, apart from any forecast.
 - **Forecasts that are marked.** Each forecast is held until the
@@ -64,7 +66,9 @@ applets that come with GNOME and KDE:
   rather than a mediocre one invented to fill the space.
 - **Where you look anyway.** The tray icon is the current temperature
   and turns red when the data behind it is stale; on a phone the
-  widget draws the graph and says how old the picture is.
+  widget draws the graph and says how old the picture is. The window
+  takes a desktop or a phone shape, chosen by the device and
+  overridable.
 
 ## Not there yet
 
