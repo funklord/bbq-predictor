@@ -421,6 +421,11 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	const auto label_for = [this](const QString &text, QWidget *control) {
 		QLabel *label = new QLabel(text, this);
 		label->setBuddy(control);
+#ifdef Q_OS_ANDROID
+		if (QComboBox *box = qobject_cast<QComboBox *>(control)) {
+			bbq_describe_by_label(box, text);
+		}
+#endif
 		return label;
 	};
 
@@ -721,6 +726,14 @@ bbq_main_window::bbq_main_window(QWidget *parent)
  * The desktop shape is unaffected: it is never stacked, so this returns
  * true for it at every size, exactly as before.
  */
+void bbq_describe_by_label(QComboBox *box, const QString &label) {
+	QString said = label;
+	while (said.endsWith(QLatin1Char(':'))) {
+		said.chop(1);
+	}
+	box->setAccessibleDescription(said.trimmed());
+}
+
 bool bbq_main_window::wants_wide_controls() const {
 	return !m_metrics.stack_controls || width() >= 600;
 }

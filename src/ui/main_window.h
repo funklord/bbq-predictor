@@ -44,6 +44,19 @@ class bbq_wu_feed;
 QString bbq_grill_window_list(const std::vector<bbq_window> &windows,
                               const QTimeZone &zone);
 
+/*
+ * Give a drop-down its label as its accessible description (project.md
+ * sec 16.133), for Android, where it is otherwise named by its value
+ * alone. Qt names a combo box by its current text on every Unix and
+ * carries the label as a labelled-by relation, which Orca reads and
+ * Android's bridge does not: TalkBack heard "Akima" and never
+ * "Interpolation". The bridge speaks the name, then the description, so
+ * this makes it "Akima, Interpolation". A free function so a test can
+ * reach it; only the Android build calls it, since Orca would hear the
+ * label twice. The label's trailing colon is not said.
+ */
+void bbq_describe_by_label(QComboBox *box, const QString &label);
+
 class bbq_main_window : public QWidget {
 	Q_OBJECT
 

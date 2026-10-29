@@ -103,6 +103,7 @@ private slots:
 	void the_tray_reads_the_owner_of_now_not_the_finest_band();
 	void the_tray_says_nought_not_minus_nought();
 	void every_labelled_control_is_named_by_its_label();
+	void a_drop_down_says_its_label_where_android_reads_it();
 	void a_dry_spell_is_not_a_rain_forecast_with_no_skill();
 
 private:
@@ -1071,6 +1072,34 @@ void test_window::every_labelled_control_is_named_by_its_label() {
 		}
 	}
 	QCOMPARE(buddies, 6);
+}
+
+/*
+ * Android's bridge speaks a node as its name, then ", " and its
+ * description (Qt's descriptionForInterface), and Qt names a combo box by
+ * its current text on every Unix. So TalkBack heard "Akima" and never
+ * which setting it was (sec 16.133). Built here as the bridge builds it,
+ * from the same accessible interface.
+ */
+void test_window::a_drop_down_says_its_label_where_android_reads_it() {
+	const auto spoken = [](QWidget *widget) {
+		QAccessibleInterface *iface = QAccessible::queryAccessibleInterface(widget);
+		QString said = iface->text(QAccessible::Name);
+		const QString description = iface->text(QAccessible::Description);
+		if (!description.isEmpty()) {
+			said += (said.isEmpty() ? QString() : QStringLiteral(", ")) + description;
+		}
+		return said;
+	};
+
+	QComboBox bare;
+	bare.addItem(QStringLiteral("Akima"));
+	QCOMPARE(spoken(&bare), QStringLiteral("Akima"));
+
+	QComboBox labelled;
+	labelled.addItem(QStringLiteral("Akima"));
+	bbq_describe_by_label(&labelled, QStringLiteral("Interpolation:"));
+	QCOMPARE(spoken(&labelled), QStringLiteral("Akima, Interpolation"));
 }
 
 void test_window::the_tray_says_nought_not_minus_nought() {
