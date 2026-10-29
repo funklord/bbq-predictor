@@ -16997,9 +16997,14 @@ clear at the top. Its midnight was at the left edge, so that name was
 skipped under "11 C" rather than under the reading. `widget-reading.txt`
 held "6".
 
+Folded, the widget itself showed on the cover screen's second page
+with its reading, "7" by then, clear at the top centre of the graph.
+
 **Still not verified on a device:** the widget's spoken description
-(sec 16.126), since the widget is on the cover screen, which is off
-while the phone is open. And the graph's description, keyboard readout
+(sec 16.126). With the phone folded, `uiautomator dump` returned only
+four System UI nodes on both cover pages: it takes no display argument
+and could not see the cover screen's launcher. Hearing TalkBack on the
+widget is the test left. And the graph's description, keyboard readout
 and label relations (sec 16.127 to 16.129): `uiautomator` sees only
 three of the app's nodes, even with TalkBack on, so Qt's accessibility
 tree is not readable that way. Hearing it with TalkBack is the test
