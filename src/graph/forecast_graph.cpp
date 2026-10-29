@@ -649,11 +649,25 @@ struct curve_spec {
 	/* Where a time lands on the column axis: column x begins at from + x * per. */
 	qint64 view_from_utc = 0;
 	double seconds_per_column = 1.0;
+
+	/*
+	 * Each column's left edge on that axis, when the columns are not all
+	 * one wide -- the margins past the view's edges are coarser (sec
+	 * 3.11.4.3). Empty means column k spans [k, k + 1).
+	 */
+	std::vector<double> left_x;
 };
 
 void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
 	const quantity which = spec.which;
 	const bbq_interpolation method = spec.method;
+	const auto edge_of = [&](std::size_t k) {
+		if (spec.left_x.empty()) {
+			return static_cast<double>(k);
+		}
+		return k < spec.left_x.size() ? spec.left_x[k]
+		                              : spec.left_x.back() + 1.0;
+	};
 	std::size_t i = 0;
 
 	while (i < cols.size()) {
@@ -705,8 +719,9 @@ void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
 				 */
 				const double true_x =
 				        (at - static_cast<double>(spec.view_from_utc)) / spec.seconds_per_column;
-				knot.x = std::max(static_cast<double>(k),
-				                  std::min(static_cast<double>(k) + 0.999, true_x));
+				const double left = edge_of(k);
+				const double right = edge_of(k + 1);
+				knot.x = std::max(left, std::min(left + 0.999 * (right - left), true_x));
 				knot.y = value;
 				knots.push_back(knot);
 			}
@@ -726,7 +741,7 @@ void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
 			curve.set(std::move(knots), method);
 
 			for (std::size_t k = i; k < end; ++k) {
-				const double x = static_cast<double>(k);
+				const double x = edge_of(k);
 				if (x < curve.first_x() || x > curve.last_x()) {
 					continue;
 				}
@@ -775,14 +790,88 @@ std::vector<column> build_columns(const bbq_composite &composite, qint64 from, q
 	if (width <= 0 || to <= from) {
 		return columns;
 	}
-	columns.reserve(width);
 
 	const double seconds_per_pixel = static_cast<double>(to - from) / width;
 
+	/*
+	 * PAST BOTH EDGES, THEN CROPPED (sec 3.11.4.3).
+	 *
+	 * The rounding and the curve see only the knots they are given. Fed
+	 * the view alone, a value near an edge depended on where the edge
+	 * was -- the line near an edge moved while panning, and a pinch
+	 * scored it as jitter. So the curves are fitted over a margin each
+	 * side wide enough for the rounding's reach and for the two knots
+	 * each side a curve method looks at, even on hourly data, and only
+	 * the view's own columns are kept.
+	 *
+	 * The margin's cells are the view's own columns where those are
+	 * five minutes or wider. Narrower, they are five-minute cells on the
+	 * clock's own grid instead, so zooming in to a quarter of an hour
+	 * does not cost thousands of extra columns: at most about fifty a
+	 * side, whatever the zoom.
+	 */
+	const double margin_s = 3.0 * smoothing_s + 3.0 * 3600.0;
+	const double cell_s = std::max(seconds_per_pixel, 300.0);
+
+	std::vector<std::pair<qint64, qint64>> spans;
+	std::vector<double> left_x;
+	const auto x_of = [&](qint64 when) { return (when - from) / seconds_per_pixel; };
+
+	/* The left margin, ending at `from`. */
+	std::vector<std::pair<qint64, qint64>> before;
+	if (seconds_per_pixel >= 300.0) {
+		for (int k = 1; k * seconds_per_pixel <= margin_s + seconds_per_pixel; ++k) {
+			before.emplace_back(from - static_cast<qint64>(k * seconds_per_pixel),
+			                    from - static_cast<qint64>((k - 1) * seconds_per_pixel));
+		}
+	} else {
+		const qint64 cell = static_cast<qint64>(cell_s);
+		qint64 edge = from;
+		qint64 start = (from / cell) * cell;
+		if (start == from) {
+			start -= cell;
+		}
+		while (from - start <= margin_s + cell_s) {
+			before.emplace_back(start, edge);
+			edge = start;
+			start -= cell;
+		}
+	}
+	for (auto it = before.rbegin(); it != before.rend(); ++it) {
+		spans.push_back(*it);
+		left_x.push_back(x_of(it->first));
+	}
+
+	const std::size_t first_visible = spans.size();
 	for (int x = 0; x < width; ++x) {
 		const qint64 start = from + static_cast<qint64>(x * seconds_per_pixel);
 		const qint64 end = from + static_cast<qint64>((x + 1) * seconds_per_pixel);
-		columns.push_back(reduce(composite, start, end == start ? end + 1 : end));
+		spans.emplace_back(start, end == start ? end + 1 : end);
+		left_x.push_back(static_cast<double>(x));
+	}
+
+	/* The right margin, from `to`. */
+	if (seconds_per_pixel >= 300.0) {
+		for (int k = 0; k * seconds_per_pixel <= margin_s; ++k) {
+			spans.emplace_back(to + static_cast<qint64>(k * seconds_per_pixel),
+			                   to + static_cast<qint64>((k + 1) * seconds_per_pixel));
+			left_x.push_back(width + k);
+		}
+	} else {
+		const qint64 cell = static_cast<qint64>(cell_s);
+		qint64 start = to;
+		qint64 end = (to / cell + 1) * cell;
+		while (start - to <= margin_s) {
+			spans.emplace_back(start, end);
+			left_x.push_back(x_of(start));
+			start = end;
+			end += cell;
+		}
+	}
+
+	columns.reserve(spans.size());
+	for (const auto &[start, end] : spans) {
+		columns.push_back(reduce(composite, start, end));
 	}
 
 	curve_spec spec;
@@ -790,6 +879,7 @@ std::vector<column> build_columns(const bbq_composite &composite, qint64 from, q
 	spec.smooth_columns = smoothing_s / seconds_per_pixel;
 	spec.view_from_utc = from;
 	spec.seconds_per_column = seconds_per_pixel;
+	spec.left_x = std::move(left_x);
 
 	for (quantity which : {quantity::temperature, quantity::rain, quantity::chance,
 	                       quantity::wind}) {
@@ -797,7 +887,8 @@ std::vector<column> build_columns(const bbq_composite &composite, qint64 from, q
 		apply_curve(columns, spec);
 	}
 
-	return columns;
+	return std::vector<column>(columns.begin() + static_cast<std::ptrdiff_t>(first_visible),
+	                           columns.begin() + static_cast<std::ptrdiff_t>(first_visible) + width);
 }
 
 /*

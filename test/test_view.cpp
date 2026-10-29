@@ -170,6 +170,7 @@ private slots:
 	void a_band_file_reads_back_what_was_written();
 	void a_band_file_that_is_not_one_is_refused();
 	void the_sweep_finds_the_flicker_it_was_written_for();
+	void panning_does_not_change_what_is_drawn_at_an_edge();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -1228,6 +1229,60 @@ void test_view::the_sweep_finds_the_flicker_it_was_written_for() {
 	const QString report = bbq_sweep_report(result, hour - 120);
 	QVERIFY2(temperature.total < 150.0, qPrintable(report));
 	QVERIFY2(result.quantities[2].total < 400.0, qPrintable(report));
+}
+
+void test_view::panning_does_not_change_what_is_drawn_at_an_edge() {
+	/*
+	 * Sec 3.11.4.3. Two views a whole number of columns apart share one
+	 * grid of moments, so every moment both show must be drawn the same
+	 * in both -- right up to either edge. The rounding and the curve
+	 * used to see only the knots in view, so near an edge a value
+	 * depended on where the edge was: the line moved while panning.
+	 * Hourly samples whose rain chance steps from 40 to 5, at a hundred
+	 * and eight seconds a column.
+	 */
+	const qint64 hour = 1600000000 - 1600000000 % 3600;
+	std::vector<bbq_sample> hours;
+	for (int i = -30; i < 30; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 10.0 + 4.0 * std::sin(i / 3.0);
+		sample.precip_chance = (i / 2) % 2 == 0 ? 40.0 : 5.0;
+		hours.push_back(sample);
+	}
+	bbq_series hourly(bbq_band::hourly, QStringLiteral("test"));
+	hourly.set_samples(std::move(hours));
+	bbq_composite composite;
+	composite.set_series(std::move(hourly));
+
+	const int width = 800;
+	const qint64 per = 108;
+	const int moved = 150;
+	const qint64 from = hour - 12 * 3600;
+	const auto a = bbq_graph_columns(composite, from, from + per * width, width,
+	                                 bbq_default_interpolation, bbq_default_smoothing_s);
+	const qint64 later = from + per * moved;
+	const auto b = bbq_graph_columns(composite, later, later + per * width, width,
+	                                 bbq_default_interpolation, bbq_default_smoothing_s);
+
+	double worst_temperature = 0.0;
+	double worst_chance = 0.0;
+	for (int x = 0; x + moved < width; ++x) {
+		const bbq_graph_column &here = a[std::size_t(x + moved)];
+		const bbq_graph_column &there = b[std::size_t(x)];
+		QCOMPARE(there.has_temperature, here.has_temperature);
+		worst_temperature = std::max(worst_temperature,
+		                             std::fabs(there.temperature - here.temperature));
+		worst_chance = std::max(worst_chance, std::fabs(there.chance - here.chance));
+	}
+
+	QVERIFY2(worst_temperature < 1e-6 && worst_chance < 1e-6,
+	         qPrintable(QStringLiteral("panned by %1 columns, a moment moved by "
+	                                   "%2 C and %3%")
+	                            .arg(moved)
+	                            .arg(worst_temperature)
+	                            .arg(worst_chance)));
 }
 
 void test_view::showing_the_wind_does_not_touch_the_temperature_line() {

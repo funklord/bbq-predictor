@@ -1891,14 +1891,29 @@ The weight is now lowered by its own value at the reach, so it reaches
 zero there continuously. The work is unchanged, and the shape inside
 the reach differs from the Gaussian by at most that 1.1%.
 
-**Left open:** the sweep's remaining chance jitter, 59, sits about
-three hours after now, where the nowcast steps from 15% to 3% and 2%.
-The likely cause is the view's edge: the rounding sees only knots in
-view, so while the right edge is within its reach the value there
-depends on where the edge is. That would also show as the line near an
-edge moving while panning. It is not confirmed. The repair would be
-columns computed past both edges and cropped, which costs paint time
-in proportion to the margin, and most when zoomed in tight.
+### 3.11.4.3 The curves are fitted past the view's edges
+
+The sweep's chance jitter left after sec 3.11.4.2, 59, sat about three
+hours after now, where the nowcast steps from 15% to 3% and 2%. The
+cause was the view's edge: the rounding and the curve were given only
+the knots in view, so while the right edge was within reach of a
+moment, that moment's value depended on where the edge was. It showed
+on the screen too, as the line near an edge moving while panning.
+`test_view`'s `panning_does_not_change_what_is_drawn_at_an_edge` pans an
+hourly series whose chance steps between 40% and 5% by 150 columns: a
+moment both views show moved by 31 percentage points and 0.05 C.
+
+`build_columns()` now reduces a margin each side -- three times the
+rounding plus three hours, enough for the rounding's reach and for the
+two knots each side a curve method reads even on hourly data -- fits
+the curves over all of it, and keeps the view's columns. Its cells are
+the view's own columns where those are five minutes or wider, and
+five-minute cells on the clock's grid where they are narrower, so a
+quarter-hour view costs about fifty extra columns a side rather than
+thousands. The pan test now agrees to a millionth; on the saved fetch
+the sweep scores 6.8 for chance and 0.16 for temperature, against 59
+and 0.34. The 144-frame sweep took 0.25 s with the margins and without,
+on a machine at load 32, so the cost did not show at that resolution.
 
 ### 3.11.5 The defaults, and why they are not the safest ones
 
