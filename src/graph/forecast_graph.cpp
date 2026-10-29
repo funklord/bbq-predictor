@@ -362,70 +362,6 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 		 * ran. Same helper, two questions -- and only one of them was
 		 * being asked.
 		 */
-		const bool after_start = samples[i].start_utc >= from;
-		const bool before_end = samples[i].start_utc < to;
-		const bool starts_here = after_start && before_end;
-
-		if (starts_here) {
-			if (!result.has_knot) {
-				result.knot_utc = samples[i].start_utc;
-			}
-			result.knot_last_utc = samples[i].start_utc;
-			result.has_knot = true;
-			++result.knot_count;
-
-			if (samples[i].temperature.has_value()) {
-				const double value = *samples[i].temperature;
-				if (temperature_count == 0) {
-					result.temperature_low = value;
-					result.temperature_high = value;
-				}
-				result.temperature_low = std::min(result.temperature_low, value);
-				result.temperature_high = std::max(result.temperature_high, value);
-				temperature_total += value;
-				temperature_time_total += static_cast<double>(samples[i].start_utc);
-				++temperature_count;
-			}
-
-			/*
-			 * Wind is meaned like temperature rather than maxed like
-			 * rain: it is a speed AT the sample's instant (sec 3.1), and
-			 * a gust is not what these bands report.
-			 */
-			if (samples[i].wind_kph.has_value()) {
-				wind_total += *samples[i].wind_kph;
-				++wind_count;
-				result.knot_wind = *samples[i].wind_kph;
-				result.knot_has_wind = true;
-				result.knot_wind_at = samples[i].start_utc;
-			}
-
-			/*
-			 * Knots take the maximum for rain and chance, matching how
-			 * the column itself is reduced (sec 3.5) -- a curve built
-			 * from meaned peaks would smooth away the thing the maximum
-			 * was protecting.
-			 */
-			if (samples[i].precip_rate.has_value() &&
-			    !radar_covers(samples[i].start_utc)) {
-				const double v = *samples[i].precip_rate;
-				if (!result.knot_has_rain || v > result.knot_rain) {
-					result.knot_rain = v;
-					result.knot_has_rain = true;
-					result.knot_rain_at = samples[i].start_utc;
-				}
-			}
-
-			if (samples[i].precip_chance.has_value()) {
-				const double v = *samples[i].precip_chance;
-				if (!result.knot_has_chance || v > result.knot_chance) {
-					result.knot_chance = v;
-					result.knot_has_chance = true;
-					result.knot_chance_at = samples[i].start_utc;
-				}
-			}
-		}
-
 		/*
 		 * The part of this sample inside the column, unless radar
 		 * covers all of it.
@@ -459,6 +395,101 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	}
 
 	/*
+	 * THE KNOTS, chosen per instant rather than per column (sec 3.18.5).
+	 *
+	 * A sample starting here is a knot when its band owns the instant it
+	 * starts at -- not when its band owns the column's middle. Where two
+	 * bands each start a sample at the same moment, as an hourly band
+	 * and the nowcast do at the top of the hour the nowcast begins, the
+	 * column's owner flipped between them as the column edges moved, and
+	 * the knot with it: the first hump after now, at 10.0 C or 9.2 C and
+	 * 2 or 0 percent, depending on the zoom. Radar owns no instant, so it
+	 * gives no knot here; its rain is added below.
+	 */
+	for (const bbq_series &series : composite.all()) {
+		if (series.band() == bbq_band::nowcast_fine || series.is_empty()) {
+			continue;
+		}
+		const bool refined = fine != nullptr && !fine->is_empty() &&
+		                     series.priority() < fine->priority();
+		const auto range = series.range(from, to);
+		for (std::size_t j = range.first; j < range.second; ++j) {
+			const bbq_sample &sample = series.samples()[j];
+			if (sample.start_utc < from || sample.start_utc >= to) {
+				continue;
+			}
+			if (composite.owner_at(sample.start_utc).series != &series) {
+				continue;
+			}
+			const auto radar_covers = [&](qint64 when) {
+				if (!refined) {
+					return false;
+				}
+				const bbq_sample *under = fine->at(when);
+				return under != nullptr && under->precip_rate.has_value();
+			};
+
+			if (!result.has_knot) {
+				result.knot_utc = sample.start_utc;
+			}
+			result.knot_last_utc = sample.start_utc;
+			result.has_knot = true;
+			++result.knot_count;
+
+			if (sample.temperature.has_value()) {
+				const double value = *sample.temperature;
+				if (temperature_count == 0) {
+					result.temperature_low = value;
+					result.temperature_high = value;
+				}
+				result.temperature_low = std::min(result.temperature_low, value);
+				result.temperature_high = std::max(result.temperature_high, value);
+				temperature_total += value;
+				temperature_time_total += static_cast<double>(sample.start_utc);
+				++temperature_count;
+			}
+
+			/*
+			 * Wind is meaned like temperature rather than maxed like
+			 * rain: it is a speed AT the sample's instant (sec 3.1), and
+			 * a gust is not what these bands report.
+			 */
+			if (sample.wind_kph.has_value()) {
+				wind_total += *sample.wind_kph;
+				++wind_count;
+				result.knot_wind = *sample.wind_kph;
+				result.knot_has_wind = true;
+				result.knot_wind_at = sample.start_utc;
+			}
+
+			/*
+			 * Knots take the maximum for rain and chance, matching how
+			 * the column itself is reduced (sec 3.5) -- a curve built
+			 * from meaned peaks would smooth away the thing the maximum
+			 * was protecting.
+			 */
+			if (sample.precip_rate.has_value() &&
+			    !radar_covers(sample.start_utc)) {
+				const double v = *sample.precip_rate;
+				if (!result.knot_has_rain || v > result.knot_rain) {
+					result.knot_rain = v;
+					result.knot_has_rain = true;
+					result.knot_rain_at = sample.start_utc;
+				}
+			}
+
+			if (sample.precip_chance.has_value()) {
+				const double v = *sample.precip_chance;
+				if (!result.knot_has_chance || v > result.knot_chance) {
+					result.knot_chance = v;
+					result.knot_has_chance = true;
+					result.knot_chance_at = sample.start_utc;
+				}
+			}
+		}
+	}
+
+	/*
 	 * Radar sharpens the rain it is expert in, having been kept from
 	 * owning the column above (sec 3.18).
 	 *
@@ -483,12 +514,23 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	 * which column lost it. The unit was wrong: a column is a slice of
 	 * the screen, and which source speaks is a property of an instant.
 	 */
-	if (radar_refines) {
+	if (fine != nullptr && fine != winner && !fine->is_empty()) {
 		const auto fine_span = fine->range(from, to);
 		const std::vector<bbq_sample> &fine_samples = fine->samples();
 
 		for (std::size_t i = fine_span.first; i < fine_span.second; ++i) {
 			if (!fine_samples[i].precip_rate.has_value()) {
+				continue;
+			}
+
+			/*
+			 * Radar refines the band that owns this step's instant,
+			 * when it outranks it -- per step, as the knots above are
+			 * chosen, not by whoever owns the column's middle.
+			 */
+			const bbq_reading under = composite.owner_at(
+			        std::max(fine_samples[i].start_utc, from));
+			if (under.is_valid() && under.series->priority() >= fine->priority()) {
 				continue;
 			}
 

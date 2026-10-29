@@ -2399,7 +2399,54 @@ the column reduction itself: every knot sits at its column's index
 rather than at its sample's own time, so a knot moves by up to a
 column as the zoom changes, and the curve through it moves with it.
 Placing knots at their true fractional position was done next, as sec
-3.11.6; whether the remainder was this is for the device to say.
+3.11.6. The device then looked worse, and the cause turned out to be
+neither: sec 3.18.5.
+
+
+#### 3.18.5 And which band owns an instant decides its knot
+
+With 54f41ad installed the holder reported the flicker by now as bad
+as ever. Measured rather than guessed this time, on the data the phone
+was drawing: a throwaway harness outside the tree fetched ISTOCK877's
+bands once through `bbq_wu_fetch_once`, saved them, and ran the graph's
+own column pipeline (`reduce()` and `apply_curve()`, by including the
+source) over a 192-frame pinch from 36 hours to 2 around now. For each
+minute from an hour before now to three after, it summed how much each
+quantity's column value went back and forth between frames.
+
+**There was no rain anywhere in it.** The hump right after now was the
+temperature and the rain chance, and it was the same at 837dd6f,
+54f41ad and HEAD, so neither knot placement nor any radar rule made or
+cured it. What the holder saw as better and worse was most likely the
+weather data changing between installs.
+
+The cause: at 13:00Z the Open-Meteo hourly band and the WU nowcast each
+start a sample, 9.2 C and 0% against 10.0 C and 2%. The nowcast owns
+that instant. But a column's knots came only from the band owning the
+column's MIDDLE, so the column holding 13:00Z took Open-Meteo's values
+when its middle fell just before the hour and the nowcast's when it
+fell after. That flipped with every zoom step, and the curve after now
+flipped with it. It is sec 3.18.4's mistake in ownership rather than in
+radar: which source speaks is a property of an instant.
+
+Knots are now chosen per instant: a sample starting in the column is a
+knot when its band owns the instant it starts at, whatever owns the
+middle. Radar's rain is added per step by the same test. On the saved
+data the summed jitter fell from 518 to 155 (degrees C, summed over
+frames and minutes) for temperature and from 1108 to 109 (percent) for
+chance. What remains sits half an hour before now, where the half-hour
+rounding meets columns that merge samples as the zoom widens, and was
+not chased. `test_view`'s `the_band_owning_an_instant_gives_its_knot`
+reproduces the 13:00Z shape and reads Open-Meteo's 9.2 C at 54f41ad.
+
+**Tried and taken out: drawing each curve through its knot's exact
+position.** The theory was that a knot between two column edges has its
+top cut off by an amount that changes with the zoom. The harness showed
+the cut does happen with the rounding off. But the rounding is on by
+default and flattens the peak, and the test written for it could not
+tell the versions apart from pixels, since a narrow spike's tip is
+mostly antialiasing. A change that cannot be shown to matter was left
+out rather than kept on theory.
 
 ### 3.19 One plot, and rain is blue
 

@@ -164,6 +164,7 @@ private slots:
 	void an_observation_keeps_its_rain_under_radar();
 	void radar_s_last_step_does_not_erase_the_next_hour();
 	void the_curve_does_not_shimmer_as_the_view_moves();
+	void the_band_owning_an_instant_gives_its_knot();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -1045,6 +1046,62 @@ void test_view::the_curve_does_not_shimmer_as_the_view_moves() {
 	         qPrintable(QStringLiteral("the line moved %1 px under the same "
 	                                   "instant when the view shifted")
 	                            .arg(worst)));
+}
+
+void test_view::the_band_owning_an_instant_gives_its_knot() {
+	/*
+	 * Sec 3.18.5, the hump after now on the Fold, 2026-10-29: Open-Meteo
+	 * hourly and the WU nowcast both start a sample at 13:00Z, at 9.2 C
+	 * and 10.0 C. The nowcast owns that instant. The knot came from
+	 * whichever band owned the column's MIDDLE, which flipped between
+	 * the two as the view moved; the readout landing on it shows which.
+	 */
+	const qint64 hour = 1600000000 - 1600000000 % 3600;
+	std::vector<bbq_sample> hours;
+	for (int i = -3; i < 6; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 9.2;
+		sample.precip_chance = 0.0;
+		hours.push_back(sample);
+	}
+	std::vector<bbq_sample> quarters;
+	for (int i = 0; i < 16; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour + i * 900;
+		sample.duration_s = 900;
+		sample.temperature = 10.0;
+		sample.precip_chance = 2.0;
+		quarters.push_back(sample);
+	}
+	bbq_series extended(bbq_band::extended, QStringLiteral("test"));
+	extended.set_samples(std::move(hours));
+	bbq_series nowcast(bbq_band::nowcast, QStringLiteral("test"));
+	nowcast.set_samples(std::move(quarters));
+	bbq_composite composite;
+	composite.set_series(std::move(extended));
+	composite.set_series(std::move(nowcast));
+	QCOMPARE(*composite.owner_at(hour).sample->temperature, 10.0);
+
+	probe graph;
+	graph.set_composite(composite);
+	graph.resize(900, 400);
+	graph.grab();
+	const int width = graph.plot_rect().width();
+	const qint64 per_column = 120;
+
+	for (qint64 shift = 0; shift < per_column; shift += 10) {
+		const qint64 from = hour - 2 * 3600 + shift;
+		graph.set_view(from, per_column * width);
+		graph.grab();
+		graph.set_cursor_column(int((hour - from) / per_column));
+		graph.grab();
+
+		const QString told = graph.accessibleDescription();
+		QVERIFY2(told.contains(QStringLiteral("10.0 C")),
+		         qPrintable(QStringLiteral("shifted %1 s: %2").arg(shift).arg(told)));
+	}
 }
 
 void test_view::showing_the_wind_does_not_touch_the_temperature_line() {
