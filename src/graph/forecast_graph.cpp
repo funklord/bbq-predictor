@@ -3601,7 +3601,19 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		                                    wide_enough, zone));
 
 		if (c.knot_has_temperature) {
-			parts.append(bbq_format_temperature(c.knot_temperature, 1) + tr(" C"));
+			QString temperature = bbq_format_temperature(c.knot_temperature, 1) + tr(" C");
+			/*
+			 * And the range behind it, where the column holds one (sec
+			 * 13.2.1). Zoomed out, the band shows a day from -18 to -2
+			 * and the mean alone said -10.0 C: the readout and the plot
+			 * describing one column differently.
+			 */
+			const QString low = bbq_format_temperature(c.temperature_low, 1);
+			const QString high = bbq_format_temperature(c.temperature_high, 1);
+			if (c.has_range && c.knot_count > 1 && low != high) {
+				temperature += tr(" (%1 to %2)").arg(low, high);
+			}
+			parts.append(temperature);
 		}
 		if (c.knot_has_rain) {
 			/*

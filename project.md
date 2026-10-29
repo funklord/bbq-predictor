@@ -5544,7 +5544,13 @@ mean is flat, shows 350 of 356 pixels in a column with the band and 3
 without it; the five-day view stays at the line's 12, and fails at 42
 with the band drawn 3 C too wide. A warm fixture cannot ask the first
 question: every evening is a grilling window, and its orange wash
-counts as red. The readout still reports the mean, and not the range.
+counts as red.
+
+**The readout says the range too**, after the mean: "-10.0 C (-18.0 to
+-2.0)" for a column holding several samples that differ. Without it
+the plot showed a day's swing and the readout, describing the same
+column, gave only its mean. It is part of the temperature field, so it
+survives where the narrow row drops the wind and the band.
 
 ## 14. Stations are discovered, remembered, and pinned
 

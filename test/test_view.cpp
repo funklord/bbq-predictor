@@ -683,6 +683,15 @@ void test_view::zoomed_out_the_day_s_range_is_drawn_behind_the_mean() {
 	                                   "shows only %1 of %2 pixels of it")
 	                            .arg(found)
 	                            .arg(plot.height())));
+
+	/*
+	 * And the readout says the same range as the band, rather than the
+	 * mean alone. The description is built from the readout's fields.
+	 */
+	graph.set_cursor_column(plot.width() / 2);
+	graph.grab();
+	const QString told = graph.accessibleDescription();
+	QVERIFY2(told.contains(QStringLiteral("-10.0 C (-18.0 to -2.0)")), qPrintable(told));
 }
 
 void test_view::a_day_view_draws_no_range_band() {
