@@ -2373,6 +2373,14 @@ at :55. It sweeps the view a minute at a time across a twenty-minute
 column and asks for the 14:00 hour's 4.0 mm/h at each; at f8fbbb9 the
 first shift already reads 0.0.
 
+**Seen on the Fold with 837dd6f, 2026-10-29:** the holder reports the
+flicker on that first hump is minimal now. What is left is most likely
+the column reduction itself: every knot sits at its column's index
+rather than at its sample's own time, so a knot moves by up to a
+column as the zoom changes, and the curve through it moves with it.
+Placing knots at their true fractional position would address that;
+it is not done, and it is not known that the remainder is this.
+
 ### 3.19 One plot, and rain is blue
 
 The chart had two panels: temperature, wind and rain rate above, and
