@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QFile>
+#include <QGestureEvent>
 #include <QImage>
 
 #include <algorithm>
@@ -51,6 +52,7 @@ public:
 	using bbq_forecast_graph::mousePressEvent;
 	using bbq_forecast_graph::mouseReleaseEvent;
 	using bbq_forecast_graph::wheelEvent;
+	using bbq_forecast_graph::event;
 };
 
 /*
@@ -89,6 +91,9 @@ private slots:
 	void a_fresh_graph_follows_the_clock();
 	void the_span_is_bounded_at_both_ends();
 	void zooming_holds_the_moment_under_the_cursor();
+	void pinching_holds_the_moment_under_the_fingers();
+	void a_pinch_moving_sideways_carries_the_moment_along();
+	void a_finger_left_down_after_a_pinch_does_not_drag();
 	void dragging_moves_time_with_the_hand();
 	void double_click_comes_back_to_now();
 	void a_theme_setting_lands_somewhere_defined();
@@ -161,7 +166,24 @@ private:
 	static void paint_once(probe &graph);
 	static double seconds_per_pixel(const probe &graph);
 	static double time_under(const probe &graph, double x);
+	static void pinch(probe &graph, double last_x, double x, double scale);
 };
+
+/*
+ * One pinch update, as Qt delivers it: centre points in SCREEN
+ * coordinates, and a scale that is the change since the last update.
+ * The widget is moved off the screen's origin first by each caller, so
+ * a handler reading the points as its own coordinates is caught.
+ */
+void test_view::pinch(probe &graph, double last_x, double x, double scale) {
+	QPinchGesture gesture;
+	gesture.setLastCenterPoint(graph.mapToGlobal(QPointF(last_x, 150.0)));
+	gesture.setCenterPoint(graph.mapToGlobal(QPointF(x, 150.0)));
+	gesture.setLastScaleFactor(1.0);
+	gesture.setScaleFactor(scale);
+	QGestureEvent event(QList<QGesture *>{&gesture});
+	QVERIFY(graph.event(&event));
+}
 
 void test_view::paint_once(probe &graph) {
 	/*
@@ -255,6 +277,75 @@ void test_view::zooming_holds_the_moment_under_the_cursor() {
 
 	QVERIFY(qAbs(time_under(graph, cursor) - before) <
 	        seconds_per_pixel(graph) + 1.0);
+}
+
+void test_view::pinching_holds_the_moment_under_the_fingers() {
+	/*
+	 * Sec 13.1.2. On the Fold the plot slid away from the fingers; this
+	 * is the wheel's invariant asked of a pinch, at a centre the widget
+	 * and the screen disagree about.
+	 */
+	probe graph;
+	graph.move(240, 130);
+	paint_once(graph);
+	QVERIFY(graph.mapToGlobal(QPointF(0, 0)).x() > 100.0);
+
+	const double fingers = graph.plot_rect().left() + 300.0;
+	const double before = time_under(graph, fingers);
+
+	for (int step = 0; step < 4; ++step) {
+		pinch(graph, fingers, fingers, 1.25);
+	}
+	QVERIFY(graph.view_span_s() < 24 * 3600 * 0.5);
+	QVERIFY2(qAbs(time_under(graph, fingers) - before) < seconds_per_pixel(graph) + 1.0,
+	         "the moment under the fingers moved while pinching about it");
+
+	for (int step = 0; step < 4; ++step) {
+		pinch(graph, fingers, fingers, 0.8);
+	}
+	QVERIFY(qAbs(time_under(graph, fingers) - before) < seconds_per_pixel(graph) + 1.0);
+}
+
+void test_view::a_pinch_moving_sideways_carries_the_moment_along() {
+	/*
+	 * Two fingers moving together while they spread: the moment that
+	 * was under them is under them where they have got to.
+	 */
+	probe graph;
+	graph.move(240, 130);
+	paint_once(graph);
+
+	const double was = graph.plot_rect().left() + 300.0;
+	const double now = was + 80.0;
+	const double before = time_under(graph, was);
+
+	pinch(graph, was, now, 1.5);
+	QVERIFY2(qAbs(time_under(graph, now) - before) < seconds_per_pixel(graph) + 1.0,
+	         "the moment under the fingers stayed behind when they moved");
+}
+
+void test_view::a_finger_left_down_after_a_pinch_does_not_drag() {
+	/*
+	 * The first finger of a pinch is a mouse press too. Its drag kept
+	 * the view's start from before the pinch, so moving that finger
+	 * afterwards panned from the old start at the new scale.
+	 */
+	probe graph;
+	graph.move(240, 130);
+	paint_once(graph);
+
+	const double x = graph.plot_rect().left() + 300.0;
+	QMouseEvent press(QEvent::MouseButtonPress, QPointF(x, 150.0), QPointF(x, 150.0),
+	                  Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+	graph.mousePressEvent(&press);
+
+	pinch(graph, x, x, 2.0);
+	const qint64 from = graph.view_from_utc();
+
+	QMouseEvent move(QEvent::MouseMove, QPointF(x + 40.0, 150.0), QPointF(x + 40.0, 150.0),
+	                 Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+	graph.mouseMoveEvent(&move);
+	QCOMPARE(graph.view_from_utc(), from);
 }
 
 void test_view::dragging_moves_time_with_the_hand() {

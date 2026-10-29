@@ -1607,31 +1607,47 @@ bool bbq_forecast_graph::event(QEvent *event) {
 
 	/*
 	 * The same invariant the wheel holds (sec 13.1.1): the moment under
-	 * the fingers stays under them. The centre point is where the pinch
-	 * is happening, so it is the anchor -- zooming about the middle of
-	 * the widget instead would slide the thing being pinched away from
-	 * the fingers doing it, which feels broken in a way a screenshot
-	 * cannot show.
+	 * the fingers stays under them. Held on the Fold it did not, in
+	 * three ways at once (sec 13.1.2), each fixed here:
+	 *
+	 * - The first finger is also a mouse press, which started a drag
+	 *   that kept the press position and the view's start from before
+	 *   the pinch. Moving that finger then panned from the old start at
+	 *   the new scale, so the plot jumped. A pinch ends the drag; the
+	 *   next press starts a fresh one.
+	 * - The centre points are in SCREEN coordinates, and were used as
+	 *   the widget's own.
+	 * - The anchor was the current centre only, so two fingers moving
+	 *   together zoomed in place while the hand moved on. The moment
+	 *   under the LAST centre is put under the current one, which is
+	 *   zoom and pan in one, as the fingers do it.
 	 */
-	const double where = pinch->centerPoint().x() - m_plot.left();
-	const double offset = std::max(0.0, std::min(
-	        static_cast<double>(m_plot.width()), where));
+	m_dragging = false;
+	unsetCursor();
+
+	const auto plot_offset = [&](const QPointF &on_screen) {
+		const double where = mapFromGlobal(on_screen).x() - m_plot.left();
+		return std::max(0.0, std::min(static_cast<double>(m_plot.width()), where));
+	};
+	const double was_at = plot_offset(pinch->lastCenterPoint());
+	const double now_at = plot_offset(pinch->centerPoint());
 
 	const qint64 span = view_span_s();
 	const qint64 from = view_from_utc();
-	const double anchor = from + offset * (static_cast<double>(span) / m_plot.width());
+	const double anchor = from + was_at * (static_cast<double>(span) / m_plot.width());
 
 	const double scale = pinch->scaleFactor();
 	if (scale > 0.0) {
 		/*
 		 * Fingers apart means see MORE detail, so the span shrinks --
-		 * the reciprocal, not the factor itself.
+		 * the reciprocal, not the factor itself. scaleFactor is the
+		 * change since the last update, not since the pinch began.
 		 */
 		set_view(0, static_cast<qint64>(span / scale));
 
 		const double per_pixel =
 		        static_cast<double>(m_view_span_s) / m_plot.width();
-		m_view_from = static_cast<qint64>(anchor - offset * per_pixel);
+		m_view_from = static_cast<qint64>(anchor - now_at * per_pixel);
 
 		emit view_changed(view_from_utc(), view_from_utc() + view_span_s());
 		update();

@@ -5497,8 +5497,21 @@ is the reason sec 13.1.1 asserts the invariant rather than looking at it.
 Fingers apart means see more detail, so the span shrinks: the reciprocal
 of the scale factor, not the factor.
 
-**Unverified on hardware.** It is written and it compiles, and only a
-touchscreen can say whether it feels right.
+**Tried on the Fold 2026-10-29, and it slid away under the fingers.**
+It had been written and compiled and never held by a hand. Three faults,
+each now pinned by its own `test_view` case, which fails when that one
+fix is taken out and no other:
+
+- **The first finger is a mouse press too.** Its drag kept the press
+  position and the view's start from before the pinch, so moving that
+  finger panned from the old start at the new scale and the plot
+  jumped. A pinch ends the drag.
+- **The centre points are in screen coordinates**, and were read as the
+  widget's own. The tests move the widget off the screen's origin so the
+  two disagree.
+- **The anchor ignored the fingers moving.** The moment under the LAST
+  centre is put under the current one, which is zoom and pan together,
+  the way two fingers do it.
 
 ### 13.2 The marks stop when they would lie
 
