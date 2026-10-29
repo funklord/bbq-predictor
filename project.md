@@ -17113,8 +17113,9 @@ program draws. On the Fold the app then exposed 29 nodes instead of 3.
 The graph read "Forecast graph, Now: Thu 02:00, 6.6 C, 0.0 mm/h, 0%,
 9 km/h, extended", every control appeared, and the slider was named
 "Steady scale:" through its buddy, its node built without an abort.
-One gap is left: a drop-down is named by its value only, with its label
-as a separate node beside it. Android does not turn Qt's labelled-by
+Heard the same night: the holder, with TalkBack on, reports the app
+reading the graph. One gap is left: a drop-down is named by its value
+only, with its label as a separate node beside it. Android does not turn Qt's labelled-by
 relation into a name, so sec 16.128 holds for Orca and not here.
 
 **The desktop shares the cause and is not measured.** On Linux the
