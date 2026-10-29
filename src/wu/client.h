@@ -43,6 +43,16 @@ enum class bbq_wu_product {
 const char *bbq_wu_product_name(bbq_wu_product product);
 
 /*
+ * What an empty answer says, for `product`, with the requested `date`
+ * where the request had one. The hint that the station is unknown or
+ * silent goes only on products asked for by station id: it said "for the
+ * observed band" on every one, so a silent station's `current` failure
+ * named the wrong band, and a forecast asked for by coordinate would have
+ * blamed a station it never named.
+ */
+QString bbq_wu_no_data_message(bbq_wu_product product, int status, const QString &date);
+
+/*
  * One parameter out of a request's query string, or empty.
  *
  * Exists so a failure can say WHICH request failed. Two observed

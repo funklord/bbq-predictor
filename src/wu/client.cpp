@@ -1,5 +1,6 @@
 #include "wu/client.h"
 
+#include <QCoreApplication>
 #include <QJsonParseError>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -279,23 +280,10 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
 		 * chase and the other is a station to re-pick (sec 2.6.6).
 		 */
 		if (body.isEmpty()) {
-			/*
-			 * Named by date where the request had one, because two
-			 * observed requests go out per round and a silent station
-			 * fails both. Printed without it they are two identical
-			 * lines about different days.
-			 */
-			const QString date = bbq_wu_query_parameter(query,
-			                                            QStringLiteral("date"));
-			const QString which = date.isEmpty()
-			                              ? QString()
-			                              : QStringLiteral(" for %1").arg(date);
-
-			emit failed(product, tr("no data (HTTP %1)%2 -- for the observed "
-			                        "band this usually means the station "
-			                        "is unknown or has reported nothing")
-			                             .arg(status)
-			                             .arg(which));
+			emit failed(product,
+			            bbq_wu_no_data_message(
+			                    product, status,
+			                    bbq_wu_query_parameter(query, QStringLiteral("date"))));
 			return;
 		}
 
@@ -327,3 +315,26 @@ void bbq_wu_client::send(bbq_wu_product product, const QString &path,
 		emit ready(product, document);
 	});
 }
+
+QString bbq_wu_no_data_message(bbq_wu_product product, int status, const QString &date) {
+	/*
+	 * Named by date where the request had one, because two observed
+	 * requests go out per round and a silent station fails both. Printed
+	 * without it they are two identical lines about different days.
+	 */
+	QString text = QCoreApplication::translate("bbq_wu_client", "no data (HTTP %1)").arg(status);
+	if (!date.isEmpty()) {
+		text += QStringLiteral(" for %1").arg(date);
+	}
+
+	const bool by_station = product == bbq_wu_product::observed ||
+	                        product == bbq_wu_product::observed_pinned ||
+	                        product == bbq_wu_product::current_station;
+	if (by_station) {
+		text += QCoreApplication::translate(
+		        "bbq_wu_client",
+		        " -- this usually means the station is unknown or has reported nothing");
+	}
+	return text;
+}
+

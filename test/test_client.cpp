@@ -38,6 +38,7 @@ private slots:
 	void api_requests_ask_for_identity_encoding();
 	void a_query_parameter_is_read_back_by_name();
 	void a_failed_key_page_says_what_the_server_answered();
+	void an_empty_answer_blames_a_station_only_where_one_was_asked();
 	void only_a_key_a_weather_endpoint_used_is_taken();
 	void the_site_key_is_taken_by_name_and_nothing_else_from_the_blob();
 	void a_page_without_a_key_is_tried_again();
@@ -375,6 +376,37 @@ void test_client::a_query_parameter_is_read_back_by_name() {
  * must keep Qt's text unchanged -- which is the half a test written
  * only for the 404 would let rot.
  */
+/*
+ * HTTP 204 is how a silent station answers. The message said "for the
+ * observed band" whichever band it was, so a silent station's current
+ * reading named the wrong band -- seen on the Fold, the night ISTOCK877
+ * stopped at 23:13 -- and a forecast asked for by coordinate would have
+ * blamed a station it never named.
+ */
+void test_client::an_empty_answer_blames_a_station_only_where_one_was_asked() {
+	const QString hint = QStringLiteral("the station is unknown or has reported nothing");
+
+	const QString observed =
+	        bbq_wu_no_data_message(bbq_wu_product::observed, 204, QStringLiteral("20261029"));
+	QVERIFY(observed.contains(QStringLiteral("HTTP 204")));
+	QVERIFY(observed.contains(QStringLiteral("for 20261029")));
+	QVERIFY(observed.contains(hint));
+	QVERIFY(!observed.contains(QStringLiteral("observed band")));
+
+	const QString current = bbq_wu_no_data_message(bbq_wu_product::current_station, 204, QString());
+	QVERIFY(current.contains(hint));
+	QVERIFY(!current.contains(QStringLiteral(" for ")));
+	QVERIFY(bbq_wu_no_data_message(bbq_wu_product::observed_pinned, 204, QString())
+	                .contains(hint));
+
+	for (bbq_wu_product by_point : {bbq_wu_product::nowcast, bbq_wu_product::hourly,
+	                                bbq_wu_product::current_point}) {
+		const QString said = bbq_wu_no_data_message(by_point, 204, QString());
+		QVERIFY2(!said.contains(hint), qPrintable(said));
+		QCOMPARE(said, QStringLiteral("no data (HTTP 204)"));
+	}
+}
+
 void test_client::a_failed_key_page_says_what_the_server_answered() {
 	const QString dangling =
 	        QStringLiteral("Error transferring https://www.wunderground.com/"
