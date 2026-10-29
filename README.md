@@ -19,8 +19,12 @@ drew each stretch. It keeps every observation it ever fetched, checks
 every forecast against what the station then measured, and uses the
 record to correct the forecast and to say how far to trust it. It sits
 in the system tray as the temperature, opens to the graph, and runs on
-Android with a home-screen widget. The name is the question it was
-written to answer: whether this afternoon is worth lighting a fire for.
+Android with a home-screen widget. Behind it is a small server: one
+publisher fetches each station on a budget and writes signed files,
+and every applet reads those rather than scraping the providers itself,
+which falls back to scraping only when the server is gone. The name is
+the question it was written to answer: whether this afternoon is worth
+lighting a fire for.
 
 Against what people use for the same question -- Weather
 Underground's own site and app, yr.no, meteoblue, and the weather
@@ -62,20 +66,15 @@ applets that come with GNOME and KDE:
   and turns red when the data behind it is stale; on a phone the
   widget draws the graph and says how old the picture is.
 
-## Status
+## Not there yet
 
-**It works, and it is one person's applet rather than a product.**
-
-Fetching, parsing, drawing, scoring, verification, configuration and
-the tray are built and in use, on the desktop and on Android. The test
-suite covers the model, the readers, the curves, the layouts and the
-graph's gestures.
-
-The server half -- a publisher that fetches for a station and writes
-signed files, and a daemon that serves them, so clients read published
-data rather than each scraping on their own -- is built and packaged.
-The applet reads it first and scrapes only when it is gone, once it is
-built with the publisher's public key.
+- **The applet does not read the server yet.** The publisher, the
+  daemon and the applet's reading of them are built and packaged, but
+  the applet is built with the publisher's public key, and until it is,
+  every applet scrapes for itself (`project.md` sec 15).
+- **On a phone the widget changes only while the app runs.** The
+  background fetch is built and measured and not switched on
+  (`project.md` sec 17).
 
 `project.md` is the authoritative record -- what was decided, why, what
 was measured, and what is still open. **Read it before the code.** It is

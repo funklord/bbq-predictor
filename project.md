@@ -2732,9 +2732,14 @@ e1b41e1, from its message 20261029T1321Z to this inbox, recorded here and
 deleted with that tree's two tooling notices of 10:28 and 10:50Z, which
 needed nothing here). It names the neighbours -- Weather Underground's
 site, yr.no, meteoblue, the GNOME and KDE applets -- and lists what this
-does that they do not, each a thing the program does today. Its status
-section had said the Android build does not complete, true until sec
-11.2 was cleared; it says what is built now.
+does that they do not, each a thing the program does today. The rule
+was amended the same day (claude-guidelines a57a385): a README describes
+the software as it is meant to be, from the aims here, and says once
+what is not there yet. So the opening includes the server half of sec
+15 as part of the design, and the old status section -- which had said
+the Android build does not complete, true until sec 11.2 was cleared --
+is a two-item "Not there yet": the applet's server key (sec 15) and the
+phone's background fetch (sec 17).
 
 ## 4. The tray
 
