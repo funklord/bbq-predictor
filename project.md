@@ -17062,3 +17062,35 @@ reasoning about it.
 Measured after the fixes: 1,976,168 inputs in 300 s, clean, and all four
 saved crash inputs pass. Each fix, removed in turn under `make test`,
 fails its unit test in `test_reader` or `test_providers`.
+
+## 16.133 TalkBack gets nothing from the app on the Fold
+
+Found 2026-10-29 by the holder, with TalkBack on and the app in front:
+nothing in bbq-predictor is spoken, neither the graph nor any control.
+The home-screen widget is spoken correctly (sec 16.126), because it is
+a launcher view, not Qt. So on this phone the app itself is unusable
+with a screen reader. The graph's description (sec 16.127), its
+keyboard readout (sec 16.129) and the label buddies (sec 16.128) are
+built and tested on the desktop, and reach nobody here.
+
+**Measured:** Fold (SM-F926B, API 35), Qt 6.12.0, a build of 4a3f1ad.
+- `uiautomator dump` sees 3 of the app's nodes with no service on, the
+  same 3 with Samsung's Assistant Menu on, and 0 with TalkBack on, the
+  app started fresh under it.
+- Qt logs "Android platform integration is not ready, accessibility
+  activation deferred." once at start. Qt's own source
+  (`qandroidplatformintegration.cpp`, `customEvent`) re-applies the
+  stored state when the integration comes up, so the deferral is
+  expected and is not, by itself, the fault.
+- The APK carries `QtAccessibilityDelegate` and its listeners, so the
+  bridge is built in. `bbq_install_accessibility_workaround` only
+  installs a factory for sliders and progress bars and switches nothing
+  off.
+
+**Not yet known: whether this is Qt's or this app's.** Qt's Android
+accessibility has been worked on mainly for Qt Quick. The experiment
+that separates the two is a minimal Qt Widgets app, a window with a
+label and a button, built with the same kit and run under TalkBack on
+the same phone. If it is silent too, this is Qt's to fix and goes
+upstream with that reproduction. If it speaks, the cause is here, and
+the difference between the two apps is where to look.
