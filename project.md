@@ -16850,8 +16850,9 @@ own, which TalkBack reads already.
 The C++ half is tested on the desktop: the reading is written, "--"
 removes it, and with the write sabotaged the test fails. The Java half
 is only built, not seen on a device: `make android` compiled it, and the
-APK's dex and resources carry the file name and the new string. It
-needs a phone with TalkBack to hear it.
+APK's dex and resources carry the file name and the new string.
+**Heard on the Fold, 2026-10-29:** TalkBack on the cover-screen widget
+said "7 degrees now, temperature and rain forecast graph" (sec 16.131).
 
 ## 16.127 The graph told a screen reader nothing
 
@@ -17000,11 +17001,11 @@ held "6".
 Folded, the widget itself showed on the cover screen's second page
 with its reading, "7" by then, clear at the top centre of the graph.
 
-**Still not verified on a device:** the widget's spoken description
-(sec 16.126). With the phone folded, `uiautomator dump` returned only
-four System UI nodes on both cover pages: it takes no display argument
-and could not see the cover screen's launcher. Hearing TalkBack on the
-widget is the test left. And the graph's description, keyboard readout
+**The widget's spoken description, heard 2026-10-29** (sec 16.126):
+TalkBack on the cover screen's widget said "7 degrees now, temperature
+and rain forecast graph", heard by the holder. No tool here could read
+it: `uiautomator dump` takes no display argument and saw only System UI
+on the cover screen, and TalkBack does not log what it speaks. And the graph's description, keyboard readout
 and label relations (sec 16.127 to 16.129): `uiautomator` sees only
 three of the app's nodes, even with TalkBack on, so Qt's accessibility
 tree is not readable that way. Hearing it with TalkBack is the test
