@@ -722,6 +722,34 @@ fuzz-wire: test/fuzz_wire.cpp test/fuzz_wire_seed.cpp $(WIRE_FUZZ_SOURCES) \
 	cd $(FUZZ_DIR) && ./fuzz_wire -max_total_time=$(FUZZ_SECONDS) \
 	        -max_len=65536 -rss_limit_mb=2048 wire-corpus
 
+# The providers' response readers under libFuzzer (project.md sec 2),
+# bounded by FUZZ_SECONDS the same way. They parse what the internet sends,
+# and the publisher runs them -- holding the signing key -- for stations
+# strangers named through the demand list (sec 15.14). Seeded from the JSON
+# the reader tests embed, with a dictionary of the fields the readers ask
+# for (test/fuzz_providers_seed.py).
+# Two of the three files also hold their QObject network clients, which
+# need moc to link though the fuzzer never constructs one.
+PROVIDERS_MOC = $(shell $(QMAKE) -query QT_HOST_LIBEXECS)/moc
+PROVIDERS_FUZZ_SOURCES = src/wu/reader.cpp src/openmeteo/forecast.cpp \
+                         src/met/nowcast.cpp src/model/series.cpp
+
+fuzz-providers: test/fuzz_providers.cpp test/fuzz_providers_seed.py \
+                $(PROVIDERS_FUZZ_SOURCES) \
+                $(wildcard src/wu/*.h src/openmeteo/*.h src/met/*.h src/model/*.h)
+	mkdir -p $(FUZZ_DIR)/providers-corpus
+	$(PROVIDERS_MOC) src/openmeteo/forecast.h -o $(FUZZ_DIR)/moc_forecast.cpp
+	$(PROVIDERS_MOC) src/met/nowcast.h -o $(FUZZ_DIR)/moc_nowcast.cpp
+	clang++ -std=c++17 -g -O1 -fPIC -Isrc $(shell pkg-config --cflags Qt6Core Qt6Network) \
+	        -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined \
+	        test/fuzz_providers.cpp $(PROVIDERS_FUZZ_SOURCES) \
+	        $(FUZZ_DIR)/moc_forecast.cpp $(FUZZ_DIR)/moc_nowcast.cpp \
+	        -o $(FUZZ_DIR)/fuzz_providers $(shell pkg-config --libs Qt6Core Qt6Network)
+	python3 -I test/fuzz_providers_seed.py $(FUZZ_DIR)/providers-corpus \
+	        $(FUZZ_DIR)/providers.dict
+	cd $(FUZZ_DIR) && ./fuzz_providers -max_total_time=$(FUZZ_SECONDS) \
+	        -max_len=65536 -rss_limit_mb=2048 -dict=providers.dict providers-corpus
+
 fuzz-serve: test/fuzz_serve.c src/serve/serve_core.c src/serve/serve_core.h
 	mkdir -p $(FUZZ_DIR)/corpus
 	clang -std=c11 -g -O1 -fsanitize=fuzzer,address,undefined \
@@ -970,6 +998,7 @@ help:
 .PHONY: all run test tests-build check style style-source style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
         style-wiring style-setup style-tests style-links test-clocks fuzz-serve fuzz-wire \
+        fuzz-providers \
         submodules check-publish-libraries check-android-compile \
         android android-aab \
         deb-daedalus check-boot install install-applet install-server uninstall clean veryclean distclean help

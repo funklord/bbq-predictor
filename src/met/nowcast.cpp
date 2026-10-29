@@ -1,5 +1,8 @@
 #include "met/nowcast.h"
 
+#include <cmath>
+#include <limits>
+
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -139,9 +142,13 @@ bbq_series bbq_met_read_nowcast(const QJsonDocument &response) {
 			sample.precip_rate = rate;
 		}
 
-		/* Metres per second here, kilometres per hour in the model. */
+		/*
+		 * Metres per second here, kilometres per hour in the model. A
+		 * speed near the largest double overflows the conversion, and an
+		 * infinite wind is no reading at all (sec 16.132).
+		 */
 		const double wind = number_or(details, "wind_speed", &found);
-		if (found) {
+		if (found && std::isfinite(wind * 3.6)) {
 			sample.wind_kph = wind * 3.6;
 		}
 
@@ -159,8 +166,24 @@ bbq_series bbq_met_read_nowcast(const QJsonDocument &response) {
 	 * claim about the provider was not checked and should not have been
 	 * written as though it had been.
 	 */
+	/*
+	 * Strictly ascending, or the band goes (sec 16.132), as for an
+	 * unreadable timestamp above: each span is the distance to the next
+	 * start, so one out of order gave a negative span and a repeated one
+	 * a span of nought. Found by `make fuzz-providers`.
+	 */
+	for (std::size_t i = 1; i < samples.size(); ++i) {
+		if (samples[i].start_utc <= samples[i - 1].start_utc) {
+			return bbq_series(bbq_band::nowcast_fine, QString::fromLatin1(provider_name));
+		}
+	}
+
 	for (std::size_t i = 0; i + 1 < samples.size(); ++i) {
 		const qint64 stride = samples[i + 1].start_utc - samples[i].start_utc;
+		/* A span the duration cannot hold is malformed (sec 16.132). */
+		if (stride > std::numeric_limits<int>::max()) {
+			return bbq_series(bbq_band::nowcast_fine, QString::fromLatin1(provider_name));
+		}
 		samples[i].duration_s = static_cast<int>(stride);
 	}
 

@@ -18,6 +18,7 @@ class test_reader : public QObject {
 
 private slots:
 	void hourly_converts_accumulation_to_a_rate();
+	void a_forecast_whose_times_do_not_ascend_is_discarded();
 	void nowcast_reads_local_time_with_an_offset();
 	void observed_sorts_rows_that_arrive_newest_first();
 	void observed_takes_the_station_zone_and_wind();
@@ -58,6 +59,50 @@ void test_reader::hourly_converts_accumulation_to_a_rate() {
 
 	QCOMPARE(*series.samples()[2].precip_chance, 60.0);
 	QCOMPARE(*series.samples()[1].wind_kph, 12.0);
+}
+
+/*
+ * Each span is the distance to the next start (sec 16.132). One out of
+ * order gave a sample covering time backwards, and a repeated one a
+ * sample covering none, whose rain was dropped. Either is a malformed
+ * response, and the band goes, as it does for an unparseable timestamp.
+ */
+void test_reader::a_forecast_whose_times_do_not_ascend_is_discarded() {
+	const QJsonDocument repeated = parse(R"({
+		"validTimeUtc": [1786100000, 1786100000, 1786107200],
+		"temperature": [20, 22, 21],
+		"qpf": [1.0, 2.0, 0.0]
+	})");
+	QVERIFY(bbq_wu_read_hourly(repeated).is_empty());
+
+	const QJsonDocument backwards = parse(R"({
+		"validTimeUtc": [1786107200, 1786100000],
+		"temperature": [20, 22]
+	})");
+	QVERIFY(bbq_wu_read_nowcast(backwards).is_empty());
+
+	/* Ascending, but a span the duration cannot hold: sixty-eight years and more. */
+	const QJsonDocument centuries = parse(R"({
+		"validTimeUtc": [1786100000, 8716103600],
+		"temperature": [20, 22]
+	})");
+	QVERIFY(bbq_wu_read_hourly(centuries).is_empty());
+
+	/* No time at all: casting 1e72 to an epoch was undefined. */
+	QVERIFY(bbq_wu_read_hourly(parse(R"({"validTimeUtc": [1e72], "temperature": [20]})"))
+	                .is_empty());
+	QVERIFY(bbq_wu_read_observed(parse(R"({"observations": [{"epoch": 1e72}]})")).is_empty());
+	QVERIFY(bbq_wu_read_current_station(
+	                parse(R"({"observations": [{"epoch": -5}]})"))
+	                .is_empty());
+
+	/* Ascending, the same values arrive. */
+	const QJsonDocument ascending = parse(R"({
+		"validTimeUtc": [1786100000, 1786103600],
+		"temperature": [20, 22],
+		"qpf": [1.0, 2.0]
+	})");
+	QCOMPARE(bbq_wu_read_hourly(ascending).size(), std::size_t(2));
 }
 
 void test_reader::nowcast_reads_local_time_with_an_offset() {

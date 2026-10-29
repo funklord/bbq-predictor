@@ -19,6 +19,7 @@ class test_providers : public QObject {
 
 private slots:
 	void met_converts_wind_from_metres_per_second();
+	void met_discards_times_that_do_not_ascend();
 	void an_unreadable_timestamp_discards_the_band();
 	void met_keeps_its_rain_rate();
 	void met_reads_zulu_time_as_utc();
@@ -61,6 +62,29 @@ QJsonDocument test_providers::openmeteo_fixture(const char *zone) {
 	})";
 	json.replace("ZONE", zone);
 	return QJsonDocument::fromJson(json);
+}
+
+/*
+ * Each span is the distance to the next start, so a repeated time gave a
+ * span of nought and one out of order a negative span (sec 16.132). The
+ * band goes, as for an unreadable timestamp. And a wind speed that
+ * overflows the conversion to km/h is no reading, not an infinite one.
+ */
+void test_providers::met_discards_times_that_do_not_ascend() {
+	const QJsonDocument repeated = QJsonDocument::fromJson(R"({"properties": {"timeseries": [
+		{"time": "2026-08-07T12:00:00Z", "data": {"instant": {"details": {"air_temperature": 21.7}}}},
+		{"time": "2026-08-07T12:00:00Z", "data": {"instant": {"details": {"air_temperature": 21.5}}}}
+	]}})");
+	QVERIFY(bbq_met_read_nowcast(repeated).is_empty());
+
+	const QJsonDocument gale = QJsonDocument::fromJson(R"({"properties": {"timeseries": [
+		{"time": "2026-08-07T12:00:00Z", "data": {"instant": {"details": {"wind_speed": 1e308}}}},
+		{"time": "2026-08-07T12:05:00Z", "data": {"instant": {"details": {"wind_speed": 3.0}}}}
+	]}})");
+	const bbq_series series = bbq_met_read_nowcast(gale);
+	QCOMPARE(series.size(), std::size_t(2));
+	QVERIFY(!series.samples()[0].wind_kph.has_value());
+	QVERIFY(series.samples()[1].wind_kph.has_value());
 }
 
 void test_providers::met_converts_wind_from_metres_per_second() {

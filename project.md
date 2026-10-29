@@ -17007,3 +17007,45 @@ past 2038, in half- and quarter-hour zones and across a clock change
 (sec 16.130). A locale run proves nothing here until code reads
 `QLocale`.
 
+
+## 16.132 The providers' readers, fuzzed
+
+The publisher runs the providers' response readers for stations that
+strangers named through the demand list (sec 15.14), in the process that
+holds the signing key, and nothing fuzzed them. `make fuzz-providers`
+does now. It feeds JSON to all nine readers (Weather Underground,
+Open-Meteo, MET), seeded from the reader tests' own responses, with a
+dictionary of the fields they read. Beyond ASan and UBSan it holds two
+things every caller relies on: every number is finite, and no sample
+covers a negative span.
+
+It found four faults within minutes, each fixed by discarding a band
+the way an unparseable timestamp already did:
+
+- **Starts out of order, or repeated,** in the WU forecast reader and in
+  MET's. Each span is the distance to the next start, so a start out of
+  order gave a sample covering time backwards, which the composite and
+  the graph took as it came, and a repeated one a sample covering none.
+  Neither reader sorted, and no forecast band has been seen to arrive
+  unsorted, so a band whose times do not strictly ascend is discarded
+  rather than repaired. The observed reader sorts and keeps doing so;
+  sec 2.6.2 records one endpoint that answers newest-first.
+- **A span too long for the duration field**, two ascending starts
+  centuries apart: the cast to `int` wrapped negative. Malformed, and
+  discarded, in `fill_durations` and MET's loop.
+- **An epoch outside qint64**, 1.3e72, cast straight to an integer,
+  which is undefined. `epoch_from` takes 0 to 1e11 s (1970 to about
+  5100), narrower than the type so that spans, differences of epochs,
+  cannot overflow either. All four WU sites use it.
+- **MET's wind, 1e308 m/s**, overflowed the conversion to km/h. An
+  infinite wind is no reading, so the field stays missing.
+
+One claim in the first draft was false: that a repeated timestamp
+archived an infinite rain rate. `bbq_rate_from_accumulation` returns no
+value for a span of nought, so the rain was dropped, not infinite. It
+was corrected before commit, from reading that function rather than
+reasoning about it.
+
+Measured after the fixes: 1,976,168 inputs in 300 s, clean, and all four
+saved crash inputs pass. Each fix, removed in turn under `make test`,
+fails its unit test in `test_reader` or `test_providers`.

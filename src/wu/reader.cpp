@@ -7,11 +7,32 @@
 #include <QTimeZone>
 
 #include <algorithm>
+#include <limits>
 #include <vector>
 
 namespace {
 
 const char *const provider_name = "wunderground";
+
+/*
+ * An epoch from a JSON number, or false where it cannot be one (sec
+ * 16.132). Casting a double outside qint64's range is undefined, and
+ * `make fuzz-providers` sent 1.3e72. The bound is narrower than the type
+ * on purpose: spans are differences of these, and two near the type's
+ * ends would overflow the subtraction as well. Nought to 1e11 seconds is
+ * 1970 to about the year 5100, which no provider's clock leaves.
+ */
+bool epoch_from(const QJsonValue &value, qint64 *out) {
+	if (!value.isDouble()) {
+		return false;
+	}
+	const double seconds = value.toDouble();
+	if (!(seconds >= 0.0 && seconds <= 1e11)) {
+		return false;
+	}
+	*out = static_cast<qint64>(seconds);
+	return true;
+}
 
 /*
  * Give every sample a duration, taken from the distance to the next one.
@@ -27,9 +48,9 @@ const char *const provider_name = "wunderground";
  * it. A lone sample gets the fallback, which is the only place a
  * nominal cadence is used at all.
  */
-void fill_durations(std::vector<bbq_sample> &samples, int fallback_s) {
+bool fill_durations(std::vector<bbq_sample> &samples, int fallback_s) {
 	if (samples.empty()) {
-		return;
+		return true;
 	}
 
 	std::vector<qint64> strides;
@@ -37,18 +58,29 @@ void fill_durations(std::vector<bbq_sample> &samples, int fallback_s) {
 
 	for (std::size_t i = 0; i + 1 < samples.size(); ++i) {
 		const qint64 stride = samples[i + 1].start_utc - samples[i].start_utc;
+
+		/*
+		 * A span the duration cannot hold is a malformed response, not a
+		 * long one (sec 16.132): two ascending starts sixty-eight years
+		 * apart wrapped the cast to a negative span. Found by
+		 * `make fuzz-providers`; the caller discards the band.
+		 */
+		if (stride > std::numeric_limits<int>::max()) {
+			return false;
+		}
 		samples[i].duration_s = static_cast<int>(stride);
 		strides.push_back(stride);
 	}
 
 	if (strides.empty()) {
 		samples.back().duration_s = fallback_s;
-		return;
+		return true;
 	}
 
 	const std::size_t middle = strides.size() / 2;
 	std::nth_element(strides.begin(), strides.begin() + middle, strides.end());
 	samples.back().duration_s = static_cast<int>(strides[middle]);
+	return true;
 }
 
 /* A JSON number, or nothing where the field is absent or null. */
@@ -125,11 +157,12 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 			 * already does, for the reason given there. The two paths
 			 * have to be equally strict or the stricter one is decoration.
 			 */
-			if (!value.isDouble()) {
+			qint64 start = 0;
+			if (!epoch_from(value, &start)) {
 				return series;
 			}
 
-			starts.push_back(static_cast<qint64>(value.toDouble()));
+			starts.push_back(start);
 		}
 	} else {
 		const QString local_key = QStringLiteral("validTimeLocal");
@@ -153,6 +186,22 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 
 	if (starts.empty()) {
 		return series;
+	}
+
+	/*
+	 * Strictly ascending, or the band is discarded (sec 16.132), like one
+	 * with an unparseable timestamp above. Each span is the distance to
+	 * the next start, so a start out of order gave a sample covering time
+	 * backwards, which the composite and the graph took as it came, and a
+	 * repeated one a sample covering none, whose rain the conversion then
+	 * dropped. Found by `make fuzz-providers`. Sorting would hide a response that is wrong
+	 * rather than repair one that is merely out of order: no forecast
+	 * band has been seen to arrive unsorted.
+	 */
+	for (std::size_t i = 1; i < starts.size(); ++i) {
+		if (starts[i] <= starts[i - 1]) {
+			return series;
+		}
 	}
 
 	/*
@@ -182,7 +231,9 @@ bbq_series read_columns(const QJsonDocument &response, const column_spec &spec) 
 		samples.push_back(sample);
 	}
 
-	fill_durations(samples, spec.fallback_step_s);
+	if (!fill_durations(samples, spec.fallback_step_s)) {
+		return series;
+	}
 
 	for (std::size_t i = 0; i < samples.size(); ++i) {
 		samples[i].precip_chance = number_at(chance, static_cast<int>(i));
@@ -231,13 +282,11 @@ bbq_series bbq_wu_read_observed(const QJsonDocument &response) {
 		const QJsonObject row = row_value.toObject();
 
 		const QJsonValue epoch = row.value(QStringLiteral("epoch"));
-		if (!epoch.isDouble()) {
+		bbq_sample sample;
+		if (!epoch_from(epoch, &sample.start_utc)) {
 			return bbq_series(bbq_band::observed,
 			                  QString::fromLatin1(provider_name));
 		}
-
-		bbq_sample sample;
-		sample.start_utc = static_cast<qint64>(epoch.toDouble());
 
 		/*
 		 * The values live under a unit-system key rather than beside
@@ -301,7 +350,9 @@ bbq_series bbq_wu_read_observed(const QJsonDocument &response) {
 	};
 	std::sort(samples.begin(), samples.end(), by_start);
 
-	fill_durations(samples, 300);
+	if (!fill_durations(samples, 300)) {
+		return series;
+	}
 
 	series.set_samples(std::move(samples));
 	return series;
@@ -322,12 +373,10 @@ bbq_series bbq_wu_read_current_station(const QJsonDocument &response) {
 
 	const QJsonObject row = rows.first().toObject();
 	const QJsonValue epoch = row.value(QStringLiteral("epoch"));
-	if (!epoch.isDouble()) {
+	bbq_sample sample;
+	if (!epoch_from(epoch, &sample.start_utc)) {
 		return series;
 	}
-
-	bbq_sample sample;
-	sample.start_utc = static_cast<qint64>(epoch.toDouble());
 	sample.duration_s = bbq_current_validity_s;
 
 	const QJsonObject metric = row.value(QStringLiteral("metric")).toObject();
@@ -377,12 +426,10 @@ bbq_series bbq_wu_read_current_point(const QJsonDocument &response) {
 
 	const QJsonObject root = response.object();
 	const QJsonValue when = root.value(QStringLiteral("validTimeUtc"));
-	if (!when.isDouble()) {
+	bbq_sample sample;
+	if (!epoch_from(when, &sample.start_utc)) {
 		return series;
 	}
-
-	bbq_sample sample;
-	sample.start_utc = static_cast<qint64>(when.toDouble());
 	sample.duration_s = bbq_current_validity_s;
 
 	const QJsonValue temperature = root.value(QStringLiteral("temperature"));
