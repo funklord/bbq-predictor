@@ -2691,6 +2691,17 @@ code did. The fixture asserts up front that its font really does report
 a negative point size, so it cannot quietly stop asking the question.
 Sabotaged by restoring the points-only spelling.
 
+
+**The README's opening was rewritten 2026-10-29** to the global rule that
+a README opens with what the software is worth (claude-guidelines
+e1b41e1, from its message 20261029T1321Z to this inbox, recorded here and
+deleted with that tree's two tooling notices of 10:28 and 10:50Z, which
+needed nothing here). It names the neighbours -- Weather Underground's
+site, yr.no, meteoblue, the GNOME and KDE applets -- and lists what this
+does that they do not, each a thing the program does today. Its status
+section had said the Android build does not complete, true until sec
+11.2 was cleared; it says what is built now.
+
 ## 4. The tray
 
 ### 4.1 Which desktop, answered by running it

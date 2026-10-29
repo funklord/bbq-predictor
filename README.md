@@ -1,46 +1,81 @@
 # bbq-predictor
 
-A Qt Widgets weather applet for the system tray and the desktop, built
-around high-resolution temperature and rain graphs -- and, since that is
-what it is named after, an answer to whether this afternoon is worth
-lighting a fire for.
+Whether an afternoon is good for anything outdoors is decided by the
+next few hours at one place, and that is the part weather software
+answers worst. A forecast is a model's guess on a grid kilometres
+wide, refreshed every hour or so; a radar extrapolation is better for
+the next two hours and says nothing about temperature; and the one
+measurement of what is really happening -- a personal weather station
+down the street -- sits on a different website from either. Each
+source is shown in its own app, as hourly icons or a smoothed line,
+and none of them says how often its forecasts have been right where
+you are.
 
-The graphs are the point. Everything else is secondary.
+bbq-predictor puts all of it on one graph: the station's own readings
+up to now, then radar for the next two hours, then the quarter-hourly
+and hourly forecasts, on one continuous time axis at the resolution
+each source actually has, with a strip underneath saying which source
+drew each stretch. It keeps every observation it ever fetched, checks
+every forecast against what the station then measured, and uses the
+record to correct the forecast and to say how far to trust it. It sits
+in the system tray as the temperature, opens to the graph, and runs on
+Android with a home-screen widget. The name is the question it was
+written to answer: whether this afternoon is worth lighting a fire for.
 
-## What it does
+Against what people use for the same question -- Weather
+Underground's own site and app, yr.no, meteoblue, and the weather
+applets that come with GNOME and KDE:
 
-- **One graph, several sources.** Observed station readings, a
-  five-minute radar nowcast, a quarter-hourly forecast and an hourly one
-  are drawn on a single continuous time axis, with a strip underneath
-  saying which band produced each stretch of it.
-- **Grilling windows.** The forecast is scored for temperature, rain
-  rate, rain chance, wind and time of day, and the stretches worth
-  using are shaded, with the best named above the graph.
-- **Curves you choose.** Seven interpolation methods, from step to
-  Akima to a natural cubic, plus a rounding radius -- with the real
-  samples markable, so a smoothed line never has to be taken on trust.
-- **A permanent history.** Every observation is kept for ever in a
-  SQLite archive; drag the graph sideways to scroll back through it and
-  use the wheel to zoom, from a quarter of an hour to years.
-- **Forecasts that get marked.** A forecast is held only until the
-  weather it predicted actually happens, then scored against it and
-  discarded -- leaving the bias, MAE and RMSE for each band at each lead
-  time, in the vocabulary forecast verification already uses.
-- **A tray that says something.** The icon is the current temperature
-  and turns red when the data behind it is stale.
-- **Desktop and mobile shapes**, chosen by the device and overridable.
+- **Several sources on one axis, each named.** Weather Underground
+  draws its own forecast and yr.no draws MET Norway's; here a station,
+  MET Norway's five-minute radar, Weather Underground's quarter-hourly
+  and hourly forecasts and Open-Meteo's sixteen days are one curve,
+  resolved by a declared priority so that a measurement always beats a
+  forecast of the same minute, and the source of every stretch is drawn
+  under it.
+- **Drawn at the data's own resolution, honestly.** Rain is reduced by
+  its maximum when zoomed out, so a five-minute downpour is not
+  averaged into a dry hour; a gap in the data is drawn as a gap, never
+  joined across; zoomed out far enough that a column holds a whole day,
+  the day's range is drawn behind the mean. The real samples can be
+  marked, so a smoothed line never has to be taken on trust, and the
+  curve is one of seven interpolation methods, from steps to Akima.
+- **A history that is kept.** Every observation goes into a SQLite
+  archive for good, and the graph scrolls and zooms through it, from a
+  quarter of an hour across the window to years. A desktop weather
+  applet keeps nothing; Weather Underground keeps a station's history,
+  but on its own pages, apart from any forecast.
+- **Forecasts that are marked.** Each forecast is held until the
+  weather it predicted has happened, then scored against the station
+  and discarded, leaving the bias, mean absolute error and RMSE of each
+  source at each lead time. That record draws a bias-corrected line
+  beside the forecast, so the difference between what was said and what
+  this place's history suggests is on the graph rather than asserted.
+  None of the sites above scores its forecasts against the station you
+  watch.
+- **An answer to the question.** The forecast is scored for
+  temperature, rain rate, rain chance, wind and time of day, the
+  stretches worth using are shaded, and the best is named in words
+  above the graph -- or "no grilling window in the next three days",
+  rather than a mediocre one invented to fill the space.
+- **Where you look anyway.** The tray icon is the current temperature
+  and turns red when the data behind it is stale; on a phone the
+  widget draws the graph and says how old the picture is.
 
 ## Status
 
 **It works, and it is one person's applet rather than a product.**
 
-Fetching, parsing, drawing, scoring, configuration and the tray are all
-built and in use. The test suite covers the model, the readers, the
-curves and the layouts.
+Fetching, parsing, drawing, scoring, verification, configuration and
+the tray are built and in use, on the desktop and on Android. The test
+suite covers the model, the readers, the curves, the layouts and the
+graph's gestures.
 
-The Android build is wired and does not currently complete: Qt's own
-AndroidX dependencies require a newer `compileSdk` than the SDK it was
-tried against. See `project.md` sec 11.2.
+The server half -- a publisher that fetches for a station and writes
+signed files, and a daemon that serves them, so clients read published
+data rather than each scraping on their own -- is built and packaged.
+The applet reads it first and scrapes only when it is gone, once it is
+built with the publisher's public key.
 
 `project.md` is the authoritative record -- what was decided, why, what
 was measured, and what is still open. **Read it before the code.** It is
