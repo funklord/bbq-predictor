@@ -153,6 +153,8 @@ private slots:
 	void a_slider_reports_no_value_to_accessibility();
 	void the_temperature_line_survives_a_certain_downpour();
 	void showing_the_wind_does_not_touch_the_temperature_line();
+	void zoomed_out_the_day_s_range_is_drawn_behind_the_mean();
+	void a_day_view_draws_no_range_band();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -607,6 +609,106 @@ void test_view::the_temperature_line_survives_a_certain_downpour() {
 	         qPrintable(QStringLiteral("the temperature line is not drawn over "
 	                                   "the rain: %1 unmixed red pixels")
 	                            .arg(found)));
+}
+
+/*
+ * Pixels in one plot column that the temperature ink or its range band
+ * reached: red well above green and blue. The light scheme's ground and
+ * grid are grey, and these fixtures are dry, so nothing else is red.
+ */
+static int reddish_in_column(const QImage &shot, int x, const QRect &plot) {
+	int found = 0;
+	for (int y = plot.top(); y <= plot.bottom(); ++y) {
+		const QColor c = QColor::fromRgb(shot.pixel(x, y));
+		if (c.red() - c.green() > 30 && c.red() - c.blue() > 30) {
+			++found;
+		}
+	}
+	return found;
+}
+
+/*
+ * A daily cycle from -18 C to -2 C, hourly unless asked, for as many days,
+ * with no rain. Cold on purpose: a warm dry fixture is a grilling
+ * window every evening, and its wash is orange, which counts as red.
+ */
+static void set_daily_cycle(probe &graph, int days, int step_s = 3600) {
+	const int per_day = 24 * 3600 / step_s;
+	std::vector<bbq_sample> samples;
+	for (int i = 0; i < days * per_day; ++i) {
+		bbq_sample sample;
+		sample.start_utc = 1600000000 + qint64(i) * step_s;
+		sample.duration_s = step_s;
+		sample.temperature = -10.0 + 8.0 * std::sin(2.0 * M_PI * (i % per_day) / per_day);
+		sample.precip_chance = 0.0;
+		sample.precip_rate = 0.0;
+		samples.push_back(sample);
+	}
+
+	bbq_series band(bbq_band::hourly, QStringLiteral("test"));
+	band.set_samples(std::move(samples));
+
+	bbq_composite composite;
+	composite.set_series(std::move(band));
+	graph.set_composite(composite);
+}
+
+void test_view::zoomed_out_the_day_s_range_is_drawn_behind_the_mean() {
+	/*
+	 * Sec 13.2.1. Exactly one day per column: every column then holds
+	 * 24 hourly samples of a whole cycle, whose mean is -10 C wherever
+	 * the day starts, so the line alone is flat and a few pixels tall.
+	 * The -18 to -2 C each column actually held is what the band adds.
+	 * At half a day per column the means swing and the line itself
+	 * runs up and down every column, which is why the span is set from
+	 * the plot's own width.
+	 */
+	probe graph;
+	graph.resize(520, 400);
+	set_daily_cycle(graph, 1);
+	graph.grab();
+	const int width = graph.plot_rect().width();
+
+	set_daily_cycle(graph, width + 2);
+	graph.set_view(1600000000, qint64(width) * 24 * 3600);
+
+	const QImage shot = graph.grab().toImage();
+	const QRect plot = graph.plot_rect();
+	QCOMPARE(plot.width(), width);
+	const int x = plot.left() + plot.width() / 2;
+	const int found = reddish_in_column(shot, x, plot);
+
+	QVERIFY2(found > plot.height() / 3,
+	         qPrintable(QStringLiteral("a column holding a whole day's swing "
+	                                   "shows only %1 of %2 pixels of it")
+	                            .arg(found)
+	                            .arg(plot.height())));
+}
+
+void test_view::a_day_view_draws_no_range_band() {
+	/*
+	 * And where the samples only climb or fall through a column, the
+	 * range is what the line already crosses there and its halo covers
+	 * it. Five-minute samples at five days across the window put two or
+	 * three in every column, on a cycle steep enough to spread them
+	 * over pixels: none of it may reach past the line.
+	 */
+	probe graph;
+	set_daily_cycle(graph, 7, 300);
+	graph.resize(900, 400);
+	graph.set_view(1600000000 + 24 * 3600, 5 * 24 * 3600);
+
+	const QImage shot = graph.grab().toImage();
+	const QRect plot = graph.plot_rect();
+	int most = 0;
+	for (int x = plot.left() + 10; x < plot.right() - 10; x += 7) {
+		most = std::max(most, reddish_in_column(shot, x, plot));
+	}
+
+	QVERIFY2(most <= 12,
+	         qPrintable(QStringLiteral("a five-day view drew %1 red pixels in "
+	                                   "one column, more than a line")
+	                            .arg(most)));
 }
 
 void test_view::showing_the_wind_does_not_touch_the_temperature_line() {

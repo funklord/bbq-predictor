@@ -5511,9 +5511,40 @@ graph-that-is-wrong-while-looking-fine this project keeps refusing.
 Absent dots say "zoomed out"; smeared dots say something false.
 
 **This is a judgement made without being asked, and it is reversible.**
-The alternative worth considering is a min/max envelope per column, which
-is honest in a different way -- it shows the spread the mean hides -- and
-is more work than the first version of this needs.
+The min/max envelope this paragraph once named as the alternative is
+built, and not as a replacement for the marks: it answers a different
+question, what the mean hides, and is sec 13.2.1.
+
+### 13.2.1 Zoomed out, the day's range is drawn behind the mean
+
+The curve goes through each column's mean (sec 3.5). Zoom reaches ten
+years across a window, and from about three months out a column holds
+most of a day, so a line through daily means draws a mild season with
+no afternoons and no nights in it. Graph quality wins here (sec 0):
+**each column's lowest and highest temperature is filled behind the
+line**, in the line's own colour at alpha 70, from the samples that
+start in the column, broken where the line breaks.
+
+Nothing changes at the ordinary views, and that was measured rather
+than assumed. Where samples only climb or fall through a column, their
+range is the stretch the line already crosses there and lies inside its
+stroke and halo. Five-minute samples at five days across 792 pixels
+reach 12 red pixels in the worst column with the band and 12 without
+it. What shows is a peak or a trough inside one column, which is the
+part the mean hides.
+
+**Rejected: a band only where a column holds two samples or more.** At
+the zooms where columns alternate between one sample and two, that cut
+the band into specks at every peak. A column of one sample, or of none,
+joins the band at its own value instead. A floor of a pixel's height
+was dropped too: the halo already hides a band that thin.
+
+Tested in `test_view`: one day per column of a -18 to -2 C cycle, whose
+mean is flat, shows 350 of 356 pixels in a column with the band and 3
+without it; the five-day view stays at the line's 12, and fails at 42
+with the band drawn 3 C too wide. A warm fixture cannot ask the first
+question: every evening is a grilling window, and its orange wash
+counts as red. The readout still reports the mean, and not the range.
 
 ## 14. Stations are discovered, remembered, and pinned
 

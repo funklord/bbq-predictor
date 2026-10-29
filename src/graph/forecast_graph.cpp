@@ -166,6 +166,17 @@ struct column {
 	qint64 knot_last_utc = 0;
 	bool knot_has_temperature = false;
 	double knot_temperature = 0.0;
+
+	/*
+	 * The lowest and highest temperature among those samples (sec
+	 * 13.2.1). The curve goes through their mean, which zoomed out far
+	 * enough is the mean of a whole day and says nothing of how warm the
+	 * afternoon got. Without a sample starting here the column's own
+	 * value stands for both.
+	 */
+	bool has_range = false;
+	double temperature_low = 0.0;
+	double temperature_high = 0.0;
 	bool knot_has_rain = false;
 	double knot_rain = 0.0;
 	bool knot_has_chance = false;
@@ -330,7 +341,14 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 			++result.knot_count;
 
 			if (samples[i].temperature.has_value()) {
-				temperature_total += *samples[i].temperature;
+				const double value = *samples[i].temperature;
+				if (temperature_count == 0) {
+					result.temperature_low = value;
+					result.temperature_high = value;
+				}
+				result.temperature_low = std::min(result.temperature_low, value);
+				result.temperature_high = std::max(result.temperature_high, value);
+				temperature_total += value;
 				++temperature_count;
 			}
 
@@ -439,6 +457,7 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	if (temperature_count > 0) {
 		result.temperature = temperature_total / temperature_count;
 		result.has_temperature = true;
+		result.has_range = true;
 		result.knot_temperature = result.temperature;
 		result.knot_has_temperature = true;
 	} else if (reading.sample->temperature.has_value()) {
@@ -2909,6 +2928,64 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 		painter.setPen(curve_ink);
 		painter.drawPolyline(line);
 	};
+
+	/*
+	 * THE RANGE BEHIND THE MEAN (sec 13.2.1).
+	 *
+	 * Zoomed out, one column holds many samples and the curve goes
+	 * through their mean: at a year across a window a column is most of
+	 * a day, and a line through daily means draws a mild season with no
+	 * afternoons and no nights in it. The lowest and highest reading in
+	 * each column are filled behind the line in its own colour, faint,
+	 * so the spread the mean hides is on the graph rather than lost.
+	 *
+	 * Where the samples merely climb or fall through a column, their
+	 * range is the stretch the line already crosses there, so it lies
+	 * inside the line's own stroke: at the default views nothing shows
+	 * and the line is untouched. What shows is the part the mean hides
+	 * -- a peak or a trough inside one column. Broken at the same places
+	 * the line is.
+	 */
+	QColor spread_ink = m_palette.temperature;
+	spread_ink.setAlpha(70);
+	const auto fill_spread = [&](const QPolygonF &top, const QPolygonF &bottom) {
+		if (top.size() < 2) {
+			return;
+		}
+		QPolygonF area = top;
+		for (auto it = bottom.crbegin(); it != bottom.crend(); ++it) {
+			area.append(*it);
+		}
+		painter.setPen(Qt::NoPen);
+		painter.setBrush(spread_ink);
+		painter.drawPolygon(area);
+		painter.setBrush(Qt::NoBrush);
+	};
+
+	QPolygonF spread_top;
+	QPolygonF spread_bottom;
+	for (int x = 0; x < plot.width(); ++x) {
+		const column &c = columns[x];
+		if (!c.covered || !c.has_temperature) {
+			fill_spread(spread_top, spread_bottom);
+			spread_top.clear();
+			spread_bottom.clear();
+			continue;
+		}
+		/*
+		 * A column of one sample, or of none, joins the band at its own
+		 * value rather than breaking it. Breaking there cut the band
+		 * into specks at the zooms where columns alternate between one
+		 * sample and two.
+		 */
+		const double high = c.has_range ? std::max(c.temperature_high, c.temperature)
+		                                : c.temperature;
+		const double low = c.has_range ? std::min(c.temperature_low, c.temperature)
+		                               : c.temperature;
+		spread_top.append(QPointF(plot.left() + x, y_for_temperature(high)));
+		spread_bottom.append(QPointF(plot.left() + x, y_for_temperature(low)));
+	}
+	fill_spread(spread_top, spread_bottom);
 
 	QPolygonF run;
 	for (int x = 0; x < plot.width(); ++x) {
