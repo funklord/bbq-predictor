@@ -764,6 +764,43 @@ void apply_curve(std::vector<column> &cols, const curve_spec &spec) {
 }
 
 /*
+ * Every column of a view, reduced and with its curves fitted: the one
+ * pipeline the paint draws from, and the one bbq_graph_columns() hands
+ * to the sweep and the tests (sec 3.18.6), so neither can measure a
+ * graph other than the one on screen.
+ */
+std::vector<column> build_columns(const bbq_composite &composite, qint64 from, qint64 to,
+                                  int width, bbq_interpolation method, int smoothing_s) {
+	std::vector<column> columns;
+	if (width <= 0 || to <= from) {
+		return columns;
+	}
+	columns.reserve(width);
+
+	const double seconds_per_pixel = static_cast<double>(to - from) / width;
+
+	for (int x = 0; x < width; ++x) {
+		const qint64 start = from + static_cast<qint64>(x * seconds_per_pixel);
+		const qint64 end = from + static_cast<qint64>((x + 1) * seconds_per_pixel);
+		columns.push_back(reduce(composite, start, end == start ? end + 1 : end));
+	}
+
+	curve_spec spec;
+	spec.method = method;
+	spec.smooth_columns = smoothing_s / seconds_per_pixel;
+	spec.view_from_utc = from;
+	spec.seconds_per_column = seconds_per_pixel;
+
+	for (quantity which : {quantity::temperature, quantity::rain, quantity::chance,
+	                       quantity::wind}) {
+		spec.which = which;
+		apply_curve(columns, spec);
+	}
+
+	return columns;
+}
+
+/*
  * Times are labelled in the LOCATION's clock, not the reader's
  * (sec 3.12.1). An invalid zone means nothing said, and the viewer's
  * own is the honest fallback rather than pretending to know.
@@ -942,6 +979,27 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 }
 
 } // namespace
+
+std::vector<bbq_graph_column> bbq_graph_columns(const bbq_composite &composite,
+                                                qint64 from_utc, qint64 to_utc, int width,
+                                                bbq_interpolation method, int smoothing_s) {
+	std::vector<bbq_graph_column> out;
+	for (const column &c : build_columns(composite, from_utc, to_utc, width, method,
+	                                     smoothing_s)) {
+		bbq_graph_column one;
+		one.covered = c.covered;
+		one.has_temperature = c.has_temperature;
+		one.temperature = c.temperature;
+		one.has_rain = c.has_rain;
+		one.rain = c.rain;
+		one.has_chance = c.has_chance;
+		one.chance = c.chance;
+		one.has_wind = c.has_wind;
+		one.wind = c.wind;
+		out.push_back(one);
+	}
+	return out;
+}
 
 
 
@@ -2004,18 +2062,11 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 
 
 	/* One pass over the columns; every later pass reads this. */
-	std::vector<column> columns;
-	columns.reserve(plot.width());
+	std::vector<column> columns =
+	        build_columns(m_composite, from, to, plot.width(), m_interpolation, m_smoothing_s);
 
 	const double seconds_per_pixel =
 	        static_cast<double>(to - from) / plot.width();
-
-	for (int x = 0; x < plot.width(); ++x) {
-		const qint64 start = from + static_cast<qint64>(x * seconds_per_pixel);
-		const qint64 end = from + static_cast<qint64>((x + 1) * seconds_per_pixel);
-		columns.push_back(reduce(m_composite, start, end == start ? end + 1 : end));
-	}
-
 
 	/*
 	 * Where a knot's time lands on the plot, clamped into the column
@@ -2031,17 +2082,6 @@ void bbq_forecast_graph::paintEvent(QPaintEvent *event) {
 	curve_spec spec;
 	spec.method = m_interpolation;
 	spec.smooth_columns = m_smoothing_s / seconds_per_pixel;
-	spec.view_from_utc = from;
-	spec.seconds_per_column = seconds_per_pixel;
-
-	spec.which = quantity::temperature;
-	apply_curve(columns, spec);
-	spec.which = quantity::rain;
-	apply_curve(columns, spec);
-	spec.which = quantity::chance;
-	apply_curve(columns, spec);
-	spec.which = quantity::wind;
-	apply_curve(columns, spec);
 
 	/* Scales, from what is actually visible rather than from the whole set. */
 	double temperature_low = 0.0;

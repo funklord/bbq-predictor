@@ -196,6 +196,35 @@ QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
  * coordinates and gets the same dot at any resolution.
  */
 /*
+ * The curve and the rounding a graph starts with, named so that what
+ * reads them without a widget -- the sweep, run headless -- gets the
+ * same ones.
+ */
+inline constexpr bbq_interpolation bbq_default_interpolation = bbq_interpolation::akima;
+inline constexpr int bbq_default_smoothing_s = 30 * 60;
+
+/*
+ * What the graph draws in each column of a view, as values rather than
+ * pixels: the paint's own pipeline, run without painting (sec 3.18.6).
+ * For the sweep diagnostic and for tests that ask what is drawn.
+ */
+struct bbq_graph_column {
+	bool covered = false;
+	bool has_temperature = false;
+	double temperature = 0.0;
+	bool has_rain = false;
+	double rain = 0.0;
+	bool has_chance = false;
+	double chance = 0.0;
+	bool has_wind = false;
+	double wind = 0.0;
+};
+
+std::vector<bbq_graph_column> bbq_graph_columns(const bbq_composite &composite,
+                                                qint64 from_utc, qint64 to_utc, int width,
+                                                bbq_interpolation method, int smoothing_s);
+
+/*
  * The halo under a curve, filled as spans rather than stroked as a wide
  * pen (sec 16.114). Free functions so a test can hold the result and
  * compare it against the stroke it replaces.
@@ -507,7 +536,7 @@ private:
 	 * marked, so what the data actually says is never hidden by them.
 	 */
 	bbq_metrics m_metrics;
-	bbq_interpolation m_interpolation = bbq_interpolation::akima;
+	bbq_interpolation m_interpolation = bbq_default_interpolation;
 	bool m_show_samples = true;
 	bool m_show_wind = false;
 	bbq_theme m_theme = bbq_theme::automatic;
@@ -521,7 +550,7 @@ private:
 	double m_scale_low = 0.0;
 	double m_scale_high = 0.0;
 	bool m_scale_held = false;
-	int m_smoothing_s = 30 * 60;
+	int m_smoothing_s = bbq_default_smoothing_s;
 	bool m_show_windows = true;
 	bool m_opaque_background = true;
 	QColor m_contrast_ground;

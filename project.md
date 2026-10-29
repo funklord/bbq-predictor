@@ -2451,6 +2451,46 @@ out rather than kept on theory.
 **Seen on the Fold with 17237d8, 2026-10-29:** the holder reports the
 flicker gone.
 
+#### 3.18.6 The sweep, kept as a diagnostic
+
+The harness that found sec 3.18.5 is in the program now, on the
+holder's word, so the next flicker starts with a measurement:
+
+    bbq-predictor --sweep [--station ID] [--save-bands FILE]
+    bbq-predictor --sweep --load-bands FILE
+
+It fetches once, or loads a saved fetch, and replays a pinch from 36
+hours to two about the present, a third of the way across, two per
+cent a frame. For each minute from an hour before to three after, it
+follows each quantity's drawn value across the frames and scores what it
+travelled beyond its net change; a steady rise scores nothing. It
+prints the total per quantity and the five moments that moved most. It
+builds no window, so it runs headless, and honours `--interp`,
+`--smooth` and the width of `--size`.
+
+Three parts, each for a reason:
+
+- `bbq_graph_columns()` is the paint's own column pipeline, which the
+  paint now calls through the same function, so the sweep cannot
+  measure a graph other than the one drawn. Tests can ask it for values
+  where four of today's pixel tests could not tell versions apart.
+- The sweep reads the drawn line AT each moment, between the two column
+  points either side, because that is what is drawn. Reading one
+  column made every step in the data score its whole height, as the
+  column began just before the step or just on it: the 13:00Z case
+  scored 65 with the fix in, and 46 read this way.
+- `--save-bands` and `--load-bands` keep a fetch as text, one sample a
+  line with "-" for an absent field, so one fetch can be swept by two
+  builds. That is what showed sec 3.18.5's fault to be the same in
+  three builds, rather than the weather changing between installs.
+
+`test_view` holds it: the band file round trip and its refusals, and
+the sweep over sec 3.18.5's shape scoring 46 for temperature and 122 for
+chance with the fix, against 569 and 1423 with the owner taken at the
+column's middle. Run live on 2026-10-29 at 13:24Z it scored 12.7 for
+temperature, and 408 for chance, the most at an hour before now. That
+remainder is not investigated.
+
 ### 3.19 One plot, and rain is blue
 
 The chart had two panels: temperature, wind and rain rate above, and

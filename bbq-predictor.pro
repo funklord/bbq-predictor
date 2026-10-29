@@ -99,7 +99,9 @@ SOURCES += \
 	src/graph/forecast_graph.cpp \
 	src/graph/interpolate.cpp \
 	src/graph/simplify.cpp \
+	src/graph/sweep.cpp \
 	src/graph/ticks.cpp \
+	src/model/band_file.cpp \
 	src/ui/accessibility.cpp \
 	src/ui/layout.cpp \
 	src/ui/locator.cpp \
@@ -113,7 +115,9 @@ HEADERS += \
 	src/graph/forecast_graph.h \
 	src/graph/interpolate.h \
 	src/graph/simplify.h \
+	src/graph/sweep.h \
 	src/graph/ticks.h \
+	src/model/band_file.h \
 	src/ui/accessibility.h \
 	src/ui/layout.h \
 	src/ui/locator.h \

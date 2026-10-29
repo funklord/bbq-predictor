@@ -24,6 +24,8 @@
 
 #include "graph/forecast_graph.h"
 #include "graph/simplify.h"
+#include "graph/sweep.h"
+#include "model/band_file.h"
 #include "model/composite.h"
 #include "model/grill.h"
 #include <QTimeZone>
@@ -165,6 +167,9 @@ private slots:
 	void radar_s_last_step_does_not_erase_the_next_hour();
 	void the_curve_does_not_shimmer_as_the_view_moves();
 	void the_band_owning_an_instant_gives_its_knot();
+	void a_band_file_reads_back_what_was_written();
+	void a_band_file_that_is_not_one_is_refused();
+	void the_sweep_finds_the_flicker_it_was_written_for();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -1102,6 +1107,127 @@ void test_view::the_band_owning_an_instant_gives_its_knot() {
 		QVERIFY2(told.contains(QStringLiteral("10.0 C")),
 		         qPrintable(QStringLiteral("shifted %1 s: %2").arg(shift).arg(told)));
 	}
+}
+
+/*
+ * The shape of sec 3.18.5: an hourly band at 9.2 C and 0%, and a nowcast
+ * at 10.0 C and 2% from `hour` on, both starting a sample at `hour`.
+ */
+static bbq_composite shared_instant(qint64 hour) {
+	std::vector<bbq_sample> hours;
+	for (int i = -3; i < 6; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour + i * 3600;
+		sample.duration_s = 3600;
+		sample.temperature = 9.2;
+		sample.precip_chance = 0.0;
+		hours.push_back(sample);
+	}
+	std::vector<bbq_sample> quarters;
+	for (int i = 0; i < 16; ++i) {
+		bbq_sample sample;
+		sample.start_utc = hour + i * 900;
+		sample.duration_s = 900;
+		sample.temperature = 10.0;
+		sample.precip_chance = 2.0;
+		quarters.push_back(sample);
+	}
+	bbq_series extended(bbq_band::extended, QStringLiteral("open-meteo"));
+	extended.set_samples(std::move(hours));
+	extended.set_fetched_utc(hour - 600);
+	extended.set_zone(QTimeZone("Europe/Stockholm"));
+	bbq_series nowcast(bbq_band::nowcast, QStringLiteral("wunderground"));
+	nowcast.set_samples(std::move(quarters));
+	nowcast.set_fetched_utc(hour - 300);
+	nowcast.set_zone(QTimeZone("Europe/Stockholm"));
+	bbq_composite composite;
+	composite.set_series(std::move(extended));
+	composite.set_series(std::move(nowcast));
+	return composite;
+}
+
+void test_view::a_band_file_reads_back_what_was_written() {
+	/*
+	 * Sec 3.18.6. Every field, an absent one kept absent rather than
+	 * read back as zero, the provider, the fetch time, the zone and the
+	 * moment the bands are for.
+	 */
+	const qint64 hour = 1600000000 - 1600000000 % 3600;
+	const bbq_composite written = shared_instant(hour);
+	QTemporaryDir dir;
+	const QString path = dir.filePath(QStringLiteral("bands.txt"));
+	QString why;
+	QVERIFY2(bbq_write_band_file(path, written, hour - 120, &why), qPrintable(why));
+
+	bbq_composite read;
+	qint64 about = 0;
+	QVERIFY2(bbq_read_band_file(path, &read, &about, &why), qPrintable(why));
+	QCOMPARE(about, hour - 120);
+	QCOMPARE(read.zone().id(), QByteArray("Europe/Stockholm"));
+	QCOMPARE(read.all().size(), written.all().size());
+
+	for (std::size_t i = 0; i < written.all().size(); ++i) {
+		const bbq_series &a = written.all()[i];
+		const bbq_series &b = read.all()[i];
+		QCOMPARE(b.band(), a.band());
+		QCOMPARE(b.provider(), a.provider());
+		QCOMPARE(b.fetched_utc(), a.fetched_utc());
+		QCOMPARE(b.samples().size(), a.samples().size());
+		for (std::size_t j = 0; j < a.samples().size(); ++j) {
+			const bbq_sample &x = a.samples()[j];
+			const bbq_sample &y = b.samples()[j];
+			QCOMPARE(y.start_utc, x.start_utc);
+			QCOMPARE(y.duration_s, x.duration_s);
+			QCOMPARE(y.temperature, x.temperature);
+			QCOMPARE(y.precip_rate, x.precip_rate);
+			QCOMPARE(y.precip_chance, x.precip_chance);
+			QCOMPARE(y.wind_kph, x.wind_kph);
+		}
+	}
+	QVERIFY(!read.all()[0].samples()[0].precip_rate.has_value());
+}
+
+void test_view::a_band_file_that_is_not_one_is_refused() {
+	QTemporaryDir dir;
+	const QString path = dir.filePath(QStringLiteral("bands.txt"));
+	QFile file(path);
+	QVERIFY(file.open(QIODevice::WriteOnly));
+	file.write("bbq-bands 1\nabout\t1600000000\nband\tsideways\t0\tnobody\n");
+	file.close();
+
+	bbq_composite read;
+	qint64 about = 0;
+	QString why;
+	QVERIFY(!bbq_read_band_file(path, &read, &about, &why));
+	QVERIFY2(why.contains(QStringLiteral("sideways")), qPrintable(why));
+
+	QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+	file.write("1600000000\t300\t1\t2\t3\t4\n");
+	file.close();
+	QVERIFY(!bbq_read_band_file(path, &read, &about, &why));
+	QVERIFY2(why.contains(QStringLiteral("not a band file")), qPrintable(why));
+}
+
+void test_view::the_sweep_finds_the_flicker_it_was_written_for() {
+	/*
+	 * Sec 3.18.6, held against sec 3.18.5's shape. With the knot taken
+	 * from the band owning its instant the sweep scores 46 for the
+	 * temperature and 122 for the chance -- about a hundredth of a
+	 * degree a frame, the curve settling onto columns as they narrow.
+	 * With the owner taken at the column's middle, as at 54f41ad, it
+	 * scores 569 and 1423, nearly all of it just after the hour. The
+	 * bounds sit between.
+	 */
+	const qint64 hour = 1600000000 - 1600000000 % 3600;
+	const bbq_sweep_result result = bbq_sweep(shared_instant(hour), hour - 120, 800,
+	                                          bbq_default_interpolation,
+	                                          bbq_default_smoothing_s);
+	QVERIFY(result.frames > 100);
+	QCOMPARE(result.quantities.size(), std::size_t(3));
+	const bbq_sweep_quantity &temperature = result.quantities[0];
+	const QString report = bbq_sweep_report(result, hour - 120);
+	QVERIFY2(temperature.total < 150.0, qPrintable(report));
+	QVERIFY2(result.quantities[2].total < 400.0, qPrintable(report));
 }
 
 void test_view::showing_the_wind_does_not_touch_the_temperature_line() {

@@ -164,6 +164,35 @@ Show the wind series.
 .TP
 .BI \-\-tray\-icon " FILE"
 Also save the tray icon.
+.SS Measuring
+.TP
+.B \-\-sweep
+Fetch every band once, replay a pinch from 36 hours to two about the
+present through the graph's own drawing pipeline, and report how much
+each quantity's drawn value at fixed moments went back and forth
+between frames, with the moments that moved most. A value that only
+rises or falls steadily as the view narrows scores nothing; one that
+flickers scores what it travelled. It honours
+.BR \-\-interp ,
+.B \-\-smooth
+and the width of
+.BR \-\-size ,
+which is the plot's width in columns, and builds no window, so it works
+headless.
+.TP
+.BI \-\-save\-bands " FILE"
+With
+.BR \-\-sweep ,
+also write every fetched band to
+.I FILE
+as text, so the same data can be swept again by another build.
+.TP
+.BI \-\-load\-bands " FILE"
+With
+.BR \-\-sweep ,
+sweep the bands saved in
+.I FILE
+instead of fetching.
 .SS Seeding
 .TP
 .BI \-\-seed\-verification " SPEC"

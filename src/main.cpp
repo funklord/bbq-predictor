@@ -13,6 +13,8 @@
 #include "ui/tray_icon.h"
 #include "graph/forecast_graph.h"
 #include "graph/interpolate.h"
+#include "graph/sweep.h"
+#include "model/band_file.h"
 #include "ui/layout.h"
 #include "wu/feed.h"
 #include "wu/fetch_once.h"
@@ -67,8 +69,95 @@ void print_usage(QTextStream &out) {
 	out << "  --shot FILE    fetch, render the window to a PNG, and exit.\n";
 	out << "                 A diagnostic: looking at the picture is how\n";
 	out << "                 layout defects actually get found.\n";
+	out << "  --sweep        fetch once, replay a pinch about now through\n";
+	out << "                 the graph, and report what jittered. With\n";
+	out << "                 --save-bands FILE the fetch is kept; with\n";
+	out << "                 --load-bands FILE it is replayed instead.\n";
 	out << "\n";
 	out << "See bbq-predictor(1) for the diagnostics this omits.\n";
+}
+
+/* The curve --interp names, or the one given when it names none. */
+bbq_interpolation interpolation_named(const QString &name, bbq_interpolation otherwise) {
+	if (name == QStringLiteral("step")) {
+		return bbq_interpolation::step;
+	} else if (name == QStringLiteral("linear")) {
+		return bbq_interpolation::linear;
+	} else if (name == QStringLiteral("akima")) {
+		return bbq_interpolation::akima;
+	} else if (name == QStringLiteral("makima")) {
+		return bbq_interpolation::makima;
+	} else if (name == QStringLiteral("natural")) {
+		return bbq_interpolation::natural;
+	} else if (name == QStringLiteral("catmull")) {
+		return bbq_interpolation::catmull;
+	} else if (name == QStringLiteral("monotone")) {
+		return bbq_interpolation::monotone;
+	}
+	return otherwise;
+}
+
+/*
+ * THE PINCH, REPLAYED (project.md sec 3.18.6).
+ *
+ * Fetches once, or loads a saved fetch, and runs bbq_sweep() over it at
+ * the window's defaults unless --interp, --smooth or --size say
+ * otherwise; --size's width is the plot's width in columns. Exits with
+ * the fetch's own status, so a sweep over a failed fetch does not look
+ * like a clean one.
+ */
+int run_sweep(const QStringList &arguments) {
+	QTextStream out(stdout);
+	QTextStream error(stderr);
+
+	const bbq_interpolation method = interpolation_named(
+	        bbq_option_value(arguments, QStringLiteral("--interp")), bbq_default_interpolation);
+	const QString smooth = bbq_option_value(arguments, QStringLiteral("--smooth"));
+	const int smoothing_s = smooth.isEmpty() ? bbq_default_smoothing_s : smooth.toInt();
+	int width = 800;
+	const QStringList size =
+	        bbq_option_value(arguments, QStringLiteral("--size")).split(QLatin1Char('x'));
+	if (size.size() == 2 && size.at(0).toInt() > 0) {
+		width = size.at(0).toInt();
+	}
+
+	const auto sweep = [&](const bbq_composite &composite, qint64 about) {
+		out << bbq_sweep_report(bbq_sweep(composite, about, width, method, smoothing_s),
+		                        about);
+		out.flush();
+	};
+
+	const QString load = bbq_option_value(arguments, QStringLiteral("--load-bands"));
+	if (!load.isEmpty()) {
+		bbq_composite composite;
+		qint64 about = 0;
+		QString why;
+		if (!bbq_read_band_file(load, &composite, &about, &why)) {
+			error << "bbq-predictor: " << load << ": " << why << "\n";
+			return 2;
+		}
+		sweep(composite, about);
+		return 0;
+	}
+
+	const QString save = bbq_option_value(arguments, QStringLiteral("--save-bands"));
+	bbq_fetch_options options;
+	options.history_path = bbq_option_value(arguments, QStringLiteral("--history-path"));
+	options.after_round = [&](const bbq_composite &composite, const bbq_history &) {
+		const qint64 about = QDateTime::currentSecsSinceEpoch();
+		if (!save.isEmpty()) {
+			QString why;
+			if (!bbq_write_band_file(save, composite, about, &why)) {
+				error << "bbq-predictor: " << save << ": " << why << "\n";
+				return 2;
+			}
+		}
+		sweep(composite, about);
+		return 0;
+	};
+	return bbq_wu_fetch_once(bbq_option_value(arguments, QStringLiteral("--station")),
+	                         bbq_option_value(arguments, QStringLiteral("--geocode")), 30,
+	                         options);
 }
 
 } // namespace
@@ -119,6 +208,7 @@ bool wants_headless(int argc, char *argv[]) {
 	static const char *const quiet[] = {
 		"--probe",
 		"--fetch-once",
+		"--sweep",
 		"--seed-verification",
 		"--search",
 		"--discover",
@@ -433,6 +523,10 @@ int main(int argc, char *argv[]) {
 	    QFile::exists(marker)) {
 		QFile::remove(marker);
 		return bbq_net_probe(15);
+	}
+
+	if (arguments.contains(QStringLiteral("--sweep"))) {
+		return run_sweep(arguments);
 	}
 
 	if (arguments.contains(QStringLiteral("--fetch-once"))) {
@@ -972,20 +1066,9 @@ int main(int argc, char *argv[]) {
 	 */
 	const QString interp =
 	        bbq_option_value(arguments, QStringLiteral("--interp"));
-	if (interp == QStringLiteral("step")) {
-		window.set_interpolation(bbq_interpolation::step);
-	} else if (interp == QStringLiteral("linear")) {
-		window.set_interpolation(bbq_interpolation::linear);
-	} else if (interp == QStringLiteral("akima")) {
-		window.set_interpolation(bbq_interpolation::akima);
-	} else if (interp == QStringLiteral("makima")) {
-		window.set_interpolation(bbq_interpolation::makima);
-	} else if (interp == QStringLiteral("natural")) {
-		window.set_interpolation(bbq_interpolation::natural);
-	} else if (interp == QStringLiteral("catmull")) {
-		window.set_interpolation(bbq_interpolation::catmull);
-	} else if (interp == QStringLiteral("monotone")) {
-		window.set_interpolation(bbq_interpolation::monotone);
+	if (!interp.isEmpty()) {
+		window.set_interpolation(
+		        interpolation_named(interp, window.graph()->interpolation()));
 	}
 
 	const QString want_layout =
