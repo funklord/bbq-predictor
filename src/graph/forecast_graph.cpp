@@ -422,13 +422,36 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 	 * still reports one band's account of each quantity, and rain has
 	 * one source here rather than an average of two.
 	 *
-	 * Both the drawn value and the knot are replaced, or the trace and
+	 * Both the drawn value and the knot are REPLACED, or the trace and
 	 * the readout would disagree about the same column.
+	 *
+	 * Replaced, not maxed with the owner's. Taking the wetter of the
+	 * two made the rain's source depend on where sample starts fell:
+	 * zoomed in, a column holding a fifteen-minute nowcast start took
+	 * its rate and the columns beside it took radar's, so wherever the
+	 * two disagreed the trace grew spikes that came and went with every
+	 * zoom step -- seen on the Fold as the first two hours' rain
+	 * flickering while pinching (sec 3.18.2). It also drew rain where
+	 * radar said it had stopped, which bbq_composite::resolved_at()
+	 * already refused. Within the column the maximum over radar's own
+	 * samples still holds (sec 3.5).
 	 */
 	const bbq_series *fine = composite.band(bbq_band::nowcast_fine);
 	if (fine != nullptr && fine != winner && !fine->is_empty()) {
 		const auto fine_span = fine->range(from, to);
 		const std::vector<bbq_sample> &fine_samples = fine->samples();
+
+		bool radar_speaks = false;
+		for (std::size_t i = fine_span.first; i < fine_span.second; ++i) {
+			radar_speaks = radar_speaks || fine_samples[i].precip_rate.has_value();
+		}
+
+		if (radar_speaks) {
+			result.has_rain = false;
+			result.rain = 0.0;
+			result.knot_has_rain = false;
+			result.knot_rain = 0.0;
+		}
 
 		for (std::size_t i = fine_span.first; i < fine_span.second; ++i) {
 			if (!fine_samples[i].precip_rate.has_value()) {
@@ -444,10 +467,8 @@ column reduce(const bbq_composite &composite, qint64 from, qint64 to) {
 
 			const qint64 begins = fine_samples[i].start_utc;
 			const bool starts_here = begins >= from && begins < to;
-			const bool wetter = rate > result.knot_rain;
-			const bool sharper = !result.knot_has_rain || wetter;
 
-			if (starts_here && sharper) {
+			if (starts_here && (!result.knot_has_rain || rate > result.knot_rain)) {
 				result.knot_rain = rate;
 				result.knot_has_rain = true;
 			}

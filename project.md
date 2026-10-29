@@ -2306,6 +2306,27 @@ while fixing the first, since keeping radar from owning a column is
 only correct if its rain still arrives.
 
 
+
+#### 3.18.2 Replaced means replaced: the rain that flickered on zoom
+
+Seen on the Fold 2026-10-29: pinching, the first two hours' rain
+flickered. The holder read it as two sources disagreeing at different
+scales, and that is what it was. `reduce()` did not replace the
+column's rain with radar's, as this section says; it took the WETTER of
+the owner's and radar's. A column holding a fifteen-minute nowcast
+start took the nowcast's rate and the columns beside it took radar's,
+so wherever the two disagreed the trace had spikes at the nowcast's
+starts. Those moved with every zoom step. It also drew rain where radar
+said it had stopped, which `bbq_composite::resolved_at()` already
+refused (`radar_still_sharpens_the_rain`): two readers of one value
+answering differently.
+
+Within radar's reach a column's rain and its rain knot now come from
+radar alone, still the maximum over radar's own samples (sec 3.5).
+`test_view`'s `radar_s_rain_is_the_rain_at_every_zoom` asks the readout
+at three zooms of a 4 mm/h nowcast under 1 mm/h radar, and reads 4.0
+before the fix.
+
 ### 3.19 One plot, and rain is blue
 
 The chart had two panels: temperature, wind and rain rate above, and

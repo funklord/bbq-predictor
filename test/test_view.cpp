@@ -160,6 +160,7 @@ private slots:
 	void showing_the_wind_does_not_touch_the_temperature_line();
 	void zoomed_out_the_day_s_range_is_drawn_behind_the_mean();
 	void a_day_view_draws_no_range_band();
+	void radar_s_rain_is_the_rain_at_every_zoom();
 	void a_pixel_sized_font_is_scaled_rather_than_refused();
 
 private:
@@ -809,6 +810,60 @@ void test_view::a_day_view_draws_no_range_band() {
 	         qPrintable(QStringLiteral("a five-day view drew %1 red pixels in "
 	                                   "one column, more than a line")
 	                            .arg(most)));
+}
+
+void test_view::radar_s_rain_is_the_rain_at_every_zoom() {
+	/*
+	 * Sec 3.18.2. A fifteen-minute nowcast saying 4 mm/h under a radar
+	 * band saying 1. Within radar's reach a column's rain is radar's,
+	 * replaced rather than maxed with the nowcast's: maxing let the
+	 * columns holding a nowcast start say 4 and their neighbours 1, a
+	 * pattern that moved with every zoom step and flickered on the Fold
+	 * while pinching. The readout lands on those nowcast starts, so it
+	 * is where the 4 showed.
+	 */
+	const qint64 start = 1600000000;
+	std::vector<bbq_sample> coarse;
+	for (int i = 0; i < 16; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 900;
+		sample.duration_s = 900;
+		sample.temperature = 12.0;
+		sample.precip_rate = 4.0;
+		coarse.push_back(sample);
+	}
+	std::vector<bbq_sample> fine;
+	for (int i = 0; i < 48; ++i) {
+		bbq_sample sample;
+		sample.start_utc = start + i * 300;
+		sample.duration_s = 300;
+		sample.precip_rate = 1.0;
+		fine.push_back(sample);
+	}
+	bbq_series nowcast(bbq_band::nowcast, QStringLiteral("test"));
+	nowcast.set_samples(std::move(coarse));
+	bbq_series radar(bbq_band::nowcast_fine, QStringLiteral("test"));
+	radar.set_samples(std::move(fine));
+	bbq_composite composite;
+	composite.set_series(std::move(nowcast));
+	composite.set_series(std::move(radar));
+
+	probe graph;
+	graph.set_composite(composite);
+	graph.resize(900, 400);
+
+	const qint64 spans[] = {3600, 2 * 3600, 3 * 3600 + 600};
+	for (qint64 span : spans) {
+		graph.set_view(start + 1800, span);
+		graph.grab();
+		graph.set_cursor_column(graph.plot_rect().width() / 2);
+		graph.grab();
+
+		const QString told = graph.accessibleDescription();
+		QVERIFY2(told.contains(QStringLiteral(" 1.0 mm/h")) &&
+		                 !told.contains(QStringLiteral("4.0 mm/h")),
+		         qPrintable(QStringLiteral("at a %1 s span: %2").arg(span).arg(told)));
+	}
 }
 
 void test_view::showing_the_wind_does_not_touch_the_temperature_line() {
