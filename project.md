@@ -7498,6 +7498,21 @@ inbox, 20261028T2255Z); vendored stays 601fa96. Apart from
 (`::situ::` and `this->` qualification, `raw()` named through its base,
 and `band_` for the `band` alias).
 
+situ answered 2026-10-29 (its inbox message 20261029T0211Z, recorded
+here and deleted). The regression is fixed at its a176c43: the bounds
+guard goes back above the counted-run branch, where C had always
+emitted it. C++, Rust and Python had emitted it after a branch that
+`continue`s, and only C++ was unsafe, because only its accessors are
+not lax. The same lens found four more faults in `required`. 26.724: a
+counted run credited unreached elements with a constraint-derived
+size, so `need` fell, in a conformant schema. 26.726: varint and
+delimiter branches answered `have + 1` and dropped the walk's own total.
+26.729: a struct holding a `tlv` region was framed at its fixed length,
+so `required` called every input complete at 0. situ says the four
+invariants found all five. It still does not take the third, that the
+`need` bytes answer the same need, as its contract; that is its
+holder's call.
+
 The case's third check was rewritten to situ's contract: never
 backwards, asked of one byte fewer and of the frame the answer named.
 Asked only of one byte fewer, it missed 26.693 entirely, which a run
