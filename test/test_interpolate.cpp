@@ -24,6 +24,7 @@ private slots:
 	void smoothing_is_identity_at_zero();
 	void smoothing_leaves_a_straight_line_alone();
 	void smoothing_flattens_a_staircase();
+	void a_knot_crossing_the_reach_does_not_step_the_result();
 
 private:
 	static std::vector<bbq_knot> staircase();
@@ -202,6 +203,41 @@ void test_interpolate::smoothing_flattens_a_staircase() {
 
 	QVERIFY2(roughness(after) < roughness(before),
 	         "rounding did not reduce the curvature of a staircase");
+}
+
+void test_interpolate::a_knot_crossing_the_reach_does_not_step_the_result() {
+	/*
+	 * Sec 3.11.4.2. A knot of 100 three bandwidths from two zeros, just
+	 * inside the reach and then just outside it. The weight used to be
+	 * cut there from about 1.1% to nothing, and with so few neighbours
+	 * that moved the fit at the zeros by whole units -- on the graph, a
+	 * rain chance pulled an hour back and in and out with every frame
+	 * of a pinch. Tapered to zero at the reach, the two agree.
+	 */
+	const auto at_zero = [](double far_x) {
+		std::vector<bbq_knot> knots;
+		bbq_knot a;
+		a.x = 0.0;
+		a.y = 0.0;
+		knots.push_back(a);
+		bbq_knot b;
+		b.x = 1.0;
+		b.y = 0.0;
+		knots.push_back(b);
+		bbq_knot far;
+		far.x = far_x;
+		far.y = 100.0;
+		knots.push_back(far);
+		bbq_smooth(knots, 1.0);
+		return knots.front().y;
+	};
+
+	const double inside = at_zero(3.0 - 1e-6);
+	const double outside = at_zero(3.0 + 1e-6);
+	QVERIFY2(std::fabs(inside - outside) < 1e-3,
+	         qPrintable(QStringLiteral("just inside the reach %1, just outside %2")
+	                            .arg(inside)
+	                            .arg(outside)));
 }
 
 QTEST_APPLESS_MAIN(test_interpolate)

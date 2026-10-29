@@ -1866,6 +1866,40 @@ So the curve visibly departs from the dots as rounding increases, and
 that gap is the claim being made out loud. A smoothed line with no
 marks would be a graph asserting readings nobody took.
 
+### 3.11.4.2 The rounding's reach is a taper, not a cut
+
+The rounding is a local linear fit weighted by a Gaussian, and knots
+past three bandwidths were skipped, for speed. But skipping made the
+weight a step: just inside the reach a knot weighed exp(-4.5), about
+1.1%, and just outside it weighed nothing. Where few knots sit near a
+centre, 1.1% moves a linear fit a long way. `test_interpolate` puts a
+knot of 100 at the reach beside two zeros, and the zeros came out
+-1.84 just inside and 0 just outside.
+
+On the graph it was the rain chance an hour before now, on 2026-10-29,
+found with `--sweep` (sec 3.18.6) after the holder asked about it. Every
+band said 0% there, and the nowcast's 15% began five minutes after
+now. Its first knot sat about ninety minutes from Open-Meteo's -85
+minute one, right at the reach, and a pinch moves knots across the
+reach on every frame. So the 30-minute rounding pulled the 15% an hour
+back into a dry past, and pulled it in and out with the zoom. On the
+saved fetch the chance jitter was 408. Widening the reach without limit
+brought it to 60; the taper does the same, at 59, and temperature fell
+from 12.7 to 0.34.
+
+The weight is now lowered by its own value at the reach, so it reaches
+zero there continuously. The work is unchanged, and the shape inside
+the reach differs from the Gaussian by at most that 1.1%.
+
+**Left open:** the sweep's remaining chance jitter, 59, sits about
+three hours after now, where the nowcast steps from 15% to 3% and 2%.
+The likely cause is the view's edge: the rounding sees only knots in
+view, so while the right edge is within its reach the value there
+depends on where the edge is. That would also show as the line near an
+edge moving while panning. It is not confirmed. The repair would be
+columns computed past both edges and cropped, which costs paint time
+in proportion to the margin, and most when zoomed in tight.
+
 ### 3.11.5 The defaults, and why they are not the safest ones
 
 **Akima, with thirty minutes of rounding.**

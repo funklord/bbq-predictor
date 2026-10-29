@@ -64,8 +64,20 @@ void bbq_smooth(std::vector<bbq_knot> &knots, double bandwidth) {
 	 * linear means requiring the knots to be sorted by x, which is a
 	 * contract this function does not currently impose on its callers.
 	 * Left as it is, deliberately, rather than left described wrongly.
+	 *
+	 * "Essentially nothing" is not nothing, and the cut was a STEP: a
+	 * knot inside the reach weighed exp(-4.5), about 1.1%, and one just
+	 * outside weighed none (sec 3.11.4.2). With few knots near a centre
+	 * that 1.1% moves a local linear fit a long way, and a pinch moves
+	 * knots across the reach on every frame -- so the rounding pulled
+	 * the nowcast's 15% rain chance back an hour into a past every band
+	 * called dry, and pulled it in and out as the zoom changed. Measured
+	 * on a saved fetch, 408 of the sweep's chance jitter was this. The
+	 * weight is lowered by its own value at the reach, so it falls to
+	 * zero there continuously and a knot crossing it enters at nothing.
 	 */
 	const double reach = bandwidth * 3.0;
+	const double floor_at_reach = std::exp(-0.5 * 3.0 * 3.0);
 
 	for (std::size_t i = 0; i < n; ++i) {
 		const double centre = knots[i].x;
@@ -83,7 +95,10 @@ void bbq_smooth(std::vector<bbq_knot> &knots, double bandwidth) {
 			}
 
 			const double t = dx / bandwidth;
-			const double w = std::exp(-0.5 * t * t);
+			const double w = std::exp(-0.5 * t * t) - floor_at_reach;
+			if (w <= 0.0) {
+				continue;
+			}
 
 			sw += w;
 			swx += w * dx;
