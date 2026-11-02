@@ -46,6 +46,11 @@ private slots:
 	void an_https_body_over_its_cap_is_refused();
 	void when_no_route_answers_every_request_fails();
 
+	void a_host_list_names_its_routes();
+	void what_a_host_list_cannot_mean_is_skipped();
+	void the_default_tries_this_machine_before_vibes_se();
+	void a_listed_host_is_the_one_fetched_from();
+
 private:
 	std::vector<bbq_server_result> fetch(bbq_server_client &client,
 	                                     std::vector<bbq_server_request> requests);
@@ -350,6 +355,90 @@ void test_server_client::when_no_route_answers_every_request_fails() {
 	QCOMPARE(results[0].status, bbq_server_status::failed);
 	QCOMPARE(results[1].status, bbq_server_status::failed);
 	QVERIFY(!client.is_busy());
+}
+
+/*
+ * THE SETTING, READ AS ROUTES (sec 16.38.3).
+ *
+ * A key alone pointed a self-hosted applet at vibes.se, whose files that
+ * key cannot verify. The host list is what makes a publisher of one's
+ * own reachable, so what each spelling means is pinned here.
+ */
+void test_server_client::a_host_list_names_its_routes() {
+	const auto routes = bbq_server_routes_from({
+		QStringLiteral("box.lan"),
+		QStringLiteral(" box.lan:8000 "),
+		QStringLiteral("[::1]:7300"),
+		QStringLiteral("https://example.org/tree"),
+	});
+	QCOMPARE(routes.size(), size_t(4));
+
+	QCOMPARE(routes[0].type, bbq_server_route::kind::daemon);
+	QCOMPARE(routes[0].host, QStringLiteral("box.lan"));
+	QCOMPARE(routes[0].port, quint16(7227));
+
+	QCOMPARE(routes[1].host, QStringLiteral("box.lan"));
+	QCOMPARE(routes[1].port, quint16(8000));
+
+	QCOMPARE(routes[2].host, QStringLiteral("::1"));
+	QCOMPARE(routes[2].port, quint16(7300));
+
+	/* The slash is added, or resolved() would fetch beside the tree. */
+	QCOMPARE(routes[3].type, bbq_server_route::kind::https);
+	QCOMPARE(routes[3].base, QUrl(QStringLiteral("https://example.org/tree/")));
+}
+
+void test_server_client::what_a_host_list_cannot_mean_is_skipped() {
+	const auto routes = bbq_server_routes_from({
+		QStringLiteral("http://plain.example/"),
+		QStringLiteral("box.lan:0"),
+		QStringLiteral("box.lan:70000"),
+		QStringLiteral("box.lan:port"),
+		QStringLiteral("::1"),
+		QStringLiteral(":7227"),
+		QString(),
+		QStringLiteral("kept.lan:7228"),
+	});
+	QCOMPARE(routes.size(), size_t(1));
+	QCOMPARE(routes[0].host, QStringLiteral("kept.lan"));
+	QCOMPARE(routes[0].port, quint16(7228));
+
+	/*
+	 * Nothing usable at all is the default rather than no server, as an
+	 * empty setting is: a typo must not silently turn the server off.
+	 */
+	const auto none = bbq_server_routes_from({QStringLiteral("ftp://x/")});
+	const auto fallback = bbq_server_default_routes();
+	QCOMPARE(none.size(), fallback.size());
+	QCOMPARE(none[0].host, fallback[0].host);
+}
+
+void test_server_client::the_default_tries_this_machine_before_vibes_se() {
+	const auto routes = bbq_server_default_routes();
+	QVERIFY(routes.size() >= 2);
+
+	QCOMPARE(routes.front().type, bbq_server_route::kind::daemon);
+	QCOMPARE(routes.front().host, QStringLiteral("localhost"));
+	QCOMPARE(routes.front().port, quint16(7227));
+
+	/* The static tree is the last resort, behind both daemon routes. */
+	QCOMPARE(routes.back().type, bbq_server_route::kind::https);
+	QCOMPARE(routes.back().base,
+	         QUrl(QStringLiteral("https://vibes.se/bbq-predictor/")));
+}
+
+void test_server_client::a_listed_host_is_the_one_fetched_from() {
+	bbq_server_client client(&m_network);
+	client.set_routes(bbq_server_routes_from({
+		QStringLiteral("127.0.0.1:%1").arg(closed_port()),
+		QStringLiteral("127.0.0.1:%1").arg(m_port),
+	}));
+
+	const auto results = fetch(client, {ask(bbq_wire_kind::head, "ISTOCK877")});
+	QCOMPARE(results.size(), size_t(1));
+	QCOMPARE(results[0].status, bbq_server_status::ok);
+	QCOMPARE(results[0].file, m_head);
+	QCOMPARE(client.preferred_route(), 1);
 }
 
 QTEST_GUILESS_MAIN(test_server_client)

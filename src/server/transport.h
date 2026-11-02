@@ -4,6 +4,7 @@
 #include <QByteArray>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 
 #include <cstdint>
@@ -68,7 +69,26 @@ struct bbq_server_route {
  */
 QByteArray bbq_server_built_in_key();
 
-/* vibes.se:7227, vibes.se:443, then https://vibes.se/bbq-predictor/. */
+/*
+ * Where the applet looks for published files, nearest first (project.md
+ * sec 16.38.3): this machine's daemon, then vibes.se's daemon on its own
+ * port and on 443, then vibes.se's static tree. As the strings the
+ * `server_hosts` setting holds, so the default and a person's own list
+ * are read by one parser.
+ */
+QStringList bbq_server_default_hosts();
+
+/*
+ * The routes a list of hosts names, in its order. "host" or "host:port"
+ * is a daemon, on 7227 when no port is given; "[::1]:7227" for an IPv6
+ * literal. "https://host/path" is a static tree served at that path.
+ * Anything else -- another scheme, a port out of range, an empty name --
+ * is skipped rather than guessed at. A list naming no usable route gives
+ * the default's, as an empty setting does.
+ */
+std::vector<bbq_server_route> bbq_server_routes_from(const QStringList &hosts);
+
+/* bbq_server_routes_from(bbq_server_default_hosts()). */
 std::vector<bbq_server_route> bbq_server_default_routes();
 
 /* The 48-byte request the daemon takes (src/serve/serve_core.h). */

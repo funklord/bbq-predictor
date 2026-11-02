@@ -36,9 +36,7 @@ const char *const key_smoothing = "graph/rounding_seconds";
 const char *const key_layout = "layout";
 const char *const key_theme = "theme";
 
-/*
- * NOT WIRED TO ANYTHING -- see the header, and project.md sec 16.38.
- */
+/* Where published files are fetched from (project.md sec 16.38.3). */
 const char *const key_server_hosts = "server_hosts";
 const char *const key_steadiness = "graph/scale_steadiness";
 
@@ -136,21 +134,8 @@ QStringList bbq_settings::server_hosts() {
 		return hosts;
 	}
 
-	/*
-	 * THE DEFAULT, AND IT CONNECTS TO NOTHING.
-	 *
-	 * Local first: a machine running the packaged timer already has the
-	 * archive on disk, so asking a remote for what is under your own
-	 * hand is slower, needs a network, and tells somebody else which
-	 * stations you watch.
-	 *
-	 * The port is provisional too. 7373 was checked against
-	 * /etc/services and is unassigned there, which is the whole of its
-	 * claim -- it is a placeholder in a placeholder, and belongs to
-	 * sec 15.5's format question rather than being settled here.
-	 */
-	return QStringList{QStringLiteral("localhost:7373"),
-	                   QStringLiteral("vibes.se:7373")};
+	/* Local first, then vibes.se (sec 16.38.3). One list, in transport. */
+	return bbq_server_default_hosts();
 }
 
 void bbq_settings::set_server_hosts(const QStringList &hosts) {

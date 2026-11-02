@@ -121,6 +121,21 @@ It can also be typed into the Station field in the window, which writes
 it there. Find a station id on Weather Underground's map, or leave it
 empty and set `geocode_override=59.33,18.07` to run on forecasts alone.
 
+To read your own publisher instead of vibes.se, name it and its key:
+
+    [server]
+    public_key=<the 64 hex digits bbq-predictor-publish printed>
+
+    [General]
+    server_hosts=box.lan:7227, https://box.lan/bbq-predictor/
+
+A `host` or `host:port` entry is a `bbq-predictor-serve` daemon (port
+7227 by default), and an `https://` entry is the published tree on a web
+server. Entries are tried in order, and the one that answers is kept.
+Unset, the applet tries this machine's daemon first and then vibes.se,
+so a machine that runs the packaged daemon reads its own archive and
+tells nobody which stations it watches.
+
 The command line overrides a run without writing to the file:
 
     ./bbq-predictor --station ISTOCK822

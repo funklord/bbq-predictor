@@ -36,17 +36,113 @@ QByteArray bbq_server_built_in_key() {
 	return key.size() == 32 ? key : QByteArray();
 }
 
-std::vector<bbq_server_route> bbq_server_default_routes() {
-	std::vector<bbq_server_route> routes(3);
-	routes[0].type = bbq_server_route::kind::daemon;
-	routes[0].host = QStringLiteral("vibes.se");
-	routes[0].port = 7227;
-	routes[1].type = bbq_server_route::kind::daemon;
-	routes[1].host = QStringLiteral("vibes.se");
-	routes[1].port = 443;
-	routes[2].type = bbq_server_route::kind::https;
-	routes[2].base = QUrl(QStringLiteral("https://vibes.se/bbq-predictor/"));
+QStringList bbq_server_default_hosts() {
+	/*
+	 * LOCAL FIRST (sec 16.38.1). A machine running the packaged daemon
+	 * already has the archive, and asking a remote for it is slower,
+	 * needs a network, and tells somebody else which stations are
+	 * watched. Where nothing listens the connection is refused at once
+	 * and the next route is tried; the client then remembers the one
+	 * that answered.
+	 */
+	return {
+		QStringLiteral("localhost:7227"),
+		QStringLiteral("vibes.se:7227"),
+		QStringLiteral("vibes.se:443"),
+		QStringLiteral("https://vibes.se/bbq-predictor/"),
+	};
+}
+
+std::vector<bbq_server_route> bbq_server_routes_from(const QStringList &hosts) {
+	std::vector<bbq_server_route> routes;
+
+	for (const QString &given : hosts) {
+		const QString entry = given.trimmed();
+		if (entry.isEmpty()) {
+			continue;
+		}
+
+		if (entry.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive)) {
+			QUrl base(entry, QUrl::StrictMode);
+			if (!base.isValid() || base.host().isEmpty()) {
+				continue;
+			}
+
+			/*
+			 * resolved() replaces the last segment of a base without
+			 * a slash, so "https://host/tree" would fetch beside the
+			 * tree rather than in it.
+			 */
+			if (!base.path().endsWith(QLatin1Char('/'))) {
+				base.setPath(base.path() + QLatin1Char('/'));
+			}
+
+			bbq_server_route route;
+			route.type = bbq_server_route::kind::https;
+			route.base = base;
+			routes.push_back(route);
+			continue;
+		}
+
+		/* Any other scheme is not a route this client speaks. */
+		if (entry.contains(QStringLiteral("://"))) {
+			continue;
+		}
+
+		QString host = entry;
+		QString port_text;
+
+		if (host.startsWith(QLatin1Char('['))) {
+			const qsizetype close = host.indexOf(QLatin1Char(']'));
+			if (close < 0) {
+				continue;
+			}
+			const QString rest = host.mid(close + 1);
+			host = host.mid(1, close - 1);
+			if (!rest.isEmpty()) {
+				if (!rest.startsWith(QLatin1Char(':'))) {
+					continue;
+				}
+				port_text = rest.mid(1);
+			}
+		} else if (host.count(QLatin1Char(':')) == 1) {
+			const qsizetype colon = host.indexOf(QLatin1Char(':'));
+			port_text = host.mid(colon + 1);
+			host = host.left(colon);
+		} else if (host.contains(QLatin1Char(':'))) {
+			/* A bare IPv6 literal is ambiguous about its port; brackets say. */
+			continue;
+		}
+
+		if (host.isEmpty()) {
+			continue;
+		}
+
+		int port = 7227;
+		if (!port_text.isEmpty()) {
+			bool number = false;
+			port = port_text.toInt(&number);
+			if (!number || port < 1 || port > 65535) {
+				continue;
+			}
+		}
+
+		bbq_server_route route;
+		route.type = bbq_server_route::kind::daemon;
+		route.host = host;
+		route.port = quint16(port);
+		routes.push_back(route);
+	}
+
+	if (routes.empty() && hosts != bbq_server_default_hosts()) {
+		return bbq_server_default_routes();
+	}
+
 	return routes;
+}
+
+std::vector<bbq_server_route> bbq_server_default_routes() {
+	return bbq_server_routes_from(bbq_server_default_hosts());
 }
 
 QByteArray bbq_server_encode_request(const bbq_server_request &request) {

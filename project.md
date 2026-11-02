@@ -11118,6 +11118,10 @@ to suspect the instrument first.
 
 ## 16.38 A server address, marked as connecting to nothing
 
+**Wired since sec 16.38.3** (2026-11-02): the list is the route list
+the client tries, and its default is this machine's daemon and then
+vibes.se's routes. What follows is the placeholder as it stood.
+
 Asked whether the server could be default-hardcoded to `vibes.se` so
 clients find it. Added on instruction as a placeholder, with the
 limitation in the code rather than only here:
@@ -11170,6 +11174,49 @@ worth not writing -- and both the comment and the test's now say which
 half actually holds the property. **A sabotage that passes is not a
 wasted experiment; it is the one that finds a claim nothing was
 checking.**
+
+### 16.38.3 The list became the routes, so a publisher of one's own is reachable
+
+`server/public_key` was documented "for somebody running their own
+publisher", and the routes were fixed to vibes.se. Such a person could
+set their key, and the applet still asked vibes.se. vibes.se's files do
+not verify against another key, so the server path failed every round
+and the applet went back to scraping. The key alone did nothing. The
+host list of sec 16.38 was the missing half, and nothing read it.
+
+`bbq_server_routes_from` reads the list:
+- `host` or `host:port` is a daemon, on 7227 when no port is given;
+- `[::1]:7300` is an IPv6 literal;
+- `https://host/path` is a static tree, with a slash added, since
+  `resolved()` would otherwise fetch beside the tree;
+- any other scheme, a port out of range or an empty name is skipped;
+- a list with nothing usable gives the default, as an unset one does,
+  so a typo cannot turn the server off.
+
+The window and the background fetch both pass it to the feed.
+
+**The default keeps both recorded decisions.** It starts with
+`localhost:7227`, which is sec 16.38.1's local first. Then come
+vibes.se's daemon on 7227 and on 443 and its static tree, which is sec
+15.12's vibes.se first. The default strings live once, in
+`bbq_server_default_hosts`. Settings and the transport both read them,
+so there is no second copy to drift. Port 7373 is gone with the
+placeholder: the daemon listens on 7227 (`bbq-predictor-serve(8)`).
+Where nothing listens locally, the connection is refused at once and the
+next route is tried; the client already keeps whichever route answered.
+
+**Measured:** `test_server_client` pins each spelling, the skips, the
+fallback and the default's order, and fetches a head through a listed
+`127.0.0.1` route after a refused one. Two sabotages were each caught.
+Dropping the slash failed the parsing test with `.../tree` against
+`.../tree/`. Putting vibes.se ahead of localhost failed the new order
+test, and also `test_window`'s position test from sec 16.38.1 ("the
+first candidate is vibes.se:7227"). The README's configuration section
+shows both keys. QSettings was checked to read the comma-separated
+value back as two entries.
+
+**Not covered by a test:** the two call sites that pass the setting to
+the feed. Each is one line, beside the key it has always passed.
 
 
 ## 16.39 The daemon's exit code, and the band it never asked for

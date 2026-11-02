@@ -296,7 +296,8 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 	}
 
 	if (options.use_server) {
-		feed.set_server(bbq_settings::server_public_key());
+		feed.set_server(bbq_settings::server_public_key(),
+		                bbq_server_routes_from(bbq_settings::server_hosts()));
 	}
 	feed.set_station(station);
 
