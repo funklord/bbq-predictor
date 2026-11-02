@@ -9648,9 +9648,14 @@ stderr, which an Android app sends nowhere. Both are redirected to
 
 **The window schedules it**, once its feed is running, on every launch.
 
-**Not measured:** a periodic run left to the scheduler rather than
-forced, the Fold (API 35, arm64), and a period while Android's battery
-optimisation defers jobs.
+**Left to the scheduler**, the job ran on its own at 15:48, one period
+after a forced run moved its window: "fetch job: starting", "service
+fetch returned 3" (the station still silent), "fetch job: done". It
+redrew `widget.png`, left no `:fetch` process and raised no ANR.
+
+**Not measured:** the Fold (API 35, arm64, One UI, whose battery rules
+are the likeliest to defer or drop the job), and a period while
+Android's battery optimisation defers jobs.
 
 ### 16.21 The widget picture was drawn whether or not anybody wanted it
 
