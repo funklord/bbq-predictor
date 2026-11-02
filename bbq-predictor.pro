@@ -90,6 +90,12 @@ android {
 		warning("openssl: $$BBQ_SSL_SSL is missing -- the package will " \
 		        "have no TLS. Run tool/build-openssl-android.sh.")
 	}
+
+	# QAndroidService, which Qt keeps in a private header. The background
+	# fetch must be one: Qt's service loader holds the service's
+	# onCreate until a QAndroidService reaches its event loop, and a
+	# plain QCoreApplication never releases it (sec 17.7).
+	QT += core-private
 }
 
 # What the window adds to core.pri, which holds everything that does not

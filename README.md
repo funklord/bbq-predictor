@@ -76,9 +76,6 @@ applets that come with GNOME and KDE:
   daemon and the applet's reading of them are built and packaged, but
   the applet is built with the publisher's public key, and until it is,
   every applet scrapes for itself (`project.md` sec 15).
-- **On a phone the widget changes only while the app runs.** The
-  background fetch is built and measured and not switched on
-  (`project.md` sec 17).
 
 `project.md` is the authoritative record -- what was decided, why, what
 was measured, and what is still open. **Read it before the code.** It is
@@ -256,11 +253,12 @@ attached device -- `make android-check` says what is missing first, by
 name, rather than failing halfway through Gradle.
 
 There is a home-screen widget. Add it from the launcher's widget picker;
-it draws the graph the applet last rendered and **says how old that
-picture is** once it is more than twenty minutes stale, because a
-forecast that looks current and is six hours old is worse than no widget
-at all. It only changes while the applet runs: there is no background
-fetch, and the age is stated rather than the staleness hidden.
+it draws the graph and **says how old that picture is** once it is more
+than twenty minutes stale, because a forecast that looks current and is
+six hours old is worse than no widget at all. With the app closed, a
+background job fetches every fifteen minutes and redraws it, with no
+notification; when Android defers the job, the age is stated rather
+than the staleness hidden (`project.md` sec 17).
 
 ## Contributing
 

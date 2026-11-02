@@ -1158,19 +1158,14 @@ void bbq_main_window::begin(const QString &station_id, const QString &geocode) {
 	m_locator->locate_once();
 
 	/*
-	 * STILL NOT SCHEDULED, AND THE REASON HAS MOVED (sec 17.4).
-	 *
-	 * The foreground service works: the notification posts, the claim
-	 * is accepted -- dumpsys shows isForeground=true with the channel
-	 * -- and the ANR that killed the background one is gone. What does
-	 * not happen is Qt: the loader never returns from onCreate and
-	 * main() is never reached, so the fetch never runs.
-	 *
-	 * That is below anything here, in Qt's own Android service startup.
-	 * Scheduling meanwhile would post a notification every fifteen
-	 * minutes for a service that fetches nothing, which is worse than
-	 * the gap it was meant to close.
+	 * The background fetch, so the home-screen widget follows the
+	 * weather while the app is closed (sec 17.7). Here, once the
+	 * window's own feed is running and a station is set or about to
+	 * be. A no-op off Android; on it, rescheduling the same job
+	 * replaces it, so every launch is harmless and is also what puts
+	 * the job back after a reboot.
 	 */
+	bbq_schedule_background_fetch();
 }
 
 void bbq_main_window::apply_theme(bbq_theme theme) {

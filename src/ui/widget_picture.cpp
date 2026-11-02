@@ -12,7 +12,13 @@
 #include <QString>
 
 #include "graph/forecast_graph.h"
+#include "model/composite.h"
+#include "model/correction.h"
+#include "store/history.h"
+#include "model/settings.h"
 #include "ui/theme.h"
+#include "ui/tray_icon.h"
+#include <QDateTime>
 
 #ifdef Q_OS_ANDROID
 #include <QCoreApplication>
@@ -593,6 +599,46 @@ void bbq_write_widget_picture(bbq_forecast_graph *source,
 #endif
 }
 
+void bbq_write_widget_picture_from(const bbq_composite &composite,
+                                   const bbq_history &history,
+                                   const QString &station) {
+#ifdef Q_OS_ANDROID
+	bbq_forecast_graph graph;
+
+	graph.set_interpolation(static_cast<bbq_interpolation>(
+	        bbq_settings::interpolation(static_cast<int>(graph.interpolation()))));
+	graph.set_smoothing(bbq_settings::smoothing(graph.smoothing()));
+	graph.set_scale_steadiness(
+	        bbq_settings::scale_steadiness(graph.scale_steadiness()));
+
+	/*
+	 * The application's palette as well as the graph's, as the window
+	 * does: the scrim is taken from the graph's colours, and a dark
+	 * theme on a light palette would give a picture nobody chose.
+	 */
+	const bbq_theme theme = bbq_theme_resolve(bbq_settings::theme());
+	bbq_theme_apply(theme);
+	graph.set_theme(theme);
+
+	graph.set_composite(composite);
+
+	/*
+	 * Over everything the composite covers rather than over a view:
+	 * the correction does not depend on where anybody looks (sec
+	 * 16.31), and posing the graph moves its view to now afterwards.
+	 */
+	graph.set_corrected(bbq_corrected_forecast(
+	        composite, history, station, composite.begin_utc(),
+	        composite.end_utc(), QDateTime::currentSecsSinceEpoch()));
+
+	bbq_write_widget_picture(&graph, bbq_tray_icon::reading_label(composite));
+#else
+	Q_UNUSED(composite);
+	Q_UNUSED(history);
+	Q_UNUSED(station);
+#endif
+}
+
 void bbq_schedule_background_fetch() {
 #ifdef Q_OS_ANDROID
 	QJniObject context = QNativeInterface::QAndroidApplication::context();
@@ -603,5 +649,12 @@ void bbq_schedule_background_fetch() {
 	QJniObject::callStaticMethod<void>(
 	        "se/vibes/bbq_predictor/FetchJobService", "schedule",
 	        "(Landroid/content/Context;)V", context.object());
+#endif
+}
+
+void bbq_background_fetch_done() {
+#ifdef Q_OS_ANDROID
+	QJniObject::callStaticMethod<void>("se/vibes/bbq_predictor/FetchJobService",
+	                                   "fetchDone", "()V");
 #endif
 }

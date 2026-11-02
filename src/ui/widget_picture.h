@@ -7,7 +7,9 @@
 #include <QtGlobal>
 
 class QString;
+class bbq_composite;
 class bbq_forecast_graph;
+class bbq_history;
 
 /*
  * Render `source` to the picture the home-screen widget reads, and tell
@@ -44,6 +46,22 @@ bool bbq_render_widget_picture(bbq_forecast_graph *source,
 
 void bbq_write_widget_picture(bbq_forecast_graph *source,
                               const QString &reading);
+
+/*
+ * The same picture, from a process with no window (sec 17.7).
+ *
+ * The background fetch has a composite and the store it wrote to, and no
+ * graph on screen to borrow. So it builds one, gives it what the window
+ * keeps across launches -- interpolation, rounding, steadiness, theme --
+ * and the corrected band, and hands it to bbq_write_widget_picture. What
+ * the window does not keep, a panned view or a ticked box, the widget
+ * never shows anyway: the picture always follows now.
+ *
+ * A no-op off Android.
+ */
+void bbq_write_widget_picture_from(const bbq_composite &composite,
+                                   const bbq_history &history,
+                                   const QString &station);
 
 /*
  * The graph settings a widget render borrows, put back when it leaves
@@ -160,5 +178,12 @@ bool bbq_widget_scrim_is_bounded(const QColor &scrim, const QColor &ink);
  * harmless and the only thing that puts the job back after a reboot.
  */
 void bbq_schedule_background_fetch();
+
+/*
+ * Tell the job that ran the background fetch that it is done, so Android
+ * can end it and its process (sec 17.7). Called by main() once the fetch
+ * and the widget's picture are finished. A no-op off Android.
+ */
+void bbq_background_fetch_done();
 
 #endif

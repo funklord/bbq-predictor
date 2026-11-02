@@ -77,9 +77,12 @@ verified, report what happened, and exit. Publishing what was fetched is
 which runs the same round with no window behind it.
 .TP
 .B \-\-android\-service
-Fetch once and exit, building no window and no
-.BR QApplication .
-Passed by the Android service's own manifest rather than by a person:
+Fetch once and exit, building no window. On Android it then draws the
+home\-screen widget's picture, which needs a
+.BR QApplication ;
+elsewhere it builds none, so it runs without a display.
+Passed by the Android background job's own manifest rather than by a
+person:
 it is read straight from
 .I argv
 before any application object exists, because whether to build one is

@@ -1,6 +1,11 @@
 #include <QApplication>
 #include <memory>
 #include <QCoreApplication>
+#include <cstdio>
+#ifdef Q_OS_ANDROID
+#include <QtCore/private/qjnihelpers_p.h>
+#include <unistd.h>
+#endif
 #include <QPixmap>
 #include <QTimer>
 #include <QStringList>
@@ -11,6 +16,7 @@
 #include "ui/accessibility.h"
 #include "ui/main_window.h"
 #include "ui/tray_icon.h"
+#include "ui/widget_picture.h"
 #include "graph/forecast_graph.h"
 #include "graph/interpolate.h"
 #include "graph/sweep.h"
@@ -315,31 +321,75 @@ static const bbq_band bbq_scored_bands[] = {
 int main(int argc, char *argv[]) {
 	if (wants_service(argc, argv)) {
 		/*
-		 * QCoreApplication: the fetch needs the event loop, the network
-		 * and the store, and nothing that draws.
+		 * No window, and on Android still a QApplication: the fetch
+		 * needs the event loop, the network and the store, and the
+		 * home-screen widget's picture is the graph drawn by the
+		 * graph's own widget (sec 17.7). Off Android nothing draws one,
+		 * and a QApplication would abort on a machine with no display.
 		 */
+#ifdef Q_OS_ANDROID
+		/*
+		 * LET QT'S SERVICE LOADER GO BEFORE ANYTHING ELSE (sec 17.7).
+		 *
+		 * QtServiceBase.onCreate holds the Android main thread in
+		 * waitForServiceSetup() until somebody installs a bind
+		 * listener, which only QAndroidService does, from its event
+		 * loop. Under the QCoreApplication this was, the fetch ran and
+		 * main() returned, and Qt's teardown then queued stopSelf onto
+		 * the main thread that was still waiting: both threads parked
+		 * and Android called it an ANR. Read from the ANR's own stack
+		 * on the API 33 emulator, 2026-11-02, where sec 17.4 had
+		 * concluded main() was never reached.
+		 *
+		 * And it must happen before the application is built, not in
+		 * its loop: a QApplication registers its clipboard on that same
+		 * main thread and waits for it, which hung the next attempt.
+		 * Taking the lock and handing over the listener at once
+		 * releases the loader immediately. The service binds nothing,
+		 * so the listener has nothing to return.
+		 */
+		struct no_binding : QtAndroidPrivate::OnBindListener {
+			jobject onBind(jobject) override { return nullptr; }
+		};
+		static no_binding listener;
+		QtAndroidPrivate::acuqireServiceSetup(0);
+		QtAndroidPrivate::setOnBindListener(&listener);
+
+		QApplication service(argc, argv);
+#else
 		QCoreApplication service(argc, argv);
+#endif
 		QCoreApplication::setApplicationName(QStringLiteral("bbq-predictor"));
 		QCoreApplication::setApplicationVersion(
 		        QStringLiteral(BBQ_VERSION_STRING));
 
 		bbq_ensure_tls_backend();
 
+#ifdef Q_OS_ANDROID
 		/*
-		 * REACH THE EVENT LOOP FIRST, AND FETCH FROM INSIDE IT
-		 * (sec 17.2).
+		 * The fetch's report, where somebody can read it.
 		 *
-		 * Qt's Android loader waits for the application to reach
-		 * exec() before it lets the service's onCreate return. Doing
-		 * the fetch here and returning never reaches one, so onCreate
-		 * blocked for the length of a fetch and Android killed the
-		 * service: measured as an ANR against
-		 * se.vibes.bbq_predictor:fetch with executeNesting=3 and
-		 * thirty seconds on the clock.
+		 * fetch-once says what failed on stdout and stderr, which an
+		 * Android app writes to nowhere, so the service's only words
+		 * were "returned 1" (sec 17.7). One file, truncated by every
+		 * run so it holds the last fetch and cannot grow, and one
+		 * descriptor for both streams so neither overwrites the other:
 		 *
-		 * A zero-delay timer fires once exec() is running, so the
-		 * loader is satisfied immediately and the work happens inside
-		 * the loop it was waiting for.
+		 *   adb shell run-as se.vibes.bbq_predictor cat files/fetch.log
+		 */
+		const QString report =
+		        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+		        QStringLiteral("/fetch.log");
+		if (std::freopen(QFile::encodeName(report).constData(), "w", stdout) != nullptr) {
+			dup2(fileno(stdout), fileno(stderr));
+		}
+#endif
+
+		/*
+		 * Fetched from inside the event loop, the shape every other
+		 * run here has. It was also how sec 17.2 tried to release the
+		 * loader, which never waited on exec() alone; the release
+		 * above is what does that now.
 		 *
 		 * The station is the one the applet is watching. A service that
 		 * took its own would be a second setting to keep in step, and
@@ -348,34 +398,48 @@ int main(int argc, char *argv[]) {
 		 */
 		int outcome = 0;
 		QTimer::singleShot(0, &service, [&outcome]() {
-			/*
-			 * TEN SECONDS, NOT THIRTY (sec 17.4).
-			 *
-			 * Android holds a service "executing" for as long as its
-			 * onCreate takes, and ANRs past the window whatever the
-			 * foreground status: measured as "Reason: executing service
-			 * ... FetchService" with the process at 0.2% CPU, waiting
-			 * rather than working. A shorter fetch is the experiment
-			 * that says whether duration is the cause.
-			 */
 			const QString watched = bbq_settings::station();
 
 			/*
-			 * qWarning rather than the report fetch-once prints: that
-			 * goes to stdout, which on Android goes nowhere, so a
-			 * service that failed and one that never ran looked
-			 * identical from outside (sec 17.4).
+			 * qWarning as well as the report, since logcat is where
+			 * somebody looks first (sec 17.4).
 			 */
 			qWarning("bbq-predictor: service fetching for station '%s'",
 			         watched.toUtf8().constData());
 
 			bbq_fetch_options options;
 			options.use_server = true;
+
+			/*
+			 * The widget follows the fetch, which is what the service
+			 * is for: the archive alone changes nothing on a home
+			 * screen. Drawn whatever the round's verdict, as the window
+			 * does, since a partial round still moves the picture.
+			 */
+			options.after_round = [&watched](const bbq_composite &composite,
+			                                 const bbq_history &history) {
+				bbq_write_widget_picture_from(composite, history, watched);
+				return 0;
+			};
+
+			/*
+			 * THIRTY SECONDS, as the command line has. Sec 17.4 cut it
+			 * to ten as an experiment against an ANR whose cause was
+			 * the held loader, not the fetch; with onCreate returning
+			 * at once a foreground service is not timed while it works.
+			 */
 			outcome = bbq_wu_fetch_once(watched,
-			                            bbq_settings::geocode_override(), 10,
+			                            bbq_settings::geocode_override(), 30,
 			                            options);
 
 			qWarning("bbq-predictor: service fetch returned %d", outcome);
+			std::fflush(stdout);
+
+			/*
+			 * Before quitting, while Qt can still reach Java: the job
+			 * waits for this, and holds its process until it comes.
+			 */
+			bbq_background_fetch_done();
 			QCoreApplication::quit();
 		});
 

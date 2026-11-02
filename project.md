@@ -2757,7 +2757,8 @@ what is not there yet. So the opening includes the server half of sec
 15 as part of the design, and the old status section -- which had said
 the Android build does not complete, true until sec 11.2 was cleared --
 is a two-item "Not there yet": the applet's server key (sec 15) and the
-phone's background fetch (sec 17).
+phone's background fetch (sec 17). The second came out on 2026-11-02,
+when sec 17.7 made the fetch work.
 
 ## 4. The tray
 
@@ -9345,10 +9346,15 @@ than a false alarm: the exit-code contract had no guard, the corrector
 turned out to be right for an unwritten reason, and this one was a
 capability quietly removed by a fix that was otherwise correct.
 
-## 17. The Android background fetch: built, measured, not enabled
+## 17. The Android background fetch
 
-Asked for by the copyright holder 2026-09-05. It is written and it does
-not work, and the reason is a platform limit rather than a bug in it.
+Asked for by the copyright holder 2026-09-05. **It works since sec
+17.7** (2026-11-02): a periodic job runs the fetch itself, with the app
+closed and no notification, and redraws the home-screen widget.
+Secs 17.1 to 17.4 are how it got there, and two of their conclusions
+were wrong: the ANR of sec 17.3 was not Qt's load time, and main() was
+reached in sec 17.4. Both were one deadlock in Qt's service handshake,
+read from the ANR's own stack in sec 17.7.
 
 **The design was right and is worth keeping.** A Qt service runs the
 same native library the activity does, with `--android-service` in its
@@ -9397,10 +9403,11 @@ With both faults fixed the service still dies:
     E ActivityManager: ANR in se.vibes.bbq_predictor:fetch
     I ActivityManager: Killing 25383:...:fetch (adj 0): bg anr
 
-Some thirty seconds after the job starts it. **Loading Qt Core, Network
-and Sql into a cold process is more than a background service is
-given**, and reaching `exec()` promptly does not help because the
-startup itself is the cost.
+Some thirty seconds after the job starts it. The conclusion drawn here
+was that **loading Qt Core, Network and Sql into a cold process is more
+than a background service is given**. That was wrong: the main thread
+was parked in Qt's service handshake, which a plain QCoreApplication
+never releases, at 0% CPU (sec 17.7).
 
 **What would work is a foreground service**, which gets a far longer
 allowance and costs a notification every fifteen minutes for a weather
@@ -9451,7 +9458,10 @@ and the archive's mtime does not move across a forced run.
 `executeNesting=3` with the service thirty seconds in says where it is
 stopped -- inside `super.onCreate()`, which is Qt's loader.
 
-**That is below anything in this project.** Qt's Android service
+**Superseded by sec 17.7**, which found what was below it: the
+handshake waits for a QAndroidService that this program never built.
+What follows is the record as it stood. **That is below anything in
+this project.** Qt's Android service
 initialisation does not complete here; every part that is ours -- the
 job, the foreground claim, the separate process, reaching `exec()`
 before working -- has been shown to do what it should.
@@ -9554,6 +9564,93 @@ that function would be invisible -- which is the reason the unit and
 the manual are both checked against the CODE rather than against each
 other, since two documents agreeing while the program does something
 else is the failure sec 15.10.2 exists for.
+
+### 17.7 The handshake, and a job that does the work itself
+
+**The deadlock, read from the ANR's stack.** On the API 33 emulator
+(2026-11-02, Qt 6.12.0), the job scheduled and started the service, and
+Android called an ANR thirty seconds later with the process at 0% CPU,
+as sec 17.3 had seen. Reading `/data/anr` under `adb root`:
+
+- the Android main thread in `QtServiceBase.onCreate` ->
+  `QtNative.startApplication` -> `waitForServiceSetup`;
+- Qt's thread past main(), in `startQtNativeApplication`'s
+  `sem_wait(&m_exitSemaphore)`.
+
+Logcat had "service fetching" and "main() returned 1", so main() ran
+and the fetch ran. The cause is in Qt's source.
+`waitForServiceSetup` takes a semaphore that only `setOnBindListener`
+releases. Only QAndroidService calls that, from its event loop. Under
+the QCoreApplication this program built, the release never came. When
+main() returned, Qt queued `stopSelf` onto the main thread that was
+still waiting. Both threads parked.
+
+**The release comes before the application is built.** A
+QAndroidService is only a QCoreApplication, and drawing the widget's
+picture needs widgets, so the service builds a QApplication instead.
+Built first, it hung: its clipboard registers on the Android main
+thread, which was still in the handshake. Called before construction,
+the private but exported `QtAndroidPrivate::acuqireServiceSetup(0)`
+and `setOnBindListener` release it at once. The listener returns no
+binding, since nothing binds. Measured: a QLabel rendered in that
+process with 356 dark pixels, the fetch ran, and the process ended
+with no ANR. This needs `QT += core-private` on Android.
+
+**No service can be started from the background.** With the deadlock
+gone, a forced run of the job while the app was killed was refused
+both ways:
+- `startForegroundService` threw ForegroundServiceStartNotAllowedException
+  (Android 12 and later);
+- a plain `startService` logged "Background start not allowed ...
+  startFg?=false".
+
+Sec 17.1's measurement had the app recently in front. So the job does
+the fetch itself. `FetchJobService` runs in `:fetch` and carries the
+three meta-data entries the service had. `BbqJobLoader` sits in Qt's
+own package, `org.qtproject.qt.android`, because the loader calls are
+package-private. It is QtServiceBase's onCreate and onDestroy, copied,
+so a Qt upgrade that renames them fails at compile time. main() calls
+`FetchJobService.fetchDone()` when it is finished. The job then ends,
+and its onDestroy exits the process, since Qt cannot start in it twice.
+**FetchService, its notification channel and both foreground
+permissions are gone**: a job runs for up to ten minutes and needs no
+notification. That removes the cost the holder accepted in sec 17.4,
+and nothing else depended on it.
+
+**The widget follows the fetch.** `fetch_once`'s `after_round` hook
+draws the picture through `bbq_write_widget_picture_from`. That builds
+a graph, gives it what the window keeps across launches (interpolation,
+rounding, steadiness and theme) and the corrected band, and draws it
+the way the window does. It draws whatever the round's verdict, as the
+window does. The fetch timeout is back to thirty seconds: sec 17.4's
+ten was an experiment against the wrong cause.
+
+**Measured, with the app killed and the picture deleted** (emulator,
+API 33, x86_64, which needed `tool/build-openssl-android.sh x86_64`):
+
+    fetch job: starting
+    bbq-predictor: service fetching for station 'ISTOCK877'
+    bbq-predictor: service fetch returned 1
+    fetch job: done
+    main() returned 1
+
+`widget.png` came back, 12 kB, drawn by the `:fetch` process. The home
+screen showed the curve, the rain band and the axes. No `:fetch`
+process was left behind, and there was no ANR. The 1 was the world, not
+the code: the station answered 204, Open-Meteo answered 503, and the
+first band began ten seconds after now, so the reading was "--".
+
+**The service's report is a file now.** fetch-once writes to stdout and
+stderr, which an Android app sends nowhere. Both are redirected to
+`files/fetch.log`, on one descriptor, truncated by each run:
+
+    adb shell run-as se.vibes.bbq_predictor cat files/fetch.log
+
+**The window schedules it**, once its feed is running, on every launch.
+
+**Not measured:** a periodic run left to the scheduler rather than
+forced, the Fold (API 35, arm64), and a period while Android's battery
+optimisation defers jobs.
 
 ### 16.21 The widget picture was drawn whether or not anybody wanted it
 
