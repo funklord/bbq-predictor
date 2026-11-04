@@ -17470,15 +17470,46 @@ compared with the clock:
         QT_QPA_PLATFORM=offscreen timeout 300 faketime -f +400d "$b"
     done
 
-## 16.131 Where things stand, 2026-10-28
+## 16.131 Where things stand, 2026-11-04
 
-What the next session should know, as of 8ac4b32's successors.
+What the next session should know, as of 9b9bbef.
 
 **Waiting on the holder:** the publisher's public key, for
 `bbq_server_built_in_key()`. And two linked decisions: whether to score
 temperature on whole degrees (sec 16.94.2), and what the applet says
 after a scoring epoch bump (sec 16.120.5). If the first is yes, the
-second becomes real at once.
+second becomes real at once. A third question rides on them: sec 7.1
+calls the grilling thresholds one cook's answers, but they are not a
+setting. The archive scores verdicts with the same policy
+(`history.cpp`), so a user's thresholds would change what archived
+scores mean. The likely shape is a display-only setting, with the
+archive keeping the defaults, and it is the holder's.
+
+**The phone's background fetch works on the emulator** (sec 17.7,
+34bdcbb, 2026-11-02). A periodic job loads Qt in `:fetch`, fetches and
+redraws the widget with no notification. It ran forced and, once, on
+the scheduler's own timing. **Not yet on the Fold**, where One UI's
+battery rules are the likeliest to defer it. That needs the holder to
+install the arm64 build, open the app once, place the widget, and leave
+the app closed for half an hour. The job's report is
+`adb shell run-as se.vibes.bbq_predictor cat files/fetch.log`.
+
+**The applet reads its own publisher when told to** (sec 16.38.3,
+9b9bbef). `server_hosts` is the route list now: local daemon first,
+then vibes.se. Together with `server/public_key`, it is all a
+self-hoster needs.
+
+**Graph steadiness, seen on the Fold 2026-10-29** with 150552e: pinch
+sticks to the fingers, the flicker at now and the rain chance jitter
+are gone, and panning and the edges hold steady (sec 3.18, 3.11.4.3,
+13.1.2). `--sweep` measures the jitter if it is ever reported again.
+
+**Testing on the emulator, learned 2026-11-02.** The x86_64 build needs
+`tool/build-openssl-android.sh x86_64` (NDK 27.2 from the SDK) or it has
+no TLS. `adb root` works on the Galaxy_Nexus_API_33 image and reads
+`/data/anr`. Force-stopping the app also cancels its job; use `am kill`
+from the home screen instead. A widget is placed by long-pressing the
+home screen, choosing Widgets, and dragging with `input draganddrop`.
 
 **Nothing waits on situ** since 2026-10-29: vendored at 714ac3c, whose
 framing passes the fuzz case, now on by default (sec 15.12.3). The
