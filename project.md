@@ -3155,6 +3155,53 @@ fixed; the point here is that nothing else would have caught it. The
 graph would have looked entirely normal, in the reader's own timezone,
 which is the failure this project has now removed twice.
 
+### 5.3 Unused code is collected at link time
+
+The global size rule asks for `-ffunction-sections -fdata-sections` and
+`-Wl,--gc-sections` beside `-Os` (claude-guidelines 36203af, relayed by
+that tree's session 2026-11-05). They are in `gc_sections.pri`. Three
+things include it, so the suite runs code collected the way the shipped
+binaries are:
+- `core.pri`, for the applet, the publisher and the Android library;
+- `test/test_common.pri`, for the test binaries;
+- `SERVE_CFLAGS`, for the daemon.
+
+**Measured, 2026-11-05.** The "after" builds went into fresh directories,
+because qmake's Makefiles do not rebuild objects when only flags change.
+Text first, then the stripped file:
+
+    applet        592,025 -> 556,625 text   615,160 -> 578,008 stripped  -6.0%
+    publisher     437,189 -> 374,668 text   456,856 -> 390,968 stripped -14.4%
+    serve daemon   18,161 ->  18,049 text
+    Android .so   847,874 -> 844,102 text   868,872 -> 865,008 stripped  -0.4%
+
+**Android gains little, and the reason is known.** The flag reached the
+link (`-Wl,--gc-sections` on the `-shared` line), and Qt's mkspec sets
+none of these itself. But a shared library exports every symbol not
+marked otherwise, 901 here, and an exported symbol is a root the linker
+must keep. Collecting more would mean hiding symbols
+(`-fvisibility=hidden`). That is a separate change, and its risk is
+exactly what this rule warns about: Qt's loader finds `main()` by name.
+
+**Not because the NDK already collects.** claude-guidelines e6dd136
+says Qt's Android mkspec and the NDK toolchain collect by default. On
+this kit they do not. The baseline link line carried no
+`--gc-sections`, and the compiles no `-ffunction-sections`. Qt keeps
+both in `QMAKE_CFLAGS_SPLIT_SECTIONS` and `QMAKE_LFLAGS_GCSECTIONS`,
+which apply only on request. NDK 27.2's clang, asked to compile a
+two-function file for `aarch64-linux-android26`, put both in one
+`.text`. The small gain is the exported symbols.
+
+**Run against the collected binaries:** `make check` with fresh
+`BUILD_DIR` and `TEST_BUILD_DIR`, 22 binaries, none failed. A collected
+x86_64 APK on the API 33 emulator started, and its forced background
+job fetched, wrote `widget.png` and ended ("main() returned 3", the
+station silent).
+
+**Nothing here is reached only by name or by section** in a way the
+flags can break. The Java side declares no native methods. The C++ calls
+into Java, not the reverse. `main()` stays exported.
+
 ## 6. Style
 
 Three rules -- `snake_case`, tabs to indent and spaces to align,

@@ -199,7 +199,8 @@ endif
 # After CFLAGS on the command line, not before: dpkg-buildflags hands
 # over -O2, and the last -O wins -- the package was built for speed until
 # the order changed. Size is this workspace's rule (build-and-commit.md).
-SERVE_CFLAGS = -std=c11 -Os -Wall -Wextra -Isrc
+SERVE_CFLAGS = -std=c11 -Os -ffunction-sections -fdata-sections \
+               -Wl,--gc-sections -Wall -Wextra -Isrc
 
 $(SERVE_ARTIFACT): src/serve/serve.c src/serve/serve_loop.c \
                    src/serve/serve_core.c $(wildcard src/serve/*.h)

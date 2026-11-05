@@ -8,6 +8,9 @@ TEMPLATE = app
 
 INCLUDEPATH += $$PWD/../src
 
+# Collected as the shipped binaries are (gc_sections.pri).
+include($$PWD/../gc_sections.pri)
+
 # EVERY SUBPROJECT IS GENERATED INTO ONE DIRECTORY, so each must own its
 # object files (project.md sec 15.9).
 #
