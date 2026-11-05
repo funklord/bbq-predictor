@@ -384,7 +384,13 @@ $(ANDROID_BUILD_DIR)/Makefile: android-check bbq-predictor.pro
 # not work: from a clean tree that leaves no Gradle project at all. It
 # appeared to work only because a previous build had left one behind, which
 # is the same stale-state trap this project keeps finding.
-android: $(ANDROID_BUILD_DIR)/Makefile
+android: android-fresh $(ANDROID_BUILD_DIR)/Makefile
+	#
+	# android-fresh removes the APK Gradle left last time: Gradle reopens
+	# one already on disk and pads the holes it cannot reuse with nameless
+	# entries, measured at 15-17% of an APK in beerssh (tool/android.mk).
+	# Not seen here on a build whose library grew by 2 KB, but it also
+	# means the copy below can only find this build's APK.
 	#
 	# The staging directory is cleared first, because nothing else
 	# prunes it.

@@ -4549,6 +4549,25 @@ no usable kit says so and names `ANDROID_COMPILE=no` as the deliberate
 skip. With the half-day's bug put back it failed naming the file, and
 passed again with it removed.
 
+### 11.14 The old APK is removed before each build
+
+From claude-guidelines (inbox 20261104T2327Z): `tool/android.mk` gained
+`android-fresh`, which removes Gradle's APK outputs by name before a
+build. Gradle reopens an APK it finds on disk and fills holes it cannot
+reuse with nameless entries. beerssh measured these at 15 to 17% of its
+APK. The build rule is ours, so wiring it in was this tree's call, and
+it is wired: `android: android-fresh ...`.
+
+**Measured here first, 2026-11-05.** An incremental x86_64 build left no
+nameless entries. That build followed 9b9bbef, so the library had grown
+by 2,368 bytes. The fresh build that followed came out the same size,
+28,956,923 bytes. So nothing here showed the padding. A growth that small
+probably fits Gradle's slack, and a larger one might not.
+
+It is wired anyway, because it costs one APK write and does a second
+job: the rule copies whichever `.apk` `find` meets first under Gradle's
+outputs, and with the old outputs gone, that can only be this build's.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
