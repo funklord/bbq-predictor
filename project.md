@@ -3175,13 +3175,17 @@ Text first, then the stripped file:
     serve daemon   18,161 ->  18,049 text
     Android .so   847,874 -> 844,102 text   868,872 -> 865,008 stripped  -0.4%
 
-**Android gains little, and the reason is known.** The flag reached the
-link (`-Wl,--gc-sections` on the `-shared` line), and Qt's mkspec sets
-none of these itself. But a shared library exports every symbol not
-marked otherwise, 901 here, and an exported symbol is a root the linker
-must keep. Collecting more would mean hiding symbols
-(`-fvisibility=hidden`). That is a separate change, and its risk is
-exactly what this rule warns about: Qt's loader finds `main()` by name.
+**Android gains little here, and why is not established.** The flag
+reached the link (`-Wl,--gc-sections` on the `-shared` line), and Qt's
+mkspec sets none of these itself. A shared library exports every symbol
+not marked otherwise, 901 here, and an exported symbol is a root the
+linker must keep -- which may explain the small figure, and was not
+tested. hydra's `.so` lost 8.4% to the same flags the same day, more
+than its desktop build did (claude-guidelines b68278a), so the export
+argument does not predict a Qt app's figure. Testing it would mean
+hiding symbols (`-fvisibility=hidden`), and its risk is exactly what
+this rule warns about: Qt's loader finds `main()` by name. Not worth it
+for at most a few per cent of an 865 kB library.
 
 **Not because the NDK already collects.** claude-guidelines e6dd136
 says Qt's Android mkspec and the NDK toolchain collect by default. On
@@ -3190,7 +3194,7 @@ this kit they do not. The baseline link line carried no
 both in `QMAKE_CFLAGS_SPLIT_SECTIONS` and `QMAKE_LFLAGS_GCSECTIONS`,
 which apply only on request. NDK 27.2's clang, asked to compile a
 two-function file for `aarch64-linux-android26`, put both in one
-`.text`. The small gain is the exported symbols.
+`.text`.
 
 **Run against the collected binaries:** `make check` with fresh
 `BUILD_DIR` and `TEST_BUILD_DIR`, 22 binaries, none failed. A collected
