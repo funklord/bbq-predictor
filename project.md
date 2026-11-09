@@ -1962,6 +1962,46 @@ one to five minutes, and compares the line's height under the same
 instants. The worst difference is 0.41 px, against 2.19 px with knots
 at the column index.
 
+### 3.11.7 Following the default is a choice the file keeps
+
+The interpolation, the rounding and the scale's steadiness (sec 3.14)
+were stored as bare values the moment somebody touched a control, and
+nothing could remove one. Akima was chosen over monotone by looking
+(sec 3.11.5), and a later look may choose again; whoever had once
+clicked through the drop-down would never get the new answer, and
+neither would whoever had picked akima knowingly be told apart from
+someone who had merely passed it. The holder's rule of 2026-11-06,
+*a config file records choices, not values*, and a finding relayed
+from claude-guidelines the same week named the gap.
+
+**Each now has a Default of its own**, which is stored as the key's
+absence: `Default (akima)` and `Default (30 min)` head the two
+drop-downs, `Default (Steady)` heads the steadiness drop-down where a
+slider would abort (sec 11.6), and the desktop slider has a Default
+button beside it, enabled only while the value is chosen -- the reset
+arrow Qt Designer's property editor puts beside a changed property,
+followed because a slider has no position that means "whatever the
+build says". Picking a value by name pins it, **even the default's own
+value**: that person chose akima, and keeps it if the default moves.
+The widget's picture and the window read the same three through
+`bbq_settings`, so both follow or both pin.
+
+**`--interp` and `--smooth` stopped writing the file.** They are "for a
+shot" (`src/main.cpp`), but they set the drop-down, whose change signal
+saved the pick, so a screenshot run left a pin behind. They now set the
+box with its signals blocked. Found while reading for the first fault:
+the same shape, a value written by a path that never asked anybody.
+
+`test_window`'s `a_graph_setting_follows_the_default_until_somebody_chooses`
+asserts what an untouched window writes, which must be nothing; that
+the command line writes nothing; that akima picked by name survives a
+new window as a pin; and that Default and the slider's button remove
+the key. Removing the `remove()` in the setter, and the signal blocker
+in `set_interpolation`, each turned it red.
+
+Theme and layout already had `Auto`, which is this shape: the stored
+word `auto` says "follow", where these three say it by absence.
+
 ### 3.12 The readout snaps to samples
 
 Hovering the graph shows a readout: the time, the values, and which

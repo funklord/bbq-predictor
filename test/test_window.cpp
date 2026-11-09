@@ -2,6 +2,9 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QToolButton>
+#include <QSlider>
+#include <QSettings>
 #include <QDir>
 #include <QLineEdit>
 #include <QLayout>
@@ -80,6 +83,7 @@ private slots:
 	void a_widget_render_halos_in_the_ground_it_lands_on();
 	void a_following_window_is_still_following_after_a_render();
 	void the_server_default_tries_a_local_host_before_a_remote_one();
+	void a_graph_setting_follows_the_default_until_somebody_chooses();
 	void the_tooltip_lists_every_window_the_count_promises();
 	void refreshing_the_status_actually_hands_the_label_that_list();
 	void a_window_that_dips_says_so_and_a_steady_one_does_not();
@@ -1682,6 +1686,96 @@ void test_window::the_server_default_tries_a_local_host_before_a_remote_one() {
 	 */
 	bbq_settings::set_server_hosts(QStringList());
 	QCOMPARE(bbq_settings::server_hosts(), fresh);
+}
+
+/*
+ * A SETTING FOLLOWS THE BUILD UNTIL SOMEBODY CHOOSES (sec 3.11.7).
+ *
+ * Interpolation, rounding and scale steadiness each have a "Default"
+ * that is stored as the key's absence, so a later build's better
+ * default reaches whoever never picked one. Tested by what an untouched
+ * window WRITES, which must be nothing: a round trip of values passes
+ * with the store doing nothing at all. Then by a pin equal to today's
+ * default, which must survive as a pin, and by Default removing it.
+ */
+void test_window::a_graph_setting_follows_the_default_until_somebody_chooses() {
+	bbq_settings::set_interpolation(std::nullopt);
+	bbq_settings::set_smoothing(std::nullopt);
+	bbq_settings::set_scale_steadiness(std::nullopt);
+
+	const QStringList keys{QStringLiteral("graph/interpolation"),
+	                       QStringLiteral("graph/rounding_seconds"),
+	                       QStringLiteral("graph/scale_steadiness")};
+	const auto written = [&keys]() {
+		QSettings file(bbq_settings::location(), QSettings::IniFormat);
+		QStringList present;
+		for (const QString &key : keys) {
+			if (file.contains(key)) {
+				present << key;
+			}
+		}
+		return present;
+	};
+
+	{
+		bbq_main_window window;
+		QCOMPARE(window.m_graph->interpolation(), bbq_default_interpolation);
+		QCOMPARE(window.m_graph->smoothing(), bbq_default_smoothing_s);
+		QCOMPARE(window.m_graph->scale_steadiness(), bbq_default_scale_steadiness);
+		QCOMPARE(window.m_method_box->currentIndex(), 0);
+		QCOMPARE(window.m_smoothing_box->currentIndex(), 0);
+		QCOMPARE(written(), QStringList());
+
+		/* The command line is for one run, not a choice to keep. */
+		window.set_interpolation(bbq_interpolation::linear);
+		window.set_smoothing(3600);
+		QCOMPARE(window.m_graph->interpolation(), bbq_interpolation::linear);
+		QCOMPARE(written(), QStringList());
+
+		/* Picking the default's own value by name is a pin. */
+		const int by_name = window.m_method_box->findData(
+		        static_cast<int>(bbq_default_interpolation));
+		QVERIFY(by_name > 0);
+		window.m_method_box->setCurrentIndex(by_name);
+		QCOMPARE(bbq_settings::interpolation(),
+		         std::optional<int>(static_cast<int>(bbq_default_interpolation)));
+	}
+
+	{
+		/* The pin held, and shows as the value rather than as Default. */
+		bbq_main_window window;
+		QVERIFY(window.m_method_box->currentIndex() > 0);
+
+		window.m_method_box->setCurrentIndex(0);
+		QCOMPARE(bbq_settings::interpolation(), std::optional<int>());
+
+		window.m_smoothing_box->setCurrentIndex(
+		        window.m_smoothing_box->findData(0));
+		QCOMPARE(bbq_settings::smoothing(), std::optional<int>(0));
+		QCOMPARE(window.m_graph->smoothing(), 0);
+		window.m_smoothing_box->setCurrentIndex(0);
+		QCOMPARE(bbq_settings::smoothing(), std::optional<int>());
+		QCOMPARE(window.m_graph->smoothing(), bbq_default_smoothing_s);
+
+		/* The slider's Default button; absent only where a slider aborts. */
+		QToolButton *follow = window.m_steadiness_default;
+		QVERIFY(follow);
+		QSlider *slider = follow->parentWidget()->findChild<QSlider *>();
+		QVERIFY(slider);
+		QVERIFY(!follow->isEnabled());
+
+		slider->setValue(30);
+		QCOMPARE(bbq_settings::scale_steadiness(), std::optional<int>(30));
+		QVERIFY(follow->isEnabled());
+
+		follow->click();
+		QCOMPARE(bbq_settings::scale_steadiness(), std::optional<int>());
+		QCOMPARE(window.m_graph->scale_steadiness(), bbq_default_scale_steadiness);
+		QCOMPARE(slider->value(), bbq_default_scale_steadiness);
+		QVERIFY(!follow->isEnabled());
+	}
+
+	QCOMPARE(written(), QStringList());
 }
 
 /*

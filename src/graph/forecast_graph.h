@@ -202,6 +202,7 @@ QString bbq_readout_time_label(qint64 first_utc, qint64 last_utc,
  */
 inline constexpr bbq_interpolation bbq_default_interpolation = bbq_interpolation::akima;
 inline constexpr int bbq_default_smoothing_s = 30 * 60;
+inline constexpr int bbq_default_scale_steadiness = 60;
 
 /*
  * What the graph draws in each column of a view, as values rather than
@@ -546,7 +547,7 @@ private:
 	 * point: a scale recomputed from scratch every frame is a scale that
 	 * moves every frame.
 	 */
-	int m_scale_steadiness = 60;
+	int m_scale_steadiness = bbq_default_scale_steadiness;
 	double m_scale_low = 0.0;
 	double m_scale_high = 0.0;
 	bool m_scale_held = false;

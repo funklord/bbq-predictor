@@ -214,6 +214,9 @@ private:
 	QString m_history_path;
 	QCheckBox *m_wind_box = nullptr;
 
+	/* Beside the steadiness slider: follow the built-in value again. */
+	class QToolButton *m_steadiness_default = nullptr;
+
 	/* Rebuilt whenever discovery finds something or a pin changes. */
 	void refresh_station_list();
 	bbq_locator *m_locator = nullptr;

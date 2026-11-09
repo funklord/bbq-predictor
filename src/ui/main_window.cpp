@@ -15,7 +15,9 @@
 #include <QDateTime>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QSignalBlocker>
 #include <QSlider>
+#include <QToolButton>
 #include <QGridLayout>
 #include <QResizeEvent>
 #include <QHBoxLayout>
@@ -62,6 +64,17 @@ bool bbq_slider_aborts_here() {
 #endif
 }
 
+/* "30 min", "1 h": what the rounding drop-down calls a duration. */
+QString bbq_smoothing_name(int seconds) {
+	if (seconds <= 0) {
+		return QObject::tr("off");
+	}
+	if (seconds % 3600 == 0) {
+		return QObject::tr("%1 h").arg(seconds / 3600);
+	}
+	return QObject::tr("%1 min").arg(seconds / 60);
+}
+
 } // namespace
 
 bbq_main_window::bbq_main_window(QWidget *parent)
@@ -77,10 +90,11 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * Remembered presentation, applied before the controls read the
 	 * graph so both start from the same answer (sec 2.6.6).
 	 */
-	const int fallback_method = static_cast<int>(m_graph->interpolation());
-	const int stored_method = bbq_settings::interpolation(fallback_method);
-	m_graph->set_interpolation(static_cast<bbq_interpolation>(stored_method));
-	m_graph->set_smoothing(bbq_settings::smoothing(m_graph->smoothing()));
+	const std::optional<int> chosen_method = bbq_settings::interpolation();
+	const std::optional<int> chosen_smoothing = bbq_settings::smoothing();
+	m_graph->set_interpolation(static_cast<bbq_interpolation>(
+	        chosen_method.value_or(static_cast<int>(bbq_default_interpolation))));
+	m_graph->set_smoothing(chosen_smoothing.value_or(bbq_default_smoothing_s));
 	m_feed = new bbq_wu_feed(this);
 
 	/*
@@ -117,17 +131,31 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		bbq_interpolation::catmull,
 	};
 
+	/*
+	 * "Default (akima)" first, and it is a choice of its own (sec
+	 * 3.11.1): following the build, so a better default in a later one
+	 * reaches this person, where picking "akima" by name keeps akima.
+	 * The shape is the one KDE's and Firefox's settings use for a value
+	 * the program may change its mind about.
+	 */
+	method->addItem(tr("Default (%1)").arg(QString::fromLatin1(
+	                        bbq_interpolation_name(bbq_default_interpolation))),
+	                QVariant());
 	for (bbq_interpolation candidate : methods) {
 		method->addItem(QString::fromLatin1(bbq_interpolation_name(candidate)),
 		                static_cast<int>(candidate));
-		if (candidate == m_graph->interpolation()) {
-			method->setCurrentIndex(method->count() - 1);
-		}
+	}
+	if (chosen_method) {
+		const int index = method->findData(*chosen_method);
+		method->setCurrentIndex(index >= 0 ? index : 0);
 	}
 
 	connect(method, &QComboBox::currentIndexChanged, this, [this, method](int) {
-		const int value = method->currentData().toInt();
-		m_graph->set_interpolation(static_cast<bbq_interpolation>(value));
+		const QVariant data = method->currentData();
+		const std::optional<int> value =
+		        data.isValid() ? std::optional<int>(data.toInt()) : std::nullopt;
+		m_graph->set_interpolation(static_cast<bbq_interpolation>(
+		        value.value_or(static_cast<int>(bbq_default_interpolation))));
 		bbq_settings::set_interpolation(value);
 	});
 
@@ -138,6 +166,9 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 */
 	m_smoothing_box = new QComboBox(this);
 	QComboBox *smoothing = m_smoothing_box;
+	smoothing->addItem(tr("Default (%1)").arg(
+	                           bbq_smoothing_name(bbq_default_smoothing_s)),
+	                   QVariant());
 	smoothing->addItem(tr("Off"), 0);
 	smoothing->addItem(tr("15 min"), 15 * 60);
 	smoothing->addItem(tr("30 min"), 30 * 60);
@@ -152,15 +183,17 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * thing over a picture doing another -- and defaulting the graph to
 	 * anything but the first entry would have made it three.
 	 */
-	const int initial = smoothing->findData(m_graph->smoothing());
-	if (initial >= 0) {
-		smoothing->setCurrentIndex(initial);
+	if (chosen_smoothing) {
+		const int initial = smoothing->findData(*chosen_smoothing);
+		smoothing->setCurrentIndex(initial >= 0 ? initial : 0);
 	}
 
 	connect(smoothing, &QComboBox::currentIndexChanged, this,
 	        [this, smoothing](int) {
-		const int seconds = smoothing->currentData().toInt();
-		m_graph->set_smoothing(seconds);
+		const QVariant data = smoothing->currentData();
+		const std::optional<int> seconds =
+		        data.isValid() ? std::optional<int>(data.toInt()) : std::nullopt;
+		m_graph->set_smoothing(seconds.value_or(bbq_default_smoothing_s));
 		bbq_settings::set_smoothing(seconds);
 	});
 
@@ -331,9 +364,13 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	 * the same number either way; only the way of choosing it differs.
 	 */
 	QWidget *steadiness = nullptr;
+	QWidget *steadiness_item = nullptr;
+	const std::optional<int> chosen_steadiness = bbq_settings::scale_steadiness();
+	m_graph->set_scale_steadiness(chosen_steadiness.value_or(bbq_default_scale_steadiness));
 
 	if (bbq_slider_aborts_here()) {
 		QComboBox *steadiness_box = new QComboBox(this);
+		steadiness_box->addItem(tr("Default (Steady)"), QVariant());
 		steadiness_box->addItem(tr("Off"), 0);
 		steadiness_box->addItem(tr("Slight"), 25);
 		steadiness_box->addItem(tr("Steady"), 60);
@@ -343,44 +380,75 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 		 * Nearest rather than exact, because the stored value may have come
 		 * from a desktop slider that can express anything in between, and a
 		 * phone that silently reset it to Off would be worse than one that
-		 * rounds.
+		 * rounds. Only a chosen value is matched; following stays on
+		 * Default.
 		 */
-		const int stored = bbq_settings::scale_steadiness(m_graph->scale_steadiness());
-		int nearest = 0;
-		for (int i = 0; i < steadiness_box->count(); ++i) {
-			const int candidate = steadiness_box->itemData(i).toInt();
-			const int best = steadiness_box->itemData(nearest).toInt();
-			if (qAbs(candidate - stored) < qAbs(best - stored)) {
-				nearest = i;
+		if (chosen_steadiness) {
+			int nearest = 1;
+			for (int i = 1; i < steadiness_box->count(); ++i) {
+				const int candidate = steadiness_box->itemData(i).toInt();
+				const int best = steadiness_box->itemData(nearest).toInt();
+				if (qAbs(candidate - *chosen_steadiness) < qAbs(best - *chosen_steadiness)) {
+					nearest = i;
+				}
 			}
+			steadiness_box->setCurrentIndex(nearest);
 		}
-
-		steadiness_box->setCurrentIndex(nearest);
-		m_graph->set_scale_steadiness(steadiness_box->currentData().toInt());
 
 		connect(steadiness_box, &QComboBox::currentIndexChanged, this,
 		        [this, steadiness_box](int) {
-			const int value = steadiness_box->currentData().toInt();
+			const QVariant data = steadiness_box->currentData();
+			const std::optional<int> value =
+			        data.isValid() ? std::optional<int>(data.toInt()) : std::nullopt;
 			bbq_settings::set_scale_steadiness(value);
-			m_graph->set_scale_steadiness(value);
+			m_graph->set_scale_steadiness(value.value_or(bbq_default_scale_steadiness));
 		});
 
 		steadiness = steadiness_box;
+		steadiness_item = steadiness_box;
 	} else {
 		QSlider *steadiness_slider = new QSlider(Qt::Horizontal, this);
 		steadiness_slider->setRange(0, 100);
 		steadiness_slider->setMinimumWidth(80);
 		steadiness_slider->setMaximumWidth(160);
-		steadiness_slider->setValue(
-		        bbq_settings::scale_steadiness(m_graph->scale_steadiness()));
-		m_graph->set_scale_steadiness(steadiness_slider->value());
+		steadiness_slider->setValue(m_graph->scale_steadiness());
 
-		connect(steadiness_slider, &QSlider::valueChanged, this, [this](int value) {
+		/*
+		 * A slider has no room for a "Default" position, so following the
+		 * build is a button beside it, enabled only while the value is
+		 * chosen -- the reset arrow Qt Designer's property editor has put
+		 * beside every changed property since Qt 4 (sec 3.11.7). Moving
+		 * the slider chooses, even back onto the default's own value.
+		 */
+		QToolButton *follow = new QToolButton(this);
+		follow->setText(tr("Default"));
+		follow->setToolTip(tr("Follow the built-in steadiness (%1%)")
+		                           .arg(bbq_default_scale_steadiness));
+		follow->setEnabled(chosen_steadiness.has_value());
+		m_steadiness_default = follow;
+
+		connect(steadiness_slider, &QSlider::valueChanged, this, [this, follow](int value) {
 			bbq_settings::set_scale_steadiness(value);
 			m_graph->set_scale_steadiness(value);
+			follow->setEnabled(true);
 		});
 
+		connect(follow, &QToolButton::clicked, this, [this, follow, steadiness_slider]() {
+			bbq_settings::set_scale_steadiness(std::nullopt);
+			const QSignalBlocker quiet(steadiness_slider);
+			steadiness_slider->setValue(bbq_default_scale_steadiness);
+			m_graph->set_scale_steadiness(bbq_default_scale_steadiness);
+			follow->setEnabled(false);
+		});
+
+		QWidget *row = new QWidget(this);
+		QHBoxLayout *row_layout = new QHBoxLayout(row);
+		row_layout->setContentsMargins(0, 0, 0, 0);
+		row_layout->addWidget(steadiness_slider);
+		row_layout->addWidget(follow);
+
 		steadiness = steadiness_slider;
+		steadiness_item = row;
 	}
 
 	/*
@@ -434,7 +502,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	                << label_for(tr("Interpolation:"), method) << method
 	                << label_for(tr("Rounding:"), smoothing) << smoothing
 	                << windows << marks << m_wind_box
-	                << label_for(tr("Steady scale:"), steadiness) << steadiness
+	                << label_for(tr("Steady scale:"), steadiness) << steadiness_item
 	                << label_for(tr("Layout:"), m_layout_box) << m_layout_box
 	                << label_for(tr("Theme:"), m_theme_box) << m_theme_box;
 
@@ -1060,6 +1128,8 @@ QString bbq_main_window::verdict() const {
 void bbq_main_window::set_interpolation(bbq_interpolation method) {
 	m_graph->set_interpolation(method);
 
+	/* For this run only: a pick here is not the person's choice. */
+	const QSignalBlocker quiet(m_method_box);
 	const int index = m_method_box->findData(static_cast<int>(method));
 	if (index >= 0) {
 		m_method_box->setCurrentIndex(index);
@@ -1069,6 +1139,8 @@ void bbq_main_window::set_interpolation(bbq_interpolation method) {
 void bbq_main_window::set_smoothing(int seconds) {
 	m_graph->set_smoothing(seconds);
 
+	/* For this run only: a pick here is not the person's choice. */
+	const QSignalBlocker quiet(m_smoothing_box);
 	const int index = m_smoothing_box->findData(seconds);
 	if (index >= 0) {
 		m_smoothing_box->setCurrentIndex(index);

@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <optional>
+
 /*
  * What the applet remembers between runs (project.md sec 2.6.6).
  *
@@ -79,24 +81,32 @@ public:
 	static QStringList server_hosts();
 	static void set_server_hosts(const QStringList &hosts);
 
-	/* Presentation, remembered because it is tuned by looking. */
-	static int interpolation(int fallback);
-	static void set_interpolation(int method);
+	/*
+	 * Presentation, remembered because it is tuned by looking.
+	 *
+	 * Each is a CHOICE or nothing (sec 3.11.7): nullopt means the person
+	 * follows the built-in default, which is stored as the key's absence
+	 * and read back as nullopt, so a later build's better default reaches
+	 * them. A value is a pin, kept whatever the default becomes -- even
+	 * one equal to today's default, because choosing it was deliberate.
+	 */
+	static std::optional<int> interpolation();
+	static void set_interpolation(std::optional<int> method);
 
-	static int smoothing(int fallback);
-	static void set_smoothing(int seconds);
+	static std::optional<int> smoothing();
+	static void set_smoothing(std::optional<int> seconds);
+
+	static std::optional<int> scale_steadiness();
+	static void set_scale_steadiness(std::optional<int> percent);
+
+	static QString theme();
+	static void set_theme(const QString &preference);
 
 	/*
 	 * "auto", "desktop" or "mobile" (sec 10.1). Auto means the device
 	 * decides, which is right until somebody disagrees with it -- a
 	 * tablet in a keyboard case, a phone on a monitor.
 	 */
-	static int scale_steadiness(int fallback);
-	static void set_scale_steadiness(int percent);
-
-	static QString theme();
-	static void set_theme(const QString &preference);
-
 	static QString layout();
 	static void set_layout(const QString &preference);
 

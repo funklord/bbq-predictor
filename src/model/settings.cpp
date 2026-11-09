@@ -94,28 +94,51 @@ QByteArray bbq_settings::server_public_key() {
 	return bbq_server_built_in_key();
 }
 
-int bbq_settings::interpolation(int fallback) {
-	return open().value(QString::fromLatin1(key_interpolation), fallback).toInt();
+namespace {
+
+std::optional<int> chosen(const char *key) {
+	const QVariant stored = open().value(QString::fromLatin1(key));
+	bool number = false;
+	const int value = stored.toInt(&number);
+	if (!stored.isValid() || !number) {
+		return std::nullopt;
+	}
+	return value;
 }
 
-void bbq_settings::set_interpolation(int method) {
-	open().setValue(QString::fromLatin1(key_interpolation), method);
+/* Following the default removes the key; it never writes today's value. */
+void choose(const char *key, std::optional<int> value) {
+	if (!value) {
+		open().remove(QString::fromLatin1(key));
+		return;
+	}
+	open().setValue(QString::fromLatin1(key), *value);
 }
 
-int bbq_settings::smoothing(int fallback) {
-	return open().value(QString::fromLatin1(key_smoothing), fallback).toInt();
+} // namespace
+
+std::optional<int> bbq_settings::interpolation() {
+	return chosen(key_interpolation);
 }
 
-void bbq_settings::set_smoothing(int seconds) {
-	open().setValue(QString::fromLatin1(key_smoothing), seconds);
+void bbq_settings::set_interpolation(std::optional<int> method) {
+	choose(key_interpolation, method);
 }
 
-int bbq_settings::scale_steadiness(int fallback) {
-	return open().value(QString::fromLatin1(key_steadiness), fallback).toInt();
+std::optional<int> bbq_settings::smoothing() {
+	return chosen(key_smoothing);
 }
 
-void bbq_settings::set_scale_steadiness(int percent) {
-	open().setValue(QString::fromLatin1(key_steadiness), percent);
+void bbq_settings::set_smoothing(std::optional<int> seconds) {
+	choose(key_smoothing, seconds);
+}
+
+std::optional<int> bbq_settings::scale_steadiness() {
+	return chosen(key_steadiness);
+}
+
+void bbq_settings::set_scale_steadiness(std::optional<int> percent) {
+	choose(key_steadiness, percent);
 }
 
 QStringList bbq_settings::server_hosts() {

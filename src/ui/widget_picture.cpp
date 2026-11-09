@@ -606,10 +606,10 @@ void bbq_write_widget_picture_from(const bbq_composite &composite,
 	bbq_forecast_graph graph;
 
 	graph.set_interpolation(static_cast<bbq_interpolation>(
-	        bbq_settings::interpolation(static_cast<int>(graph.interpolation()))));
-	graph.set_smoothing(bbq_settings::smoothing(graph.smoothing()));
+	        bbq_settings::interpolation().value_or(static_cast<int>(graph.interpolation()))));
+	graph.set_smoothing(bbq_settings::smoothing().value_or(graph.smoothing()));
 	graph.set_scale_steadiness(
-	        bbq_settings::scale_steadiness(graph.scale_steadiness()));
+	        bbq_settings::scale_steadiness().value_or(graph.scale_steadiness()));
 
 	/*
 	 * The application's palette as well as the graph's, as the window
