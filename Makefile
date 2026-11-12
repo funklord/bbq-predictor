@@ -555,8 +555,16 @@ test: tests-build $(APPLET_ARTIFACT) $(PUBLISH_ARTIFACT)
 	echo "test: $$ran binary(ies), $$failed failed"; \
 	[ "$$failed" -eq 0 ]
 
-style: style-source style-docs style-signals style-man style-palette style-exits style-xml style-wiring \
+style: style-tool style-source style-docs style-signals style-man style-palette style-exits style-xml style-wiring \
        style-setup style-tests style-links
+
+# The style gate's own suite, run ahead of the gate's verdict. A checker
+# that has stopped inspecting anything passes exactly as loudly as one
+# that works, so its pass is worth reading only once its suite has.
+# tool/test_style_gate.py arrives beside tool/style_gate.py and was
+# carried here unrun until 2026-11-12, on the holder's word.
+style-tool:
+	python3 tool/test_style_gate.py
 
 style-source:
 	python3 tool/style_gate.py check
@@ -994,7 +1002,7 @@ distclean: veryclean
 help:
 	@sed -n '/^# TARGETS/,/^#$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
 
-.PHONY: all run test tests-build check style style-source style-docs hooks \
+.PHONY: all run test tests-build check style style-source style-tool style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
         style-wiring style-setup style-tests style-links test-clocks fuzz-serve fuzz-wire \
         fuzz-providers \
