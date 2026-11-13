@@ -1,3 +1,5 @@
+#include "bbq_version.h"
+
 #include <QApplication>
 #include <memory>
 #include <QCoreApplication>

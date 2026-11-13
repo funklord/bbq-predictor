@@ -1,3 +1,5 @@
+#include "bbq_version.h"
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>

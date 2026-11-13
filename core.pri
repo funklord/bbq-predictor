@@ -18,7 +18,19 @@
 # or any bare qmake run, still produces something that builds and can say
 # what it is.
 isEmpty(BBQ_VERSION): BBQ_VERSION = 0.0.0-nomake
-DEFINES += BBQ_VERSION_STRING=\\\"$$BBQ_VERSION\\\"
+
+# In a header qmake writes, not a DEFINES (project.md sec 5.4). A define
+# on the command line rebuilds nothing when it changes: an object depends
+# on its source and headers, not on the Makefile, so `make VERSION=9.9.9`
+# went on printing 0.1.0. A header is tracked like any other, and is
+# written only when its text changes, so an unchanged version recompiles
+# nothing when qmake reruns.
+BBQ_VERSION_HEADER = $$OUT_PWD/bbq_version.h
+BBQ_VERSION_LINE = "$${LITERAL_HASH}define BBQ_VERSION_STRING \"$$BBQ_VERSION\""
+!equals(BBQ_VERSION_LINE, $$cat($$BBQ_VERSION_HEADER, lines)) {
+	write_file($$BBQ_VERSION_HEADER, BBQ_VERSION_LINE)|error("cannot write $$BBQ_VERSION_HEADER")
+}
+INCLUDEPATH += $$OUT_PWD
 
 # network is here from the start rather than added later: the whole
 # program is a client for somebody else's HTTP endpoint (project.md sec 2).

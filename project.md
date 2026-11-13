@@ -3246,6 +3246,34 @@ station silent).
 flags can break. The Java side declares no native methods. The C++ calls
 into Java, not the reverse. `main()` stays exported.
 
+### 5.4 A new version reaches the binary
+
+**`make VERSION=9.9.9` went on printing 0.1.0**, measured 2026-11-13 in
+an existing build directory. That was two faults in a row. The qmake
+rule depended only on the `.pro`, so qmake did not rerun when the
+values handed to it changed. And had it rerun, the version was a
+`DEFINES`: an object depends on its source and headers, not on the
+Makefile, so `main.o` would have kept the old string. A version bump
+after a build would ship with the old `--version`. The
+makefile-hazards rule on a dropped qmake define named the shape the
+same day.
+
+**Both halves are fixed.** `$(BUILD_DIR)/qmake.args` and the
+publisher's copy hold what qmake was given. Each is rewritten only when
+its text differs, and qmake's Makefile depends on it (raidcfgd's
+`PATH_STAMP` is the shape). `core.pri` writes the version into
+`bbq_version.h` in qmake's output directory, again only when the text
+differs, and the two `main.cpp` include it. Header tracking then
+recompiles exactly those two objects. The Android rule reruns qmake on
+every build already, since `android-check` is phony, so it gets the
+header without a stamp.
+
+**Measured after it.** A second `make` wrote no file. `VERSION=9.9.9`
+recompiled the two `main.o` and nothing else, and the applet and the
+publisher both said 9.9.9. A plain `make` afterwards brought back
+0.1.0. With the stamp dropped from the Makefile's prerequisites,
+`VERSION=7.7.7` printed 0.1.0 again.
+
 ## 6. Style
 
 Three rules -- `snake_case`, tabs to indent and spaces to align,

@@ -277,10 +277,28 @@ submodules:
 		exit 1; \
 	}
 
-$(BUILD_DIR)/Makefile: bbq-predictor.pro | submodules
+# What a qmake run was given, kept so a change reruns it (project.md sec
+# 5.4). The values reach the Makefile qmake writes and the version header,
+# and neither moved when only they changed: `make VERSION=9.9.9` printed
+# 0.1.0. The stamp is rewritten only when its text differs, so a build
+# with nothing changed reruns nothing.
+define bbq_qmake_stamp
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(1)' > $@.new
+	@if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+endef
+
+QMAKE_ARGS = $(QMAKE_CONFIG) QMAKE_CXX=$(CXX) BBQ_VERSION=$(VERSION)
+
+$(BUILD_DIR)/qmake.args: FORCE
+	$(call bbq_qmake_stamp,$(QMAKE) $(QMAKE_ARGS))
+
+$(PUBLISH_BUILD_DIR)/qmake.args: FORCE
+	$(call bbq_qmake_stamp,$(QMAKE) $(QMAKE_ARGS))
+
+$(BUILD_DIR)/Makefile: bbq-predictor.pro core.pri $(BUILD_DIR)/qmake.args | submodules
 	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor.pro $(QMAKE_CONFIG) \
-	        QMAKE_CXX=$(CXX) BBQ_VERSION=$(VERSION)
+	cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor.pro $(QMAKE_ARGS)
 
 # The sources and headers are prerequisites so that adding a file rebuilds
 # through qmake's Makefile rather than being missed. qmake's own generated
@@ -308,10 +326,10 @@ $(TARGET): $(BUILD_DIR)/$(TARGET)
 	cp $(BUILD_DIR)/$(TARGET) $(TARGET).new
 	mv -f $(TARGET).new $(TARGET)
 
-$(PUBLISH_BUILD_DIR)/Makefile: bbq-predictor-publish.pro core.pri | submodules
+$(PUBLISH_BUILD_DIR)/Makefile: bbq-predictor-publish.pro core.pri $(PUBLISH_BUILD_DIR)/qmake.args | submodules
 	mkdir -p $(PUBLISH_BUILD_DIR)
 	cd $(PUBLISH_BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor-publish.pro \
-	        $(QMAKE_CONFIG) QMAKE_CXX=$(CXX) BBQ_VERSION=$(VERSION)
+	        $(QMAKE_ARGS)
 
 $(PUBLISH_BUILD_DIR)/$(PUBLISH_TARGET): $(PUBLISH_BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
 	$(MAKE) -C $(PUBLISH_BUILD_DIR)
@@ -1007,6 +1025,8 @@ distclean: veryclean
 
 help:
 	@sed -n '/^# TARGETS/,/^#$$/p' $(firstword $(MAKEFILE_LIST)) | sed 's/^# \{0,1\}//'
+
+FORCE:
 
 .PHONY: all run test tests-build check style style-source style-tool style-docs hooks \
         style-signals style-man style-palette style-exits style-xml \
