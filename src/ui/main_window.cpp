@@ -23,6 +23,9 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QInputDialog>
+#include <QListWidget>
+#include <QDialogButtonBox>
+#include <QDialog>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QStringList>
@@ -278,6 +281,24 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	});
 
 	/*
+	 * Other stations' pins (sec 12.18.2). The Pin box answers for the
+	 * watched station only, so a second station was pinned by watching
+	 * it, pinning, and switching back -- or by editing the store, which
+	 * is how the second one here was pinned. A checkable list applied on
+	 * OK, as Thunderbird's folder Subscribe dialog and KDE's toolbar
+	 * editor do: a flag per item in a list, which a touch screen can
+	 * reach where a context menu on a drop-down item cannot.
+	 */
+	m_pins_button = new QPushButton(tr("Pin others..."), this);
+	m_pins_button->setToolTip(tr("Choose which known stations keep their "
+	                             "history fetched"));
+	connect(m_pins_button, &QPushButton::clicked, this, [this]() {
+		QDialog *dialog = make_pin_dialog();
+		dialog->setAttribute(Qt::WA_DeleteOnClose);
+		dialog->open();
+	});
+
+	/*
 	 * Somewhere else. Discovery can only look around a coordinate it
 	 * has, so reaching another town means naming it first.
 	 */
@@ -498,7 +519,7 @@ bbq_main_window::bbq_main_window(QWidget *parent)
 	};
 
 	m_control_items << label_for(tr("Station:"), m_station_box) << m_station_box
-	                << m_pin_box << m_find_button
+	                << m_pin_box << m_pins_button << m_find_button
 	                << label_for(tr("Interpolation:"), method) << method
 	                << label_for(tr("Rounding:"), smoothing) << smoothing
 	                << windows << marks << m_wind_box
@@ -1820,6 +1841,61 @@ void bbq_main_window::watch_station(const QString &id) {
 
 	m_feed->refresh();
 	refresh_station_list();
+}
+
+QDialog *bbq_main_window::make_pin_dialog() {
+	QDialog *dialog = new QDialog(this);
+	dialog->setWindowTitle(tr("Pinned stations"));
+
+	QLabel *about = new QLabel(
+	        tr("A pinned station keeps its history fetched, so its "
+	           "forecasts are scored while another is watched. Each pin "
+	           "costs requests."),
+	        dialog);
+	about->setWordWrap(true);
+
+	QListWidget *list = new QListWidget(dialog);
+	list->setAccessibleName(tr("Stations"));
+	for (const bbq_station &one : m_feed->stations()) {
+		QString label = one.id;
+		if (one.distance_km >= 0.0) {
+			label += QStringLiteral("  ");
+			label += bbq_describe_distance(one.distance_km);
+		}
+		QListWidgetItem *item = new QListWidgetItem(label, list);
+		item->setData(Qt::UserRole, one.id);
+		item->setData(Qt::UserRole + 1, one.pinned);
+		item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+		item->setCheckState(one.pinned ? Qt::Checked : Qt::Unchecked);
+	}
+
+	QDialogButtonBox *buttons = new QDialogButtonBox(
+	        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+	connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+	connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+
+	/* Only what changed is written: an untouched OK touches nothing. */
+	connect(dialog, &QDialog::accepted, this, [this, list]() {
+		bool changed = false;
+		for (int i = 0; i < list->count(); ++i) {
+			const QListWidgetItem *item = list->item(i);
+			const bool want = item->checkState() == Qt::Checked;
+			if (want != item->data(Qt::UserRole + 1).toBool()) {
+				m_feed->history().set_station_pinned(
+				        item->data(Qt::UserRole).toString(), want);
+				changed = true;
+			}
+		}
+		if (changed) {
+			refresh_station_list();
+		}
+	});
+
+	QVBoxLayout *layout = new QVBoxLayout(dialog);
+	layout->addWidget(about);
+	layout->addWidget(list, 1);
+	layout->addWidget(buttons);
+	return dialog;
 }
 
 void bbq_main_window::refresh_station_list() {

@@ -3554,11 +3554,9 @@ anything.
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
-- **Whether the Pin control should offer a per-station pin**
-  (sec 12.18.1). It applies to the watched station, so pinning a second
-  one means watching it, pinning, and switching back -- which works and
-  is clumsy enough that the second station was pinned by editing the
-  store instead
+- ~~**Whether the Pin control should offer a per-station pin**
+  (sec 12.18.1).~~ It does, since sec 12.18.2: "Pin others..." opens a
+  checkable list of the known stations
 - ~~**CI, which is free for this repository and unused.**~~ Running
   since sec 16.69: `.github/workflows/ci.yml` runs the gates and the
   offline suite on every push, and its first run found a defect (sec
@@ -5508,6 +5506,28 @@ Pin control applies to the WATCHED station, so pinning a second one
 through the interface means watching it, pinning, and switching back.
 That works and is clumsy; whether the control should offer a per-station
 pin is an open question rather than a defect.
+
+#### 12.18.2 Other stations are pinned from a list
+
+**"Pin others..." beside the Pin box** opens the known stations as a
+checkable list, and OK pins or unpins what changed. Nothing else is
+written: an OK over an untouched list leaves every pin as it was, and
+Cancel writes nothing. The Pin box still answers for the watched station
+and reflects a change made in the list. Added 2026-11-13 because the
+question sec 12.18.1 left open turned out to be a UI one. The holder's
+rule of 2026-11-06 settles those from prior art rather than by asking,
+and nothing in this record reserved it.
+
+**The shape followed is the checkable list in a dialog** that
+Thunderbird's folder Subscribe dialog and KDE's toolbar editor use for a
+flag per item. A context menu on the station drop-down's items was the
+other candidate. It was rejected because a touch screen cannot reach it,
+and this window is also the phone's.
+
+`test_window`'s `a_station_not_watched_can_be_pinned` pins a station
+that is not watched, checks that an untouched OK and a Cancel write
+nothing, and unpins the watched one from the list. Removing the refresh
+after OK left the Pin box checked and turned the test red.
 
 ### 12.19 The correction was the one claim nothing checked
 

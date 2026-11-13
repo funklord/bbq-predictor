@@ -196,6 +196,14 @@ private:
 	QComboBox *m_station_box;
 	QCheckBox *m_pin_box = nullptr;
 	QPushButton *m_find_button = nullptr;
+
+	/*
+	 * Pinning a station other than the watched one (sec 12.18.2): a
+	 * checkable list of the known stations, applied on OK. Built apart
+	 * from the button so a test can drive it without a modal loop.
+	 */
+	QPushButton *m_pins_button = nullptr;
+	class QDialog *make_pin_dialog();
 	QLabel *m_verdict;
 	QLabel *m_freshness_label;
 	bbq_forecast_graph *m_graph;

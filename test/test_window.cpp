@@ -2,6 +2,8 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QListWidget>
+#include <QDialog>
 #include <QToolButton>
 #include <QSlider>
 #include <QSettings>
@@ -15,6 +17,8 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QWheelEvent>
+
+#include <memory>
 
 #include "model/settings.h"
 #include "graph/forecast_graph.h"
@@ -93,6 +97,7 @@ private slots:
 	void changing_station_clears_the_old_curves();
 	void changing_station_clears_the_old_error();
 	void pinning_marks_the_station_in_the_store();
+	void a_station_not_watched_can_be_pinned();
 	void a_warm_band_and_a_cold_one_read_differently();
 	void the_record_line_reports_the_verdict_too();
 	void the_list_names_the_station_actually_being_read();
@@ -278,6 +283,87 @@ void test_window::pinning_marks_the_station_in_the_store() {
 	window.m_pin_box->setChecked(false);
 	QCOMPARE(static_cast<int>(window.feed()->history().pinned_stations().size()),
 	         0);
+}
+
+/*
+ * A second station's pin, without watching it (sec 12.18.2). The second
+ * station here was once pinned by editing the store, because the Pin box
+ * answers only for the watched one. The dialog writes only what changed:
+ * an OK over an untouched list must leave the watched station's pin and
+ * every other alone.
+ */
+void test_window::a_station_not_watched_can_be_pinned() {
+	QTemporaryDir directory;
+	bbq_main_window window;
+	QVERIFY(window.feed()->open_history(
+	        directory.filePath(QStringLiteral("h.sqlite"))));
+
+	bbq_station watched;
+	watched.id = QStringLiteral("ITEST1");
+	bbq_station other;
+	other.id = QStringLiteral("ITEST2");
+	QVERIFY(window.feed()->history().remember_station(watched));
+	QVERIFY(window.feed()->history().remember_station(other));
+
+	window.watch_station(watched.id);
+	window.m_pin_box->setChecked(true);
+
+	const auto pinned_ids = [&window]() {
+		QStringList ids;
+		for (const bbq_station &one : window.feed()->history().pinned_stations()) {
+			ids << one.id;
+		}
+		ids.sort();
+		return ids;
+	};
+
+	/* Untouched, OK changes nothing. */
+	{
+		std::unique_ptr<QDialog> dialog(window.make_pin_dialog());
+		dialog->accept();
+	}
+	QCOMPARE(pinned_ids(), QStringList{watched.id});
+
+	/* The other station, checked in the list, is pinned on OK. */
+	{
+		std::unique_ptr<QDialog> dialog(window.make_pin_dialog());
+		QListWidget *list = dialog->findChild<QListWidget *>();
+		QVERIFY(list);
+		QCOMPARE(list->count(), 2);
+		for (int i = 0; i < list->count(); ++i) {
+			if (list->item(i)->data(Qt::UserRole).toString() == other.id) {
+				list->item(i)->setCheckState(Qt::Checked);
+			}
+		}
+		dialog->accept();
+	}
+	QCOMPARE(pinned_ids(), (QStringList{watched.id, other.id}));
+	QCOMPARE(window.m_station_box->currentData().toString(), watched.id);
+
+	/* Cancel writes nothing. */
+	{
+		std::unique_ptr<QDialog> dialog(window.make_pin_dialog());
+		QListWidget *list = dialog->findChild<QListWidget *>();
+		for (int i = 0; i < list->count(); ++i) {
+			list->item(i)->setCheckState(Qt::Unchecked);
+		}
+		dialog->reject();
+	}
+	QCOMPARE(pinned_ids(), (QStringList{watched.id, other.id}));
+
+	/* Unpinning the watched one from the list shows in its Pin box. */
+	{
+		std::unique_ptr<QDialog> dialog(window.make_pin_dialog());
+		QListWidget *list = dialog->findChild<QListWidget *>();
+		for (int i = 0; i < list->count(); ++i) {
+			if (list->item(i)->data(Qt::UserRole).toString() == watched.id) {
+				list->item(i)->setCheckState(Qt::Unchecked);
+			}
+		}
+		dialog->accept();
+	}
+	QCOMPARE(pinned_ids(), QStringList{other.id});
+	QVERIFY(!window.m_pin_box->isChecked());
 }
 
 void test_window::a_warm_band_and_a_cold_one_read_differently() {
