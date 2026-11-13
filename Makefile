@@ -353,7 +353,12 @@ run: $(ARTIFACT)
 
 # --- Android ---------------------------------------------------------------
 # The build rule is this project's; everything around it is tool/android.mk.
-$(ANDROID_BUILD_DIR)/Makefile: android-check bbq-predictor.pro
+#
+# $(ANDROID_KIT_SOURCE) records the Qt kit this directory was built with,
+# and cleans it when the kit changes (tool/android.mk). ~/Qt/6.12.0 was
+# updated in place on 2026-11-13, and the staged QtCore here was then the
+# old kit's: 6,475,176 bytes against the kit's 6,499,728.
+$(ANDROID_BUILD_DIR)/Makefile: android-check $(ANDROID_KIT_SOURCE) bbq-predictor.pro
 	mkdir -p $(ANDROID_BUILD_DIR)
 	cd $(ANDROID_BUILD_DIR) && $(QT_ANDROID_ROOT)/bin/qmake \
 	        $(CURDIR)/bbq-predictor.pro $(QMAKE_CONFIG) \
@@ -651,7 +656,7 @@ ANDROID_COMPILE_DIR = build-android-compile-$(ANDROID_ABI)
 ANDROID_ONLY_SOURCES = $(shell grep -lE 'Q_OS_ANDROID|__ANDROID__' $(SOURCES))
 ANDROID_ONLY_OBJECTS = $(patsubst %.cpp,%.o,$(notdir $(ANDROID_ONLY_SOURCES)))
 
-$(ANDROID_COMPILE_DIR)/Makefile: bbq-predictor.pro core.pri
+$(ANDROID_COMPILE_DIR)/Makefile: bbq-predictor.pro core.pri $(ANDROID_COMPILE_DIR)/kit.source
 	mkdir -p $(ANDROID_COMPILE_DIR)
 	cd $(ANDROID_COMPILE_DIR) && $(QT_ANDROID_ROOT)/bin/qmake \
 	        $(CURDIR)/bbq-predictor.pro $(QMAKE_CONFIG) \

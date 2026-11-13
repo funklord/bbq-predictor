@@ -4659,6 +4659,49 @@ It is wired anyway, because it costs one APK write and does a second
 job: the rule copies whichever `.apk` `find` meets first under Gradle's
 outputs, and with the old outputs gone, that can only be this build's.
 
+### 11.15 A build directory records the Qt kit it was built with
+
+`~/Qt/6.12.0` was updated in place on 2026-11-13, from the July
+pre-release to the release. Neither make nor androiddeployqt notices
+that. The kit's headers keep their archives' dates, older than any
+object, and androiddeployqt keeps a staged library that is newer than
+the kit's. beerssh linked old objects against the new QtCore, and then,
+even after a clean, packaged the old QtCore and FFmpeg and crashed at
+start. Here the staged `libQt6Core_arm64-v8a.so` was 6,475,176 bytes,
+against the kit's 6,499,728.
+
+`tool/android.mk` now supplies a record of the kit, in each build
+directory's `kit.source`. When the kit differs, it runs that build's
+`make clean` and removes `android-build/libs`. Both build directories'
+qmake rules depend on their own record: the APK build on
+`$(ANDROID_KIT_SOURCE)`, and the `check-android-compile` directory on
+its `kit.source`, since its objects would otherwise still be the old
+kit's and pass without recompiling. The fragment's rule is a pattern,
+`%/kit.source`, so one rule serves both.
+
+**Measured, 2026-11-13.** The arm64 and x86_64 builds each said "not
+built with this Qt kit; cleaning its objects" and removed the staged
+libraries. Afterwards the arm64 QtCore was the kit's, at 6,499,728
+bytes, and both APKs had 4,096 bytes of dead space. The x86_64 APK started on the
+API 33 emulator and was still running 15 s later, with no fatal error in
+the log. This app ships no FFmpeg, which is what crashed beerssh. Second runs of the
+APK build and of the compile check did not clean again, and left the
+record and the objects untouched.
+
+**Do not give a record its own rule that calls `$(MAKE)` for the same
+target.** My first wiring for the compile directory was an explicit
+rule that ran a sub-make with `ANDROID_BUILD_DIR` overridden, meant to
+reach the fragment's rule. An explicit rule outranks a pattern rule, so
+the sub-make matched the same explicit rule and called itself. Nothing
+bounded the recursion, and it grew to about 16,000 `make` processes on
+the account before it was found and killed, about ten minutes in. The
+pattern rule already covered the directory, and no sub-make was needed.
+Two things would have caught it. One was to read the rule I was reaching
+for after the fragment last changed: `82b3de4` had made it a pattern
+rule an hour earlier. The other was to bound the first run with
+`ulimit -u`, set above the account's thread count, which was about
+3,200 that day.
+
 ## 12. The history is permanent, the forecasts are not
 
 Everything before this section was an applet with no memory. Each refresh
