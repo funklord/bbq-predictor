@@ -16,7 +16,7 @@ const char *const header = "bbq-bands 1";
 
 const bbq_band every_band[] = {
 	bbq_band::observed, bbq_band::current, bbq_band::nowcast_fine, bbq_band::nowcast,
-	bbq_band::extended, bbq_band::corrected, bbq_band::hourly,
+	bbq_band::extended, bbq_band::corrected, bbq_band::hourly, bbq_band::regional,
 };
 
 std::optional<bbq_band> band_named(const QString &name) {

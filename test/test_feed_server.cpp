@@ -597,7 +597,7 @@ void test_feed_server::no_key_means_no_server() {
 }
 
 /*
- * Radar and extended, unreachable through the hermetic proxy, settle
+ * Radar, extended and regional, unreachable through the hermetic proxy, settle
  * through band_quiet and never band_failed (sec 19). The display hears
  * only the second, where a permanent error for everybody outside MET's
  * coverage would be wrong; the diagnostic hears the first, without which
@@ -621,11 +621,13 @@ void test_feed_server::the_keyless_bands_settle_quietly_when_unreachable() {
 		QVERIFY2(!call.at(1).toString().isEmpty(), "a quiet band with no reason");
 	}
 	quietly.sort();
-	QCOMPARE(quietly, QStringList({QStringLiteral("extended"), QStringLiteral("radar")}));
+	QCOMPARE(quietly, QStringList({QStringLiteral("extended"), QStringLiteral("radar"),
+	                               QStringLiteral("regional")}));
 
 	for (const auto &call : failed) {
 		const QString band = call.at(0).toString();
-		QVERIFY2(band != QLatin1String("radar") && band != QLatin1String("extended"),
+		QVERIFY2(band != QLatin1String("radar") && band != QLatin1String("extended") &&
+		                 band != QLatin1String("regional"),
 		         qPrintable(band + QStringLiteral(" was announced as failed")));
 	}
 }

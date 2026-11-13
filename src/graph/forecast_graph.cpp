@@ -268,6 +268,8 @@ QColor band_colour(const bbq_graph_palette &palette, bbq_band band) {
 		return palette.band_extended;
 	case bbq_band::hourly:
 		return palette.band_hourly;
+	case bbq_band::regional:
+		return palette.band_regional;
 	case bbq_band::corrected:
 		return palette.corrected;
 	}
@@ -1010,6 +1012,8 @@ bbq_graph_palette palette_for(Qt::ColorScheme scheme) {
 	 */
 	chosen.band_extended = QColor(0x8b, 0x6b, 0xb1);
 	chosen.band_hourly = QColor(0x9a, 0x9a, 0x9a);
+	/* Teal: none of the other bands' hues, and not the curve's red. */
+	chosen.band_regional = QColor(0x1f, 0x9e, 0x89);
 
 	if (scheme != Qt::ColorScheme::Dark) {
 		return chosen;

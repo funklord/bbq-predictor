@@ -22,6 +22,8 @@ uint8_t bbq_wire_band_code(bbq_band band) {
 		return 5;
 	case bbq_band::hourly:
 		return 6;
+	case bbq_band::regional:
+		return 7;
 	case bbq_band::corrected:
 		/* This program's opinion, not a provider's report (sec 12.5). */
 		return 0;
@@ -64,7 +66,8 @@ QString bbq_wire_month_name(uint16_t month) {
 
 bool bbq_wire_band_from_code(uint8_t code, bbq_band *band) {
 	for (bbq_band candidate : {bbq_band::observed, bbq_band::current, bbq_band::nowcast_fine,
-	                           bbq_band::nowcast, bbq_band::extended, bbq_band::hourly}) {
+	                           bbq_band::nowcast, bbq_band::extended, bbq_band::hourly,
+	                           bbq_band::regional}) {
 		if (bbq_wire_band_code(candidate) == code) {
 			*band = candidate;
 			return true;

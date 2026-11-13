@@ -33,7 +33,9 @@ applets that come with GNOME and KDE:
 - **Several sources on one axis, each named.** Weather Underground
   draws its own forecast and yr.no draws MET Norway's; here a station,
   MET Norway's five-minute radar, Weather Underground's quarter-hourly
-  and hourly forecasts and Open-Meteo's sixteen days are one curve,
+  and hourly forecasts, a fine-scale model's own quarter hours where
+  one covers the place (HRRR over North America, AROME and ICON-D2
+  over central Europe) and Open-Meteo's sixteen days are one curve,
   resolved by a declared priority so that a measurement always beats a
   forecast of the same minute, and the source of every stretch is drawn
   under it.
@@ -100,6 +102,7 @@ The other two providers need no key and break no terms:
 | Current | that station's latest reading | now | -- |
 | Radar | MET Norway | 5 min | ~2 h |
 | Nowcast | Weather Underground | 15 min | 7 h |
+| Regional | Open-Meteo, from HRRR, AROME or ICON-D2 where one reaches | 15 min | ~2.5 days |
 | Extended | Open-Meteo | 60 min | 16 days |
 | Hourly | Weather Underground | 60 min | 15 days |
 

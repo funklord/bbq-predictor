@@ -319,7 +319,8 @@ int main(int argc, char *argv[]) {
 			 */
 			bool any_band = false;
 			for (bbq_band band : {bbq_band::observed, bbq_band::current, bbq_band::nowcast_fine,
-			                      bbq_band::nowcast, bbq_band::extended, bbq_band::hourly}) {
+			                      bbq_band::nowcast, bbq_band::extended, bbq_band::hourly,
+			                      bbq_band::regional}) {
 				const bbq_series *series = composite.band(band);
 				any_band = any_band || (series && !series->is_empty());
 			}

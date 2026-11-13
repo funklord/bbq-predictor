@@ -73,6 +73,18 @@ enum class bbq_band {
 	corrected,
 
 	hourly,
+
+	/*
+	 * Quarter-hourly from a native fine-scale model, where one reaches
+	 * the point (project.md sec 2.10.5): HRRR, AROME or ICON-D2, about
+	 * two and a half days. Absent everywhere else, which is most of the
+	 * world and this project's own station.
+	 *
+	 * LAST in the enum because the archive stores a band as its number
+	 * and the wire gives it a code of its own; appending keeps every
+	 * stored and published value meaning what it did.
+	 */
+	regional,
 };
 
 /*

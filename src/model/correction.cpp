@@ -30,6 +30,7 @@ bool is_forecast(bbq_band band) {
 	case bbq_band::nowcast:
 	case bbq_band::hourly:
 	case bbq_band::extended:
+	case bbq_band::regional:
 		return true;
 	case bbq_band::observed:
 	case bbq_band::current:

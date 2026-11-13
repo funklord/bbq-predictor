@@ -305,7 +305,8 @@ int bbq_publish(const QString &dir, const QString &station,
 
 	if (composite) {
 		for (bbq_band band : {bbq_band::observed, bbq_band::current, bbq_band::nowcast_fine,
-		                      bbq_band::nowcast, bbq_band::extended, bbq_band::hourly}) {
+		                      bbq_band::nowcast, bbq_band::extended, bbq_band::hourly,
+		                      bbq_band::regional}) {
 			const bbq_series *series = composite->band(band);
 			if (series && !series->is_empty()) {
 				any_band = true;

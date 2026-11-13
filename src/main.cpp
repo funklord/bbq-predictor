@@ -317,6 +317,7 @@ static const bbq_band bbq_scored_bands[] = {
 	bbq_band::nowcast,
 	bbq_band::hourly,
 	bbq_band::extended,
+	bbq_band::regional,
 	bbq_band::corrected,
 };
 

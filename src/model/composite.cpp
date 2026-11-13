@@ -197,6 +197,7 @@ QTimeZone bbq_composite::zone() const {
 		bbq_band::hourly,
 		bbq_band::nowcast,
 		bbq_band::nowcast_fine,
+		bbq_band::regional,
 		bbq_band::extended,
 	};
 

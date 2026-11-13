@@ -49,6 +49,17 @@ const char *const endpoint =
     "precipitation_probability"
     "&timezone=auto&forecast_days=16";
 
+/*
+ * One model's quarter-hourly block, three days of it: the native models
+ * reach about two and a half, and the rest of the request would be
+ * nulls.
+ */
+const char *const regional_endpoint =
+    "https://api.open-meteo.com/v1/forecast"
+    "?minutely_15=temperature_2m,precipitation,wind_speed_10m,"
+    "precipitation_probability"
+    "&timezone=auto&forecast_days=3";
+
 std::optional<double> number_at(const QJsonArray &array, int index) {
 	if (index < 0 || index >= array.size()) {
 		return std::nullopt;
@@ -104,8 +115,118 @@ void bbq_openmeteo_client::fetch(double latitude, double longitude) {
 	});
 }
 
-bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
-	bbq_series series(bbq_band::extended, QString::fromLatin1(provider_name));
+const char *const bbq_openmeteo_regional_models[3] = {
+	"ncep_hrrr_conus",
+	"meteofrance_arome_france_hd",
+	"icon_d2",
+};
+
+void bbq_regional_probe::at(double latitude, double longitude) {
+	const QString place = QString::number(latitude, 'f', 2) + QLatin1Char(',') +
+	                      QString::number(longitude, 'f', 2);
+	if (place != m_place) {
+		m_place = place;
+		m_model.clear();
+		m_next = 0;
+	}
+}
+
+QString bbq_regional_probe::to_ask() const {
+	if (!m_model.isEmpty()) {
+		return m_model;
+	}
+	if (m_next >= 3) {
+		return QString();
+	}
+	return QString::fromLatin1(bbq_openmeteo_regional_models[m_next]);
+}
+
+void bbq_regional_probe::answered(const QString &model) {
+	m_model = model;
+}
+
+bool bbq_regional_probe::outside(const QString &model) {
+	int asked = 0;
+	while (asked < 3 && model != QLatin1String(bbq_openmeteo_regional_models[asked])) {
+		++asked;
+	}
+
+	/*
+	 * A model that answered before and is outside now -- the point moved
+	 * less than the place key notices, at a domain's edge -- starts the
+	 * asking again after it rather than being kept.
+	 */
+	m_model.clear();
+	m_next = asked + 1;
+	return m_next < 3;
+}
+
+void bbq_openmeteo_client::fetch_regional(double latitude, double longitude,
+                                          const QString &model) {
+	QString target = QString::fromLatin1(regional_endpoint);
+	target += QStringLiteral("&models=");
+	target += model;
+	target += QStringLiteral("&latitude=");
+	target += QString::number(latitude, 'f', 4);
+	target += QStringLiteral("&longitude=");
+	target += QString::number(longitude, 'f', 4);
+
+	QNetworkRequest request((QUrl(target)));
+	request.setHeader(QNetworkRequest::UserAgentHeader,
+	                  QString::fromLatin1(agent));
+
+	QNetworkReply *reply = m_net->get(request);
+
+	connect(reply, &QNetworkReply::finished, this, [this, reply, model]() {
+		reply->deleteLater();
+
+		const int status =
+		        reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		const QByteArray body = reply->readAll();
+
+		/*
+		 * Out of the model's domain is a 400 with a reason, measured
+		 * 2026-11-13 at Stockholm for all three. Any other failure says
+		 * nothing about the place, so it is not remembered as one.
+		 */
+		if (status == 400) {
+			const QString reason = QJsonDocument::fromJson(body)
+			                               .object()
+			                               .value(QStringLiteral("reason"))
+			                               .toString();
+			emit regional_failed(model, true, reason);
+			return;
+		}
+
+		if (reply->error() != QNetworkReply::NoError) {
+			emit regional_failed(model, false, reply->errorString());
+			return;
+		}
+
+		QJsonParseError parse_error;
+		const QJsonDocument document = QJsonDocument::fromJson(body, &parse_error);
+		if (document.isNull()) {
+			emit regional_failed(model, false,
+			                     tr("malformed response: %1")
+			                             .arg(parse_error.errorString()));
+			return;
+		}
+
+		emit regional_ready(model, document);
+	});
+}
+
+namespace {
+
+/*
+ * A block of rows in the response's own zone, shared by both bands.
+ * `while_measured` stops at the first row with no temperature, which is
+ * where a regional model's horizon ends.
+ */
+bbq_series read_block(const QJsonDocument &response, const QString &block_name,
+                      int step_s, bbq_band band, const QString &provider,
+                      bool while_measured) {
+	bbq_series series(band, provider);
 
 	if (!response.isObject()) {
 		return series;
@@ -144,7 +265,7 @@ bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
 		return series;
 	}
 
-	const QJsonObject block = root.value(QStringLiteral("hourly")).toObject();
+	const QJsonObject block = root.value(block_name).toObject();
 	const QJsonArray times = block.value(QStringLiteral("time")).toArray();
 	if (times.isEmpty()) {
 		return series;
@@ -166,8 +287,7 @@ bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
 		QDateTime when = QDateTime::fromString(times.at(i).toString(),
 		                                       Qt::ISODate);
 		if (!when.isValid()) {
-			return bbq_series(bbq_band::extended,
-			                  QString::fromLatin1(provider_name));
+			return bbq_series(band, provider);
 		}
 
 		/*
@@ -180,15 +300,18 @@ bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
 
 		bbq_sample sample;
 		sample.start_utc = when.toSecsSinceEpoch();
-		sample.duration_s = 3600;
+		sample.duration_s = step_s;
 		sample.temperature = number_at(temperatures, i);
+		if (while_measured && !sample.temperature.has_value()) {
+			break;
+		}
 		sample.wind_kph = number_at(wind, i);
 		sample.precip_chance = number_at(chance, i);
 
-		/* Millimetres over the hour, which the model stores as a rate. */
+		/* Millimetres over the step, which the model stores as a rate. */
 		const std::optional<double> fell = number_at(rain, i);
 		if (fell.has_value()) {
-			sample.precip_rate = bbq_rate_from_accumulation(*fell, 3600);
+			sample.precip_rate = bbq_rate_from_accumulation(*fell, step_s);
 		}
 
 		samples.push_back(sample);
@@ -197,4 +320,18 @@ bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
 	series.set_zone(zone);
 	series.set_samples(std::move(samples));
 	return series;
+}
+
+} // namespace
+
+bbq_series bbq_openmeteo_read(const QJsonDocument &response) {
+	return read_block(response, QStringLiteral("hourly"), 3600, bbq_band::extended,
+	                  QString::fromLatin1(provider_name), false);
+}
+
+bbq_series bbq_openmeteo_read_regional(const QJsonDocument &response,
+                                       const QString &model) {
+	return read_block(response, QStringLiteral("minutely_15"), 900, bbq_band::regional,
+	                  QString::fromLatin1(provider_name) + QLatin1Char(' ') + model,
+	                  true);
 }

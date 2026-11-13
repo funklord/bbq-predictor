@@ -497,6 +497,7 @@ void test_publish::band_codes_are_a_contract() {
 	QCOMPARE(bbq_wire_band_code(bbq_band::nowcast), uint8_t(4));
 	QCOMPARE(bbq_wire_band_code(bbq_band::extended), uint8_t(5));
 	QCOMPARE(bbq_wire_band_code(bbq_band::hourly), uint8_t(6));
+	QCOMPARE(bbq_wire_band_code(bbq_band::regional), uint8_t(7));
 	QCOMPARE(bbq_wire_band_code(bbq_band::corrected), uint8_t(0));
 }
 

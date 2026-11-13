@@ -438,6 +438,7 @@ private:
 	void dispatch_pinned();
 	void attempt_radar(qint64 now_utc);
 	void attempt_extended(qint64 now_utc);
+	void attempt_regional();
 	void finish_one();
 	void report_observed_staleness(qint64 now_utc = 0);
 	void tick();
@@ -449,6 +450,12 @@ private:
 	bbq_wu_client *m_client;
 	bbq_met_client *m_met;
 	bbq_openmeteo_client *m_open;
+
+	/*
+	 * Which native quarter-hourly model reaches the forecast point (sec
+	 * 2.10.5), kept per run for the place it was learned at.
+	 */
+	bbq_regional_probe m_regional;
 
 	bbq_composite m_composite;
 	QString m_station_id;

@@ -402,6 +402,7 @@ int bbq_wu_fetch_once(const QString &station_id, const QString &geocode, int tim
 	const bbq_band order[] = {
 		bbq_band::observed,  bbq_band::current, bbq_band::nowcast_fine,
 		bbq_band::nowcast,   bbq_band::extended, bbq_band::hourly,
+		bbq_band::regional,
 	};
 
 	if (timed_out) {

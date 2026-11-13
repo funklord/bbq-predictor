@@ -70,6 +70,17 @@ int bbq_band_priority(bbq_band band) {
 		return 100;
 
 	/*
+	 * Above the hourly band and below both nowcasts. It is a model's own
+	 * quarter-hourly output, finer than WU's hourly over the same hours,
+	 * and the tie sec 2.7 hands WU is a tie of cadence that this is not.
+	 * The nowcasts outrank it where they reach: the radar is closer to
+	 * an observation, and WU's fifteen-minute band is the station
+	 * provider's own.
+	 */
+	case bbq_band::regional:
+		return 120;
+
+	/*
 	 * Last, deliberately. See the note in the enum: it is an overlay,
 	 * and a priority it could ever win on would be a bug waiting for a
 	 * composite to put it in.
@@ -95,6 +106,8 @@ const char *bbq_band_name(bbq_band band) {
 		return "extended";
 	case bbq_band::hourly:
 		return "hourly";
+	case bbq_band::regional:
+		return "regional";
 	case bbq_band::corrected:
 		return "corrected";
 	}

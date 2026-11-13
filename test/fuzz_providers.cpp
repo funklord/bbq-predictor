@@ -61,7 +61,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	const QJsonDocument response = QJsonDocument::fromJson(
 	        QByteArray(reinterpret_cast<const char *>(data + 1), int(size - 1)));
 
-	switch (data[0] % 9) {
+	switch (data[0] % 10) {
 	case 0: hold(bbq_wu_read_observed(response)); break;
 	case 1: hold(bbq_wu_read_current_station(response)); break;
 	case 2: hold(bbq_wu_read_current_point(response)); break;
@@ -82,6 +82,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		break;
 	case 7: hold(bbq_openmeteo_read(response)); break;
 	case 8: hold(bbq_met_read_nowcast(response)); break;
+	case 9: hold(bbq_openmeteo_read_regional(response, QStringLiteral("icon_d2"))); break;
 	}
 	return 0;
 }

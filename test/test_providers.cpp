@@ -27,6 +27,9 @@ private slots:
 	void openmeteo_without_a_zone_is_discarded();
 	void openmeteo_converts_hourly_rain_to_a_rate();
 	void openmeteo_keeps_wind_that_is_already_kph();
+	void a_regional_model_is_read_quarter_hourly_to_its_horizon();
+	void the_regional_band_ranks_between_hourly_and_the_nowcasts();
+	void a_place_no_regional_model_reaches_is_asked_about_once();
 
 private:
 	static QJsonDocument parse(const char *json);
@@ -119,6 +122,84 @@ void test_providers::met_reads_zulu_time_as_utc() {
 
 	const QDateTime expected(QDate(2026, 8, 7), QTime(12, 0), bbq_utc());
 	QCOMPARE(series.samples()[0].start_utc, expected.toSecsSinceEpoch());
+}
+
+/*
+ * A native quarter-hourly model (sec 2.10.5). Fifteen-minute samples,
+ * rain as a rate over the quarter hour, and nothing past the first row
+ * the model leaves without a temperature: beyond its horizon the block
+ * is nulls, or columns the provider filled from elsewhere.
+ */
+void test_providers::a_regional_model_is_read_quarter_hourly_to_its_horizon() {
+	const QJsonDocument response = QJsonDocument::fromJson(R"({
+		"timezone": "Europe/Berlin",
+		"minutely_15": {
+			"time": ["2026-08-07T00:00", "2026-08-07T00:15", "2026-08-07T00:30", "2026-08-07T00:45"],
+			"temperature_2m": [18.1, 17.9, null, 17.5],
+			"precipitation": [0.5, 0.0, 0.2, 0.1],
+			"wind_speed_10m": [23.4, 23.0, 22.0, 21.0],
+			"precipitation_probability": [7, 6, 5, 5]
+		}
+	})");
+
+	const bbq_series series =
+	        bbq_openmeteo_read_regional(response, QStringLiteral("icon_d2"));
+	QCOMPARE(series.band(), bbq_band::regional);
+	QCOMPARE(series.size(), std::size_t(2));
+	QCOMPARE(series.samples()[0].duration_s, 900);
+	QVERIFY(std::fabs(*series.samples()[0].precip_rate - 2.0) < 1e-9);
+	QVERIFY(series.provider().contains(QStringLiteral("icon_d2")));
+
+	const QDateTime expected(QDate(2026, 8, 6), QTime(22, 15), bbq_utc());
+	QCOMPARE(series.samples()[1].start_utc, expected.toSecsSinceEpoch());
+
+	/* The hourly reader is untouched by it: an hourly block, hourly spans. */
+	QCOMPARE(bbq_openmeteo_read(openmeteo_fixture("Europe/Berlin")).samples()[0].duration_s,
+	         3600);
+}
+
+/*
+ * Declared, not computed (sec 3.3), so the declaration is what is held:
+ * a model's own quarter hours beat WU's hourly over the same hours, and
+ * lose to both nowcasts where those reach.
+ */
+void test_providers::the_regional_band_ranks_between_hourly_and_the_nowcasts() {
+	QVERIFY(bbq_band_priority(bbq_band::regional) > bbq_band_priority(bbq_band::hourly));
+	QVERIFY(bbq_band_priority(bbq_band::regional) > bbq_band_priority(bbq_band::extended));
+	QVERIFY(bbq_band_priority(bbq_band::regional) < bbq_band_priority(bbq_band::nowcast));
+	QVERIFY(bbq_band_priority(bbq_band::regional) < bbq_band_priority(bbq_band::nowcast_fine));
+}
+
+/*
+ * The asking (sec 2.10.5). Stockholm is outside all three: three
+ * questions, then none for as long as the place stays put. Berlin is
+ * outside HRRR and inside AROME, which is then the only one asked. And a
+ * new place starts the asking again.
+ */
+void test_providers::a_place_no_regional_model_reaches_is_asked_about_once() {
+	bbq_regional_probe probe;
+	probe.at(59.34, 18.05);
+
+	QStringList asked;
+	while (!probe.to_ask().isEmpty() && asked.size() < 10) {
+		const QString model = probe.to_ask();
+		asked << model;
+		probe.outside(model);
+	}
+	QCOMPARE(asked, (QStringList{QStringLiteral("ncep_hrrr_conus"),
+	                             QStringLiteral("meteofrance_arome_france_hd"),
+	                             QStringLiteral("icon_d2")}));
+
+	probe.at(59.34, 18.05);
+	QVERIFY(probe.to_ask().isEmpty());
+
+	probe.at(52.52, 13.40);
+	QCOMPARE(probe.to_ask(), QStringLiteral("ncep_hrrr_conus"));
+	QVERIFY(probe.outside(QStringLiteral("ncep_hrrr_conus")));
+	QCOMPARE(probe.to_ask(), QStringLiteral("meteofrance_arome_france_hd"));
+	probe.answered(QStringLiteral("meteofrance_arome_france_hd"));
+	probe.at(52.52, 13.40);
+	QCOMPARE(probe.to_ask(), QStringLiteral("meteofrance_arome_france_hd"));
 }
 
 void test_providers::openmeteo_reads_local_time_through_the_named_zone() {

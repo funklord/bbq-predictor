@@ -1253,6 +1253,55 @@ also a reason the joins matter more than they would otherwise: a seam
 between two bands from one provider is a resampling artefact, while a
 seam between two providers can disagree about the actual weather.
 
+### 2.10.5 Where a model is genuinely quarter-hourly, it is taken
+
+Sec 2.10.4 refused `minutely_15` because outside a few domains it is
+hourly data at a finer spacing. Inside them it is not. HRRR over North
+America, and AROME and ICON-D2 over central Europe, forecast every
+quarter hour themselves, so a user there had a finer forecast available
+and got hourly between WU's seven hours and the sixteenth day. That is
+the graph, which is the program (sec 0), left coarser than its data.
+
+**Asked of the provider, as sec 2.10.4.1 says the question has to be.**
+Measured 2026-11-13:
+
+| Place | HRRR | AROME France HD | ICON-D2 |
+|---|---|---|---|
+| Berlin | 400, no data here | 248 quarter hours | 248 |
+| Paris | 400 | 248 | 248 |
+| Denver | 216 | 400 | 400 |
+| Stockholm, this station | 400 | 400 | 400 |
+
+Each model is asked separately, in that order, finest first where two
+overlap. Asking for several in one request came back suffixed at
+Berlin, unsuffixed at Denver, and refused outright at Stockholm.
+`bbq_regional_probe` keeps the answer for the place, including "none",
+so a place outside every domain costs three requests once a run, and a
+place inside one costs one request a round.
+
+**The regional band, appended to the enum.** The archive stores a band
+as its number and the wire gives it code 7, so appending keeps every
+stored and published value meaning what it did, and a reader that does
+not know code 7 skips the band (`wire/read.cpp`). Priority 120: above
+WU's hourly band, since the tie sec 2.7 gives WU is one of cadence and
+this is finer, and below both nowcasts, which are closer to the station
+or are its provider's own. Its ribbon colour is teal. It is scored and
+corrected like the other forecasts.
+
+**Taken only while the model has a temperature.** Past the horizon,
+about 54 hours for HRRR and 62 for the other two, the block holds nulls,
+and HRRR's rain chance runs the full three days though HRRR forecasts no
+chance. That column is filled from elsewhere. Rows stop at the first
+missing temperature, so no row past the model's own reach is drawn as
+its data. Within the reach, the chance is the provider's column as
+given.
+
+**Live, 2026-11-13, with `--fetch-once`:** Berlin got AROME's 248
+quarter hours, Denver HRRR's 216, and Stockholm none, drawn hourly as
+before. `test_providers` holds the reader, the ranking and the asking.
+`test_feed_server` holds that, unreachable, the band settles quietly
+like the extended one.
+
 ### 3.1 The unit of the model is a span, not a point
 
     start_utc     epoch seconds, UTC
@@ -3598,12 +3647,9 @@ anything.
 - ~~**Whether the three projects that shipped for Android first adopt
   `tool/android.mk`.**~~ They did: hydra, beerssh and fuzzypickles all
   carry it, re-checked 2026-10-25
-- **Whether to take Open-Meteo's quarter-hourly block where it is
-  genuine.** It is real over North America and central Europe and
-  interpolated elsewhere (sec 2.10.4), so using it correctly means
-  probing model coverage for the configured point and choosing per
-  location. Worth it only for someone inside those domains, which this
-  station is not
+- ~~**Whether to take Open-Meteo's quarter-hourly block where it is
+  genuine.**~~ Taken since sec 2.10.5, as the regional band, where a
+  native quarter-hourly model reaches the point
 
 ### 9.3 Raised elsewhere
 

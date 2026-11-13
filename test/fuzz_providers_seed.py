@@ -13,7 +13,7 @@ import pathlib
 import re
 import sys
 
-READERS = 9
+READERS = 10
 TESTS = ["test/test_reader.cpp", "test/test_providers.cpp"]
 SOURCES = ["src/wu/reader.cpp", "src/openmeteo/forecast.cpp", "src/met/nowcast.cpp"]
 

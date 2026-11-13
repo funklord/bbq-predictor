@@ -324,6 +324,47 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 	});
 
 	/*
+	 * The regional band (sec 2.10.5). Silent when no model reaches the
+	 * point, which is an answer rather than a fault, and quiet like the
+	 * extended band when a request fails: it sharpens hours the hourly
+	 * band already covers.
+	 */
+	connect(m_open, &bbq_openmeteo_client::regional_ready, this,
+	        [this](const QString &model, const QJsonDocument &document) {
+		bbq_series series = bbq_openmeteo_read_regional(document, model);
+
+		if (!series.is_empty()) {
+			m_regional.answered(model);
+			m_history.record_forecast(m_station_id, series,
+			                          QDateTime::currentSecsSinceEpoch());
+			series.set_fetched_utc(QDateTime::currentSecsSinceEpoch());
+			m_composite.set_series(std::move(series));
+			emit updated();
+		} else {
+			emit band_quiet(QStringLiteral("regional"), tr("the reply held no rows"));
+		}
+
+		finish_one();
+	});
+
+	connect(m_open, &bbq_openmeteo_client::regional_failed, this,
+	        [this](const QString &model, bool outside, const QString &reason) {
+		if (!outside) {
+			emit band_quiet(QStringLiteral("regional"), reason);
+			finish_one();
+			return;
+		}
+
+		/* The next model, in the same round and under the same count. */
+		if (m_regional.outside(model)) {
+			m_open->fetch_regional(m_latitude, m_longitude, m_regional.to_ask());
+			return;
+		}
+
+		finish_one();
+	});
+
+	/*
 	 * MET Norway serves the nowcast band where it can (sec 2.9). Five
 	 * minute steps against WU's fifteen, a rate already in mm/h, no key
 	 * and no terms broken to read it -- and it replaces the one band
@@ -774,6 +815,7 @@ void bbq_wu_feed::set_station(const QString &station_id) {
 		stale.push_back(bbq_band::nowcast);
 		stale.push_back(bbq_band::extended);
 		stale.push_back(bbq_band::hourly);
+		stale.push_back(bbq_band::regional);
 	}
 
 	for (bbq_band band : stale) {
@@ -1534,6 +1576,23 @@ void bbq_wu_feed::attempt_extended(qint64 now_utc) {
 	m_extended_attempted = now_utc;
 	++m_outstanding;
 	m_open->fetch(m_latitude, m_longitude);
+	attempt_regional();
+}
+
+/*
+ * On the extended band's schedule: the same provider, and a forecast that
+ * moves no faster. One request a round once the model is known; up to
+ * three, once, for a place nobody has asked about.
+ */
+void bbq_wu_feed::attempt_regional() {
+	m_regional.at(m_latitude, m_longitude);
+	const QString model = m_regional.to_ask();
+	if (model.isEmpty()) {
+		return;
+	}
+
+	++m_outstanding;
+	m_open->fetch_regional(m_latitude, m_longitude, model);
 }
 
 /*
