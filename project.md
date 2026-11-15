@@ -17717,9 +17717,25 @@ compared with the clock:
         QT_QPA_PLATFORM=offscreen timeout 300 faketime -f +400d "$b"
     done
 
-## 16.131 Where things stand, 2026-11-04
+## 16.131 Where things stand, 2026-11-15
 
-What the next session should know, as of 9b9bbef.
+What the next session should know, as of d800d04.
+
+**New since 2026-11-04:**
+
+- **The regional band** (sec 2.10.5, d800d04): a native quarter-hourly
+  model's own forecast where one reaches the point (HRRR, AROME,
+  ICON-D2), for about 2.5 days, above WU's hourly. It was seen live at
+  Berlin and Denver. This station is outside all three, so nothing
+  changes here. Not yet seen on a device or through the publisher.
+- **Graph settings follow the default until chosen** (sec 3.11.7,
+  3aca22b). `--interp` and `--smooth` no longer write the config.
+- **Other stations are pinned from a list** (sec 12.18.2, eb8082d).
+- **A new VERSION reaches the binaries** (sec 5.4, c86c41a): a qmake
+  argument stamp and a generated `bbq_version.h`.
+- **Android build directories record their Qt kit** (sec 11.15,
+  08ac162) and clean themselves when it changes. Never write a rule for
+  a `kit.source`: one recursed to about 16,000 processes.
 
 **Waiting on the holder:** the publisher's public key, for
 `bbq_server_built_in_key()`. And two linked decisions: whether to score
