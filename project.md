@@ -9950,6 +9950,24 @@ the test.~~ **Verified in sec 16.22**, which is where the test the last
 sentence asked for was finally run.
 
 
+### 17.8 The eglSurface wait beerssh found does not reach here
+
+From beerssh (inbox 20261107T1712Z): with `background_running` true,
+Qt 6.12's main thread can block with no timeout in
+`QAndroidPlatformOpenGLWindow::eglSurface()` while the activity is
+stopped. A queued Active state makes Qt repaint a window whose surface
+the Suspended state has just destroyed. beerssh reproduced it about once
+in 12 cycles on API 36 and fixed it with a watchdog (its a4b401b).
+
+**Here `background_running` is set only on `FetchJobService`**, which
+runs in `:fetch` and shows no window, so there is nothing to repaint and
+nothing to wait for. The activity keeps Qt's default, so the condition
+is absent there too. Recorded so that adding `background_running` to the
+activity, for any reason, is known to bring this with it.
+
+The other beerssh message (20261113T0600Z), on the kit updated in place,
+is what sec 11.15 acts on.
+
 ## 16.22 The widget was placed, and the picture was the wrong size
 
 The positive path sec 16.21.1 left open was finally exercised: a widget
@@ -17719,7 +17737,8 @@ compared with the clock:
 
 ## 16.131 Where things stand, 2026-11-15
 
-What the next session should know, as of d800d04.
+What the next session should know, as of d800d04. Folded for the
+wind-down of 2026-11-19; the inbox is empty and recorded (sec 17.8).
 
 **New since 2026-11-04:**
 
