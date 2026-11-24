@@ -8804,7 +8804,11 @@ are about 500 of the hour's 2000. The Fold was moved to IJOHAN69 the
 same day by its settings file, over adb, with the app closed: the
 station line rewritten and the derived coordinate dropped, as
 `set_station` does; launched once, the app derived 59.2970,18.0930,
-IJOHAN69's own position, which it does only when the station answers.
+IJOHAN69's own position, which it does only when the station answers. The Fold was given the arm64 build of aef1ded at 21:41 the same day,
+`adb install -r` over the 2026-10-29 build, its archive and settings
+kept (a copy taken first). Launched while the phone was dozing, it
+scheduled no background job and fetched nothing, so its first round
+from the server waits on the holder opening it.
 
 **On -01 from 19:25 the same day** (0.1.0-10, inbox 20261124T1825Z):
 the first round read "8 of 8 due station(s) fetched, 8 wanted, 63 of
