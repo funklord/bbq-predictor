@@ -8514,8 +8514,14 @@ Devuan excalibur under sysvinit, cron every five minutes,
 lighttpd owns 443 there. So the default route `vibes.se:443` (the daemon
 protocol on 443) reaches lighttpd once vibes.se points at that host; it
 fails there as any non-daemon answer does and the client moves on to the
-https route. Whether to keep that route in the defaults is open, and
-cheap either way.
+https route. **Kept, settled 2026-11-24 by measuring what it costs.**
+vibes.se:443 refused at once that day, and nothing listened on -01's
+443 yet. A local `openssl s_server` sent the daemon's 48-byte request
+closed the connection in 8 ms without a byte, and the client fails a
+route on `disconnected` as on an error, not at its deadline
+(`transport.cpp`). So the route costs milliseconds wherever 443 is not
+the daemon, and is the one that gets through a network that allows
+only 443 wherever it is.
 
 **A fresh server with a quiet station published nothing.** Its first
 round, 02:45, met HTTP 204 from ISTOCK877 overnight, so no coordinate
