@@ -8439,7 +8439,18 @@ the project's own Monocypher. The same copy with one bit flipped was
 refused, so the check was not vacuous (inbox 20261124T0311Z).
 Still not seen: the applet itself taking a round from that server. A
 `--shot` aimed at it with a scratch config recorded no server state,
-which says the shot ends first, not that the path fails.
+which looked like the shot ending first. **It was not: the path
+could not succeed.** Asked by hand, the daemon answered the manifest
+(84 bytes), NOT_SERVED for the index, and the head. The publisher wrote
+a station's index only once it held an observed month, and the manifest
+lists only stations with an index, so the client read ISTOCK877 as not
+served, went to the providers, and never looked at the head with its
+forecast in it. It is the same first-night gap as the geocode below,
+one layer up: a server whose station has not reported serves nothing.
+The publisher now writes the index once with no months
+(`a_station_with_no_observations_is_served_its_forecast`, which fails
+with the old condition). The wire format, the daemon and the client
+already took a count of zero.
 
 **How that server is set up**, by the holder: 0.1.0-7 on dl180g6-01,
 Devuan excalibur under sysvinit, cron every five minutes,

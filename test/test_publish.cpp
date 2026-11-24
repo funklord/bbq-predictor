@@ -45,6 +45,7 @@ private slots:
 	void month_numbers_and_names_agree();
 
 	void publishing_twice_rewrites_nothing();
+	void a_station_with_no_observations_is_served_its_forecast();
 	void a_new_observation_rewrites_only_its_month();
 	void a_round_with_no_bands_keeps_the_last_head();
 	void a_band_not_fetched_is_carried_from_the_last_head();
@@ -592,6 +593,41 @@ void test_publish::publishing_twice_rewrites_nothing() {
 		}
 	}
 	QVERIFY(inode(dir + "/stations") != before["stations"]);
+}
+
+/*
+ * A station that has not reported yet still has a forecast to serve
+ * (sec 15.12.7). The manifest lists only stations with an index, so the
+ * index is written with no months rather than not at all.
+ */
+void test_publish::a_station_with_no_observations_is_served_its_forecast() {
+	QTemporaryDir root;
+	bbq_history history;
+	QVERIFY(history.open(root.filePath("history.sqlite")));
+	const QString dir = root.filePath("pub");
+	QString out_text, error_text;
+	QTextStream out(&out_text), error(&error_text);
+
+	const bbq_composite composite = one_band();
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &composite, history, m_key, 1790000100, out, error), 0);
+
+	std::vector<bbq_wire_index_entry> entries(1);
+	QString why;
+	QVERIFY2(bbq_wire_read_index(contents(dir + "/ISTOCK877/index"), m_key.public_key(),
+	                             QStringLiteral("ISTOCK877"), &entries, &why),
+	         qPrintable(why + " " + error_text));
+	QCOMPARE(int(entries.size()), 0);
+
+	QStringList stations;
+	QVERIFY2(bbq_wire_read_stations(contents(dir + "/stations"), m_key.public_key(), &stations,
+	                                &why),
+	         qPrintable(why));
+	QCOMPARE(stations, QStringList{QStringLiteral("ISTOCK877")});
+
+	/* Written once: a second round with still nothing keeps it. */
+	const qint64 before = inode(dir + "/ISTOCK877/index");
+	QCOMPARE(bbq_publish(dir, "ISTOCK877", &composite, history, m_key, 1790000200, out, error), 0);
+	QCOMPARE(inode(dir + "/ISTOCK877/index"), before);
 }
 
 void test_publish::a_new_observation_rewrites_only_its_month() {

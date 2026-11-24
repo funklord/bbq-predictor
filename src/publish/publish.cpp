@@ -261,8 +261,15 @@ int bbq_publish(const QString &dir, const QString &station,
 		entries.push_back(entry);
 	}
 
-	/* The index, only when a month changed: a client compares it to decide what to fetch. */
-	if (!entries.empty() && !same_entries(entries, previous)) {
+	/*
+	 * The index, only when a month changed: a client compares it to
+	 * decide what to fetch. And once with no months at all, for a station
+	 * that has not reported yet (sec 15.12.7): the manifest lists only
+	 * stations with an index, so without one the forecast in the head was
+	 * published and no client would read it until the station first
+	 * spoke -- a fresh server's whole first night.
+	 */
+	if (!same_entries(entries, previous) || !QFile::exists(index_path)) {
 		const QByteArray body = bbq_wire_index_body(station, now_utc, entries, &why);
 		if (body.isEmpty() ||
 		    !write_if_changed(index_path, bbq_wire_file(bbq_wire_kind::index, body, key),
