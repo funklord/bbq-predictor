@@ -8452,6 +8452,13 @@ The publisher now writes the index once with no months
 with the old condition). The wire format, the daemon and the client
 already took a count of zero. Seen on the host at 12:25 under 0.1.0-9:
 ISTOCK877/index written (94 bytes) and the manifest grown to list it.
+**And the applet then took a round from it**, 2026-11-24 17:50: a
+`--shot` with a scratch config naming only `10.0.0.11:7227` and station
+ISTOCK877 stored the head (`head/ISTOCK877`, 1362 bytes), the three
+month files (`server_month` 3) and 7469 observations, the server's
+count to the row, and drew the forecast from the head's bands, where
+the same test before the fix had drawn "No forecast data yet". The
+station's own bands were missing, ISTOCK877 being silent.
 
 **Importing an applet's archive into the server's** (asked 2026-11-24,
 to seed -01 with the Fold's two months) needs no tool of its own: the
