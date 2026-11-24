@@ -39,6 +39,7 @@ private slots:
 	void it_refuses_without_a_tree_and_a_key();
 	void a_key_others_can_read_is_refused_before_fetching();
 	void a_key_is_made_once_and_never_overwritten();
+	void a_kept_station_must_be_one_and_needs_the_demand();
 	void the_version_names_the_copyright_holder();
 	void the_applet_refuses_what_moved_here();
 	void demand_is_saved_before_the_round_fetches();
@@ -157,6 +158,43 @@ void test_publisher::a_key_others_can_read_is_refused_before_fetching() {
 	 */
 	QVERIFY2(!QFileInfo::exists(archive), "the archive was opened, so a round ran");
 	QVERIFY2(!said.contains(QStringLiteral("fetching every band")), qPrintable(said));
+	QVERIFY2(!QFileInfo::exists(tree), "a refused run created the tree");
+}
+
+/*
+ * --keep (sec 15.14.1) is checked before any round: a typo in the
+ * holder's list costs a message, not a round of fetching for an id that
+ * cannot exist, and without --demand there is no schedule to keep it in.
+ */
+void test_publisher::a_kept_station_must_be_one_and_needs_the_demand() {
+	QTemporaryDir home;
+	QVERIFY(home.isValid());
+	QString said;
+
+	const QString key = home.filePath(QStringLiteral("signing.key"));
+	QCOMPARE(run(m_publisher, home, {QStringLiteral("--generate-signing-key"), key}, &said),
+	         0);
+	const QString tree = home.filePath(QStringLiteral("published"));
+	const QString archive = home.filePath(QStringLiteral("archive.sqlite"));
+	const QString demand = home.filePath(QStringLiteral("demand"));
+	const QStringList common = {QStringLiteral("--dir"), tree, QStringLiteral("--signing-key"),
+	                            key, QStringLiteral("--station"), QStringLiteral("ITEST1"),
+	                            QStringLiteral("--history-path"), archive};
+
+	int code = run(m_publisher, home,
+	               common + QStringList{QStringLiteral("--demand"), demand,
+	                                    QStringLiteral("--keep"),
+	                                    QStringLiteral("IKEEP1, ikeep2")},
+	               &said);
+	QVERIFY2(code == 2, qPrintable(QStringLiteral("exit %1, said: %2").arg(code).arg(said)));
+	QVERIFY2(said.contains(QStringLiteral("ikeep2")), qPrintable(said));
+
+	code = run(m_publisher, home,
+	           common + QStringList{QStringLiteral("--keep"), QStringLiteral("IKEEP1")}, &said);
+	QVERIFY2(code == 2, qPrintable(QStringLiteral("exit %1, said: %2").arg(code).arg(said)));
+	QVERIFY2(said.contains(QStringLiteral("--demand")), qPrintable(said));
+
+	QVERIFY2(!QFileInfo::exists(archive), "the archive was opened, so a round ran");
 	QVERIFY2(!QFileInfo::exists(tree), "a refused run created the tree");
 }
 

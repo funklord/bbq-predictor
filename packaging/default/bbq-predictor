@@ -16,6 +16,13 @@
 #
 #BBQ_GEOCODE=59.33,18.07
 #
+# Stations to keep publishing permanently beside BBQ_STATION, separated
+# by spaces or commas. Stations clients ask for are fetched too, up to 50,
+# and dropped once nobody has asked for two weeks; these never are, and
+# do not count among the 50.
+#
+#BBQ_KEEP_STATIONS="IJOHAN69 ILIDIN21"
+#
 # Every round publishes the station's signed files for bbq-predictor-serve
 # (project.md sec 15.12). The key is made once, as the account that
 # publishes:

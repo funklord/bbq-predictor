@@ -44,4 +44,11 @@ if [ -n "${BBQ_GEOCODE:-}" ]; then
 	set -- "$@" --geocode "$BBQ_GEOCODE"
 fi
 
+# Stations kept permanently beside BBQ_STATION (project.md sec 15.14.1):
+# fetched every round, never dropped, not counted among the fifty that
+# clients' requests may add.
+if [ -n "${BBQ_KEEP_STATIONS:-}" ]; then
+	set -- "$@" --keep "$BBQ_KEEP_STATIONS"
+fi
+
 exec flock -n "$state/.fetch.lock" /usr/bin/bbq-predictor-publish "$@"

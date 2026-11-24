@@ -18,7 +18,9 @@ bbq\-predictor\-publish \- fetch the weather bands once and publish them signed
 .RB [ \-\-history\-path
 .IR FILE ]
 .RB [ \-\-demand
-.IR FILE ]
+.IR FILE
+.RB [ \-\-keep
+.IR ID ,...]]
 .br
 .B bbq\-predictor\-publish \-\-generate\-signing\-key
 .I FILE
@@ -55,14 +57,14 @@ a run also fetches the stations
 recorded clients asking for, so that a client which moves to a station
 nobody publishes yet finds it published within a round or two:
 .IP \(bu 2
-The configured station is always fetched and never dropped.
+The configured station, and every station given to
+.BR \-\-keep ,
+is always fetched and never dropped.
 .IP \(bu 2
 Up to 50 other stations are admitted, in the order they are asked for.
 .IP \(bu 2
-An admitted station is kept however long nobody asks for it, since a
-client may travel and come back. Only when the 50 are full does a new
-station displace the one asked for least recently, and only if nobody
-has asked for that one in 14 days. What was published for it stays.
+A station nobody has asked for in 14 days is no longer fetched. What was
+published for it stays.
 .IP \(bu 2
 A station that says nothing for three rounds in which other stations
 answered is dropped and not admitted again for a week: that is what an
@@ -102,6 +104,12 @@ The archive to fetch into and publish from, instead of the default one.
 The demand
 .BR bbq\-predictor\-serve (8)
 records. Read and emptied at the start of every run; absent is no demand.
+.TP
+.BI \-\-keep " ID,..."
+Stations to fetch and publish every round beside the configured one,
+separated by commas or spaces. They are never dropped and do not count
+among the 50 that requests may add. Needs
+.BR \-\-demand .
 .TP
 .BI \-\-generate\-signing\-key " FILE"
 Create a new signing key at
@@ -150,6 +158,9 @@ than fetching for a station nobody named.
 is optional and passed as
 .BR \-\-geocode ;
 set it where the station may be quiet when the server is first started.
+.B BBQ_KEEP_STATIONS
+is optional and passed as
+.BR \-\-keep .
 .B BBQ_PUBLISH_DIR
 and
 .B BBQ_SIGNING_KEY

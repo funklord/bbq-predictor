@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
+#include <QRegularExpression>
 #include <QStringList>
 #include <QTextStream>
 
@@ -24,6 +25,7 @@
 #include "publish/publish.h"
 #include "publish/signing_key.h"
 #include "store/history.h"
+#include "wire/format.h"
 #include "wu/fetch_once.h"
 
 /*
@@ -48,7 +50,7 @@ void print_usage(QTextStream &out) {
 	       " [--station ID]\n";
 	out << "                             [--geocode LAT,LON]"
 	       " [--history-path FILE]\n";
-	out << "                             [--demand FILE]\n";
+	out << "                             [--demand FILE [--keep ID,...]]\n";
 	out << "       bbq-predictor-publish --generate-signing-key FILE\n";
 	out << "       bbq-predictor-publish --version | --help\n";
 	out << "\n";
@@ -128,7 +130,7 @@ bool take_demand(const QString &path, QByteArray *text, QString *why) {
  * going quiet is ordinary -- the unit forgives 3 and fails on 1 -- so it
  * never makes the run a failure on its own.
  */
-int publish_demanded(const QString &station, const QString &geocode,
+int publish_demanded(const QString &station, const QStringList &kept, const QString &geocode,
                          const QString &history_path, const QString &demand_path,
                          const std::function<bbq_after_round(const QString &, bool)> &publishing) {
 	QTextStream out(stdout);
@@ -151,7 +153,7 @@ int publish_demanded(const QString &station, const QString &geocode,
 	int turned_away = 0;
 	const int admitted = bbq_demand_absorb(demand, text, started, &turned_away);
 	bbq_demand_expire(demand, started);
-	bbq_demand_configure(demand, station, started);
+	bbq_demand_configure(demand, QStringList{station} + kept, started);
 
 	/*
 	 * Saved before the first fetch, not only after the last. The file
@@ -302,6 +304,27 @@ int main(int argc, char *argv[]) {
 	const QString history_path = bbq_option_value(arguments, QStringLiteral("--history-path"));
 	const QString demand_path = bbq_option_value(arguments, QStringLiteral("--demand"));
 
+	/*
+	 * Stations the holder keeps permanently beside the published one
+	 * (sec 15.14.1): fetched every round however long nobody asks, never
+	 * dropped for silence, and not counted against the fifty. They live
+	 * in the demand schedule, so they need it.
+	 */
+	QStringList kept;
+	for (const QString &id : bbq_option_value(arguments, QStringLiteral("--keep"))
+	                                 .split(QRegularExpression(QStringLiteral("[,\\s]+")),
+	                                        Qt::SkipEmptyParts)) {
+		if (!bbq_wire_station_valid(id)) {
+			error << "publish: --keep: " << id << " is not a station id\n";
+			return 2;
+		}
+		kept.append(id);
+	}
+	if (!kept.isEmpty() && demand_path.isEmpty()) {
+		error << "publish: --keep needs --demand, whose schedule keeps them\n";
+		return 2;
+	}
+
 	bbq_ensure_tls_backend();
 
 	/*
@@ -347,5 +370,5 @@ int main(int argc, char *argv[]) {
 		return bbq_wu_fetch_once(station, geocode, 30, options);
 	}
 
-	return publish_demanded(station, geocode, history_path, demand_path, publishing);
+	return publish_demanded(station, kept, geocode, history_path, demand_path, publishing);
 }

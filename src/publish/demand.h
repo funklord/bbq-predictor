@@ -3,6 +3,7 @@
 
 #include <QByteArray>
 #include <QString>
+#include <QStringList>
 
 #include <map>
 #include <utility>
@@ -13,17 +14,14 @@
  * 15.14). Pure: the demand file's text and the clock in, a schedule out,
  * so every rule is checked without a network.
  *
- * The configured station is always fetched and never expires. Stations
- * clients ask for are admitted up to a ceiling and KEPT, however long
- * nobody asks, until the ceiling is full (holder, 2026-11-24: a phone
- * travels back and forth, and its home station should still be there
- * when it comes back). Only then does a new request displace the station
- * asked for least recently, and only one nobody has asked for in two
- * weeks; otherwise the newcomer is turned away. A station is also
- * dropped if Weather Underground keeps answering for the others while
- * saying nothing for it -- which is what a station id that does not
- * exist looks like, and the one thing a stranger could otherwise fill
- * the ceiling with.
+ * The configured stations -- the one the server publishes for, and any
+ * the holder keeps permanently (sec 15.14.1) -- are always fetched, never
+ * expire and never fall silent out of the list. Stations
+ * clients ask for are admitted up to a ceiling, dropped after two weeks
+ * nobody asked, and dropped if Weather Underground keeps answering for
+ * the others while saying nothing for them -- which is what a station id
+ * that does not exist looks like, and the one thing a stranger could
+ * otherwise fill the ceiling with.
  *
  * Every Weather Underground request comes out of one budget an hour, from
  * one address and one key. When the stations want more than that, each
@@ -32,13 +30,9 @@
  * refused is none.
  */
 
-/*
- * Holder's numbers, 2026-10-23. The two weeks were an expiry until
- * 2026-11-24; now they are how recent a request must be to be believed
- * from the daemon's file, and to protect its station from displacement.
- */
+/* Holder's numbers, 2026-10-23. */
 const int bbq_demand_max_stations = 50;
-const qint64 bbq_demand_recent_s = 14 * 24 * 3600;
+const qint64 bbq_demand_expiry_s = 14 * 24 * 3600;
 const int bbq_demand_budget_per_hour = 2000;
 
 /* The round the timer runs, and the most often any station is fetched. */
@@ -96,26 +90,26 @@ struct bbq_demand_result {
 };
 
 /*
- * Mark `station` as the configured one: always fetched, never expired or
- * refused. Any other station that was marked loses the mark.
+ * Mark `stations` as the configured ones: always fetched, never expired or
+ * refused, and not counted against the ceiling. Any other station that was
+ * marked loses the mark and is an asked-for station from then on. Empty
+ * ids are skipped.
  */
-void bbq_demand_configure(bbq_demand &demand, const QString &station, qint64 now_utc);
+void bbq_demand_configure(bbq_demand &demand, const QStringList &stations, qint64 now_utc);
 
 /*
  * Take the daemon's lines ("<STATION> <epoch>\n"). A malformed line, an
  * id that is not one, or a time further than bbq_demand_skew_s ahead or
- * older than bbq_demand_recent_s is ignored. Returns how many stations
- * were admitted that were not there before. At the ceiling a new station
- * displaces the one asked for least recently, if that one has not been
- * asked for within bbq_demand_recent_s. `turned_away`, where given, is
+ * older than the expiry is ignored. Returns how many stations were
+ * admitted that were not there before. `turned_away`, where given, is
  * set to how many distinct stations asked and were not admitted because
- * the ceiling was full of recent requests: the one refusal the holder
- * may want to act on, since it says bbq_demand_max_stations is binding.
+ * the ceiling was full: the one refusal the holder may want to act on,
+ * since it says bbq_demand_max_stations is binding.
  */
 int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc,
                       int *turned_away = nullptr);
 
-/* Drop refusals that have run out, and spending older than an hour. Stations stay. */
+/* Drop what nobody has asked for in two weeks, and spending older than an hour. */
 void bbq_demand_expire(bbq_demand &demand, qint64 now_utc);
 
 /* WU requests spent in the hour up to `now_utc`. */

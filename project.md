@@ -8625,8 +8625,8 @@ traffic.** Until then the server published the one station in
 to scraping, which nothing ever told the server about. Numbers chosen by
 the holder: one request admits a station, three new stations per
 address per day, fifty stations at most, two weeks without a request
-before a station stops being fetched (until 2026-11-24, sec 15.14.1),
-2000 Weather Underground requests an hour.
+before a station stops being fetched, 2000 Weather Underground requests
+an hour.
 
 **The request is the signal; the protocol is unchanged.** A client
 already asks for its station's index and head every round, pipelined
@@ -8663,9 +8663,8 @@ marked a station written although it was not, and the next request for
 it was not written either until an hour had passed.
 
 **The publisher schedules** (`src/publish/demand.cpp`, pure). Each run
-reads and empties the file, admits up to the ceiling (displacing only
-what nobody has asked for in two weeks, and only when full, sec
-15.14.1), and fetches the configured station first
+reads and empties the file, admits up to the ceiling, expires what
+nobody asked for in two weeks, and fetches the configured station first
 and the rest by who was asked for most recently -- each at five minutes,
 or proportionally less often when the stations together would spend
 more than the hour's budget, and stopping where the hour's remaining
@@ -8683,8 +8682,7 @@ A station turned away because the ceiling is full is named in the
 run's summary line as "N turned away at the ceiling of 50" (since
 2026-10-25). Its request was consumed with the file and is lost until
 that client asks again, so the line is the only sign that the ceiling
-is binding, which since sec 15.14.1 means fifty stations all asked for
-within two weeks. Whether to raise it is the holder's decision.
+is binding. Whether to raise it is the holder's decision.
 
 **A station id that does not exist is the thing a stranger could fill
 the ceiling with,** so a station that says nothing for three rounds in
@@ -8756,28 +8754,32 @@ being exceeded, so this is freshness, not safety. And WU's real limits
 are unknown: 2000 an hour is a starting point to raise or lower by what
 the publisher's log shows, a 401 or 429 being the first sign.
 
-### 15.14.1 Stations stay until the ceiling needs the room
+### 15.14.1 The holder's stations are kept; everybody else's expire
 
-**Set by the holder 2026-11-24: the applet travels back and forth, so
-nothing is cleared until it gets too much.** A station nobody had asked
-for in two weeks stopped being fetched, so a phone away for three weeks
-came home to a station that had to be admitted again and had not been
-fetched in between. Now an admitted station is kept however long
-nobody asks. When a new station asks and the fifty are full, the one
-asked for least recently makes way, but only if nobody has asked for it
-in two weeks; otherwise the newcomer is turned away, as at the ceiling
-before. The two weeks survive as `bbq_demand_recent_s`: how old a line
-in the daemon's file may be and still be believed, and how recently a
-station must have been asked for to hold its place.
+**Set by the holder 2026-11-24.** The applet travels back and forth, and
+a station that stopped being fetched after two weeks without a request
+would greet a phone back from three weeks away with a gap. That is right
+for stations other people use: they are cleared when those people stop
+using the app, which is what two weeks without a request means. It is
+wrong for the holder's own, so those are named in the server's
+configuration instead: `BBQ_KEEP_STATIONS` in `/etc/default/bbq-predictor`,
+passed as `--keep`, beside `BBQ_STATION`. Each is configured as
+`BBQ_STATION` is: fetched every round, never expired, never dropped for
+silence, and not one of the fifty. One taken off the list is an
+asked-for station from then on and expires like the rest. `--keep` is
+checked before any round, and needs `--demand`, whose schedule holds it.
 
-What a full list costs is the budget's to absorb: fifty stations at six
-requests a round want 3600 an hour against 2000, so each is fetched
-about every nine minutes instead of five (`bbq_demand_interval`). The
-silence rule stays as it was, since travelling does not make a station
-silent, and a dead id is the thing a stranger could fill the list with.
-Rejected: displacing the least recent station unconditionally, which
-would let a run of new ids from many addresses churn out stations
-people are using this week.
+Tried and withdrawn the same day (b924f2d, reverted): keeping every
+station until the fifty were full and then displacing the one asked for
+least recently. It answered the travelling phone, but it kept strangers'
+stations long after they had stopped using the app, which is the
+opposite of what the holder wants for them.
+
+`BBQ_STATION` remains the one station whose failure fails the run, and
+the one `BBQ_GEOCODE` aims; a kept station derives its coordinate from
+its own first report. Which stations to keep is the holder's list: the
+Stockholm ones near the old ISTOCK877, which has been silent since
+2026-10-28 (sec 15.12.7).
 
 ## 15.15 The server half builds for an older release
 
