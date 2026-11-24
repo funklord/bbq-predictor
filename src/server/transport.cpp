@@ -26,12 +26,14 @@ QByteArray have_of(const QByteArray &held) {
 
 QByteArray bbq_server_built_in_key() {
 	/*
-	 * The hex `bbq-predictor --generate-signing-key` prints as "public
-	 * key". Empty until the publishing key exists; a wrong one is no
-	 * worse than none, since nothing would verify and the providers are
-	 * still asked once the policy gives up.
+	 * The hex `bbq-predictor-publish --generate-signing-key` printed as
+	 * "public key" for vibes.se's publisher, made on its host on
+	 * 2026-11-24 (project.md sec 15.12). The private half never left that
+	 * machine. A wrong one would be no worse than none, since nothing
+	 * would verify and the providers are still asked once the policy
+	 * gives up; the settings' server/public_key overrides it.
 	 */
-	static const char hex[] = "";
+	static const char hex[] = "178780131e88222c624fd675627022aedfb0117f7cb5b2186e9d072090507734";
 	const QByteArray key = QByteArray::fromHex(QByteArray(hex));
 	return key.size() == 32 ? key : QByteArray();
 }

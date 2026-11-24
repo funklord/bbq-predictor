@@ -3640,8 +3640,8 @@ anything.
   device. It needs the Note 9 with any accessibility service running
 - ~~**The fetching server of sec 15**~~, proposed 2026-08-31 as a
   design. Built: the publisher, the daemon and the client's server
-  path are secs 15.12 to 15.16. What still waits on the holder is the
-  publisher's public key, which the applet is built with
+  path are secs 15.12 to 15.16. The publisher's public key is built in
+  since 2026-11-24 (sec 15.12.7)
 - **Whether to implement the portal tier of the dark-desktop rule**,
   which needs `Qt6::DBus` for an answer that abstains on this machine
   and does not exist on Android (sec 3.8.4)
@@ -8397,6 +8397,36 @@ HTTPS body arrived whole before the streaming cap could abort it, so
 the cap is enforced on what arrived as well. And a 290 ms bound on a
 300 ms coarse QTimer failed about one run in two, since such a timer may
 fire 5% early.
+
+### 15.12.7 vibes.se's publisher, and the key the applet is built with
+
+**The key is built in since 2026-11-24**:
+`178780131e88222c624fd675627022aedfb0117f7cb5b2186e9d072090507734`,
+in `bbq_server_built_in_key()`. It came by the holder's request through
+another session (inbox 20261124T0145Z), made with
+`--generate-signing-key` on dl180g6-01 as `bbq-predictor`, the private
+half never leaving it. When it was built in, nothing had been published
+yet, so no signature had been checked against it; the first published
+head is that check, and a key that verifies nothing costs only a
+fallback to the providers (the comment at the function says why).
+
+**How that server is set up**, by the holder: 0.1.0-7 on dl180g6-01,
+Devuan excalibur under sysvinit, cron every five minutes,
+`BBQ_STATION=ISTOCK877`. The daemon listens on 7227 only, since
+lighttpd owns 443 there. So the default route `vibes.se:443` (the daemon
+protocol on 443) reaches lighttpd once vibes.se points at that host; it
+fails there as any non-daemon answer does and the client moves on to the
+https route. Whether to keep that route in the defaults is open, and
+cheap either way.
+
+**A fresh server with a quiet station published nothing.** Its first
+round, 02:45, met HTTP 204 from ISTOCK877 overnight, so no coordinate
+was derived and the forecast bands were never asked (fetch-once says
+so, and exits 1). The coordinate is remembered once the station has
+reported, so this is a first-start gap, but it cost the server its
+first night. `BBQ_GEOCODE` in `/etc/default/bbq-predictor` now passes
+`--geocode` to the round, so the forecast is published whatever the
+station is doing.
 
 ## 15.13 The publisher is its own program, with no Gui
 
@@ -17780,8 +17810,8 @@ wind-down of 2026-11-19; the inbox is empty and recorded (sec 17.8).
   08ac162) and clean themselves when it changes. Never write a rule for
   a `kit.source`: one recursed to about 16,000 processes.
 
-**Waiting on the holder:** the publisher's public key, for
-`bbq_server_built_in_key()`. And two linked decisions: whether to score
+**Waiting on the holder:** ~~the publisher's public key~~, built in
+since 2026-11-24 (sec 15.12.7). And two linked decisions: whether to score
 temperature on whole degrees (sec 16.94.2), and what the applet says
 after a scoring epoch bump (sec 16.120.5). If the first is yes, the
 second becomes real at once. A third question rides on them: sec 7.1

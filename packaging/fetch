@@ -37,4 +37,11 @@ set -- --station "$BBQ_STATION" --history-path "$state/history.sqlite" \
         --signing-key "${BBQ_SIGNING_KEY:-$state/signing.key}" \
         --demand "$state/demand"
 
+# Where the forecast bands are aimed. Unset, the station's own reply
+# supplies it, and a fresh server whose station is quiet publishes no
+# forecast until the station first speaks (project.md sec 15.12.7).
+if [ -n "${BBQ_GEOCODE:-}" ]; then
+	set -- "$@" --geocode "$BBQ_GEOCODE"
+fi
+
 exec flock -n "$state/.fetch.lock" /usr/bin/bbq-predictor-publish "$@"

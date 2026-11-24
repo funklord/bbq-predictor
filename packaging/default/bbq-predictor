@@ -9,6 +9,13 @@
 #
 #BBQ_STATION=ISTOCK877
 #
+# Where the forecast bands are aimed, as LAT,LON. Optional: the station's
+# own reply supplies it, and is remembered once it has, but until the
+# station first reports a fresh server publishes no forecast. Setting it
+# also keeps the forecast aimed at one point whatever the station says.
+#
+#BBQ_GEOCODE=59.33,18.07
+#
 # Every round publishes the station's signed files for bbq-predictor-serve
 # (project.md sec 15.12). The key is made once, as the account that
 # publishes:
