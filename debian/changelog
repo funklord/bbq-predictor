@@ -1,3 +1,12 @@
+bbq-predictor (0.1.0-10) unstable; urgency=low
+
+  * BBQ_KEEP_STATIONS in /etc/default/bbq-predictor names stations the
+    server publishes permanently beside BBQ_STATION: always fetched, never
+    dropped, and not among the 50 that clients' requests may add. Stations
+    clients ask for are still dropped after two weeks without a request.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Tue, 24 Nov 2026 17:42:49 +0100
+
 bbq-predictor (0.1.0-9) unstable; urgency=low
 
   * The server publishes a station's forecast before the station has

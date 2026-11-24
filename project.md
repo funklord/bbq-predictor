@@ -8781,6 +8781,18 @@ its own first report. Which stations to keep is the holder's list: the
 Stockholm ones near the old ISTOCK877, which has been silent since
 2026-10-28 (sec 15.12.7).
 
+**Chosen 2026-11-24**, from the stations within about 6 km of ISTOCK877
+that answered that afternoon (ISTOCK650 and ISTOCK767 were silent and
+are left out): `BBQ_STATION=IJOHAN69`, the nearest at 3.0 km, with
+`BBQ_GEOCODE=59.297,18.093`, its own position, since the old value
+pointed at ISTOCK877; and `BBQ_KEEP_STATIONS="ILIDIN21 ILIDIN1 IENSKE4
+IRSTA33 INACKA27 IENSKE5"`. Seven stations at about six requests a round
+are about 500 of the hour's 2000. The Fold was moved to IJOHAN69 the
+same day by its settings file, over adb, with the app closed: the
+station line rewritten and the derived coordinate dropped, as
+`set_station` does; launched once, the app derived 59.2970,18.0930,
+IJOHAN69's own position, which it does only when the station answers.
+
 ## 15.15 The server half builds for an older release
 
 **The holder's server runs Devuan daedalus** (2026-10-23), built on
@@ -17991,11 +18003,12 @@ three of the app's nodes, even with TalkBack on, so Qt's accessibility
 tree is not readable that way. Hearing it with TalkBack is the test
 left.
 
-**Artifacts, 2026-11-24:** the debs are 0.1.0-9, built from aef1ded
-plus its changelog (suite 402 passed, lintian silent): the publisher's
-key built in, the empty index that lets a quiet station be served, and
-the derived coordinate the station corrects (sec 15.12.7, 2.6.7.6). The
-vibes.se host runs 0.1.0-8, which lacks the last two. The APKs were
+**Artifacts, 2026-11-24:** the debs are 0.1.0-10, built from c73f801
+plus its changelog (suite 404 passed, lintian silent): the publisher's
+key built in, the empty index that lets a quiet station be served, the
+derived coordinate the station corrects (sec 15.12.7, 2.6.7.6), and the
+kept stations (sec 15.14.1). The vibes.se host runs 0.1.0-9, which
+lacks the last. The APKs were
 rebuilt from aef1ded for arm64-v8a and x86_64; a build of the same day
 without the key launched on an API 34 emulator without a crash. Rebuild only when
 asked. `make check-boot` now needs `HULL=` here,
