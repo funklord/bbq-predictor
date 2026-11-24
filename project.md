@@ -8494,6 +8494,12 @@ archive and this machine's both end at that same minute, from two
 clients fetching independently, and the station still answered 204 at
 noon on 2026-11-24. So the server is watching a station that has been
 silent for four weeks; which station to watch instead is the holder's.
+**Not a ban**: at 14:40 the same scraped key fetched ISUNDB5, IJOHAN69,
+IENSKE4 and ILIDIN21 whole (two days of five-minute rows to the last
+quarter hour, current reading included) while ISTOCK877 alone answered
+204. A block would refuse the key or the address for every station,
+with a 401, 403 or 429, not a 204 for one. The nearest live one on the
+September station list is IJOHAN69, 3.0 km.
 
 **How that server is set up**, by the holder: 0.1.0-7 on dl180g6-01,
 Devuan excalibur under sysvinit, cron every five minutes,
