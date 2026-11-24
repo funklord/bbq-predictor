@@ -8479,7 +8479,12 @@ Tried on copies the same day: the Fold's 7293 ISTOCK877 rows merged
 with this machine's 2886 came to 7469, integrity ok, and one publisher
 round over the result wrote 2026-08, -09 and -10 and a new index by
 itself. This machine's archive holds rows the Fold's lacks, so both are
-worth importing.
+worth importing. **Done on -01 the same day**, by this method, from both
+archives (11037 rows from the Fold, 1380 from this machine). Fetched back
+from 10.0.0.11:7227 afterwards, the manifest, index, head and the three
+months all verified under the built-in key, the months the same sizes
+the trial on copies wrote (3594, 9282 and 5064 bytes, index 220), and
+2026-11 answered not served, there being no rows for it.
 Both schemas were `user_version` 2 with the same observation table
 when this was written; check that first, since a later migration
 would make the column list the thing to re-read.
