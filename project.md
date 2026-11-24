@@ -17915,12 +17915,13 @@ three of the app's nodes, even with TalkBack on, so Qt's accessibility
 tree is not readable that way. Hearing it with TalkBack is the test
 left.
 
-**Artifacts, 2026-11-24:** the debs are 0.1.0-8, built from aa822a2
-plus its changelog (suite 400 passed, lintian silent), the first with
-the publisher's key built in (sec 15.12.7); 0.1.0-7, an hour older and
-without it, is what the vibes.se host runs. The APKs were rebuilt from
-aa822a2 for arm64-v8a and x86_64; the build before the key launched on
-an API 34 emulator without a crash. Rebuild only when
+**Artifacts, 2026-11-24:** the debs are 0.1.0-9, built from aef1ded
+plus its changelog (suite 402 passed, lintian silent): the publisher's
+key built in, the empty index that lets a quiet station be served, and
+the derived coordinate the station corrects (sec 15.12.7, 2.6.7.6). The
+vibes.se host runs 0.1.0-8, which lacks the last two. The APKs were
+rebuilt from aef1ded for arm64-v8a and x86_64; a build of the same day
+without the key launched on an API 34 emulator without a crash. Rebuild only when
 asked. `make check-boot` now needs `HULL=` here,
 since hull is not on `PATH`.
 

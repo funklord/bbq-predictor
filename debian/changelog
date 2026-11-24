@@ -1,3 +1,13 @@
+bbq-predictor (0.1.0-9) unstable; urgency=low
+
+  * The server publishes a station's forecast before the station has
+    reported: its index is written with no months, so the manifest lists
+    it and clients read its head.
+  * A derived forecast coordinate the station's own position contradicts
+    is replaced, rather than kept for as long as one is held.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Tue, 24 Nov 2026 04:22:15 +0100
+
 bbq-predictor (0.1.0-8) unstable; urgency=low
 
   * The applet is built with the vibes.se publisher's public key, so it
