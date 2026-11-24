@@ -8304,6 +8304,16 @@ hull 55f2beb (2026-10-27) gives a chroot machine its own NATed network
 when its spec names none, rather than the host's. `bake.sh`'s steps
 already say `(network true)`, and the boots are vms, so nothing changes
 here (hull's notice, inbox 20261027T1808Z, recorded and deleted).
+**The two images it tags, `bbq-boot-sysvinit` and `bbq-boot-openrc`,
+are not worth keeping between runs** (asked by the claude-guidelines
+session for the holder, inbox 20261119T1346Z): every `make check-boot`
+rebakes both from the package in hand and retags them, so a kept tag
+holds only the last package booted. So `hull tag -d` both; the next
+run costs a fresh bake, minutes with the network. Whether hull's
+week-long cache of the init step survives a `gc` once the tags are gone
+is hull's behaviour and was not measured here. Not done from the
+2026-11-24 session, whose permission check refused the untag: the
+holder runs it, as they run `hull gc`.
 Until 2026-10-25 it defaulted to a sibling checkout's build, a path
 nobody without that checkout has, and the holder set that a project
 builds and checks from its own files.
@@ -17832,8 +17842,11 @@ three of the app's nodes, even with TalkBack on, so Qt's accessibility
 tree is not readable that way. Hearing it with TalkBack is the test
 left.
 
-**Stale artifacts:** the debs predate many commits since 0.1.0-6;
-rebuild only when asked. `make check-boot` now needs `HULL=` here,
+**Artifacts, 2026-11-24:** the debs are 0.1.0-7, built from 554d179
+plus its changelog (suite 400 passed, lintian silent), and the APKs
+were rebuilt from the same tree for arm64-v8a and x86_64, the x86_64
+one launched on an API 34 emulator without a crash. Rebuild only when
+asked. `make check-boot` now needs `HULL=` here,
 since hull is not on `PATH`.
 
 **Measured and clean, so not to repeat blind:** the suite a year ahead,

@@ -1,3 +1,27 @@
+bbq-predictor (0.1.0-7) unstable; urgency=low
+
+  * The graph fits its curves past the view's edges before cropping, takes
+    each knot from the band that owns its instant at the sample's time,
+    keeps the moment under the fingers while pinching, and draws each
+    column's temperature range behind the mean.
+  * Radar replaces a column's rain per instant and no longer overrules an
+    observation.
+  * Open-Meteo takes a native regional model's quarter hours (HRRR, AROME,
+    ICON-D2) where one reaches.
+  * The graph and its controls are described to screen readers, and the
+    readout and view step by keyboard.
+  * Stations other than the watched one can be pinned from a list, and the
+    graph settings can follow the default again.
+  * The server routes are read from the settings; a server head that does
+    not verify, or is over two hours old, fails the round.
+  * The publisher saves the demand before the round and says when the
+    demand ceiling turns a station away; the server locks the demand file.
+  * Malformed provider responses found by fuzzing are refused.
+  * A new version reaches the programs that print it, and unused sections
+    are collected at link time.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Tue, 24 Nov 2026 02:02:00 +0100
+
 bbq-predictor (0.1.0-6) unstable; urgency=low
 
   * Take the Weather Underground key from the site's own API_KEY rather
