@@ -8806,6 +8806,18 @@ station line rewritten and the derived coordinate dropped, as
 `set_station` does; launched once, the app derived 59.2970,18.0930,
 IJOHAN69's own position, which it does only when the station answers.
 
+**On -01 from 19:25 the same day** (0.1.0-10, inbox 20261124T1825Z):
+the first round read "8 of 8 due station(s) fetched, 8 wanted, 63 of
+2000 WU requests", ISTOCK877 the eighth until silence drops it. Each new
+station was partial only for its observed band, the history endpoint
+running 4 h 40 to 50 min behind the stations' own current reports, a
+message the feed already gives by name. Fetched back from here, the
+manifest and every station's head and index verified under the built-in
+key, the heads the sizes the host reported. The daemon keeps a
+connection open ten seconds for further requests, so a probe that
+reads until the close waits that long per request: read the length the
+response header gives instead.
+
 ## 15.15 The server half builds for an older release
 
 **The holder's server runs Devuan daedalus** (2026-10-23), built on
