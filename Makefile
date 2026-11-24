@@ -101,6 +101,7 @@ APP_ID = se.vibes.bbq_predictor
 # nothing in the build or the gates installs anything. Packaging is what
 # found it.
 DESKTOP_ID = se.vibes.bbq-predictor
+ICON_SIZES = 16 22 32 48 64 128
 
 # The one place the version is stated (project.md sec 0). Passed into the
 # build rather than repeated in a source file, because a second copy is a
@@ -939,6 +940,26 @@ install-applet: $(ARTIFACT)
 	install -m 0644 packaging/$(DESKTOP_ID).svg \
 	        $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
 
+	# PNGs beside it, for TDE: its icon loader takes a PNG before an SVG
+	# and draws an SVG with its own partial engine. Rendered from the SVG
+	# and committed (packaging/icon/), so the build needs no renderer.
+	for n in $(ICON_SIZES); do \
+		install -Dm 0644 packaging/icon/$$n.png \
+		        $(DESTDIR)$(PREFIX)/share/icons/hicolor/$${n}x$${n}/apps/$(DESKTOP_ID).png || exit 1; \
+	done
+
+	# A packager's install (DESTDIR set) refreshes nothing: the package's
+	# dpkg triggers do. A plain install refreshes what this machine has,
+	# TDE's menu included, and passes over what it lacks.
+	@if [ -z "$(DESTDIR)" ]; then \
+		if command -v update-desktop-database >/dev/null 2>&1; then \
+			update-desktop-database -q $(PREFIX)/share/applications || true; fi; \
+		if command -v gtk-update-icon-cache >/dev/null 2>&1; then \
+			gtk-update-icon-cache -q -t -f $(PREFIX)/share/icons/hicolor || true; fi; \
+		if command -v tdebuildsycoca >/dev/null 2>&1; then \
+			tdebuildsycoca >/dev/null 2>&1 || true; fi; \
+	fi
+
 	# The manual page. Named for the PROGRAM rather than the desktop
 	# entry: what a person types is $(TARGET), and `man` looks the name
 	# up by what was typed.
@@ -966,6 +987,9 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 	rm -f $(DESTDIR)$(PREFIX)/share/applications/$(DESKTOP_ID).desktop
 	rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/$(DESKTOP_ID).svg
+	for n in $(ICON_SIZES); do \
+		rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/$${n}x$${n}/apps/$(DESKTOP_ID).png; \
+	done
 	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/$(TARGET).1
 	rm -f $(DESTDIR)$(PREFIX)/sbin/$(SERVE_TARGET)
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(PUBLISH_TARGET)

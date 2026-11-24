@@ -542,6 +542,15 @@ int main(int argc, char *argv[]) {
 	QCoreApplication::setApplicationName(QStringLiteral("bbq-predictor"));
 
 	/*
+	 * The desktop entry's id, so a Wayland compositor and a taskbar
+	 * match the window to packaging/se.vibes.bbq-predictor.desktop and
+	 * its icon; StartupWMClass there does the same on X11.
+	 */
+	if (draws) {
+		QGuiApplication::setDesktopFileName(QStringLiteral("se.vibes.bbq-predictor"));
+	}
+
+	/*
 	 * Before anything reaches the network, including the diagnostics
 	 * below -- on Android the TLS backend does not load itself, and
 	 * every provider here is HTTPS (sec 11.6).

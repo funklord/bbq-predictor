@@ -17,6 +17,6 @@ Keywords=weather;forecast;rain;temperature;
 # WM_CLASS = "bbq-predictor", "bbq-predictor".
 #
 # This is the X11 half. On Wayland the association comes from
-# QGuiApplication::setDesktopFileName(), which this program does not call yet
-# -- see project.md sec 5.1.3.
+# QGuiApplication::setDesktopFileName(), which main.cpp calls with this
+# file's id.
 StartupWMClass=bbq-predictor

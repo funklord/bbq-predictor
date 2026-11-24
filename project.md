@@ -3060,17 +3060,34 @@ project does not. It cannot be written yet: AppStream requires
 `<project_license>`, so producing one means stating a licence, and that
 is the decision sec 8 says is not mine.
 
-Two smaller pieces of desktop integration, one done and one not:
+Two smaller pieces of desktop integration, both done:
 
 - **`StartupWMClass` is set**, measured with `xprop` on the running
   window rather than guessed. Without it the running window is not
   associated with its launcher and appears as a second, unnamed entry in
   the dock -- beerssh carries the same line and the same warning.
-- **`QGuiApplication::setDesktopFileName()` is not called**, which is
-  the Wayland half of that same association. It is a one-line change and
-  is deliberately not made here, because it cannot be checked without
-  building and an unverified change is not the kind this project
-  commits.
+- **`QGuiApplication::setDesktopFileName("se.vibes.bbq-predictor")`
+  is called** since 2026-11-24, when the program draws: the Wayland half
+  of that same association. It had been left out as unverifiable without
+  a build; the claude-guidelines session's measurement of this tree
+  (inbox 20261124T2059Z) named it, and the build now carries it. The
+  association itself is not seen on a Wayland session, there being none
+  here.
+
+**PNGs beside the SVG, since 2026-11-24, for TDE**, whose icon loader
+takes a PNG before an SVG and draws an SVG with its own partial engine
+(the `desktop-entry` rule, from TDE's source). `packaging/icon/` holds
+16, 22, 32, 48, 64 and 128, rendered from the SVG with Inkscape and
+committed, so a bare `make` needs no renderer; re-render them when the
+SVG changes. The 16 and 22 were looked at enlarged: the red curve and
+the blue rain both read. `make install` puts each at
+`share/icons/hicolor/NxN/apps/se.vibes.bbq-predictor.png`, `uninstall`
+removes those names, and the Debian package takes them through its
+`usr/share/icons` line unchanged. A plain install (no `DESTDIR`) also
+refreshes the desktop database, the icon cache and TDE's menu
+(`tdebuildsycoca`) where those exist; a packager's leaves that to the
+dpkg triggers. The entry's id stays `se.vibes.bbq-predictor`, the
+reverse-DNS form the rule asks for.
 
 Drafting this exposed one thing packaging would have shipped: the
 desktop entry had named `Icon=se.vibes.bbq-predictor` since the first
