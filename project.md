@@ -3323,6 +3323,20 @@ publisher both said 9.9.9. A plain `make` afterwards brought back
 0.1.0. With the stamp dropped from the Makefile's prerequisites,
 `VERSION=7.7.7` printed 0.1.0 again.
 
+**And it broke the fmake build, which nothing here noticed for ten
+days.** fmake's `defines` entry no longer reached the two mains once
+they included `bbq_version.h`, which only qmake writes, so fmake stopped
+at the missing include and built `serve` alone. Reported by the fmake
+session (inbox 20261123T1835Z), with the remedy now in the tree: a
+`[generate.version]` rule in `fmake.toml` runs `tool/version-header`,
+which writes `gen/bbq_version.h` from `VERSION` only when its text
+changes. qmake never sees `gen/`: its include path is its own output
+directory and `src/`. Measured 2026-11-24 on a copy of the tracked tree
+with fmake e15988a: exit 0, all three programs built, the applet and the
+publisher both print 0.1.0, and a second fmake wrote no file. The
+generator's own measurement of a `VERSION` change (only the two mains
+recompiled) is the fmake session's, not repeated here.
+
 ## 6. Style
 
 Three rules -- `snake_case`, tabs to indent and spaces to align,

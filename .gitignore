@@ -4,6 +4,8 @@
 /build-*/
 /build-test/
 /build-test-server/
+# fmake's generated version header (fmake.toml)
+/gen/
 /bbq-predictor
 /bbq-predictor.new
 /bbq-predictor-serve

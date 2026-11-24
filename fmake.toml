@@ -1,8 +1,4 @@
 [project]
-# The version the qmake build passes as BBQ_VERSION_STRING, read from the
-# file it and debian/changelog already agree about rather than written a
-# third time here.
-defines = ['BBQ_VERSION_STRING="$file(VERSION)"']
 
 # qmake's own output directories, which hold a moc_*.cpp for every class
 # that already has one in .fmake/moc. Both are untracked build products;
@@ -14,3 +10,14 @@ defines = ['BBQ_VERSION_STRING="$file(VERSION)"']
 # somebody builds for a new target. Nothing tracked lives under any of
 # them, checked rather than assumed.
 exclude = ["build-*"]
+
+# The version, in the header src/main.cpp and src/publish/main.cpp include,
+# as qmake writes it into its own build directory (project.md sec 5.4).
+# It was a `defines` entry until c86c41a moved the version into a header,
+# after which fmake stopped at the missing include and built only serve.
+# The generator rewrites the header only when VERSION's text changes, so a
+# second fmake writes no file.
+[generate.version]
+command = "tool/version-header VERSION gen/bbq_version.h"
+inputs  = ["VERSION"]
+outputs = ["gen/bbq_version.h"]

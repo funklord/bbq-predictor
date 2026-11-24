@@ -1,0 +1,8 @@
+#!/bin/sh
+# VERSION -> a header defining BBQ_VERSION_STRING, for the fmake build
+# (fmake.toml). Rewritten only when its text changes, so a second build
+# writes no file and recompiles nothing.
+v=$(cat "$1") || exit 1
+line="#define BBQ_VERSION_STRING \"$v\""
+[ -f "$2" ] && [ "$(cat "$2")" = "$line" ] && exit 0
+mkdir -p "$(dirname "$2")" && printf '%s\n' "$line" > "$2"
