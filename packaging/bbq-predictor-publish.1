@@ -59,8 +59,10 @@ The configured station is always fetched and never dropped.
 .IP \(bu 2
 Up to 50 other stations are admitted, in the order they are asked for.
 .IP \(bu 2
-A station nobody has asked for in 14 days is no longer fetched. What was
-published for it stays.
+An admitted station is kept however long nobody asks for it, since a
+client may travel and come back. Only when the 50 are full does a new
+station displace the one asked for least recently, and only if nobody
+has asked for that one in 14 days. What was published for it stays.
 .IP \(bu 2
 A station that says nothing for three rounds in which other stations
 answered is dropped and not admitted again for a week: that is what an

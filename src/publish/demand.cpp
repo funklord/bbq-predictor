@@ -22,6 +22,28 @@ int cost_of(const bbq_demand_station &station) {
 	return station.cost > 0 ? station.cost : bbq_demand_default_cost;
 }
 
+/*
+ * Make room at the ceiling: drop the station asked for least recently,
+ * if nobody has asked for it within bbq_demand_recent_s. Returns whether
+ * one went. Nothing is dropped before the ceiling needs it (sec 15.14.1).
+ */
+bool displace_oldest(bbq_demand &demand, qint64 now_utc) {
+	auto oldest = demand.stations.end();
+	for (auto it = demand.stations.begin(); it != demand.stations.end(); ++it) {
+		if (!it->second.configured &&
+		    (oldest == demand.stations.end() ||
+		     it->second.last_asked_utc < oldest->second.last_asked_utc)) {
+			oldest = it;
+		}
+	}
+	if (oldest == demand.stations.end() ||
+	    now_utc - oldest->second.last_asked_utc <= bbq_demand_recent_s) {
+		return false;
+	}
+	demand.stations.erase(oldest);
+	return true;
+}
+
 /* A version, so a change of layout reads as empty rather than as garbage. */
 const quint32 serialized_version = 1;
 
@@ -60,7 +82,7 @@ int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc
 		bool number = false;
 		const qint64 asked = fields.at(1).toLongLong(&number);
 		if (!number || !bbq_wire_station_valid(station) ||
-		    asked > now_utc + bbq_demand_skew_s || asked < now_utc - bbq_demand_expiry_s) {
+		    asked > now_utc + bbq_demand_skew_s || asked < now_utc - bbq_demand_recent_s) {
 			continue;
 		}
 
@@ -74,7 +96,8 @@ int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc
 		if (refused != demand.refused_until.end() && refused->second > now_utc) {
 			continue;
 		}
-		if (admitted_count(demand) >= bbq_demand_max_stations) {
+		if (admitted_count(demand) >= bbq_demand_max_stations &&
+		    !displace_oldest(demand, now_utc)) {
 			full.insert(station);
 			continue;
 		}
@@ -92,15 +115,6 @@ int bbq_demand_absorb(bbq_demand &demand, const QByteArray &text, qint64 now_utc
 }
 
 void bbq_demand_expire(bbq_demand &demand, qint64 now_utc) {
-	for (auto it = demand.stations.begin(); it != demand.stations.end();) {
-		if (!it->second.configured &&
-		    now_utc - it->second.last_asked_utc > bbq_demand_expiry_s) {
-			it = demand.stations.erase(it);
-		} else {
-			++it;
-		}
-	}
-
 	for (auto it = demand.refused_until.begin(); it != demand.refused_until.end();) {
 		if (it->second <= now_utc) {
 			it = demand.refused_until.erase(it);

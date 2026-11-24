@@ -15,7 +15,8 @@ class test_demand : public QObject {
 private slots:
 	void a_line_must_be_a_station_and_a_believable_time();
 	void the_ceiling_admits_fifty_and_no_more();
-	void two_weeks_without_a_request_expires_a_station();
+	void a_station_nobody_asks_for_is_kept_until_the_ceiling();
+	void the_ceiling_displaces_only_a_station_not_asked_for_lately();
 	void the_configured_station_never_expires_and_comes_first();
 	void silence_drops_a_station_only_while_others_answer();
 	void the_budget_stretches_the_interval_rather_than_being_spent();
@@ -37,7 +38,7 @@ void test_demand::a_line_must_be_a_station_and_a_believable_time() {
 	bbq_demand demand;
 	const QByteArray text = line("IGOOD1", now) + "IBAD2\n" + "ibad3 " +
 	                        QByteArray::number(now) + "\n" + line("IFUTURE4", now + 301) +
-	                        line("IOLD5", now - bbq_demand_expiry_s - 1) +
+	                        line("IOLD5", now - bbq_demand_recent_s - 1) +
 	                        "ISPACE6  " + QByteArray::number(now) + "\n" +
 	                        line("INEAR7", now + 300) + "IEND8 12x\n";
 
@@ -73,29 +74,65 @@ void test_demand::the_ceiling_admits_fifty_and_no_more() {
 	/* The configured station is not one of the fifty. */
 	QCOMPARE(demand.stations.size(), size_t(bbq_demand_max_stations + 1));
 
-	/* One expiring makes room for one more. */
-	demand.stations["IX0"].last_asked_utc = now - bbq_demand_expiry_s - 1;
-	bbq_demand_expire(demand, now);
-	QCOMPARE(bbq_demand_absorb(demand, line("INEW1", now) + line("INEW2", now), now), 1);
+	/* One not asked for lately makes room for one more, and only one. */
+	demand.stations["IX0"].last_asked_utc = now - bbq_demand_recent_s - 1;
+	QCOMPARE(bbq_demand_absorb(demand, line("INEW1", now) + line("INEW2", now), now, &turned_away),
+	         1);
+	QCOMPARE(turned_away, 1);
+	QVERIFY(!demand.stations.count("IX0"));
+	QVERIFY(demand.stations.count("INEW1"));
 }
 
-void test_demand::two_weeks_without_a_request_expires_a_station() {
+/*
+ * A client travels and comes back (holder, 2026-11-24): its station is
+ * still fetched however long it was away, while there is room.
+ */
+void test_demand::a_station_nobody_asks_for_is_kept_until_the_ceiling() {
 	bbq_demand demand;
 	QCOMPARE(bbq_demand_absorb(demand, line("IONE1", now), now), 1);
 
-	bbq_demand_expire(demand, now + bbq_demand_expiry_s);
+	bbq_demand_expire(demand, now + 10 * bbq_demand_recent_s);
 	QVERIFY(demand.stations.count("IONE1"));
+	QCOMPARE(bbq_demand_due(demand, now + 10 * bbq_demand_recent_s).size(), size_t(1));
+}
 
-	bbq_demand_expire(demand, now + bbq_demand_expiry_s + 1);
-	QVERIFY(!demand.stations.count("IONE1"));
+/*
+ * At the ceiling the least recently asked goes, and only one nobody has
+ * asked for in bbq_demand_recent_s: each edge, the side allowed and the
+ * side refused.
+ */
+void test_demand::the_ceiling_displaces_only_a_station_not_asked_for_lately() {
+	const qint64 later = now + 100 * 24 * 3600;
+	bbq_demand demand;
+	QByteArray text;
+	for (int i = 0; i < bbq_demand_max_stations; ++i) {
+		text += line(QStringLiteral("IX%1").arg(i), now);
+	}
+	QCOMPARE(bbq_demand_absorb(demand, text, now), bbq_demand_max_stations);
+	for (int i = 0; i < bbq_demand_max_stations; ++i) {
+		demand.stations[QStringLiteral("IX%1").arg(i)].last_asked_utc = later - 3600 * (i + 1);
+	}
 
-	/* Its published months are the publisher's to keep; only fetching stops. */
+	/* All asked for within the window, the oldest exactly at its edge: kept. */
+	demand.stations["IX7"].last_asked_utc = later - bbq_demand_recent_s;
+	int turned_away = -1;
+	QCOMPARE(bbq_demand_absorb(demand, line("INEW1", later), later, &turned_away), 0);
+	QCOMPARE(turned_away, 1);
+	QVERIFY(demand.stations.count("IX7"));
+
+	/* One second past it: the oldest makes way, and nothing else does. */
+	demand.stations["IX7"].last_asked_utc = later - bbq_demand_recent_s - 1;
+	QCOMPARE(bbq_demand_absorb(demand, line("INEW1", later), later, &turned_away), 1);
+	QCOMPARE(turned_away, 0);
+	QVERIFY(!demand.stations.count("IX7"));
+	QVERIFY(demand.stations.count("INEW1"));
+	QCOMPARE(demand.stations.size(), size_t(bbq_demand_max_stations));
 }
 
 void test_demand::the_configured_station_never_expires_and_comes_first() {
 	bbq_demand demand;
 	bbq_demand_absorb(demand, line("IASKED1", now) + line("IASKED2", now - 60), now);
-	bbq_demand_configure(demand, QStringLiteral("ICONF1"), now - 2 * bbq_demand_expiry_s);
+	bbq_demand_configure(demand, QStringLiteral("ICONF1"), now - 2 * bbq_demand_recent_s);
 
 	bbq_demand_expire(demand, now);
 	QVERIFY(demand.stations.count("ICONF1"));
@@ -106,11 +143,14 @@ void test_demand::the_configured_station_never_expires_and_comes_first() {
 	QCOMPARE(due[1], QStringLiteral("IASKED1"));
 	QCOMPARE(due[2], QStringLiteral("IASKED2"));
 
-	/* Configuring another moves the mark; the old one can expire now. */
+	/*
+	 * Configuring another moves the mark; the old one stays, as any
+	 * asked-for station does, and now counts against the ceiling.
+	 */
 	bbq_demand_configure(demand, QStringLiteral("IASKED2"), now);
 	QVERIFY(!demand.stations["ICONF1"].configured);
 	bbq_demand_expire(demand, now + 1);
-	QVERIFY(!demand.stations.count("ICONF1"));
+	QVERIFY(demand.stations.count("ICONF1"));
 }
 
 void test_demand::silence_drops_a_station_only_while_others_answer() {
