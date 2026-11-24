@@ -1,4 +1,7 @@
 #include <QDateTime>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QNetworkProxy>
 #include <QTemporaryDir>
 #include <QSignalSpy>
@@ -31,6 +34,7 @@ private slots:
 	void a_band_never_asked_for_is_not_a_band_that_answered();
 	void a_band_that_settled_is_not_one_still_waiting();
 	void a_pinned_coordinate_does();
+	void the_station_corrects_a_derived_coordinate_it_contradicts();
 	void resetting_the_same_station_changes_nothing();
 	void the_observed_band_is_served_from_the_store();
 	void every_station_with_a_queue_is_scored_not_just_the_watched_one();
@@ -120,6 +124,59 @@ void test_feed::a_pinned_coordinate_does() {
 	feed.set_station(QStringLiteral("IGOTHENB12"));
 	QVERIFY2(feed.has_geocode(),
 	         "a pinned coordinate was discarded by a station change");
+}
+
+/*
+ * A derived coordinate can be wrong without any station change: the
+ * config's cache once held ISTOCK822's position beside station=ISTOCK877
+ * after a hand edit, and the observed handler learned a coordinate only
+ * when none was held, so it was never corrected (sec 2.6.7.6).
+ */
+void test_feed::the_station_corrects_a_derived_coordinate_it_contradicts() {
+	const auto reply = [](double latitude, double longitude) {
+		QJsonObject row;
+		row.insert(QStringLiteral("stationID"), QStringLiteral("ISTOCK877"));
+		row.insert(QStringLiteral("lat"), latitude);
+		row.insert(QStringLiteral("lon"), longitude);
+		QJsonObject root;
+		root.insert(QStringLiteral("observations"), QJsonArray{row});
+		return QJsonDocument(root);
+	};
+
+	{
+		bbq_wu_feed feed;
+		feed.set_station(QStringLiteral("ISTOCK877"));
+		feed.set_geocode(59.3390, 18.0550, false);
+		QSignalSpy derived(&feed, &bbq_wu_feed::geocode_derived);
+
+		emit feed.m_client->ready(bbq_wu_product::observed, reply(59.32253, 18.11118));
+		QCOMPARE(derived.count(), 1);
+		QCOMPARE(feed.m_latitude, 59.32253);
+		QCOMPARE(feed.m_longitude, 18.11118);
+		QVERIFY2(!feed.m_geocode_pinned, "a corrected coordinate became the configuration's");
+	}
+	{
+		/* The cache's own four decimals read back: no move, no refetch. */
+		bbq_wu_feed feed;
+		feed.set_station(QStringLiteral("ISTOCK877"));
+		feed.set_geocode(59.3225, 18.1112, false);
+		QSignalSpy derived(&feed, &bbq_wu_feed::geocode_derived);
+
+		emit feed.m_client->ready(bbq_wu_product::observed, reply(59.32253, 18.11118));
+		QCOMPARE(derived.count(), 0);
+		QCOMPARE(feed.m_latitude, 59.3225);
+	}
+	{
+		/* Chosen by configuration: the station has no say. */
+		bbq_wu_feed feed;
+		feed.set_station(QStringLiteral("ISTOCK877"));
+		feed.set_geocode(59.3390, 18.0550, true);
+		QSignalSpy derived(&feed, &bbq_wu_feed::geocode_derived);
+
+		emit feed.m_client->ready(bbq_wu_product::observed, reply(59.32253, 18.11118));
+		QCOMPARE(derived.count(), 0);
+		QCOMPARE(feed.m_latitude, 59.3390);
+	}
 }
 
 void test_feed::resetting_the_same_station_changes_nothing() {

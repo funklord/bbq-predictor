@@ -83,6 +83,15 @@ const int radar_freshness_s = 10 * 60;
 const int extended_freshness_s = 60 * 60;
 
 /*
+ * How far a station's reported position may sit from a derived coordinate
+ * before the coordinate is replaced (sec 2.6.7.6). About 100 m: the
+ * config caches four decimals, about 10 m, so a cache read back from disk
+ * never counts as a move and refetches nothing, while a neighbouring
+ * station, kilometres off, always does.
+ */
+const double derived_drift_deg = 0.001;
+
+/*
  * vibes.se publishes after every five-minute fetch (sec 15.12), so a
  * client asking more often than that is told "unchanged" for nothing.
  */
@@ -526,19 +535,40 @@ bbq_wu_feed::bbq_wu_feed(QObject *parent) : QObject(parent) {
 		 * The station supplies the coordinate the forecast bands need
 		 * (sec 2.6.7.1), so they wait for it rather than for a lookup.
 		 */
-		if (was_observed && need_geocode) {
+		if (was_observed && (need_geocode || !m_geocode_pinned)) {
 			const QJsonArray rows = document.object()
 			                                .value(QStringLiteral("observations"))
 			                                .toArray();
 			if (!rows.isEmpty()) {
 				const QJsonObject first = rows.first().toObject();
 				if (first.contains(QStringLiteral("lat"))) {
-					m_latitude = first.value(QStringLiteral("lat")).toDouble();
-					m_longitude = first.value(QStringLiteral("lon")).toDouble();
-					m_have_geocode = true;
-					emit geocode_derived(m_latitude, m_longitude);
-					save_schedule();
-					start_forecast_bands();
+					const double latitude = first.value(QStringLiteral("lat")).toDouble();
+					const double longitude = first.value(QStringLiteral("lon")).toDouble();
+					if (need_geocode) {
+						m_latitude = latitude;
+						m_longitude = longitude;
+						m_have_geocode = true;
+						emit geocode_derived(m_latitude, m_longitude);
+						save_schedule();
+						start_forecast_bands();
+					} else if (std::abs(latitude - m_latitude) > derived_drift_deg ||
+					           std::abs(longitude - m_longitude) > derived_drift_deg) {
+						/*
+						 * A derived coordinate the station itself now
+						 * contradicts (sec 2.6.7.6). The cache in the
+						 * config was written for some station, and
+						 * nothing but this reply says it was this
+						 * one: a hand-edited station line kept
+						 * ISTOCK822's coordinate beside ISTOCK877 for
+						 * ten weeks, because the coordinate was only
+						 * ever learned when none was held. A pinned
+						 * one is the configuration's and stays.
+						 */
+						set_geocode(latitude, longitude, false);
+						emit geocode_derived(m_latitude, m_longitude);
+						save_schedule();
+						start_forecast_bands();
+					}
 				}
 			}
 		}

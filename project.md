@@ -920,6 +920,28 @@ one. Each half, sabotaged, fails it. The station half also had a test
 already, `a_new_station_has_never_been_asked` (sec 14.9), which this
 paragraph never caught up with.
 
+#### 2.6.7.6 The station corrects a derived coordinate it contradicts
+
+**This machine's config held ISTOCK822's position beside
+`station=ISTOCK877`**, written 2026-09-11 and found 2026-11-24 by the
+session that set up vibes.se's server: `derived_geocode="59.3390,18.0550"`,
+3.6 km from ISTOCK877's 59.3225,18.1112. `set_station` drops the cache on
+a change and has since 83b951e, so the station line was most likely
+edited by hand, which nothing can see. What made it permanent was the
+handler: it learned a coordinate only when none was held, so a wrong
+cache was read back every start and never questioned. The forecast
+bands were aimed 3.6 km from the observations for ten weeks.
+
+So the observed reply now checks an unpinned coordinate against the
+station's own position, and replaces it when the two differ by more than
+0.001 degrees (about 100 m; the cache keeps four decimals, about 10 m,
+so a cache read back from disk is never a move). The replacement goes
+through `set_geocode`, so the coordinate's bands are refetched, and is
+written back to the cache. A pinned coordinate -- the override or
+`--geocode` -- is the configuration's, and the station has no say over
+it. `the_station_corrects_a_derived_coordinate_it_contradicts` fails
+with the old condition put back.
+
 ### 2.6.8 The command line overrides the run, not the configuration
 
 `--station` and `--geocode` win for the run they are given on and
@@ -8405,10 +8427,19 @@ fire 5% early.
 in `bbq_server_built_in_key()`. It came by the holder's request through
 another session (inbox 20261124T0145Z), made with
 `--generate-signing-key` on dl180g6-01 as `bbq-predictor`, the private
-half never leaving it. When it was built in, nothing had been published
-yet, so no signature had been checked against it; the first published
-head is that check, and a key that verifies nothing costs only a
-fallback to the providers (the comment at the function says why).
+half never leaving it. A key that verifies nothing would cost only a
+fallback to the providers (the comment at the function says why), and
+this one does verify: **the first head, published 04:10 on 2026-11-24
+by 0.1.0-8 with `BBQ_GEOCODE` set**, was fetched from 10.0.0.11:7227
+with the daemon's own request (kind 3, station ISTOCK877). It arrived
+as 1437 bytes with the sha256 the publishing host reported
+(08c03605...), and its last 64 bytes verified as an Ed25519 signature
+over the rest under this key, with Python's `cryptography` rather than
+the project's own Monocypher. The same copy with one bit flipped was
+refused, so the check was not vacuous (inbox 20261124T0311Z).
+Still not seen: the applet itself taking a round from that server. A
+`--shot` aimed at it with a scratch config recorded no server state,
+which says the shot ends first, not that the path fails.
 
 **How that server is set up**, by the holder: 0.1.0-7 on dl180g6-01,
 Devuan excalibur under sysvinit, cron every five minutes,
@@ -8426,7 +8457,8 @@ so, and exits 1). The coordinate is remembered once the station has
 reported, so this is a first-start gap, but it cost the server its
 first night. `BBQ_GEOCODE` in `/etc/default/bbq-predictor` now passes
 `--geocode` to the round, so the forecast is published whatever the
-station is doing.
+station is doing. Measured the same night: with it set, the 04:10 round
+published a head while the station still answered 204.
 
 ## 15.13 The publisher is its own program, with no Gui
 
