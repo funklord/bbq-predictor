@@ -1,3 +1,13 @@
+bbq-predictor (0.1.0-8) unstable; urgency=low
+
+  * The applet is built with the vibes.se publisher's public key, so it
+    reads published data without being configured.
+  * BBQ_GEOCODE in /etc/default/bbq-predictor aims the server's forecast
+    bands, so a server whose station is quiet at its first start still
+    publishes a forecast.
+
+ -- Nabeel Sowan <nabeel@vibes.se>  Tue, 24 Nov 2026 02:48:10 +0100
+
 bbq-predictor (0.1.0-7) unstable; urgency=low
 
   * The graph fits its curves past the view's edges before cropping, takes
