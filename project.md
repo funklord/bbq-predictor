@@ -8450,7 +8450,45 @@ one layer up: a server whose station has not reported serves nothing.
 The publisher now writes the index once with no months
 (`a_station_with_no_observations_is_served_its_forecast`, which fails
 with the old condition). The wire format, the daemon and the client
-already took a count of zero.
+already took a count of zero. Seen on the host at 12:25 under 0.1.0-9:
+ISTOCK877/index written (94 bytes) and the manifest grown to list it.
+
+**Importing an applet's archive into the server's** (asked 2026-11-24,
+to seed -01 with the Fold's two months) needs no tool of its own: the
+observation table is the whole of what is published, its primary key
+(station, valid_utc) makes `INSERT OR IGNORE` the merge, and the
+publisher writes every month `observation_months` returns that its
+last index does not already describe, in the next round, unbounded.
+The verification and reliability sums are not published and describe
+the forecasts that one client saw, so they stay behind, and so does
+`forecast_pending`, which would only be scored against the imported
+rows into those same unpublished sums. Done as `bbq-predictor`, under
+the round's own lock so a cron round cannot interleave:
+
+    cd /var/lib/bbq-predictor
+    flock .fetch.lock sqlite3 history.sqlite \
+        ".backup history.sqlite.pre-import" \
+        "ATTACH 'fold.sqlite' AS f" \
+        "INSERT OR IGNORE INTO observation (station, valid_utc, duration_s,
+             temperature, precip_rate, wind_kph, provider)
+         SELECT station, valid_utc, duration_s, temperature, precip_rate,
+             wind_kph, provider FROM f.observation" \
+        "DETACH f"
+
+Tried on copies the same day: the Fold's 7293 ISTOCK877 rows merged
+with this machine's 2886 came to 7469, integrity ok, and one publisher
+round over the result wrote 2026-08, -09 and -10 and a new index by
+itself. This machine's archive holds rows the Fold's lacks, so both are
+worth importing.
+Both schemas were `user_version` 2 with the same observation table
+when this was written; check that first, since a later migration
+would make the column list the thing to re-read.
+
+**ISTOCK877 has reported nothing since 2026-10-28 22:09.** The Fold's
+archive and this machine's both end at that same minute, from two
+clients fetching independently, and the station still answered 204 at
+noon on 2026-11-24. So the server is watching a station that has been
+silent for four weeks; which station to watch instead is the holder's.
 
 **How that server is set up**, by the holder: 0.1.0-7 on dl180g6-01,
 Devuan excalibur under sysvinit, cron every five minutes,
