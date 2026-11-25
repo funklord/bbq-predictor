@@ -3707,12 +3707,14 @@ anything.
   should run in qtty, the workspace's own terminal, so that qtty can be
   tested on harder graphical work than text -- a high-resolution
   temperature and rain graph that redraws, pans and pinches is exactly
-  that. Not designed yet. What "support" means is the first thing to
-  settle: drawing the graph into the terminal through a graphics
-  protocol qtty speaks, or a text-mode view, and which of those qtty is
-  meant to be measured on. Read qtty's `project.md` for what it
-  renders before choosing, and report what it handles badly to qtty's
-  inbox rather than working around it here
+  that. Not designed yet. **Both modes, settled by the holder the same
+  day**: qtty is meant to support every kind of terminal, so
+  bbq-predictor needs a graphics view, the graph drawn through the
+  graphics protocols qtty speaks, and a text view for terminals with
+  none, and both are tested anyway. Read qtty's `project.md` for what
+  it renders and which protocols before designing either, and report
+  what it handles badly to qtty's inbox rather than working around it
+  here
 
 ### 9.3 Raised elsewhere
 
