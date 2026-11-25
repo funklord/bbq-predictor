@@ -3703,6 +3703,16 @@ anything.
 - ~~**Whether to take Open-Meteo's quarter-hourly block where it is
   genuine.**~~ Taken since sec 2.10.5, as the regional band, where a
   native quarter-hourly model reaches the point
+- **qtty support** (wanted by the holder, 2026-11-25): bbq-predictor
+  should run in qtty, the workspace's own terminal, so that qtty can be
+  tested on harder graphical work than text -- a high-resolution
+  temperature and rain graph that redraws, pans and pinches is exactly
+  that. Not designed yet. What "support" means is the first thing to
+  settle: drawing the graph into the terminal through a graphics
+  protocol qtty speaks, or a text-mode view, and which of those qtty is
+  meant to be measured on. Read qtty's `project.md` for what it
+  renders before choosing, and report what it handles badly to qtty's
+  inbox rather than working around it here
 
 ### 9.3 Raised elsewhere
 
