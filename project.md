@@ -18228,9 +18228,10 @@ weeks without a request; the holder's are kept by `BBQ_KEEP_STATIONS`.
 (aef1ded); a derived coordinate the station corrects (ced3ae8, sec
 2.6.7.6); kept stations (c73f801); fmake's version header (554d179);
 PNG icons and `setDesktopFileName` (2af07cd). Debs up to 0.1.0-10 are
-in `build/deb`; the PNG icons are in no deb yet. A `make deb` the holder
-started at about 11:38 on 2026-11-25 was running when the machine went
-down for a reboot: run it again.
+in `build/deb`. The holder's own `make deb` of 2026-11-25 finished at
+11:57 and rebuilt them under the same version, 0.1.0-10, now carrying
+the six PNG icons; the server package on -01 is the earlier build of
+that number, which differs only in the applet's icons.
 
 **The Fold** runs the aef1ded build since 2026-11-24 21:41, station
 IJOHAN69, its data kept. It has not yet done a round from the server or
