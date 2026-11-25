@@ -20,6 +20,8 @@ wins.
 - App id: `se.vibes.bbq-predictor`
 - Symbol prefix: `bbq_`
 - Version: one place, the `VERSION` file
+- Where things stand: the newest status section, sec 16.134
+  (2026-11-25)
 
 ### 0.1 The name
 
@@ -17980,6 +17982,9 @@ compared with the clock:
 
 ## 16.131 Where things stand, 2026-11-15
 
+Superseded by sec 16.134; kept for what it says about the widget, the
+background fetch and the questions still open.
+
 What the next session should know, as of d800d04. Folded for the
 wind-down of 2026-11-19; the inbox is empty and recorded (sec 17.8).
 
@@ -18200,3 +18205,49 @@ since 8edc558, so the API 29 abort of sec 11.6 could not happen in that
 time, and the protections against it (the drop-down below API 33, the
 factory for scroll bars) have not met it since. They are in place, and
 the factory is still unverified on a device (sec 9.2).
+
+
+## 16.134 Where things stand, 2026-11-25
+
+Folded for a wind-down and reboot. As of cfe31e9.
+
+**The vibes.se server is live** on dl180g6-01, running 0.1.0-10:
+`BBQ_STATION=IJOHAN69`, `BBQ_GEOCODE=59.297,18.093`, and six kept
+Stockholm stations (sec 15.14.1). vibes.se forwards 7227 to it; 443 is
+closed there. Every file it serves verifies under the key built into
+the applet (sec 15.12.7), checked from this machine through the public
+address, which loops back through the router: access from outside the
+LAN is not yet proved. The desktop applet with no server configured
+reached it and drew the forecast. ISTOCK877 has been silent since
+2026-10-28; its archive (the Fold's and this machine's, merged) was
+imported on the server. Other people's stations still expire after two
+weeks without a request; the holder's are kept by `BBQ_KEEP_STATIONS`.
+
+**Landed 2026-11-24:** the publisher's key built in (aa822a2);
+`BBQ_GEOCODE` (aa822a2); an empty index so a quiet station is served
+(aef1ded); a derived coordinate the station corrects (ced3ae8, sec
+2.6.7.6); kept stations (c73f801); fmake's version header (554d179);
+PNG icons and `setDesktopFileName` (2af07cd). Debs up to 0.1.0-10 are
+in `build/deb`; the PNG icons are in no deb yet. A `make deb` the holder
+started at about 11:38 on 2026-11-25 was running when the machine went
+down for a reboot: run it again.
+
+**The Fold** runs the aef1ded build since 2026-11-24 21:41, station
+IJOHAN69, its data kept. It has not yet done a round from the server or
+scheduled its background job, because it was asleep when launched.
+**Next:** the holder opens the app on mobile data for a minute; then
+read its archive over adb (`run-as se.vibes.bbq_predictor`) for
+`head/IJOHAN69` in `server_state` and rows in `server_month`. That is
+the proof of access from the internet, and it schedules the widget's
+background fetch.
+
+**Open for the holder:** whole-degree scoring and the scoring epoch
+(sec 16.94.2, 16.120.5) with configurable grilling thresholds; the
+Fold's background fetch over half an hour; the API 29 slider on the
+Note 9 with a service on (sec 9.2); `hull tag -d` of the two
+`bbq-boot-*` images (sec 15.12.5), refused to this session; whether
+`VERSION` moves past 0.1.0, since the APK's versionCode is still 100.
+
+**New and not designed:** bbq-predictor in qtty, both a graphics view
+and a text view (sec 9.2).
+
