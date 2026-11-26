@@ -203,8 +203,13 @@ endif
 SERVE_CFLAGS = -std=c11 -Os -ffunction-sections -fdata-sections \
                -Wl,--gc-sections -Wall -Wextra -Isrc
 
+#
+# The flags it was built with are recorded beside it, so a change of
+# them rebuilds it: the package build hands over Debian's in the
+# environment, and nothing else here would notice they had moved.
 $(SERVE_ARTIFACT): src/serve/serve.c src/serve/serve_loop.c \
-                   src/serve/serve_core.c $(wildcard src/serve/*.h)
+                   src/serve/serve_core.c $(wildcard src/serve/*.h) \
+                   $(BUILD_DIR)/serve.flags
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SERVE_CFLAGS) $(LDFLAGS) \
 	        -o $@.new $(filter %.c,$^)
@@ -297,9 +302,69 @@ $(BUILD_DIR)/qmake.args: FORCE
 $(PUBLISH_BUILD_DIR)/qmake.args: FORCE
 	$(call bbq_qmake_stamp,$(QMAKE) $(QMAKE_ARGS))
 
-$(BUILD_DIR)/Makefile: bbq-predictor.pro core.pri $(BUILD_DIR)/qmake.args | submodules
+$(BUILD_DIR)/serve.flags: FORCE
+	$(call bbq_qmake_stamp,$(CC) $(CPPFLAGS) $(CFLAGS) $(SERVE_CFLAGS) $(LDFLAGS))
+
+# What a build hands qmake from the environment, ADDED to what core.pri
+# says and never replacing it (the debian-packaging rule). dh puts
+# Debian's CPPFLAGS, CFLAGS, CXXFLAGS and LDFLAGS in the environment, and
+# qmake writes a Makefile that reads none of them, so the applet and the
+# publisher went out with no _FORTIFY_SOURCE, no stack protector and no
+# relro: 0 _chk imports in the 0.1.0-10 applet. -O is filtered out
+# because core.pri owns the level (-Os); a plain build, with all four
+# unset, hands over nothing.
+#
+# From the environment only: a CXXFLAGS on make's command line reaches
+# the Makefile qmake writes as an override and replaces its whole
+# CXXFLAGS -- -Os, -fPIC and every -D with it -- so it is refused.
+HANDED_CFLAGS   = $(filter-out -O%,$(CPPFLAGS) $(CFLAGS))
+HANDED_CXXFLAGS = $(filter-out -O%,$(CPPFLAGS) $(CXXFLAGS))
+HANDED_LFLAGS   = $(LDFLAGS)
+ifneq ($(filter command,$(origin CFLAGS) $(origin CXXFLAGS)),)
+$(error CFLAGS or CXXFLAGS on the command line would replace qmake's own; set it in the environment instead)
+endif
+HANDED_QMAKE_ARGS = "QMAKE_CFLAGS+=$$HANDED_CFLAGS" \
+                    "QMAKE_CXXFLAGS+=$$HANDED_CXXFLAGS" \
+                    "QMAKE_LFLAGS+=$$HANDED_LFLAGS"
+
+# **What a qmake tree's objects were compiled with**, and a clean when it
+# changes: rerunning qmake recompiles nothing, since its objects depend
+# on their sources, so a tree built with one set of flags would link
+# objects compiled with another. The configuration is in it too, for the
+# same reason -- DEBUG=1 or SANITIZE=1 in a tree built without left every
+# object as it was. Written only when it changes. The flags are read
+# from the environment rather than pasted into the shell line, so no
+# quote in a flag can end the string; `make` rather than $(MAKE) for the
+# clean, so `make -n` does not run it.
+define bbq_flags_record
+	@want="$$HANDED_CFLAGS|$$HANDED_CXXFLAGS|$$HANDED_LFLAGS|$(QMAKE_CONFIG)"; \
+	if [ -f '$@' ]; then have=$$(cat '$@'); else have=; fi; \
+	[ "$$have" = "$$want" ] && exit 0; \
+	mkdir -p '$(@D)' || exit 1; \
+	if [ -f '$(@D)/Makefile' ]; then \
+		echo "build: what $(@D) is compiled with changed; cleaning its objects"; \
+		make -o Makefile -C '$(@D)' clean >/dev/null || exit 1; \
+	fi; \
+	printf '%s\n' "$$want" > '$@'
+endef
+
+FLAGS_RECORDS = $(BUILD_DIR)/flags.source $(PUBLISH_BUILD_DIR)/flags.source
+$(FLAGS_RECORDS) $(BUILD_DIR)/Makefile $(PUBLISH_BUILD_DIR)/Makefile: export HANDED_CFLAGS := $(HANDED_CFLAGS)
+$(FLAGS_RECORDS) $(BUILD_DIR)/Makefile $(PUBLISH_BUILD_DIR)/Makefile: export HANDED_CXXFLAGS := $(HANDED_CXXFLAGS)
+$(FLAGS_RECORDS) $(BUILD_DIR)/Makefile $(PUBLISH_BUILD_DIR)/Makefile: export HANDED_LFLAGS := $(HANDED_LFLAGS)
+$(FLAGS_RECORDS): FORCE
+	$(bbq_flags_record)
+
+# The package build's own tree (debian/rules builds with
+# BUILD_DIR=$(DEB_BUILD_DIR)), so that `make` and `make deb` never
+# rebuild each other's objects for the change of flags.
+DEB_BUILD_DIR ?= build-deb
+
+$(BUILD_DIR)/Makefile: bbq-predictor.pro core.pri $(BUILD_DIR)/qmake.args \
+                       $(BUILD_DIR)/flags.source | submodules
 	mkdir -p $(BUILD_DIR)
-	cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor.pro $(QMAKE_ARGS)
+	cd $(BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor.pro $(QMAKE_ARGS) \
+	        $(HANDED_QMAKE_ARGS)
 
 # The sources and headers are prerequisites so that adding a file rebuilds
 # through qmake's Makefile rather than being missed. qmake's own generated
@@ -327,10 +392,11 @@ $(TARGET): $(BUILD_DIR)/$(TARGET)
 	cp $(BUILD_DIR)/$(TARGET) $(TARGET).new
 	mv -f $(TARGET).new $(TARGET)
 
-$(PUBLISH_BUILD_DIR)/Makefile: bbq-predictor-publish.pro core.pri $(PUBLISH_BUILD_DIR)/qmake.args | submodules
+$(PUBLISH_BUILD_DIR)/Makefile: bbq-predictor-publish.pro core.pri $(PUBLISH_BUILD_DIR)/qmake.args \
+                               $(PUBLISH_BUILD_DIR)/flags.source | submodules
 	mkdir -p $(PUBLISH_BUILD_DIR)
 	cd $(PUBLISH_BUILD_DIR) && $(QMAKE) $(CURDIR)/bbq-predictor-publish.pro \
-	        $(QMAKE_ARGS)
+	        $(QMAKE_ARGS) $(HANDED_QMAKE_ARGS)
 
 $(PUBLISH_BUILD_DIR)/$(PUBLISH_TARGET): $(PUBLISH_BUILD_DIR)/Makefile $(SOURCES) $(HEADERS)
 	$(MAKE) -C $(PUBLISH_BUILD_DIR)
@@ -878,8 +944,21 @@ check-boot:
 			grep -v emulated $(BUILD_DIR)/boot/$$init.log >&2; exit 1; }; \
 	done
 
+#
+# -nc, so the build is not cleaned first: dpkg-buildpackage's clean ran
+# this Makefile's distclean, and every package rebuilt the whole tree --
+# and took build/, build-test/ and the binaries with it. Make decides what
+# is stale, in the package's own tree (DEB_BUILD_DIR). The stamp goes
+# because with it dh skips the whole build sequence and packages what was
+# there; debian/.debhelper because dh_strip collects every build's debug
+# file there and only the skipped clean emptied it, so -dbgsym would carry
+# the debug files of binaries built before. Not dh_clean, which also
+# deletes every *.orig, *.rej and *~ in the tree. `make deb-clean deb` is
+# the package from clean.
 deb:
-	dpkg-buildpackage -b -us -uc
+	rm -f debian/debhelper-build-stamp
+	rm -rf debian/.debhelper
+	DEB_BUILD_DIR=$(DEB_BUILD_DIR) dpkg-buildpackage -b -us -uc -nc
 	mkdir -p $(DEB_DIR)
 	@arch=$$(dpkg --print-architecture); \
 	version=$$(dpkg-parsechangelog -S Version) || exit 1; \
@@ -1032,8 +1111,13 @@ endef
 
 veryclean: clean
 	$(call bbq_remove_tree,$(BUILD_DIR) $(TEST_BUILD_DIR) build-test-server $(ANDROID_BUILD_DIR) \
-	        $(ANDROID_COMPILE_DIR))
+	        $(ANDROID_COMPILE_DIR) $(DEB_BUILD_DIR))
 	rm -f $(TARGET) $(SERVE_TARGET) $(PUBLISH_TARGET)
+
+# The package build's tree alone: what a bare dpkg-buildpackage cleans
+# (debian/rules), leaving every other build where it was.
+deb-clean:
+	$(call bbq_remove_tree,$(DEB_BUILD_DIR))
 
 # `distclean` removes what the build generated and `veryclean` does not.
 # `.qmake.stash` is qmake's, is named, and is disposable by construction.
@@ -1058,4 +1142,4 @@ FORCE:
         fuzz-providers \
         submodules check-publish-libraries check-android-compile \
         android android-aab \
-        deb-daedalus check-boot install install-applet install-server uninstall clean veryclean distclean help
+        deb-daedalus deb-clean check-boot install install-applet install-server uninstall clean veryclean distclean help

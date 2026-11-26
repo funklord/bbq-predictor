@@ -17,8 +17,23 @@ endif
 # lintian's debug-file-with-no-debug-symbols. The release build does not
 # carry -g on its own; DEBUG_INFO adds it without making this a debug
 # build, and dh_strip moves the result out of the shipped binary.
+#
+# Every call gets the same environment, BUILD_ENV, because what the tree
+# was compiled with is recorded in it (the Makefile's flags.source) and a
+# call that differed -- an install without DEBUG_INFO -- would clean it
+# and build again. The package's own tree, DEB_BUILD_DIR, so `make deb`
+# and a plain `make` never rebuild each other's objects; in the
+# environment rather than on make's command line, where it would reach
+# the Makefiles qmake writes as an override. The suite's tree is the
+# package's too, so a package build does not take a developer's
+# build-test/ to another configuration.
+DEB_BUILD_DIR ?= build-deb
+BUILD_ENV = BUILD_DIR=$(DEB_BUILD_DIR) \
+            TEST_BUILD_DIR=$(DEB_BUILD_DIR)/test$(if $(SERVER_ONLY),-server) \
+            DEBUG_INFO=1 SERVER_ONLY=$(SERVER_ONLY)
+
 override_dh_auto_build:
-	$(MAKE) DEBUG_INFO=1 SERVER_ONLY=$(SERVER_ONLY)
+	$(BUILD_ENV) $(MAKE)
 
 # PREFIX is /usr/local by default, which is right for a hand-built copy
 # and wrong for a package. Into debian/tmp, because two packages now take
@@ -26,11 +41,11 @@ override_dh_auto_build:
 # The suite dh runs, told which half was built.
 override_dh_auto_test:
 ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
-	$(MAKE) test SERVER_ONLY=$(SERVER_ONLY)
+	$(BUILD_ENV) $(MAKE) test
 endif
 
 override_dh_auto_install:
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp PREFIX=/usr SERVER_ONLY=$(SERVER_ONLY)
+	$(BUILD_ENV) $(MAKE) install DESTDIR=$(CURDIR)/debian/tmp PREFIX=/usr
 
 # The archive server's LSB script, installed by its .install file from
 # packaging/ so there is one copy of it; this adds only the update-rc.d
@@ -76,3 +91,10 @@ override_dh_installsystemd:
 # the server package does not carry the design record.)
 override_dh_compress:
 	dh_compress -X.md
+
+# For dpkg-buildpackage run directly; `make deb` passes -nc and does not
+# clean. dh's own choice was the Makefile's distclean, which removed
+# build/, build-test/, the Android trees and the built binaries -- every
+# build in the tree, for a package that uses none of them.
+override_dh_auto_clean:
+	DEB_BUILD_DIR=$(DEB_BUILD_DIR) $(MAKE) deb-clean

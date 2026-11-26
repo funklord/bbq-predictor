@@ -3378,6 +3378,53 @@ publisher both print 0.1.0, and a second fmake wrote no file. The
 generator's own measurement of a `VERSION` change (only the two mains
 recompiled) is the fmake session's, not repeated here.
 
+### 5.5 A second `make deb` compiles nothing
+
+**Every `make deb` rebuilt everything, and the package carried none of
+Debian's hardening.** dpkg-buildpackage cleaned first, and dh's clean was
+this Makefile's `distclean`. That removed `build/`, `build-test/`, the
+Android trees and the built binaries. qmake writes a Makefile that reads
+no CPPFLAGS, CXXFLAGS or LDFLAGS, so the applet and the publisher in
+0.1.0-10 had 0 `_chk` imports. The workspace rule is the
+debian-packaging skill's (inbox 20261125T1430Z).
+
+What changed, all in the Makefile and `debian/rules`:
+
+- `make deb` passes `-nc`. Before that it removes
+  `debian/debhelper-build-stamp` and `debian/.debhelper`, and not with
+  dh_clean, which deletes every `*.orig`, `*.rej` and `*~` in the tree.
+- The package builds in `build-deb/` (`DEB_BUILD_DIR`), and its suite
+  runs in `build-deb/test`. Every dh step gets the same environment,
+  `BUILD_ENV` in `debian/rules`. A bare `dpkg-buildpackage` cleans with
+  `make deb-clean`, which removes `build-deb/` and nothing else.
+- The environment's flags reach qmake as `QMAKE_*FLAGS+=`, with `-O`
+  filtered out, because `core.pri` owns `-Os`. A flags record in each
+  qmake tree (`flags.source`) cleans that tree's objects when it changes.
+  `QMAKE_CONFIG` is in the record too, so switching to `DEBUG=1` or
+  `SANITIZE=1` in a tree built without them no longer links the old
+  objects. A tree built before this cleans once.
+- `bbq-predictor-serve` already took the flags on its compile line. It
+  now has a record of them, `serve.flags`, so a change of flags relinks it.
+- CFLAGS or CXXFLAGS on make's command line are refused. They would
+  replace the whole line in the Makefile qmake writes.
+
+Measured 2026-11-26 in a scratch clone:
+
+- The sequence make, make deb, make deb, make, touch `src/main.cpp`,
+  make deb, make compiled 84, 488, 0, 0, 1, 1 objects. The 488 includes
+  the package's test tree. The suite passed (22 binaries) in each
+  `make deb`, and a third make wrote no file.
+- The applet and the publisher went from 0 `_chk` imports to 1 each,
+  and the daemon has 5. All three have relro.
+- `-dbgsym` holds one debug file per program, each named by its
+  build-id and each with `.debug_info`.
+- lintian is clean.
+- A bare `dpkg-buildpackage` rebuilt `build-deb/` and wrote no file
+  outside it and `debian/`. `build/` and the three binaries at the root
+  survived its clean. The first version of `deb-clean` was placed above
+  veryclean's last recipe line and took that `rm -f` of the binaries with
+  it, and this check is what caught it.
+
 ## 6. Style
 
 Three rules -- `snake_case`, tabs to indent and spaces to align,
